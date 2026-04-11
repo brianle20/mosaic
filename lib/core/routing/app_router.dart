@@ -7,17 +7,25 @@ import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
+import 'package:mosaic/features/tables/screens/table_form_screen.dart';
+import 'package:mosaic/features/tables/screens/start_session_screen.dart';
+import 'package:mosaic/features/tables/screens/tables_overview_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/data/models/table_models.dart';
 
 class AppRouter {
   const AppRouter({
     required this.eventRepository,
     required this.guestRepository,
+    required this.tableRepository,
+    required this.sessionRepository,
     required this.nfcService,
   });
 
   final EventRepository eventRepository;
   final GuestRepository guestRepository;
+  final TableRepository tableRepository;
+  final SessionRepository sessionRepository;
   final NfcService nfcService;
 
   static const eventListRoute = '/';
@@ -26,6 +34,9 @@ class AppRouter {
   static const guestRosterRoute = '/guests';
   static const guestDetailRoute = '/guests/detail';
   static const guestFormRoute = '/guests/form';
+  static const tablesOverviewRoute = '/tables';
+  static const tableFormRoute = '/tables/form';
+  static const startSessionRoute = '/tables/start-session';
 
   Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -85,6 +96,40 @@ class AppRouter {
           ),
           settings: settings,
         );
+      case tablesOverviewRoute:
+        final args = settings.arguments as TablesOverviewArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => TablesOverviewScreen(
+            eventId: args.eventId,
+            eventTitle: args.eventTitle,
+            tableRepository: tableRepository,
+            sessionRepository: sessionRepository,
+          ),
+          settings: settings,
+        );
+      case tableFormRoute:
+        final args = settings.arguments as TableFormArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => TableFormScreen(
+            eventId: args.eventId,
+            tableRepository: tableRepository,
+            nfcService: nfcService,
+            initialTable: args.initialTable,
+          ),
+          settings: settings,
+        );
+      case startSessionRoute:
+        final args = settings.arguments as StartSessionArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => StartSessionScreen(
+            eventId: args.eventId,
+            table: args.table,
+            guestRepository: guestRepository,
+            sessionRepository: sessionRepository,
+            nfcService: nfcService,
+          ),
+          settings: settings,
+        );
       default:
         return MaterialPageRoute<void>(
           builder: (_) => EventListScreen(
@@ -134,4 +179,34 @@ class GuestDetailArgs {
 
   final String eventId;
   final String guestId;
+}
+
+class TablesOverviewArgs {
+  const TablesOverviewArgs({
+    required this.eventId,
+    required this.eventTitle,
+  });
+
+  final String eventId;
+  final String eventTitle;
+}
+
+class TableFormArgs {
+  const TableFormArgs({
+    required this.eventId,
+    this.initialTable,
+  });
+
+  final String eventId;
+  final EventTableRecord? initialTable;
+}
+
+class StartSessionArgs {
+  const StartSessionArgs({
+    required this.eventId,
+    required this.table,
+  });
+
+  final String eventId;
+  final EventTableRecord table;
 }

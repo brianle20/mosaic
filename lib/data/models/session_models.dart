@@ -12,6 +12,13 @@ enum SessionStatus {
   aborted,
 }
 
+enum SeatWind {
+  east,
+  south,
+  west,
+  north,
+}
+
 @immutable
 class TableSessionRecord {
   const TableSessionRecord({
@@ -111,6 +118,109 @@ class TableSessionRecord {
   }
 }
 
+@immutable
+class TableSessionSeatRecord {
+  const TableSessionSeatRecord({
+    required this.id,
+    required this.tableSessionId,
+    required this.seatIndex,
+    required this.initialWind,
+    required this.eventGuestId,
+  });
+
+  factory TableSessionSeatRecord.fromJson(Map<String, dynamic> json) {
+    return TableSessionSeatRecord(
+      id: _requiredString(json, 'id'),
+      tableSessionId: _requiredString(json, 'table_session_id'),
+      seatIndex: _requiredInt(json, 'seat_index'),
+      initialWind: _seatWindFromJson(_requiredString(json, 'initial_wind')),
+      eventGuestId: _requiredString(json, 'event_guest_id'),
+    );
+  }
+
+  final String id;
+  final String tableSessionId;
+  final int seatIndex;
+  final SeatWind initialWind;
+  final String eventGuestId;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'table_session_id': tableSessionId,
+      'seat_index': seatIndex,
+      'initial_wind': _seatWindToJson(initialWind),
+      'event_guest_id': eventGuestId,
+    };
+  }
+}
+
+@immutable
+class StartedTableSessionRecord {
+  const StartedTableSessionRecord({
+    required this.session,
+    required this.seats,
+  });
+
+  factory StartedTableSessionRecord.fromJson({
+    required Map<String, dynamic> sessionJson,
+    required List<dynamic> seatsJson,
+  }) {
+    final seats = seatsJson
+        .map((seat) => TableSessionSeatRecord.fromJson(seat as Map<String, dynamic>))
+        .toList(growable: false)
+      ..sort((left, right) => left.seatIndex.compareTo(right.seatIndex));
+
+    return StartedTableSessionRecord(
+      session: TableSessionRecord.fromJson(sessionJson),
+      seats: seats,
+    );
+  }
+
+  final TableSessionRecord session;
+  final List<TableSessionSeatRecord> seats;
+}
+
+@immutable
+class StartTableSessionInput {
+  const StartTableSessionInput({
+    required this.eventTableId,
+    required this.scannedTableUid,
+    required this.eastPlayerUid,
+    required this.southPlayerUid,
+    required this.westPlayerUid,
+    required this.northPlayerUid,
+  });
+
+  final String eventTableId;
+  final String scannedTableUid;
+  final String eastPlayerUid;
+  final String southPlayerUid;
+  final String westPlayerUid;
+  final String northPlayerUid;
+
+  Map<String, dynamic> toRpcParams() {
+    return {
+      'target_event_table_id': eventTableId,
+      'scanned_table_uid': scannedTableUid,
+      'east_player_uid': eastPlayerUid,
+      'south_player_uid': southPlayerUid,
+      'west_player_uid': westPlayerUid,
+      'north_player_uid': northPlayerUid,
+    };
+  }
+}
+
+SeatWind seatWindForIndex(int index) {
+  return switch (index) {
+    0 => SeatWind.east,
+    1 => SeatWind.south,
+    2 => SeatWind.west,
+    3 => SeatWind.north,
+    _ => throw RangeError.range(index, 0, 3, 'index'),
+  };
+}
+
 String _requiredString(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is String && value.trim().isNotEmpty) {
@@ -207,11 +317,19 @@ RotationPolicyType _rotationPolicyTypeFromJson(String value) {
   };
 }
 
+RotationPolicyType rotationPolicyTypeFromJson(String value) {
+  return _rotationPolicyTypeFromJson(value);
+}
+
 String _rotationPolicyTypeToJson(RotationPolicyType value) {
   return switch (value) {
     RotationPolicyType.dealerCycleReturnToInitialEast =>
       'dealer_cycle_return_to_initial_east',
   };
+}
+
+String rotationPolicyTypeToJson(RotationPolicyType value) {
+  return _rotationPolicyTypeToJson(value);
 }
 
 SessionStatus _sessionStatusFromJson(String value) {
@@ -232,5 +350,24 @@ String _sessionStatusToJson(SessionStatus value) {
     SessionStatus.completed => 'completed',
     SessionStatus.endedEarly => 'ended_early',
     SessionStatus.aborted => 'aborted',
+  };
+}
+
+SeatWind _seatWindFromJson(String value) {
+  return switch (value) {
+    'east' => SeatWind.east,
+    'south' => SeatWind.south,
+    'west' => SeatWind.west,
+    'north' => SeatWind.north,
+    _ => throw FormatException('Unknown seat wind: $value'),
+  };
+}
+
+String _seatWindToJson(SeatWind value) {
+  return switch (value) {
+    SeatWind.east => 'east',
+    SeatWind.south => 'south',
+    SeatWind.west => 'west',
+    SeatWind.north => 'north',
   };
 }

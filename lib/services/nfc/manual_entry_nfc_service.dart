@@ -7,6 +7,39 @@ class ManualEntryNfcService implements NfcService {
 
   @override
   Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) async {
+    return _scanTag(
+      context,
+      title: 'Enter Tag UID',
+      labelText: 'Tag UID',
+    );
+  }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForSessionSeat(
+    BuildContext context, {
+    required String seatLabel,
+  }) async {
+    return _scanTag(
+      context,
+      title: 'Scan $seatLabel Player Tag',
+      labelText: '$seatLabel Player Tag UID',
+    );
+  }
+
+  @override
+  Future<TagScanResult?> scanTableTag(BuildContext context) async {
+    return _scanTag(
+      context,
+      title: 'Scan Table Tag',
+      labelText: 'Table Tag UID',
+    );
+  }
+
+  Future<TagScanResult?> _scanTag(
+    BuildContext context, {
+    required String title,
+    required String labelText,
+  }) async {
     final controller = TextEditingController();
     var showValidation = false;
 
@@ -17,12 +50,12 @@ class ManualEntryNfcService implements NfcService {
           builder: (context, setState) {
             final draft = ManualTagScanDraft(rawUid: controller.text);
             return AlertDialog(
-              title: const Text('Enter Tag UID'),
+              title: Text(title),
               content: TextField(
                 controller: controller,
                 autofocus: true,
                 decoration: InputDecoration(
-                  labelText: 'Tag UID',
+                  labelText: labelText,
                   errorText: showValidation ? draft.uidError : null,
                 ),
                 onChanged: (_) {

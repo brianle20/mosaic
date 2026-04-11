@@ -7,6 +7,8 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/data/repositories/supabase_auth_repository.dart';
 import 'package:mosaic/data/repositories/supabase_event_repository.dart';
 import 'package:mosaic/data/repositories/supabase_guest_repository.dart';
+import 'package:mosaic/data/repositories/supabase_session_repository.dart';
+import 'package:mosaic/data/repositories/supabase_table_repository.dart';
 import 'package:mosaic/features/auth/controllers/auth_controller.dart';
 import 'package:mosaic/features/auth/screens/host_sign_in_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
@@ -22,6 +24,8 @@ class MosaicApp extends StatelessWidget {
     this.authRepository,
     this.eventRepository,
     this.guestRepository,
+    this.tableRepository,
+    this.sessionRepository,
     this.nfcService,
   });
 
@@ -30,6 +34,8 @@ class MosaicApp extends StatelessWidget {
   final AuthRepository? authRepository;
   final EventRepository? eventRepository;
   final GuestRepository? guestRepository;
+  final TableRepository? tableRepository;
+  final SessionRepository? sessionRepository;
   final NfcService? nfcService;
 
   @override
@@ -45,11 +51,15 @@ class MosaicApp extends StatelessWidget {
     if (authRepository != null &&
         eventRepository != null &&
         guestRepository != null &&
+        tableRepository != null &&
+        sessionRepository != null &&
         nfcService != null) {
       return _AppWithRepositories(
         authRepository: authRepository!,
         eventRepository: eventRepository!,
         guestRepository: guestRepository!,
+        tableRepository: tableRepository!,
+        sessionRepository: sessionRepository!,
         nfcService: nfcService!,
       );
     }
@@ -59,6 +69,8 @@ class MosaicApp extends StatelessWidget {
           AuthRepository authRepository,
           EventRepository eventRepository,
           GuestRepository guestRepository,
+          TableRepository tableRepository,
+          SessionRepository sessionRepository,
           NfcService nfcService,
         })>(
       future: _loadRepositories(),
@@ -83,6 +95,8 @@ class MosaicApp extends StatelessWidget {
           authRepository: snapshot.data!.authRepository,
           eventRepository: snapshot.data!.eventRepository,
           guestRepository: snapshot.data!.guestRepository,
+          tableRepository: snapshot.data!.tableRepository,
+          sessionRepository: snapshot.data!.sessionRepository,
           nfcService: snapshot.data!.nfcService,
         );
       },
@@ -94,6 +108,8 @@ class MosaicApp extends StatelessWidget {
         AuthRepository authRepository,
         EventRepository eventRepository,
         GuestRepository guestRepository,
+        TableRepository tableRepository,
+        SessionRepository sessionRepository,
         NfcService nfcService,
       })> _loadRepositories() async {
     final cache = await LocalCache.create();
@@ -105,6 +121,14 @@ class MosaicApp extends StatelessWidget {
         cache: cache,
       ),
       guestRepository: SupabaseGuestRepository(
+        client: client,
+        cache: cache,
+      ),
+      tableRepository: SupabaseTableRepository(
+        client: client,
+        cache: cache,
+      ),
+      sessionRepository: SupabaseSessionRepository(
         client: client,
         cache: cache,
       ),
@@ -172,12 +196,16 @@ class _AppWithRepositories extends StatelessWidget {
     required this.authRepository,
     required this.eventRepository,
     required this.guestRepository,
+    required this.tableRepository,
+    required this.sessionRepository,
     required this.nfcService,
   });
 
   final AuthRepository authRepository;
   final EventRepository eventRepository;
   final GuestRepository guestRepository;
+  final TableRepository tableRepository;
+  final SessionRepository sessionRepository;
   final NfcService nfcService;
 
   @override
@@ -185,6 +213,8 @@ class _AppWithRepositories extends StatelessWidget {
     final router = AppRouter(
       eventRepository: eventRepository,
       guestRepository: guestRepository,
+      tableRepository: tableRepository,
+      sessionRepository: sessionRepository,
       nfcService: nfcService,
     );
 
