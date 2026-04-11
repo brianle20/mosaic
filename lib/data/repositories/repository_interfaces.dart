@@ -1,8 +1,22 @@
+import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/ruleset_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+
+abstract interface class AuthRepository {
+  HostAuthUser? get currentHost;
+
+  Stream<HostAuthUser?> authStateChanges();
+
+  Future<HostAuthUser?> signInWithPassword({
+    required String email,
+    required String password,
+  });
+
+  Future<void> signOut();
+}
 
 abstract interface class EventRepository {
   Future<List<EventRecord>> readCachedEvents();
