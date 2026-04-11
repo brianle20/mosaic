@@ -10,7 +10,8 @@ const _hostPassword = String.fromEnvironment('HOST_PASSWORD');
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('host can sign in, create an event, and add a guest',
+  testWidgets(
+      'host can sign in, create an event, add a guest, and assign a player tag',
       (tester) async {
     if (_hostEmail.isEmpty || _hostPassword.isEmpty) {
       fail(
@@ -22,8 +23,11 @@ void main() {
     final eventTitle = 'Smoke Event $suffix';
     final guestName = 'Smoke Guest $suffix';
     final venueName = 'Simulator Clubhouse';
+    final tagUid = 'SMOKE$suffix';
+    final normalizedTagUid = tagUid.toUpperCase();
 
     String? eventId;
+    String? guestId;
 
     app.main();
     await tester.pump();
@@ -110,6 +114,10 @@ void main() {
         find.widgetWithText(TextFormField, 'Cover Amount (cents)'),
         '2000',
       );
+      await tester.tap(find.text('unpaid').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('paid').last);
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Note'),
         'Live smoke test guest',
@@ -121,12 +129,60 @@ void main() {
 
       final guestRows = await Supabase.instance.client
           .from('event_guests')
-          .select('id, display_name')
+          .select('id, display_name, attendance_status')
           .eq('event_id', eventId)
           .eq('display_name', guestName);
 
       expect(guestRows, isNotEmpty);
+      guestId = guestRows.first['id'] as String;
+
+      final guestRowFinder =
+          find.byKey(ValueKey('guest-row-$guestId')).hitTestable();
+      await _pumpUntilVisible(tester, guestRowFinder);
+      await tester.ensureVisible(guestRowFinder);
+      await tester.tap(guestRowFinder);
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Check In and Assign Tag'));
+
+      await tester.tap(find.text('Check In and Assign Tag'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Enter Tag UID'));
+
+      await tester.enterText(find.byType(TextField), tagUid);
+      await tester.tap(find.text('Use Tag'));
+      await tester.pumpAndSettle();
+
+      await _pumpUntilVisible(tester, find.text('Replace Tag'));
+      await _pumpUntilVisible(tester, find.text('Tag Assigned'));
+
+      final updatedGuest = await Supabase.instance.client
+          .from('event_guests')
+          .select('id, attendance_status')
+          .eq('id', guestId)
+          .maybeSingle();
+      expect(updatedGuest, isNotNull);
+      expect(updatedGuest!['attendance_status'], 'checked_in');
+
+      final assignmentRows = await Supabase.instance.client
+          .from('event_guest_tag_assignments')
+          .select('id, status, nfc_tag_id')
+          .eq('event_id', eventId)
+          .eq('event_guest_id', guestId)
+          .eq('status', 'assigned');
+      expect(assignmentRows, isNotEmpty);
+
+      final tagRows = await Supabase.instance.client
+          .from('nfc_tags')
+          .select('id, uid_hex')
+          .eq('uid_hex', normalizedTagUid);
+      expect(tagRows, isNotEmpty);
     } finally {
+      if (eventId != null) {
+        await Supabase.instance.client
+            .from('event_guest_tag_assignments')
+            .delete()
+            .eq('event_id', eventId);
+      }
       if (eventId != null) {
         await Supabase.instance.client
             .from('event_guests')
@@ -146,6 +202,11 @@ void main() {
             .delete()
             .eq('title', eventTitle);
       }
+
+      await Supabase.instance.client
+          .from('nfc_tags')
+          .delete()
+          .eq('uid_hex', normalizedTagUid);
     }
   });
 }

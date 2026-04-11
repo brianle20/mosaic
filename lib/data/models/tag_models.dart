@@ -52,6 +52,40 @@ class NfcTagRecord {
   final String? note;
 }
 
+@immutable
+class GuestTagAssignmentSummary {
+  const GuestTagAssignmentSummary({
+    required this.assignmentId,
+    required this.eventId,
+    required this.eventGuestId,
+    required this.status,
+    required this.assignedAt,
+    required this.tag,
+  });
+
+  factory GuestTagAssignmentSummary.fromJson(Map<String, dynamic> json) {
+    return GuestTagAssignmentSummary(
+      assignmentId: _requiredString(json, 'assignment_id'),
+      eventId: _requiredString(json, 'event_id'),
+      eventGuestId: _requiredString(json, 'event_guest_id'),
+      status: _assignmentStatusFromJson(_requiredString(json, 'status')),
+      assignedAt: DateTime.parse(_requiredString(json, 'assigned_at')),
+      tag: NfcTagRecord.fromJson(
+        _requiredMap(json, 'nfc_tag'),
+      ),
+    );
+  }
+
+  final String assignmentId;
+  final String eventId;
+  final String eventGuestId;
+  final GuestTagAssignmentStatus status;
+  final DateTime assignedAt;
+  final NfcTagRecord tag;
+
+  bool get isActive => status == GuestTagAssignmentStatus.assigned;
+}
+
 String _requiredString(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is String && value.trim().isNotEmpty) {
@@ -74,6 +108,19 @@ String? _optionalString(Map<String, dynamic> json, String key) {
   throw FormatException('Expected string or null for $key.');
 }
 
+Map<String, dynamic> _requiredMap(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+
+  if (value is Map) {
+    return value.cast<String, dynamic>();
+  }
+
+  throw FormatException('Expected map for $key.');
+}
+
 NfcTagType _tagTypeFromJson(String value) {
   return switch (value) {
     'player' => NfcTagType.player,
@@ -88,5 +135,15 @@ NfcTagStatus _tagStatusFromJson(String value) {
     'active' => NfcTagStatus.active,
     'retired' => NfcTagStatus.retired,
     _ => throw FormatException('Unknown tag status: $value'),
+  };
+}
+
+GuestTagAssignmentStatus _assignmentStatusFromJson(String value) {
+  return switch (value) {
+    'assigned' => GuestTagAssignmentStatus.assigned,
+    'replaced' => GuestTagAssignmentStatus.replaced,
+    'released' => GuestTagAssignmentStatus.released,
+    'lost' => GuestTagAssignmentStatus.lost,
+    _ => throw FormatException('Unknown assignment status: $value'),
   };
 }

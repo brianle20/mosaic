@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:mosaic/data/models/tag_models.dart';
 
 enum AttendanceStatus {
   expected,
@@ -155,6 +156,8 @@ class EventGuestRecord {
     return coverStatus == CoverStatus.paid || coverStatus == CoverStatus.comped;
   }
 
+  bool get isCheckedIn => attendanceStatus == AttendanceStatus.checkedIn;
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -173,6 +176,19 @@ class EventGuestRecord {
       'row_version': rowVersion,
     };
   }
+}
+
+@immutable
+class GuestDetailRecord {
+  const GuestDetailRecord({
+    required this.guest,
+    this.activeTagAssignment,
+  });
+
+  final EventGuestRecord guest;
+  final GuestTagAssignmentSummary? activeTagAssignment;
+
+  bool get hasAssignedPlayerTag => activeTagAssignment?.isActive ?? false;
 }
 
 String _requiredString(Map<String, dynamic> json, String key) {

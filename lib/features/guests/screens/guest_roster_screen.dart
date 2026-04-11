@@ -57,13 +57,12 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     await _controller.load(widget.eventId);
   }
 
-  Future<void> _openEditGuest(EventGuestRecord guest) async {
+  Future<void> _openGuestDetail(EventGuestRecord guest) async {
     await Navigator.of(context).pushNamed(
-      AppRouter.guestFormRoute,
-      arguments: GuestFormArgs(
+      AppRouter.guestDetailRoute,
+      arguments: GuestDetailArgs(
         eventId: widget.eventId,
-        existingGuests: _controller.guests,
-        initialGuest: guest,
+        guestId: guest.id,
       ),
     );
     await _controller.load(widget.eventId);
@@ -92,15 +91,21 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
             for (final guest in _controller.guests)
               Card(
                 child: ListTile(
+                  key: ValueKey('guest-row-${guest.id}'),
                   title: Text(guest.displayName),
                   subtitle: Wrap(
                     spacing: 8,
                     children: [
                       Text(guest.coverStatus.name),
                       Text(guest.attendanceStatus.name),
+                      Text(
+                        _controller.activeTagAssignments.containsKey(guest.id)
+                            ? 'Tag Assigned'
+                            : 'Tag Unassigned',
+                      ),
                     ],
                   ),
-                  onTap: () => _openEditGuest(guest),
+                  onTap: () => _openGuestDetail(guest),
                 ),
               ),
             if (_controller.guests.isEmpty)

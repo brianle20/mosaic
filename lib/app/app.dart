@@ -10,6 +10,8 @@ import 'package:mosaic/data/repositories/supabase_guest_repository.dart';
 import 'package:mosaic/features/auth/controllers/auth_controller.dart';
 import 'package:mosaic/features/auth/screens/host_sign_in_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
+import 'package:mosaic/services/nfc/manual_entry_nfc_service.dart';
+import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MosaicApp extends StatelessWidget {
@@ -20,6 +22,7 @@ class MosaicApp extends StatelessWidget {
     this.authRepository,
     this.eventRepository,
     this.guestRepository,
+    this.nfcService,
   });
 
   final AppEnvironment? environment;
@@ -27,6 +30,7 @@ class MosaicApp extends StatelessWidget {
   final AuthRepository? authRepository;
   final EventRepository? eventRepository;
   final GuestRepository? guestRepository;
+  final NfcService? nfcService;
 
   @override
   Widget build(BuildContext context) {
@@ -40,11 +44,13 @@ class MosaicApp extends StatelessWidget {
 
     if (authRepository != null &&
         eventRepository != null &&
-        guestRepository != null) {
+        guestRepository != null &&
+        nfcService != null) {
       return _AppWithRepositories(
         authRepository: authRepository!,
         eventRepository: eventRepository!,
         guestRepository: guestRepository!,
+        nfcService: nfcService!,
       );
     }
 
@@ -53,6 +59,7 @@ class MosaicApp extends StatelessWidget {
           AuthRepository authRepository,
           EventRepository eventRepository,
           GuestRepository guestRepository,
+          NfcService nfcService,
         })>(
       future: _loadRepositories(),
       builder: (context, snapshot) {
@@ -76,6 +83,7 @@ class MosaicApp extends StatelessWidget {
           authRepository: snapshot.data!.authRepository,
           eventRepository: snapshot.data!.eventRepository,
           guestRepository: snapshot.data!.guestRepository,
+          nfcService: snapshot.data!.nfcService,
         );
       },
     );
@@ -86,6 +94,7 @@ class MosaicApp extends StatelessWidget {
         AuthRepository authRepository,
         EventRepository eventRepository,
         GuestRepository guestRepository,
+        NfcService nfcService,
       })> _loadRepositories() async {
     final cache = await LocalCache.create();
     final client = Supabase.instance.client;
@@ -99,6 +108,7 @@ class MosaicApp extends StatelessWidget {
         client: client,
         cache: cache,
       ),
+      nfcService: const ManualEntryNfcService(),
     );
   }
 }
@@ -162,17 +172,20 @@ class _AppWithRepositories extends StatelessWidget {
     required this.authRepository,
     required this.eventRepository,
     required this.guestRepository,
+    required this.nfcService,
   });
 
   final AuthRepository authRepository;
   final EventRepository eventRepository;
   final GuestRepository guestRepository;
+  final NfcService nfcService;
 
   @override
   Widget build(BuildContext context) {
     final router = AppRouter(
       eventRepository: eventRepository,
       guestRepository: guestRepository,
+      nfcService: nfcService,
     );
 
     return MaterialApp(

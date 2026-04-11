@@ -6,7 +6,9 @@ import 'package:mosaic/app/app.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/services/nfc/nfc_service.dart';
 
 class _FakeAuthRepository implements AuthRepository {
   _FakeAuthRepository({this.host});
@@ -67,20 +69,61 @@ class _FakeEventRepository implements EventRepository {
 
 class _FakeGuestRepository implements GuestRepository {
   @override
+  Future<GuestDetailRecord> assignGuestTag({
+    required String guestId,
+    required String scannedUid,
+    String? displayLabel,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<GuestDetailRecord> checkInGuest(String guestId) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventGuestRecord> createGuest(CreateGuestInput input) {
     throw UnimplementedError();
   }
 
   @override
+  Future<GuestDetailRecord?> getGuestDetail(String guestId) async => null;
+
+  @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async => const [];
+
+  @override
+  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
+    String eventId,
+  ) async =>
+      const {};
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       const [];
 
   @override
+  Future<GuestDetailRecord> replaceGuestTag({
+    required String guestId,
+    required String scannedUid,
+    String? displayLabel,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
     throw UnimplementedError();
+  }
+}
+
+class _FakeNfcService implements NfcService {
+  const _FakeNfcService();
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) async {
+    return null;
   }
 }
 
@@ -92,6 +135,7 @@ void main() {
           authRepository: _FakeAuthRepository(),
           eventRepository: _FakeEventRepository(const []),
           guestRepository: _FakeGuestRepository(),
+          nfcService: const _FakeNfcService(),
         ),
       ),
     );
@@ -129,6 +173,7 @@ void main() {
             }),
           ]),
           guestRepository: _FakeGuestRepository(),
+          nfcService: const _FakeNfcService(),
         ),
       ),
     );
@@ -168,6 +213,7 @@ void main() {
             }),
           ]),
           guestRepository: _FakeGuestRepository(),
+          nfcService: const _FakeNfcService(),
         ),
       ),
     );

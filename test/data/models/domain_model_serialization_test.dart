@@ -3,6 +3,7 @@ import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/tag_models.dart';
 
 void main() {
   group('EventRecord', () {
@@ -66,6 +67,58 @@ void main() {
       expect(paidGuest.isEligibleForPlayerTagAssignment, isTrue);
       expect(compedGuest.isEligibleForPlayerTagAssignment, isTrue);
       expect(unpaidGuest.isEligibleForPlayerTagAssignment, isFalse);
+    });
+
+    test('exposes checked-in state from attendance status', () {
+      final checkedInGuest = EventGuestRecord.fromJson(const {
+        'id': 'gst_checked_in',
+        'event_id': 'evt_01',
+        'display_name': 'Dana',
+        'normalized_name': 'dana',
+        'attendance_status': 'checked_in',
+        'cover_status': 'paid',
+        'cover_amount_cents': 2000,
+        'is_comped': false,
+        'has_scored_play': false,
+      });
+      final expectedGuest = EventGuestRecord.fromJson(const {
+        'id': 'gst_expected',
+        'event_id': 'evt_01',
+        'display_name': 'Eli',
+        'normalized_name': 'eli',
+        'attendance_status': 'expected',
+        'cover_status': 'paid',
+        'cover_amount_cents': 2000,
+        'is_comped': false,
+        'has_scored_play': false,
+      });
+
+      expect(checkedInGuest.isCheckedIn, isTrue);
+      expect(expectedGuest.isCheckedIn, isFalse);
+    });
+  });
+
+  group('GuestTagAssignmentSummary', () {
+    test('parses an active assignment with nested player tag', () {
+      final summary = GuestTagAssignmentSummary.fromJson(const {
+        'assignment_id': 'asg_01',
+        'event_id': 'evt_01',
+        'event_guest_id': 'gst_01',
+        'status': 'assigned',
+        'assigned_at': '2026-04-24T19:15:00-07:00',
+        'nfc_tag': {
+          'id': 'tag_01',
+          'uid_hex': '04AABBCCDD',
+          'uid_fingerprint': '04AABBCCDD',
+          'default_tag_type': 'player',
+          'status': 'active',
+          'display_label': 'Player 7',
+        },
+      });
+
+      expect(summary.isActive, isTrue);
+      expect(summary.tag.uidHex, '04AABBCCDD');
+      expect(summary.tag.defaultTagType, NfcTagType.player);
     });
   });
 
