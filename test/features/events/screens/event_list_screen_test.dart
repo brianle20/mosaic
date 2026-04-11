@@ -34,6 +34,7 @@ class _FakeEventRepository implements EventRepository {
 
 void main() {
   testWidgets('renders loaded events and create action', (tester) async {
+    var signOutTapped = false;
     final repository = _FakeEventRepository([
       EventRecord.fromJson(const {
         'id': 'evt_01',
@@ -53,7 +54,12 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: EventListScreen(eventRepository: repository),
+        home: EventListScreen(
+          eventRepository: repository,
+          onSignOut: () async {
+            signOutTapped = true;
+          },
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -61,5 +67,11 @@ void main() {
     expect(find.text('Events'), findsOneWidget);
     expect(find.text('Friday Night Mahjong'), findsOneWidget);
     expect(find.text('Create Event'), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
+
+    await tester.tap(find.text('Sign out'));
+    await tester.pumpAndSettle();
+
+    expect(signOutTapped, isTrue);
   });
 }

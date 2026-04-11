@@ -9,9 +9,11 @@ class EventListScreen extends StatefulWidget {
   const EventListScreen({
     super.key,
     required this.eventRepository,
+    this.onSignOut,
   });
 
   final EventRepository eventRepository;
+  final Future<void> Function()? onSignOut;
 
   @override
   State<EventListScreen> createState() => _EventListScreenState();
@@ -53,10 +55,23 @@ class _EventListScreenState extends State<EventListScreen> {
     );
   }
 
+  Future<void> _signOut() async {
+    await widget.onSignOut?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Events')),
+      appBar: AppBar(
+        title: const Text('Events'),
+        actions: [
+          if (widget.onSignOut != null)
+            TextButton(
+              onPressed: _signOut,
+              child: const Text('Sign out'),
+            ),
+        ],
+      ),
       body: AsyncBody(
         isLoading: _controller.isLoading,
         error: _controller.error,
