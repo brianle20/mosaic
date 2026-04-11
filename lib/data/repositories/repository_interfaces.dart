@@ -5,15 +5,23 @@ import 'package:mosaic/data/models/ruleset_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 
 abstract interface class EventRepository {
+  Future<List<EventRecord>> readCachedEvents();
+
   Future<List<EventRecord>> listEvents();
 
-  Future<EventRecord> createEvent(EventRecord event);
+  Future<EventRecord?> getEvent(String eventId);
+
+  Future<EventRecord> createEvent(CreateEventInput input);
 }
 
 abstract interface class GuestRepository {
+  Future<List<EventGuestRecord>> readCachedGuests(String eventId);
+
   Future<List<EventGuestRecord>> listGuests(String eventId);
 
-  Future<EventGuestRecord> upsertGuest(EventGuestRecord guest);
+  Future<EventGuestRecord> createGuest(CreateGuestInput input);
+
+  Future<EventGuestRecord> updateGuest(UpdateGuestInput input);
 }
 
 abstract interface class RulesetRepository {

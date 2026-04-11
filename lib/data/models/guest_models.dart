@@ -16,6 +16,87 @@ enum CoverStatus {
 }
 
 @immutable
+class CreateGuestInput {
+  const CreateGuestInput({
+    required this.eventId,
+    required this.displayName,
+    required this.normalizedName,
+    required this.coverStatus,
+    required this.coverAmountCents,
+    required this.isComped,
+    this.phoneE164,
+    this.emailLower,
+    this.note,
+  });
+
+  final String eventId;
+  final String displayName;
+  final String normalizedName;
+  final String? phoneE164;
+  final String? emailLower;
+  final CoverStatus coverStatus;
+  final int coverAmountCents;
+  final bool isComped;
+  final String? note;
+
+  Map<String, dynamic> toInsertJson() {
+    return {
+      'event_id': eventId,
+      'display_name': displayName,
+      'normalized_name': normalizedName,
+      'phone_e164': phoneE164,
+      'email_lower': emailLower,
+      'attendance_status': 'expected',
+      'cover_status': _coverStatusToJson(coverStatus),
+      'cover_amount_cents': coverAmountCents,
+      'is_comped': isComped,
+      'has_scored_play': false,
+      'note': note,
+    };
+  }
+}
+
+@immutable
+class UpdateGuestInput {
+  const UpdateGuestInput({
+    required this.id,
+    required this.eventId,
+    required this.displayName,
+    required this.normalizedName,
+    required this.coverStatus,
+    required this.coverAmountCents,
+    required this.isComped,
+    this.phoneE164,
+    this.emailLower,
+    this.note,
+  });
+
+  final String id;
+  final String eventId;
+  final String displayName;
+  final String normalizedName;
+  final String? phoneE164;
+  final String? emailLower;
+  final CoverStatus coverStatus;
+  final int coverAmountCents;
+  final bool isComped;
+  final String? note;
+
+  Map<String, dynamic> toUpdateJson() {
+    return {
+      'display_name': displayName,
+      'normalized_name': normalizedName,
+      'phone_e164': phoneE164,
+      'email_lower': emailLower,
+      'cover_status': _coverStatusToJson(coverStatus),
+      'cover_amount_cents': coverAmountCents,
+      'is_comped': isComped,
+      'note': note,
+    };
+  }
+}
+
+@immutable
 class EventGuestRecord {
   const EventGuestRecord({
     required this.id,
