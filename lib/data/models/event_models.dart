@@ -16,6 +16,53 @@ enum PrevailingWind {
 }
 
 @immutable
+class CreateEventInput {
+  const CreateEventInput({
+    required this.title,
+    required this.startsAt,
+    required this.timezone,
+    required this.coverChargeCents,
+    required this.prizeBudgetCents,
+    this.description,
+    this.venueName,
+    this.venueAddress,
+    this.prizeBudgetNote,
+    this.defaultRulesetId = 'HK_STANDARD_V1',
+  });
+
+  final String title;
+  final String? description;
+  final String? venueName;
+  final String? venueAddress;
+  final String timezone;
+  final DateTime startsAt;
+  final int coverChargeCents;
+  final int prizeBudgetCents;
+  final String? prizeBudgetNote;
+  final String defaultRulesetId;
+
+  Map<String, dynamic> toInsertJson({required String ownerUserId}) {
+    return {
+      'owner_user_id': ownerUserId,
+      'title': title,
+      'description': description,
+      'venue_name': venueName,
+      'venue_address': venueAddress,
+      'timezone': timezone,
+      'starts_at': startsAt.toIso8601String(),
+      'lifecycle_status': 'draft',
+      'checkin_open': false,
+      'scoring_open': false,
+      'cover_charge_cents': coverChargeCents,
+      'prize_budget_cents': prizeBudgetCents,
+      'prize_budget_note': prizeBudgetNote,
+      'default_ruleset_id': defaultRulesetId,
+      'prevailing_wind': 'east',
+    };
+  }
+}
+
+@immutable
 class EventRecord {
   const EventRecord({
     required this.id,
