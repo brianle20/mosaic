@@ -1,0 +1,26 @@
+name: mosaic
+description: Native mobile app for hosting casual mahjong events.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.6.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  collection: ^1.19.1
+  flutter_dotenv: ^5.2.1
+  meta: ^1.16.0
+  supabase_flutter: ^2.8.4
+
+dev_dependencies:
+  flutter_lints: ^5.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+
