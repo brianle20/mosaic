@@ -162,6 +162,27 @@ class _FakeNfcService implements NfcService {
       isManualEntry: true,
     );
   }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForSessionSeat(
+    BuildContext context, {
+    required String seatLabel,
+  }) async {
+    return const TagScanResult(
+      rawUid: '04AABB',
+      normalizedUid: '04AABB',
+      isManualEntry: true,
+    );
+  }
+
+  @override
+  Future<TagScanResult?> scanTableTag(BuildContext context) async {
+    return const TagScanResult(
+      rawUid: 'TABLE001',
+      normalizedUid: 'TABLE001',
+      isManualEntry: true,
+    );
+  }
 }
 
 void main() {

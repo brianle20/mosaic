@@ -6,7 +6,9 @@ import 'package:mosaic/app/app.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
+import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
@@ -118,11 +120,67 @@ class _FakeGuestRepository implements GuestRepository {
   }
 }
 
+class _FakeTableRepository implements TableRepository {
+  @override
+  Future<EventTableRecord> bindTableTag({
+    required String tableId,
+    required String scannedUid,
+    String? displayLabel,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventTableRecord> createTable(CreateEventTableInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<EventTableRecord>> listTables(String eventId) async => const [];
+
+  @override
+  Future<List<EventTableRecord>> readCachedTables(String eventId) async =>
+      const [];
+
+  @override
+  Future<EventTableRecord> updateTable(UpdateEventTableInput input) {
+    throw UnimplementedError();
+  }
+}
+
+class _FakeSessionRepository implements SessionRepository {
+  @override
+  Future<List<TableSessionRecord>> listSessions(String eventId) async =>
+      const [];
+
+  @override
+  Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
+      const [];
+
+  @override
+  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
+    throw UnimplementedError();
+  }
+}
+
 class _FakeNfcService implements NfcService {
   const _FakeNfcService();
 
   @override
   Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) async {
+    return null;
+  }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForSessionSeat(
+    BuildContext context, {
+    required String seatLabel,
+  }) async {
+    return null;
+  }
+
+  @override
+  Future<TagScanResult?> scanTableTag(BuildContext context) async {
     return null;
   }
 }
@@ -135,6 +193,8 @@ void main() {
           authRepository: _FakeAuthRepository(),
           eventRepository: _FakeEventRepository(const []),
           guestRepository: _FakeGuestRepository(),
+          tableRepository: _FakeTableRepository(),
+          sessionRepository: _FakeSessionRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
@@ -173,6 +233,8 @@ void main() {
             }),
           ]),
           guestRepository: _FakeGuestRepository(),
+          tableRepository: _FakeTableRepository(),
+          sessionRepository: _FakeSessionRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
@@ -213,6 +275,8 @@ void main() {
             }),
           ]),
           guestRepository: _FakeGuestRepository(),
+          tableRepository: _FakeTableRepository(),
+          sessionRepository: _FakeSessionRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),

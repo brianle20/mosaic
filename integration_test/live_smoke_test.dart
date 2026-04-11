@@ -11,7 +11,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-      'host can sign in, create an event, add a guest, and assign a player tag',
+      'host can sign in, run guest intake, configure a table, and start a session',
       (tester) async {
     if (_hostEmail.isEmpty || _hostPassword.isEmpty) {
       fail(
@@ -21,13 +21,27 @@ void main() {
 
     final suffix = DateTime.now().millisecondsSinceEpoch;
     final eventTitle = 'Smoke Event $suffix';
-    final guestName = 'Smoke Guest $suffix';
     final venueName = 'Simulator Clubhouse';
-    final tagUid = 'SMOKE$suffix';
-    final normalizedTagUid = tagUid.toUpperCase();
+    final guestNames = [
+      'Smoke East $suffix',
+      'Smoke South $suffix',
+      'Smoke West $suffix',
+      'Smoke North $suffix',
+    ];
+    final playerTagUids = [
+      'SMOKEE$suffix',
+      'SMOKES$suffix',
+      'SMOKEW$suffix',
+      'SMOKEN$suffix',
+    ];
+    final normalizedPlayerTagUids =
+        playerTagUids.map((uid) => uid.toUpperCase()).toList(growable: false);
+    final tableLabel = 'Table $suffix';
+    final tableTagUid = 'SMOKET$suffix';
+    final normalizedTableTagUid = tableTagUid.toUpperCase();
 
     String? eventId;
-    String? guestId;
+    String? tableId;
 
     app.main();
     await tester.pump();
@@ -96,90 +110,169 @@ void main() {
       await tester.pump();
       await _pumpUntilVisible(tester, find.text('No guests yet.'));
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Add Guest'));
-      await tester.pump();
-      await _pumpUntilVisible(tester, find.text('Add Guest'));
-
-      await tester.enterText(
-          find.widgetWithText(TextFormField, 'Name'), guestName);
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Phone'),
-        '+14155550123',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Email'),
-        'smoke+$suffix@example.com',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Cover Amount (cents)'),
-        '2000',
-      );
-      await tester.tap(find.text('unpaid').last);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('paid').last);
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Note'),
-        'Live smoke test guest',
-      );
-      await tester.tap(find.widgetWithText(FilledButton, 'Save Guest'));
-      await tester.pump();
-
-      await _pumpUntilVisible(tester, find.text(guestName));
+      for (var index = 0; index < guestNames.length; index++) {
+        await _addPaidGuest(
+          tester,
+          guestName: guestNames[index],
+          suffix: '$suffix-$index',
+        );
+        await _pumpUntilVisible(tester, find.text(guestNames[index]));
+      }
 
       final guestRows = await Supabase.instance.client
           .from('event_guests')
           .select('id, display_name, attendance_status')
           .eq('event_id', eventId)
-          .eq('display_name', guestName);
+          .order('display_name', ascending: true);
+      expect(guestRows, hasLength(4));
 
-      expect(guestRows, isNotEmpty);
-      guestId = guestRows.first['id'] as String;
+      for (var index = 0; index < guestNames.length; index++) {
+        final guestRow = guestRows.firstWhere(
+          (row) => row['display_name'] == guestNames[index],
+        );
+        final guestId = guestRow['id'] as String;
 
-      final guestRowFinder =
-          find.byKey(ValueKey('guest-row-$guestId')).hitTestable();
-      await _pumpUntilVisible(tester, guestRowFinder);
-      await tester.ensureVisible(guestRowFinder);
-      await tester.tap(guestRowFinder);
-      await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Check In and Assign Tag'));
+        final guestRowFinder =
+            find.byKey(ValueKey('guest-row-$guestId')).hitTestable();
+        await _pumpUntilVisible(tester, guestRowFinder);
+        await tester.ensureVisible(guestRowFinder);
+        await tester.tap(guestRowFinder);
+        await tester.pumpAndSettle();
+        await _pumpUntilVisible(tester, find.text('Check In and Assign Tag'));
 
-      await tester.tap(find.text('Check In and Assign Tag'));
-      await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Enter Tag UID'));
+        await tester.tap(find.text('Check In and Assign Tag'));
+        await tester.pumpAndSettle();
+        await _pumpUntilVisible(tester, find.text('Enter Tag UID'));
 
-      await tester.enterText(find.byType(TextField), tagUid);
-      await tester.tap(find.text('Use Tag'));
-      await tester.pumpAndSettle();
+        final assignmentTagField = find.byType(TextField).hitTestable();
+        await _pumpUntilVisible(tester, assignmentTagField);
+        await tester.enterText(assignmentTagField, playerTagUids[index]);
+        await tester.tap(find.text('Use Tag'));
+        await tester.pumpAndSettle();
 
-      await _pumpUntilVisible(tester, find.text('Replace Tag'));
-      await _pumpUntilVisible(tester, find.text('Tag Assigned'));
+        await _pumpUntilVisible(tester, find.text('Replace Tag'));
+        await _pumpUntilVisible(tester, find.text('Tag Assigned'));
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+      }
 
-      final updatedGuest = await Supabase.instance.client
+      final updatedGuests = await Supabase.instance.client
           .from('event_guests')
           .select('id, attendance_status')
-          .eq('id', guestId)
-          .maybeSingle();
-      expect(updatedGuest, isNotNull);
-      expect(updatedGuest!['attendance_status'], 'checked_in');
+          .eq('event_id', eventId);
+      expect(
+        updatedGuests.every(
+          (guest) => guest['attendance_status'] == 'checked_in',
+        ),
+        isTrue,
+      );
 
-      final assignmentRows = await Supabase.instance.client
-          .from('event_guest_tag_assignments')
-          .select('id, status, nfc_tag_id')
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Tables'));
+
+      await tester.tap(find.text('Tables'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Add Table'));
+
+      await tester.tap(find.text('Add Table'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Add Table'));
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Label'),
+        tableLabel,
+      );
+      await tester.tap(find.text('Save Table'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text(tableLabel));
+
+      final tableRows = await Supabase.instance.client
+          .from('event_tables')
+          .select('id, label, nfc_tag_id')
           .eq('event_id', eventId)
-          .eq('event_guest_id', guestId)
-          .eq('status', 'assigned');
-      expect(assignmentRows, isNotEmpty);
+          .eq('label', tableLabel);
+      expect(tableRows, isNotEmpty);
+      tableId = tableRows.first['id'] as String;
 
-      final tagRows = await Supabase.instance.client
-          .from('nfc_tags')
-          .select('id, uid_hex')
-          .eq('uid_hex', normalizedTagUid);
-      expect(tagRows, isNotEmpty);
+      await tester.tap(find.text('Bind Table Tag').first);
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Edit Table'));
+
+      await tester.tap(find.text('Bind Table Tag'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Scan Table Tag'));
+      final tableTagField = find.byType(TextField).hitTestable();
+      await _pumpUntilVisible(tester, tableTagField);
+      await tester.enterText(tableTagField, tableTagUid);
+      await tester.tap(find.text('Use Tag'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Table Tag Bound'));
+
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Table Tag Bound'));
+
+      await tester.tap(find.text('Start Session').first);
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Scan Table Tag'));
+
+      await _scanSessionStep(tester, tableTagUid, 'Scan Table Tag');
+      await _scanSessionStep(tester, playerTagUids[0], 'Scan East Player Tag');
+      await _scanSessionStep(
+        tester,
+        playerTagUids[1],
+        'Scan South Player Tag',
+      );
+      await _scanSessionStep(tester, playerTagUids[2], 'Scan West Player Tag');
+      await _scanSessionStep(
+        tester,
+        playerTagUids[3],
+        'Scan North Player Tag',
+      );
+
+      await _pumpUntilVisible(tester, find.text('Review Session'));
+      for (final guestName in guestNames) {
+        await _pumpUntilVisible(tester, find.text(guestName));
+      }
+
+      await tester.tap(find.text('Confirm Start Session'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Session Active'));
+
+      final sessionRows = await Supabase.instance.client
+          .from('table_sessions')
+          .select('id, event_table_id, status')
+          .eq('event_id', eventId)
+          .eq('event_table_id', tableId);
+      expect(sessionRows, hasLength(1));
+      expect(sessionRows.single['status'], 'active');
+
+      final sessionId = sessionRows.single['id'] as String;
+      final seatRows = await Supabase.instance.client
+          .from('table_session_seats')
+          .select('seat_index, initial_wind, event_guest_id')
+          .eq('table_session_id', sessionId)
+          .order('seat_index', ascending: true);
+      expect(seatRows, hasLength(4));
+      expect(
+        seatRows.map((seat) => seat['initial_wind']).toList(),
+        ['east', 'south', 'west', 'north'],
+      );
     } finally {
       if (eventId != null) {
         await Supabase.instance.client
             .from('event_guest_tag_assignments')
+            .delete()
+            .eq('event_id', eventId);
+      }
+      if (eventId != null) {
+        await Supabase.instance.client
+            .from('table_sessions')
+            .delete()
+            .eq('event_id', eventId);
+        await Supabase.instance.client
+            .from('event_tables')
             .delete()
             .eq('event_id', eventId);
       }
@@ -193,22 +286,78 @@ void main() {
             .delete()
             .eq('id', eventId);
       } else {
-        await Supabase.instance.client
-            .from('event_guests')
-            .delete()
-            .eq('display_name', guestName);
+        for (final guestName in guestNames) {
+          await Supabase.instance.client
+              .from('event_guests')
+              .delete()
+              .eq('display_name', guestName);
+        }
         await Supabase.instance.client
             .from('events')
             .delete()
             .eq('title', eventTitle);
       }
 
-      await Supabase.instance.client
-          .from('nfc_tags')
-          .delete()
-          .eq('uid_hex', normalizedTagUid);
+      for (final uid in [...normalizedPlayerTagUids, normalizedTableTagUid]) {
+        await Supabase.instance.client.from('nfc_tags').delete().eq('uid_hex', uid);
+      }
     }
   });
+}
+
+Future<void> _addPaidGuest(
+  WidgetTester tester, {
+  required String guestName,
+  required String suffix,
+}) async {
+  final addGuestButton = find
+      .widgetWithText(FilledButton, 'Add Guest')
+      .hitTestable();
+  await _pumpUntilVisible(tester, addGuestButton);
+  await tester.ensureVisible(addGuestButton);
+  await tester.tap(addGuestButton);
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text('Add Guest'));
+
+  await tester.enterText(find.widgetWithText(TextFormField, 'Name'), guestName);
+  await tester.enterText(
+    find.widgetWithText(TextFormField, 'Phone'),
+    '+1415555${suffix.replaceAll('-', '').padLeft(5, '0').substring(0, 5)}',
+  );
+  await tester.enterText(
+    find.widgetWithText(TextFormField, 'Email'),
+    'smoke+$suffix@example.com',
+  );
+  await tester.enterText(
+    find.widgetWithText(TextFormField, 'Cover Amount (cents)'),
+    '2000',
+  );
+  await tester.tap(find.text('unpaid').last);
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('paid').last);
+  await tester.pumpAndSettle();
+  await tester.enterText(
+    find.widgetWithText(TextFormField, 'Note'),
+    'Live smoke test guest',
+  );
+  await tester.tap(find.widgetWithText(FilledButton, 'Save Guest'));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _scanSessionStep(
+  WidgetTester tester,
+  String uid,
+  String prompt,
+) async {
+  await _pumpUntilVisible(tester, find.text(prompt));
+  await tester.tap(find.text('Scan Next Tag'));
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text(prompt));
+  final tagField = find.byType(TextField).hitTestable();
+  await _pumpUntilVisible(tester, tagField);
+  await tester.enterText(tagField, uid);
+  await tester.tap(find.text('Use Tag'));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _pumpUntilVisible(

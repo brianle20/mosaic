@@ -63,6 +63,21 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     );
   }
 
+  void _openTables() {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    Navigator.of(context).pushNamed(
+      AppRouter.tablesOverviewRoute,
+      arguments: TablesOverviewArgs(
+        eventId: event.id,
+        eventTitle: event.title,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final event = _controller.event;
@@ -91,6 +106,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 FilledButton(
                   onPressed: _openGuests,
                   child: const Text('Guests'),
+                ),
+                FilledButton(
+                  onPressed: _openTables,
+                  child: const Text('Tables'),
                 ),
                 OutlinedButton(
                   onPressed: _openGuests,

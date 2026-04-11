@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/table_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LocalCache {
@@ -17,6 +19,8 @@ class LocalCache {
   static const _eventsKey = 'events';
   static const _eventKeyPrefix = 'event:';
   static const _guestListKeyPrefix = 'guests:';
+  static const _tableListKeyPrefix = 'tables:';
+  static const _sessionListKeyPrefix = 'sessions:';
 
   Future<void> saveEvents(List<EventRecord> events) async {
     await _preferences.setString(
@@ -70,6 +74,50 @@ class LocalCache {
     return decoded
         .map(
             (guest) => EventGuestRecord.fromJson(guest as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
+  Future<void> saveTables(String eventId, List<EventTableRecord> tables) async {
+    await _preferences.setString(
+      '$_tableListKeyPrefix$eventId',
+      jsonEncode(tables.map((table) => table.toJson()).toList()),
+    );
+  }
+
+  List<EventTableRecord> readTables(String eventId) {
+    final raw = _preferences.getString('$_tableListKeyPrefix$eventId');
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((table) => EventTableRecord.fromJson(table as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
+  Future<void> saveSessions(
+    String eventId,
+    List<TableSessionRecord> sessions,
+  ) async {
+    await _preferences.setString(
+      '$_sessionListKeyPrefix$eventId',
+      jsonEncode(sessions.map((session) => session.toJson()).toList()),
+    );
+  }
+
+  List<TableSessionRecord> readSessions(String eventId) {
+    final raw = _preferences.getString('$_sessionListKeyPrefix$eventId');
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map(
+          (session) =>
+              TableSessionRecord.fromJson(session as Map<String, dynamic>),
+        )
         .toList(growable: false);
   }
 }

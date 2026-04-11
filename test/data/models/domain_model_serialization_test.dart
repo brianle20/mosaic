@@ -3,6 +3,7 @@ import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 
 void main() {
@@ -148,6 +149,102 @@ void main() {
         record.rotationPolicyType,
         RotationPolicyType.dealerCycleReturnToInitialEast,
       );
+    });
+
+    test('parses ordered session seats and preserves explicit ruleset shape', () {
+      final startedSession = StartedTableSessionRecord.fromJson(
+        sessionJson: const {
+          'id': 'ses_01',
+          'event_id': 'evt_01',
+          'event_table_id': 'tbl_01',
+          'session_number_for_table': 1,
+          'ruleset_id': 'HK_STANDARD_V1',
+          'ruleset_version': 1,
+          'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+          'rotation_policy_config_json': {},
+          'status': 'active',
+          'initial_east_seat_index': 0,
+          'current_dealer_seat_index': 0,
+          'dealer_pass_count': 0,
+          'completed_games_count': 0,
+          'hand_count': 0,
+          'started_at': '2026-04-24T19:00:00-07:00',
+          'started_by_user_id': 'usr_01',
+        },
+        seatsJson: const [
+          {
+            'id': 'seat_01',
+            'table_session_id': 'ses_01',
+            'seat_index': 0,
+            'initial_wind': 'east',
+            'event_guest_id': 'gst_east',
+          },
+          {
+            'id': 'seat_02',
+            'table_session_id': 'ses_01',
+            'seat_index': 1,
+            'initial_wind': 'south',
+            'event_guest_id': 'gst_south',
+          },
+          {
+            'id': 'seat_03',
+            'table_session_id': 'ses_01',
+            'seat_index': 2,
+            'initial_wind': 'west',
+            'event_guest_id': 'gst_west',
+          },
+          {
+            'id': 'seat_04',
+            'table_session_id': 'ses_01',
+            'seat_index': 3,
+            'initial_wind': 'north',
+            'event_guest_id': 'gst_north',
+          },
+        ],
+      );
+
+      expect(startedSession.session.rulesetId, 'HK_STANDARD_V1');
+      expect(
+        startedSession.session.rotationPolicyType,
+        RotationPolicyType.dealerCycleReturnToInitialEast,
+      );
+      expect(startedSession.seats, hasLength(4));
+      expect(startedSession.seats.first.initialWind, SeatWind.east);
+      expect(startedSession.seats.last.initialWind, SeatWind.north);
+    });
+  });
+
+  group('EventTableRecord', () {
+    test('parses table defaults and optional bound tag id', () {
+      final table = EventTableRecord.fromJson(const {
+        'id': 'tbl_01',
+        'event_id': 'evt_01',
+        'label': 'Table 1',
+        'mode': 'points',
+        'display_order': 1,
+        'nfc_tag_id': 'tag_table_01',
+        'default_ruleset_id': 'HK_STANDARD_V1',
+        'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+        'default_rotation_policy_config_json': {},
+        'status': 'active',
+      });
+
+      expect(table.mode, EventTableMode.points);
+      expect(table.defaultRulesetId, 'HK_STANDARD_V1');
+      expect(
+        table.defaultRotationPolicyType,
+        RotationPolicyType.dealerCycleReturnToInitialEast,
+      );
+      expect(table.nfcTagId, 'tag_table_01');
+    });
+  });
+
+  group('seatWindForIndex', () {
+    test('maps seat order to east south west north', () {
+      expect(seatWindForIndex(0), SeatWind.east);
+      expect(seatWindForIndex(1), SeatWind.south);
+      expect(seatWindForIndex(2), SeatWind.west);
+      expect(seatWindForIndex(3), SeatWind.north);
     });
   });
 
