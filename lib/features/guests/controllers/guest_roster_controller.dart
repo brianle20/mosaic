@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/data/models/tag_models.dart';
 
 class GuestRosterController extends ChangeNotifier {
   GuestRosterController({required GuestRepository guestRepository})
@@ -11,6 +12,7 @@ class GuestRosterController extends ChangeNotifier {
   bool isLoading = true;
   String? error;
   List<EventGuestRecord> guests = const [];
+  Map<String, GuestTagAssignmentSummary> activeTagAssignments = const {};
 
   Future<void> load(String eventId) async {
     isLoading = true;
@@ -26,6 +28,8 @@ class GuestRosterController extends ChangeNotifier {
 
     try {
       guests = await _guestRepository.listGuests(eventId);
+      activeTagAssignments =
+          await _guestRepository.listActiveTagAssignments(eventId);
     } catch (exception) {
       if (guests.isEmpty) {
         error = exception.toString();
