@@ -69,6 +69,10 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
       ),
     );
 
+    if (!mounted) {
+      return;
+    }
+
     await _controller.load(
         eventId: widget.eventId, sessionId: widget.sessionId);
   }

@@ -101,9 +101,34 @@ abstract interface class SessionRepository {
 }
 
 abstract interface class PrizeRepository {
-  Future<PrizePlanRecord?> loadPrizePlan({
+  Future<PrizePlanDetail?> readCachedPrizePlan(String eventId);
+
+  Future<PrizePlanDetail?> loadPrizePlan({
     required String eventId,
     required int prizeBudgetCents,
+  });
+
+  Future<PrizePlanDetail> upsertPrizePlan(UpsertPrizePlanInput input);
+
+  Future<List<PrizeAwardPreviewRow>> readCachedPrizePreview(String eventId);
+
+  Future<List<PrizeAwardPreviewRow>> loadPrizePreview(String eventId);
+
+  Future<List<PrizeAwardRecord>> readCachedPrizeAwards(String eventId);
+
+  Future<List<PrizeAwardRecord>> loadPrizeAwards(String eventId);
+
+  Future<List<PrizeAwardRecord>> lockPrizeAwards(String eventId);
+
+  Future<PrizeAwardRecord> markPrizeAwardPaid({
+    required String awardId,
+    String? paidMethod,
+    String? paidNote,
+  });
+
+  Future<PrizeAwardRecord> voidPrizeAward({
+    required String awardId,
+    String? paidNote,
   });
 }
 
