@@ -5,8 +5,10 @@ import 'package:mosaic/features/checkin/screens/guest_detail_screen.dart';
 import 'package:mosaic/features/events/screens/create_event_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
+import 'package:mosaic/features/leaderboard/screens/leaderboard_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
+import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 import 'package:mosaic/features/tables/screens/table_form_screen.dart';
 import 'package:mosaic/features/tables/screens/start_session_screen.dart';
 import 'package:mosaic/features/tables/screens/tables_overview_screen.dart';
@@ -19,6 +21,7 @@ class AppRouter {
     required this.guestRepository,
     required this.tableRepository,
     required this.sessionRepository,
+    required this.leaderboardRepository,
     required this.nfcService,
   });
 
@@ -26,6 +29,7 @@ class AppRouter {
   final GuestRepository guestRepository;
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
+  final LeaderboardRepository leaderboardRepository;
   final NfcService nfcService;
 
   static const eventListRoute = '/';
@@ -37,6 +41,8 @@ class AppRouter {
   static const tablesOverviewRoute = '/tables';
   static const tableFormRoute = '/tables/form';
   static const startSessionRoute = '/tables/start-session';
+  static const sessionDetailRoute = '/sessions/detail';
+  static const leaderboardRoute = '/leaderboard';
 
   Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -61,6 +67,7 @@ class AppRouter {
             args: args,
             eventRepository: eventRepository,
             guestRepository: guestRepository,
+            leaderboardRepository: leaderboardRepository,
           ),
           settings: settings,
         );
@@ -127,6 +134,26 @@ class AppRouter {
             guestRepository: guestRepository,
             sessionRepository: sessionRepository,
             nfcService: nfcService,
+          ),
+          settings: settings,
+        );
+      case sessionDetailRoute:
+        final args = settings.arguments as SessionDetailArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => SessionDetailScreen(
+            eventId: args.eventId,
+            sessionId: args.sessionId,
+            guestRepository: guestRepository,
+            sessionRepository: sessionRepository,
+          ),
+          settings: settings,
+        );
+      case leaderboardRoute:
+        final args = settings.arguments as LeaderboardArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => LeaderboardScreen(
+            eventId: args.eventId,
+            leaderboardRepository: leaderboardRepository,
           ),
           settings: settings,
         );
@@ -209,4 +236,22 @@ class StartSessionArgs {
 
   final String eventId;
   final EventTableRecord table;
+}
+
+class SessionDetailArgs {
+  const SessionDetailArgs({
+    required this.eventId,
+    required this.sessionId,
+  });
+
+  final String eventId;
+  final String sessionId;
+}
+
+class LeaderboardArgs {
+  const LeaderboardArgs({
+    required this.eventId,
+  });
+
+  final String eventId;
 }

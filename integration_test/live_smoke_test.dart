@@ -11,7 +11,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-      'host can sign in, run guest intake, configure a table, and start a session',
+      'host can sign in, score hands, and verify leaderboard recalculation',
       (tester) async {
     if (_hostEmail.isEmpty || _hostPassword.isEmpty) {
       fail(
@@ -152,7 +152,7 @@ void main() {
 
         await _pumpUntilVisible(tester, find.text('Replace Tag'));
         await _pumpUntilVisible(tester, find.text('Tag Assigned'));
-        await tester.pageBack();
+        await _tapBack(tester);
         await tester.pumpAndSettle();
       }
 
@@ -167,7 +167,7 @@ void main() {
         isTrue,
       );
 
-      await tester.pageBack();
+      await _tapBack(tester);
       await tester.pumpAndSettle();
       await _pumpUntilVisible(tester, find.text('Tables'));
 
@@ -209,7 +209,7 @@ void main() {
       await tester.pumpAndSettle();
       await _pumpUntilVisible(tester, find.text('Table Tag Bound'));
 
-      await tester.pageBack();
+      await _tapBack(tester);
       await tester.pumpAndSettle();
       await _pumpUntilVisible(tester, find.text('Table Tag Bound'));
 
@@ -238,7 +238,7 @@ void main() {
 
       await tester.tap(find.text('Confirm Start Session'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Session Active'));
+      await _pumpUntilVisible(tester, find.text('Session Detail'));
 
       final sessionRows = await Supabase.instance.client
           .from('table_sessions')
@@ -259,6 +259,66 @@ void main() {
         seatRows.map((seat) => seat['initial_wind']).toList(),
         ['east', 'south', 'west', 'north'],
       );
+
+      await _recordDiscardHand(
+        tester,
+        winnerLabel: '${guestNames[2]} (West)',
+        discarderLabel: '${guestNames[0]} (East)',
+        fanCount: '2',
+      );
+      await _recordSelfDrawHand(
+        tester,
+        winnerLabel: '${guestNames[1]} (South)',
+        fanCount: '1',
+      );
+      await _recordWashoutHand(tester);
+
+      final recordedHands = await Supabase.instance.client
+          .from('hand_results')
+          .select('id, hand_number, result_type, status')
+          .eq('table_session_id', sessionId)
+          .order('hand_number', ascending: true);
+      expect(recordedHands, hasLength(3));
+
+      final leaderboardBeforeVoid = await Supabase.instance.client.rpc(
+        'get_event_leaderboard',
+        params: {'target_event_id': eventId},
+      ) as List<dynamic>;
+      expect(leaderboardBeforeVoid.first['display_name'], guestNames[1]);
+      expect(leaderboardBeforeVoid.first['total_points'], 20);
+      expect(leaderboardBeforeVoid[1]['display_name'], guestNames[2]);
+      expect(leaderboardBeforeVoid[1]['total_points'], 16);
+
+      await _pumpUntilVisible(tester, find.text('Hand 2'));
+      await tester.tap(find.text('Hand 2'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Void Hand'));
+      await tester.tap(find.text('Void Hand'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Session Detail'));
+
+      final leaderboardAfterVoid = await Supabase.instance.client.rpc(
+        'get_event_leaderboard',
+        params: {'target_event_id': eventId},
+      ) as List<dynamic>;
+      expect(leaderboardAfterVoid.first['display_name'], guestNames[2]);
+      expect(leaderboardAfterVoid.first['total_points'], 24);
+      final tiedEntries = leaderboardAfterVoid
+          .where((entry) => entry['total_points'] == -4)
+          .map((entry) => entry['display_name'] as String)
+          .toSet();
+      expect(tiedEntries, containsAll(<String>[guestNames[1], guestNames[3]]));
+
+      await _tapBack(tester);
+      await tester.pumpAndSettle();
+      await _tapBack(tester);
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Leaderboard'));
+
+      await tester.tap(find.text('Leaderboard'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text(guestNames[2]));
+      await _pumpUntilVisible(tester, find.text('24 pts'));
     } finally {
       if (eventId != null) {
         await Supabase.instance.client
@@ -299,7 +359,10 @@ void main() {
       }
 
       for (final uid in [...normalizedPlayerTagUids, normalizedTableTagUid]) {
-        await Supabase.instance.client.from('nfc_tags').delete().eq('uid_hex', uid);
+        await Supabase.instance.client
+            .from('nfc_tags')
+            .delete()
+            .eq('uid_hex', uid);
       }
     }
   });
@@ -310,9 +373,8 @@ Future<void> _addPaidGuest(
   required String guestName,
   required String suffix,
 }) async {
-  final addGuestButton = find
-      .widgetWithText(FilledButton, 'Add Guest')
-      .hitTestable();
+  final addGuestButton =
+      find.widgetWithText(FilledButton, 'Add Guest').hitTestable();
   await _pumpUntilVisible(tester, addGuestButton);
   await tester.ensureVisible(addGuestButton);
   await tester.tap(addGuestButton);
@@ -360,6 +422,89 @@ Future<void> _scanSessionStep(
   await tester.pumpAndSettle();
 }
 
+Future<void> _recordDiscardHand(
+  WidgetTester tester, {
+  required String winnerLabel,
+  required String discarderLabel,
+  required String fanCount,
+}) async {
+  final recordHandButton =
+      find.widgetWithText(FilledButton, 'Record Hand').hitTestable();
+  await _pumpUntilVisible(tester, recordHandButton);
+  await tester.tap(recordHandButton);
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text('Self Draw'));
+
+  await tester.tap(find.text('Discard').hitTestable());
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.text('Winner'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(winnerLabel).last);
+  await tester.pumpAndSettle();
+
+  await tester.tap(find.text('Discarder'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(discarderLabel).last);
+  await tester.pumpAndSettle();
+
+  await tester.enterText(
+      find.widgetWithText(TextFormField, 'Fan Count'), fanCount);
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text('Scoring Preview'));
+
+  await tester.tap(find.text('Save Hand'));
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text('Session Detail'));
+  await _pumpUntilVisible(tester, recordHandButton);
+}
+
+Future<void> _recordSelfDrawHand(
+  WidgetTester tester, {
+  required String winnerLabel,
+  required String fanCount,
+}) async {
+  final recordHandButton =
+      find.widgetWithText(FilledButton, 'Record Hand').hitTestable();
+  await _pumpUntilVisible(tester, recordHandButton);
+  await tester.tap(recordHandButton);
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text('Self Draw'));
+
+  await tester.tap(find.text('Winner'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(winnerLabel).last);
+  await tester.pumpAndSettle();
+
+  await tester.enterText(
+      find.widgetWithText(TextFormField, 'Fan Count'), fanCount);
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text('Scoring Preview'));
+
+  await tester.tap(find.text('Save Hand'));
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text('Session Detail'));
+  await _pumpUntilVisible(tester, recordHandButton);
+}
+
+Future<void> _recordWashoutHand(WidgetTester tester) async {
+  final recordHandButton =
+      find.widgetWithText(FilledButton, 'Record Hand').hitTestable();
+  await _pumpUntilVisible(tester, recordHandButton);
+  await tester.tap(recordHandButton);
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text('Washout'));
+
+  await tester.tap(find.text('Washout'));
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text('Scoring Preview'));
+
+  await tester.tap(find.text('Save Hand'));
+  await tester.pumpAndSettle();
+  await _pumpUntilVisible(tester, find.text('Session Detail'));
+  await _pumpUntilVisible(tester, recordHandButton);
+}
+
 Future<void> _pumpUntilVisible(
   WidgetTester tester,
   Finder finder, {
@@ -394,4 +539,10 @@ Future<void> _pumpUntilAny(
   fail(
     'Timed out waiting for any of: ${finders.map((finder) => finder.describeMatch(Plurality.many)).join(', ')}',
   );
+}
+
+Future<void> _tapBack(WidgetTester tester) async {
+  final backButton = find.byTooltip('Back').hitTestable().first;
+  await _pumpUntilVisible(tester, backButton);
+  await tester.tap(backButton);
 }

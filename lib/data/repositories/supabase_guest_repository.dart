@@ -81,9 +81,7 @@ class SupabaseGuestRepository implements GuestRepository {
   Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
     String eventId,
   ) async {
-    final rows = await client
-        .from('event_guest_tag_assignments')
-        .select('''
+    final rows = await client.from('event_guest_tag_assignments').select('''
           id,
           event_id,
           event_guest_id,
@@ -98,9 +96,7 @@ class SupabaseGuestRepository implements GuestRepository {
             display_label,
             note
           )
-        ''')
-        .eq('event_id', eventId)
-        .eq('status', 'assigned');
+        ''').eq('event_id', eventId).eq('status', 'assigned');
 
     final summaries = rows
         .map((row) => GuestTagAssignmentSummary.fromJson({
@@ -286,9 +282,7 @@ class SupabaseGuestRepository implements GuestRepository {
         rethrow;
       }
 
-      final rows = await client
-          .from('event_guest_tag_assignments')
-          .select('''
+      final rows = await client.from('event_guest_tag_assignments').select('''
             id,
             event_id,
             event_guest_id,
@@ -303,10 +297,7 @@ class SupabaseGuestRepository implements GuestRepository {
               display_label,
               note
             )
-          ''')
-          .eq('event_guest_id', guestId)
-          .eq('status', 'assigned')
-          .limit(1);
+          ''').eq('event_guest_id', guestId).eq('status', 'assigned').limit(1);
       if (rows.isEmpty) {
         return null;
       }
@@ -370,7 +361,8 @@ class SupabaseGuestRepository implements GuestRepository {
       return value.cast<String, dynamic>();
     }
 
-    throw StateError('Expected a map row result but received ${value.runtimeType}.');
+    throw StateError(
+        'Expected a map row result but received ${value.runtimeType}.');
   }
 
   bool _shouldUseFallback(Object exception, String functionName) {
@@ -410,9 +402,8 @@ class SupabaseGuestRepository implements GuestRepository {
       throw StateError('A signed-in host is required to assign a player tag.');
     }
 
-    final normalizedUid = scannedUid
-        .replaceAll(RegExp(r'[^0-9A-Za-z]+'), '')
-        .toUpperCase();
+    final normalizedUid =
+        scannedUid.replaceAll(RegExp(r'[^0-9A-Za-z]+'), '').toUpperCase();
     if (normalizedUid.isEmpty) {
       throw StateError('Tag UID is required.');
     }
@@ -463,7 +454,8 @@ class SupabaseGuestRepository implements GuestRepository {
         .eq('status', 'assigned')
         .maybeSingle();
     if (conflictingAssignment != null) {
-      throw StateError('This tag is already assigned to another guest in this event.');
+      throw StateError(
+          'This tag is already assigned to another guest in this event.');
     }
 
     await client.from('event_guest_tag_assignments').insert({
@@ -490,14 +482,11 @@ class SupabaseGuestRepository implements GuestRepository {
       throw StateError('Guest does not have an active tag to replace.');
     }
 
-    await client
-        .from('event_guest_tag_assignments')
-        .update({
-          'status': 'replaced',
-          'released_at': DateTime.now().toUtc().toIso8601String(),
-          'release_reason': 'replacement',
-        })
-        .eq('id', currentAssignment.assignmentId);
+    await client.from('event_guest_tag_assignments').update({
+      'status': 'replaced',
+      'released_at': DateTime.now().toUtc().toIso8601String(),
+      'release_reason': 'replacement',
+    }).eq('id', currentAssignment.assignmentId);
 
     await _assignGuestTagFallback(
       guestId: guestId,

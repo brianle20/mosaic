@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
@@ -151,7 +153,8 @@ void main() {
       );
     });
 
-    test('parses ordered session seats and preserves explicit ruleset shape', () {
+    test('parses ordered session seats and preserves explicit ruleset shape',
+        () {
       final startedSession = StartedTableSessionRecord.fromJson(
         sessionJson: const {
           'id': 'ses_01',
@@ -245,6 +248,71 @@ void main() {
       expect(seatWindForIndex(1), SeatWind.south);
       expect(seatWindForIndex(2), SeatWind.west);
       expect(seatWindForIndex(3), SeatWind.north);
+    });
+  });
+
+  group('HandResultRecord', () {
+    test('parses derived scoring fields from JSON', () {
+      final hand = HandResultRecord.fromJson(const {
+        'id': 'hand_01',
+        'table_session_id': 'ses_01',
+        'hand_number': 3,
+        'result_type': 'win',
+        'winner_seat_index': 2,
+        'win_type': 'discard',
+        'discarder_seat_index': 0,
+        'fan_count': 7,
+        'base_points': 32,
+        'east_seat_index_before_hand': 0,
+        'east_seat_index_after_hand': 1,
+        'dealer_rotated': true,
+        'session_completed_after_hand': false,
+        'status': 'recorded',
+        'entered_by_user_id': 'usr_01',
+        'entered_at': '2026-04-24T20:00:00-07:00',
+      });
+
+      expect(hand.basePoints, 32);
+      expect(hand.eastSeatIndexBeforeHand, 0);
+      expect(hand.eastSeatIndexAfterHand, 1);
+      expect(hand.dealerRotated, isTrue);
+      expect(hand.sessionCompletedAfterHand, isFalse);
+    });
+  });
+
+  group('HandSettlementRecord', () {
+    test('parses a payer-to-winner points transfer', () {
+      final settlement = HandSettlementRecord.fromJson(const {
+        'id': 'hst_01',
+        'hand_result_id': 'hand_01',
+        'payer_event_guest_id': 'gst_east',
+        'payee_event_guest_id': 'gst_west',
+        'amount_points': 16,
+        'multiplier_flags_json': ['discard', 'east_loses'],
+      });
+
+      expect(settlement.amountPoints, 16);
+      expect(settlement.multiplierFlags, ['discard', 'east_loses']);
+    });
+  });
+
+  group('LeaderboardEntry', () {
+    test('parses a leaderboard row from the server response', () {
+      final entry = LeaderboardEntry.fromJson(const {
+        'event_guest_id': 'gst_01',
+        'display_name': 'Alice Wong',
+        'total_points': 48,
+        'hands_won': 3,
+        'self_draw_wins': 1,
+        'discard_wins': 2,
+        'rank': 1,
+      });
+
+      expect(entry.displayName, 'Alice Wong');
+      expect(entry.totalPoints, 48);
+      expect(entry.handsWon, 3);
+      expect(entry.selfDrawWins, 1);
+      expect(entry.rank, 1);
     });
   });
 

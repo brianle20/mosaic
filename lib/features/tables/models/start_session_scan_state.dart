@@ -50,8 +50,7 @@ class StartSessionScanState {
     };
   }
 
-  bool get canReview =>
-      tableTagUid != null && scannedPlayerUids.length == 4;
+  bool get canReview => tableTagUid != null && scannedPlayerUids.length == 4;
 
   StartSessionScanState withTableTag(String normalizedUid) {
     return StartSessionScanState(
@@ -62,7 +61,8 @@ class StartSessionScanState {
 
   StartSessionScanState withPlayerTag(String normalizedUid) {
     if (scannedPlayerUids.contains(normalizedUid)) {
-      throw StateError('Duplicate player tag scanned in the same session setup.');
+      throw StateError(
+          'Duplicate player tag scanned in the same session setup.');
     }
 
     return StartSessionScanState(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -49,7 +50,8 @@ class _FakeGuestRepository implements GuestRepository {
       assignments;
 
   @override
-  Future<List<EventGuestRecord>> readCachedGuests(String eventId) async => guests;
+  Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
+      guests;
 
   @override
   Future<GuestDetailRecord> replaceGuestTag({
@@ -70,15 +72,36 @@ class _FakeSessionRepository implements SessionRepository {
   StartTableSessionInput? startedInput;
 
   @override
+  Future<SessionDetailRecord> editHand(EditHandResultInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async =>
       const [];
+
+  @override
+  Future<SessionDetailRecord> loadSessionDetail(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> recordHand(RecordHandResultInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord?> readCachedSessionDetail(
+          String sessionId) async =>
+      null;
 
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
       const [];
 
   @override
-  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) async {
+  Future<StartedTableSessionRecord> startSession(
+      StartTableSessionInput input) async {
     startedInput = input;
     return StartedTableSessionRecord.fromJson(
       sessionJson: const {
@@ -131,6 +154,11 @@ class _FakeSessionRepository implements SessionRepository {
       ],
     );
   }
+
+  @override
+  Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
+    throw UnimplementedError();
+  }
 }
 
 class _QueuedNfcService implements NfcService {
@@ -141,7 +169,8 @@ class _QueuedNfcService implements NfcService {
   TagScanResult? _takeNext() => results.removeAt(0);
 
   @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) async =>
+  Future<TagScanResult?> scanPlayerTagForAssignment(
+          BuildContext context) async =>
       null;
 
   @override
@@ -152,7 +181,8 @@ class _QueuedNfcService implements NfcService {
       _takeNext();
 
   @override
-  Future<TagScanResult?> scanTableTag(BuildContext context) async => _takeNext();
+  Future<TagScanResult?> scanTableTag(BuildContext context) async =>
+      _takeNext();
 }
 
 void main() {

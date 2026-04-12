@@ -7,6 +7,7 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/data/repositories/supabase_auth_repository.dart';
 import 'package:mosaic/data/repositories/supabase_event_repository.dart';
 import 'package:mosaic/data/repositories/supabase_guest_repository.dart';
+import 'package:mosaic/data/repositories/supabase_leaderboard_repository.dart';
 import 'package:mosaic/data/repositories/supabase_session_repository.dart';
 import 'package:mosaic/data/repositories/supabase_table_repository.dart';
 import 'package:mosaic/features/auth/controllers/auth_controller.dart';
@@ -26,6 +27,7 @@ class MosaicApp extends StatelessWidget {
     this.guestRepository,
     this.tableRepository,
     this.sessionRepository,
+    this.leaderboardRepository,
     this.nfcService,
   });
 
@@ -36,6 +38,7 @@ class MosaicApp extends StatelessWidget {
   final GuestRepository? guestRepository;
   final TableRepository? tableRepository;
   final SessionRepository? sessionRepository;
+  final LeaderboardRepository? leaderboardRepository;
   final NfcService? nfcService;
 
   @override
@@ -53,6 +56,7 @@ class MosaicApp extends StatelessWidget {
         guestRepository != null &&
         tableRepository != null &&
         sessionRepository != null &&
+        leaderboardRepository != null &&
         nfcService != null) {
       return _AppWithRepositories(
         authRepository: authRepository!,
@@ -60,6 +64,7 @@ class MosaicApp extends StatelessWidget {
         guestRepository: guestRepository!,
         tableRepository: tableRepository!,
         sessionRepository: sessionRepository!,
+        leaderboardRepository: leaderboardRepository!,
         nfcService: nfcService!,
       );
     }
@@ -71,6 +76,7 @@ class MosaicApp extends StatelessWidget {
           GuestRepository guestRepository,
           TableRepository tableRepository,
           SessionRepository sessionRepository,
+          LeaderboardRepository leaderboardRepository,
           NfcService nfcService,
         })>(
       future: _loadRepositories(),
@@ -97,6 +103,7 @@ class MosaicApp extends StatelessWidget {
           guestRepository: snapshot.data!.guestRepository,
           tableRepository: snapshot.data!.tableRepository,
           sessionRepository: snapshot.data!.sessionRepository,
+          leaderboardRepository: snapshot.data!.leaderboardRepository,
           nfcService: snapshot.data!.nfcService,
         );
       },
@@ -110,6 +117,7 @@ class MosaicApp extends StatelessWidget {
         GuestRepository guestRepository,
         TableRepository tableRepository,
         SessionRepository sessionRepository,
+        LeaderboardRepository leaderboardRepository,
         NfcService nfcService,
       })> _loadRepositories() async {
     final cache = await LocalCache.create();
@@ -129,6 +137,10 @@ class MosaicApp extends StatelessWidget {
         cache: cache,
       ),
       sessionRepository: SupabaseSessionRepository(
+        client: client,
+        cache: cache,
+      ),
+      leaderboardRepository: SupabaseLeaderboardRepository(
         client: client,
         cache: cache,
       ),
@@ -198,6 +210,7 @@ class _AppWithRepositories extends StatelessWidget {
     required this.guestRepository,
     required this.tableRepository,
     required this.sessionRepository,
+    required this.leaderboardRepository,
     required this.nfcService,
   });
 
@@ -206,6 +219,7 @@ class _AppWithRepositories extends StatelessWidget {
   final GuestRepository guestRepository;
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
+  final LeaderboardRepository leaderboardRepository;
   final NfcService nfcService;
 
   @override
@@ -215,6 +229,7 @@ class _AppWithRepositories extends StatelessWidget {
       guestRepository: guestRepository,
       tableRepository: tableRepository,
       sessionRepository: sessionRepository,
+      leaderboardRepository: leaderboardRepository,
       nfcService: nfcService,
     );
 

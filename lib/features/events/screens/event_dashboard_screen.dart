@@ -10,11 +10,13 @@ class EventDashboardScreen extends StatefulWidget {
     required this.args,
     required this.eventRepository,
     required this.guestRepository,
+    required this.leaderboardRepository,
   });
 
   final EventDashboardArgs args;
   final EventRepository eventRepository;
   final GuestRepository guestRepository;
+  final LeaderboardRepository leaderboardRepository;
 
   @override
   State<EventDashboardScreen> createState() => _EventDashboardScreenState();
@@ -78,6 +80,18 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     );
   }
 
+  void _openLeaderboard() {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    Navigator.of(context).pushNamed(
+      AppRouter.leaderboardRoute,
+      arguments: LeaderboardArgs(eventId: event.id),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final event = _controller.event;
@@ -110,6 +124,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 FilledButton(
                   onPressed: _openTables,
                   child: const Text('Tables'),
+                ),
+                FilledButton(
+                  onPressed: _openLeaderboard,
+                  child: const Text('Leaderboard'),
                 ),
                 OutlinedButton(
                   onPressed: _openGuests,

@@ -6,7 +6,8 @@ class ManualEntryNfcService implements NfcService {
   const ManualEntryNfcService();
 
   @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) async {
+  Future<TagScanResult?> scanPlayerTagForAssignment(
+      BuildContext context) async {
     return _scanTag(
       context,
       title: 'Enter Tag UID',

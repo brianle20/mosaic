@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -28,7 +29,8 @@ class _FakeTableRepository implements TableRepository {
   Future<List<EventTableRecord>> listTables(String eventId) async => tables;
 
   @override
-  Future<List<EventTableRecord>> readCachedTables(String eventId) async => tables;
+  Future<List<EventTableRecord>> readCachedTables(String eventId) async =>
+      tables;
 
   @override
   Future<EventTableRecord> updateTable(UpdateEventTableInput input) {
@@ -42,7 +44,28 @@ class _FakeSessionRepository implements SessionRepository {
   final List<TableSessionRecord> sessions;
 
   @override
-  Future<List<TableSessionRecord>> listSessions(String eventId) async => sessions;
+  Future<SessionDetailRecord> editHand(EditHandResultInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<TableSessionRecord>> listSessions(String eventId) async =>
+      sessions;
+
+  @override
+  Future<SessionDetailRecord> loadSessionDetail(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> recordHand(RecordHandResultInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord?> readCachedSessionDetail(
+          String sessionId) async =>
+      null;
 
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
@@ -50,6 +73,11 @@ class _FakeSessionRepository implements SessionRepository {
 
   @override
   Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
     throw UnimplementedError();
   }
 }

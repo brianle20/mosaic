@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -21,6 +22,8 @@ class LocalCache {
   static const _guestListKeyPrefix = 'guests:';
   static const _tableListKeyPrefix = 'tables:';
   static const _sessionListKeyPrefix = 'sessions:';
+  static const _sessionDetailKeyPrefix = 'session-detail:';
+  static const _leaderboardKeyPrefix = 'leaderboard:';
 
   Future<void> saveEvents(List<EventRecord> events) async {
     await _preferences.setString(
@@ -92,7 +95,8 @@ class LocalCache {
 
     final decoded = jsonDecode(raw) as List<dynamic>;
     return decoded
-        .map((table) => EventTableRecord.fromJson(table as Map<String, dynamic>))
+        .map(
+            (table) => EventTableRecord.fromJson(table as Map<String, dynamic>))
         .toList(growable: false);
   }
 
@@ -117,6 +121,47 @@ class LocalCache {
         .map(
           (session) =>
               TableSessionRecord.fromJson(session as Map<String, dynamic>),
+        )
+        .toList(growable: false);
+  }
+
+  Future<void> saveSessionDetail(SessionDetailRecord detail) async {
+    await _preferences.setString(
+      '$_sessionDetailKeyPrefix${detail.session.id}',
+      jsonEncode(detail.toJson()),
+    );
+  }
+
+  SessionDetailRecord? readSessionDetail(String sessionId) {
+    final raw = _preferences.getString('$_sessionDetailKeyPrefix$sessionId');
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+
+    return SessionDetailRecord.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>);
+  }
+
+  Future<void> saveLeaderboard(
+    String eventId,
+    List<LeaderboardEntry> entries,
+  ) async {
+    await _preferences.setString(
+      '$_leaderboardKeyPrefix$eventId',
+      jsonEncode(entries.map((entry) => entry.toJson()).toList()),
+    );
+  }
+
+  List<LeaderboardEntry> readLeaderboard(String eventId) {
+    final raw = _preferences.getString('$_leaderboardKeyPrefix$eventId');
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map(
+          (entry) => LeaderboardEntry.fromJson(entry as Map<String, dynamic>),
         )
         .toList(growable: false);
   }
