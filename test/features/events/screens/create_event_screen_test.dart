@@ -31,6 +31,16 @@ class _RecordingEventRepository implements EventRepository {
   }
 
   @override
+  Future<EventRecord> completeEvent(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> finalizeEvent(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventRecord?> getEvent(String eventId) async => null;
 
   @override

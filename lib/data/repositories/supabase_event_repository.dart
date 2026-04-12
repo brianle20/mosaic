@@ -3,14 +3,21 @@ import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+typedef EventMutationRunner = Future<Map<String, dynamic>> Function(
+  String functionName,
+  Map<String, dynamic> params,
+);
+
 class SupabaseEventRepository implements EventRepository {
   SupabaseEventRepository({
     required this.client,
     required this.cache,
-  });
+    EventMutationRunner? eventMutationRunner,
+  }) : _eventMutationRunner = eventMutationRunner;
 
   final SupabaseClient client;
   final LocalCache cache;
+  final EventMutationRunner? _eventMutationRunner;
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) async {
@@ -26,14 +33,29 @@ class SupabaseEventRepository implements EventRepository {
         .single();
 
     final record = EventRecord.fromJson(inserted);
-    final currentEvents = await readCachedEvents();
-    final mergedEvents = [
-      ...currentEvents.where((event) => event.id != record.id),
-      record
-    ]..sort((left, right) => left.startsAt.compareTo(right.startsAt));
+    await _saveEventRecord(record);
+    return record;
+  }
 
-    await cache.saveEvent(record);
-    await cache.saveEvents(mergedEvents);
+  @override
+  Future<EventRecord> completeEvent(String eventId) async {
+    final response = await _runMutation(
+      'complete_event',
+      {'target_event_id': eventId},
+    );
+    final record = EventRecord.fromJson(response);
+    await _saveEventRecord(record);
+    return record;
+  }
+
+  @override
+  Future<EventRecord> finalizeEvent(String eventId) async {
+    final response = await _runMutation(
+      'finalize_event',
+      {'target_event_id': eventId},
+    );
+    final record = EventRecord.fromJson(response);
+    await _saveEventRecord(record);
     return record;
   }
 
@@ -69,5 +91,39 @@ class SupabaseEventRepository implements EventRepository {
   @override
   Future<List<EventRecord>> readCachedEvents() async {
     return cache.readEvents();
+  }
+
+  Future<void> _saveEventRecord(EventRecord record) async {
+    final currentEvents = await readCachedEvents();
+    final mergedEvents = [
+      ...currentEvents.where((event) => event.id != record.id),
+      record,
+    ]..sort((left, right) => left.startsAt.compareTo(right.startsAt));
+
+    await cache.saveEvent(record);
+    await cache.saveEvents(mergedEvents);
+  }
+
+  Future<Map<String, dynamic>> _runMutation(
+    String functionName,
+    Map<String, dynamic> params,
+  ) async {
+    final runner = _eventMutationRunner;
+    if (runner != null) {
+      return runner(functionName, params);
+    }
+
+    final response = await client.rpc(functionName, params: params);
+    if (response is Map<String, dynamic>) {
+      return response;
+    }
+
+    if (response is Map) {
+      return response.cast<String, dynamic>();
+    }
+
+    throw StateError(
+      'Expected a map response from $functionName but received ${response.runtimeType}.',
+    );
   }
 }

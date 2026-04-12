@@ -380,6 +380,42 @@ void main() {
       expect(prizeAwards, hasLength(1));
       expect(prizeAwards.first['award_amount_cents'], 5000);
       expect(prizeAwards.first['status'], 'paid');
+
+      // Event activation is still a separate product slice, so the live smoke
+      // promotes the event to active before verifying completion/finalization
+      // against the real backend RPCs.
+      await Supabase.instance.client
+          .from('events')
+          .update({'lifecycle_status': 'active', 'scoring_open': true}).eq(
+              'id', eventId);
+      await Supabase.instance.client
+          .from('table_sessions')
+          .update({
+            'status': 'ended_early',
+            'ended_at': DateTime.now().toIso8601String(),
+            'ended_by_user_id': Supabase.instance.client.auth.currentUser!.id,
+            'end_reason': 'smoke test finalization',
+          })
+          .eq('event_id', eventId)
+          .inFilter('status', ['active', 'paused']);
+
+      await Supabase.instance.client.rpc(
+        'complete_event',
+        params: {'target_event_id': eventId},
+      );
+      await Supabase.instance.client.rpc(
+        'finalize_event',
+        params: {'target_event_id': eventId},
+      );
+
+      final finalizedEventRow = await Supabase.instance.client
+          .from('events')
+          .select('lifecycle_status, checkin_open, scoring_open')
+          .eq('id', eventId)
+          .single();
+      expect(finalizedEventRow['lifecycle_status'], 'finalized');
+      expect(finalizedEventRow['checkin_open'], isFalse);
+      expect(finalizedEventRow['scoring_open'], isFalse);
     } finally {
       if (eventId != null) {
         await Supabase.instance.client

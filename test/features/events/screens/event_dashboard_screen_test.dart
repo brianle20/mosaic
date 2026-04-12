@@ -15,12 +15,40 @@ import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
 class _EventRepository implements EventRepository {
-  _EventRepository(this.event);
+  _EventRepository(
+    this.event, {
+    this.onComplete,
+    this.onFinalize,
+  });
 
-  final EventRecord event;
+  EventRecord event;
+  final Future<EventRecord> Function(String eventId)? onComplete;
+  final Future<EventRecord> Function(String eventId)? onFinalize;
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> completeEvent(String eventId) async {
+    final handler = onComplete;
+    if (handler != null) {
+      event = await handler(eventId);
+      return event;
+    }
+
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> finalizeEvent(String eventId) async {
+    final handler = onFinalize;
+    if (handler != null) {
+      event = await handler(eventId);
+      return event;
+    }
+
     throw UnimplementedError();
   }
 
@@ -242,7 +270,7 @@ class _NfcService implements NfcService {
 }
 
 void main() {
-  final event = EventRecord.fromJson(const {
+  final activeEvent = EventRecord.fromJson(const {
     'id': 'evt_01',
     'owner_user_id': 'usr_01',
     'title': 'Friday Night Mahjong',
@@ -256,13 +284,41 @@ void main() {
     'default_ruleset_id': 'HK_STANDARD_V1',
     'prevailing_wind': 'east',
   });
+  final completedEvent = EventRecord.fromJson(const {
+    'id': 'evt_02',
+    'owner_user_id': 'usr_01',
+    'title': 'Completed Friday Night Mahjong',
+    'timezone': 'America/Los_Angeles',
+    'starts_at': '2026-04-24T19:00:00-07:00',
+    'lifecycle_status': 'completed',
+    'checkin_open': true,
+    'scoring_open': false,
+    'cover_charge_cents': 2000,
+    'prize_budget_cents': 50000,
+    'default_ruleset_id': 'HK_STANDARD_V1',
+    'prevailing_wind': 'east',
+  });
+  final finalizedEvent = EventRecord.fromJson(const {
+    'id': 'evt_03',
+    'owner_user_id': 'usr_01',
+    'title': 'Finalized Friday Night Mahjong',
+    'timezone': 'America/Los_Angeles',
+    'starts_at': '2026-04-24T19:00:00-07:00',
+    'lifecycle_status': 'finalized',
+    'checkin_open': false,
+    'scoring_open': false,
+    'cover_charge_cents': 2000,
+    'prize_budget_cents': 50000,
+    'default_ruleset_id': 'HK_STANDARD_V1',
+    'prevailing_wind': 'east',
+  });
 
   testWidgets('dashboard exposes a prizes action', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: EventDashboardScreen(
           args: const EventDashboardArgs(eventId: 'evt_01'),
-          eventRepository: _EventRepository(event),
+          eventRepository: _EventRepository(activeEvent),
           guestRepository: _GuestRepository(),
           leaderboardRepository: _LeaderboardRepository(),
         ),
@@ -277,7 +333,7 @@ void main() {
     tester,
   ) async {
     final router = AppRouter(
-      eventRepository: _EventRepository(event),
+      eventRepository: _EventRepository(activeEvent),
       guestRepository: _GuestRepository(),
       tableRepository: _TableRepository(),
       sessionRepository: _SessionRepository(),
@@ -290,7 +346,7 @@ void main() {
       MaterialApp(
         home: EventDashboardScreen(
           args: const EventDashboardArgs(eventId: 'evt_01'),
-          eventRepository: _EventRepository(event),
+          eventRepository: _EventRepository(activeEvent),
           guestRepository: _GuestRepository(),
           leaderboardRepository: _LeaderboardRepository(),
         ),
@@ -305,5 +361,95 @@ void main() {
     expect(find.byType(PrizePlanScreen), findsOneWidget);
     expect(find.text('Prize Budget'), findsOneWidget);
     expect(find.text('50000 cents'), findsOneWidget);
+  });
+
+  testWidgets('active event shows Complete Event action', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Complete Event'), findsOneWidget);
+    expect(find.text('Finalize Event'), findsNothing);
+  });
+
+  testWidgets('completed event shows Finalize Event action', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_02'),
+          eventRepository: _EventRepository(
+            completedEvent,
+            onFinalize: (_) async => finalizedEvent,
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Finalize Event'), findsOneWidget);
+    expect(find.text('Complete Event'), findsNothing);
+  });
+
+  testWidgets('finalized event hides live operation actions', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_03'),
+          eventRepository: _EventRepository(finalizedEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('This event is finalized.'), findsOneWidget);
+    expect(find.text('Guests'), findsNothing);
+    expect(find.text('Tables'), findsNothing);
+    expect(find.text('Add Guest'), findsNothing);
+    expect(find.text('Complete Event'), findsNothing);
+    expect(find.text('Finalize Event'), findsNothing);
+  });
+
+  testWidgets('blocked lifecycle error renders when completion fails',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(
+            activeEvent,
+            onComplete: (_) async {
+              throw StateError(
+                '1 active or paused session(s) must be ended before changing the event lifecycle.',
+              );
+            },
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Complete Event'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        '1 active or paused session(s) must be ended before changing the event lifecycle.',
+      ),
+      findsOneWidget,
+    );
   });
 }
