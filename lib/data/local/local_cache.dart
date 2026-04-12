@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
+import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,6 +25,9 @@ class LocalCache {
   static const _sessionListKeyPrefix = 'sessions:';
   static const _sessionDetailKeyPrefix = 'session-detail:';
   static const _leaderboardKeyPrefix = 'leaderboard:';
+  static const _prizePlanKeyPrefix = 'prize-plan:';
+  static const _prizePreviewKeyPrefix = 'prize-preview:';
+  static const _prizeAwardsKeyPrefix = 'prize-awards:';
 
   Future<void> saveEvents(List<EventRecord> events) async {
     await _preferences.setString(
@@ -163,6 +167,72 @@ class LocalCache {
         .map(
           (entry) => LeaderboardEntry.fromJson(entry as Map<String, dynamic>),
         )
+        .toList(growable: false);
+  }
+
+  Future<void> savePrizePlan(String eventId, PrizePlanDetail detail) async {
+    await _preferences.setString(
+      '$_prizePlanKeyPrefix$eventId',
+      jsonEncode(detail.toJson()),
+    );
+  }
+
+  PrizePlanDetail? readPrizePlan(String eventId) {
+    final raw = _preferences.getString('$_prizePlanKeyPrefix$eventId');
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+
+    final decoded = jsonDecode(raw) as Map<String, dynamic>;
+    final planJson = (decoded['plan'] as Map).cast<String, dynamic>();
+    final prizeBudgetCents = (planJson['prize_budget_cents'] as num).toInt();
+    return PrizePlanDetail.fromJson(decoded,
+        prizeBudgetCents: prizeBudgetCents);
+  }
+
+  Future<void> savePrizePreview(
+    String eventId,
+    List<PrizeAwardPreviewRow> preview,
+  ) async {
+    await _preferences.setString(
+      '$_prizePreviewKeyPrefix$eventId',
+      jsonEncode(preview.map((row) => row.toJson()).toList(growable: false)),
+    );
+  }
+
+  List<PrizeAwardPreviewRow> readPrizePreview(String eventId) {
+    final raw = _preferences.getString('$_prizePreviewKeyPrefix$eventId');
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((row) =>
+            PrizeAwardPreviewRow.fromJson((row as Map).cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
+  Future<void> savePrizeAwards(
+    String eventId,
+    List<PrizeAwardRecord> awards,
+  ) async {
+    await _preferences.setString(
+      '$_prizeAwardsKeyPrefix$eventId',
+      jsonEncode(awards.map((award) => award.toJson()).toList(growable: false)),
+    );
+  }
+
+  List<PrizeAwardRecord> readPrizeAwards(String eventId) {
+    final raw = _preferences.getString('$_prizeAwardsKeyPrefix$eventId');
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((award) =>
+            PrizeAwardRecord.fromJson((award as Map).cast<String, dynamic>()))
         .toList(growable: false);
   }
 }

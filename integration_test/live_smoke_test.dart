@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/main.dart' as app;
+import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const _hostEmail = String.fromEnvironment('HOST_EMAIL');
@@ -11,7 +13,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-      'host can sign in, score hands, and verify leaderboard recalculation',
+      'host can sign in, score hands, configure prizes, and verify payout tracking',
       (tester) async {
     if (_hostEmail.isEmpty || _hostPassword.isEmpty) {
       fail(
@@ -42,6 +44,7 @@ void main() {
 
     String? eventId;
     String? tableId;
+    Map<String, String> guestNamesById = const {};
 
     app.main();
     await tester.pump();
@@ -125,6 +128,10 @@ void main() {
           .eq('event_id', eventId)
           .order('display_name', ascending: true);
       expect(guestRows, hasLength(4));
+      guestNamesById = {
+        for (final guest in guestRows)
+          guest['id'] as String: guest['display_name'] as String,
+      };
 
       for (var index = 0; index < guestNames.length; index++) {
         final guestRow = guestRows.firstWhere(
@@ -319,7 +326,67 @@ void main() {
       await tester.pumpAndSettle();
       await _pumpUntilVisible(tester, find.text(guestNames[2]));
       await _pumpUntilVisible(tester, find.text('24 pts'));
+
+      await _tapBack(tester);
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Prizes'));
+
+      await tester.tap(find.text('Prizes'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Prize Plan'));
+
+      await Supabase.instance.client.rpc(
+        'upsert_prize_plan',
+        params: {
+          'target_event_id': eventId,
+          'target_mode': 'fixed',
+          'target_reserve_fixed_cents': 0,
+          'target_reserve_percentage_bps': 0,
+          'target_note': 'Smoke test payout',
+          'target_tiers': [
+            {
+              'place': 1,
+              'label': '1st',
+              'fixed_amount_cents': 5000,
+            },
+          ],
+        },
+      );
+      await Supabase.instance.client.rpc(
+        'lock_prize_awards',
+        params: {'target_event_id': eventId},
+      );
+      final prizePlanContext = tester.element(find.byType(PrizePlanScreen));
+      Navigator.of(prizePlanContext).pushNamed(
+        AppRouter.prizeAwardsRoute,
+        arguments: PrizeAwardsArgs(
+          eventId: eventId,
+          guestNamesById: guestNamesById,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Prize Awards'));
+      await _pumpUntilVisible(tester, find.text(guestNames[2]));
+
+      await tester.tap(find.text('Mark Paid').first);
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('paid'));
+
+      final prizeAwards = await Supabase.instance.client
+          .from('prize_awards')
+          .select('display_rank, award_amount_cents, status')
+          .eq('event_id', eventId)
+          .order('rank_start', ascending: true);
+      expect(prizeAwards, hasLength(1));
+      expect(prizeAwards.first['award_amount_cents'], 5000);
+      expect(prizeAwards.first['status'], 'paid');
     } finally {
+      if (eventId != null) {
+        await Supabase.instance.client
+            .from('prize_awards')
+            .delete()
+            .eq('event_id', eventId);
+      }
       if (eventId != null) {
         await Supabase.instance.client
             .from('event_guest_tag_assignments')

@@ -6,6 +6,8 @@ import 'package:mosaic/features/events/screens/create_event_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
 import 'package:mosaic/features/leaderboard/screens/leaderboard_screen.dart';
+import 'package:mosaic/features/prizes/screens/prize_awards_screen.dart';
+import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
@@ -22,6 +24,7 @@ class AppRouter {
     required this.tableRepository,
     required this.sessionRepository,
     required this.leaderboardRepository,
+    required this.prizeRepository,
     required this.nfcService,
   });
 
@@ -30,6 +33,7 @@ class AppRouter {
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
   final LeaderboardRepository leaderboardRepository;
+  final PrizeRepository prizeRepository;
   final NfcService nfcService;
 
   static const eventListRoute = '/';
@@ -43,6 +47,8 @@ class AppRouter {
   static const startSessionRoute = '/tables/start-session';
   static const sessionDetailRoute = '/sessions/detail';
   static const leaderboardRoute = '/leaderboard';
+  static const prizePlanRoute = '/prizes/plan';
+  static const prizeAwardsRoute = '/prizes/awards';
 
   Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -157,6 +163,26 @@ class AppRouter {
           ),
           settings: settings,
         );
+      case prizePlanRoute:
+        final args = settings.arguments as PrizePlanArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => PrizePlanScreen(
+            eventId: args.eventId,
+            prizeBudgetCents: args.prizeBudgetCents,
+            prizeRepository: prizeRepository,
+          ),
+          settings: settings,
+        );
+      case prizeAwardsRoute:
+        final args = settings.arguments as PrizeAwardsArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => PrizeAwardsScreen(
+            eventId: args.eventId,
+            guestNamesById: args.guestNamesById,
+            prizeRepository: prizeRepository,
+          ),
+          settings: settings,
+        );
       default:
         return MaterialPageRoute<void>(
           builder: (_) => EventListScreen(
@@ -254,4 +280,24 @@ class LeaderboardArgs {
   });
 
   final String eventId;
+}
+
+class PrizePlanArgs {
+  const PrizePlanArgs({
+    required this.eventId,
+    required this.prizeBudgetCents,
+  });
+
+  final String eventId;
+  final int prizeBudgetCents;
+}
+
+class PrizeAwardsArgs {
+  const PrizeAwardsArgs({
+    required this.eventId,
+    this.guestNamesById = const {},
+  });
+
+  final String eventId;
+  final Map<String, String> guestNamesById;
 }

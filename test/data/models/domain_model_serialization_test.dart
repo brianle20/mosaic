@@ -330,4 +330,64 @@ void main() {
       expect(record.distributableBudgetCents, 8000);
     });
   });
+
+  group('PrizeTierRecord', () {
+    test('parses a fixed prize tier row', () {
+      final tier = PrizeTierRecord.fromJson(const {
+        'id': 'tier_01',
+        'prize_plan_id': 'pp_01',
+        'place': 1,
+        'label': '1st Place',
+        'fixed_amount_cents': 15000,
+        'percentage_bps': null,
+      });
+
+      expect(tier.place, 1);
+      expect(tier.label, '1st Place');
+      expect(tier.fixedAmountCents, 15000);
+      expect(tier.percentageBps, isNull);
+    });
+  });
+
+  group('PrizeAwardRecord', () {
+    test('parses a locked prize award row', () {
+      final award = PrizeAwardRecord.fromJson(const {
+        'id': 'award_01',
+        'event_id': 'evt_01',
+        'event_guest_id': 'gst_01',
+        'rank_start': 1,
+        'rank_end': 1,
+        'display_rank': '1',
+        'award_amount_cents': 15000,
+        'status': 'planned',
+        'paid_method': null,
+        'paid_at': null,
+        'paid_note': null,
+      });
+
+      expect(award.rankStart, 1);
+      expect(award.displayRank, '1');
+      expect(award.awardAmountCents, 15000);
+      expect(award.status, PrizeAwardStatus.planned);
+    });
+  });
+
+  group('PrizeAwardPreviewRow', () {
+    test('parses a derived preview award row with shared rank data', () {
+      final preview = PrizeAwardPreviewRow.fromJson(const {
+        'event_guest_id': 'gst_02',
+        'display_name': 'Bob Lee',
+        'rank_start': 2,
+        'rank_end': 3,
+        'display_rank': 'T-2',
+        'award_amount_cents': 7500,
+      });
+
+      expect(preview.displayName, 'Bob Lee');
+      expect(preview.rankStart, 2);
+      expect(preview.rankEnd, 3);
+      expect(preview.displayRank, 'T-2');
+      expect(preview.awardAmountCents, 7500);
+    });
+  });
 }

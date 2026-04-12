@@ -92,6 +92,21 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     );
   }
 
+  void _openPrizes() {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    Navigator.of(context).pushNamed(
+      AppRouter.prizePlanRoute,
+      arguments: PrizePlanArgs(
+        eventId: event.id,
+        prizeBudgetCents: event.prizeBudgetCents,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final event = _controller.event;
@@ -129,6 +144,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   onPressed: _openLeaderboard,
                   child: const Text('Leaderboard'),
                 ),
+                FilledButton(
+                  onPressed: _openPrizes,
+                  child: const Text('Prizes'),
+                ),
                 OutlinedButton(
                   onPressed: _openGuests,
                   child: const Text('Add Guest'),
@@ -140,7 +159,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               child: Padding(
                 padding: EdgeInsets.all(16),
                 child: Text(
-                  'Check-in, tables, sessions, scoring, and prizes will land in later slices.',
+                  'Check-in, tables, sessions, scoring, and prizes are available from the dashboard actions above.',
                 ),
               ),
             ),
