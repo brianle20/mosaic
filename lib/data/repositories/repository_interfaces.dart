@@ -30,6 +30,10 @@ abstract interface class EventRepository {
   Future<EventRecord?> getEvent(String eventId);
 
   Future<EventRecord> createEvent(CreateEventInput input);
+
+  Future<EventRecord> completeEvent(String eventId);
+
+  Future<EventRecord> finalizeEvent(String eventId);
 }
 
 abstract interface class GuestRepository {

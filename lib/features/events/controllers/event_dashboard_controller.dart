@@ -14,13 +14,16 @@ class EventDashboardController extends ChangeNotifier {
   final GuestRepository _guestRepository;
 
   bool isLoading = true;
+  bool isSubmittingLifecycle = false;
   String? error;
+  String? lifecycleError;
   EventRecord? event;
   int guestCount = 0;
 
   Future<void> load(String eventId) async {
     isLoading = true;
     error = null;
+    lifecycleError = null;
     notifyListeners();
 
     try {
@@ -37,5 +40,54 @@ class EventDashboardController extends ChangeNotifier {
 
     isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> completeEvent() async {
+    final currentEvent = event;
+    if (currentEvent == null || isSubmittingLifecycle) {
+      return;
+    }
+
+    isSubmittingLifecycle = true;
+    lifecycleError = null;
+    notifyListeners();
+
+    try {
+      event = await _eventRepository.completeEvent(currentEvent.id);
+    } catch (exception) {
+      lifecycleError = _formatLifecycleError(exception);
+    }
+
+    isSubmittingLifecycle = false;
+    notifyListeners();
+  }
+
+  Future<void> finalizeEvent() async {
+    final currentEvent = event;
+    if (currentEvent == null || isSubmittingLifecycle) {
+      return;
+    }
+
+    isSubmittingLifecycle = true;
+    lifecycleError = null;
+    notifyListeners();
+
+    try {
+      event = await _eventRepository.finalizeEvent(currentEvent.id);
+    } catch (exception) {
+      lifecycleError = _formatLifecycleError(exception);
+    }
+
+    isSubmittingLifecycle = false;
+    notifyListeners();
+  }
+
+  String _formatLifecycleError(Object exception) {
+    final message = exception.toString();
+    const statePrefix = 'Bad state: ';
+    if (message.startsWith(statePrefix)) {
+      return message.substring(statePrefix.length);
+    }
+    return message;
   }
 }
