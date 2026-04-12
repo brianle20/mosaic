@@ -31,6 +31,14 @@ abstract interface class EventRepository {
 
   Future<EventRecord> createEvent(CreateEventInput input);
 
+  Future<EventRecord> startEvent(String eventId);
+
+  Future<EventRecord> setOperationalFlags({
+    required String eventId,
+    required bool checkinOpen,
+    required bool scoringOpen,
+  });
+
   Future<EventRecord> completeEvent(String eventId);
 
   Future<EventRecord> finalizeEvent(String eventId);
@@ -96,6 +104,15 @@ abstract interface class SessionRepository {
   Future<SessionDetailRecord> loadSessionDetail(String sessionId);
 
   Future<StartedTableSessionRecord> startSession(StartTableSessionInput input);
+
+  Future<SessionDetailRecord> pauseSession(String sessionId);
+
+  Future<SessionDetailRecord> resumeSession(String sessionId);
+
+  Future<SessionDetailRecord> endSession({
+    required String sessionId,
+    required String reason,
+  });
 
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input);
 
