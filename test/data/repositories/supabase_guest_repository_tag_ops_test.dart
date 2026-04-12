@@ -11,7 +11,8 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('maps check-in RPC result into guest detail without active tag', () async {
+    test('maps check-in RPC result into guest detail without active tag',
+        () async {
       final cache = await LocalCache.create();
       final repository = SupabaseGuestRepository(
         client: SupabaseClient('https://example.com', 'publishable-key'),

@@ -63,7 +63,8 @@ class _FakeNfcService implements NfcService {
   const _FakeNfcService();
 
   @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) async =>
+  Future<TagScanResult?> scanPlayerTagForAssignment(
+          BuildContext context) async =>
       null;
 
   @override

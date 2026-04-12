@@ -1,8 +1,10 @@
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/ruleset_models.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -85,7 +87,17 @@ abstract interface class SessionRepository {
 
   Future<List<TableSessionRecord>> listSessions(String eventId);
 
+  Future<SessionDetailRecord?> readCachedSessionDetail(String sessionId);
+
+  Future<SessionDetailRecord> loadSessionDetail(String sessionId);
+
   Future<StartedTableSessionRecord> startSession(StartTableSessionInput input);
+
+  Future<SessionDetailRecord> recordHand(RecordHandResultInput input);
+
+  Future<SessionDetailRecord> editHand(EditHandResultInput input);
+
+  Future<SessionDetailRecord> voidHand(VoidHandResultInput input);
 }
 
 abstract interface class PrizeRepository {
@@ -93,4 +105,10 @@ abstract interface class PrizeRepository {
     required String eventId,
     required int prizeBudgetCents,
   });
+}
+
+abstract interface class LeaderboardRepository {
+  Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId);
+
+  Future<List<LeaderboardEntry>> loadLeaderboard(String eventId);
 }

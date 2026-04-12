@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
 
 enum RotationPolicyType {
   dealerCycleReturnToInitialEast,
@@ -167,7 +168,8 @@ class StartedTableSessionRecord {
     required List<dynamic> seatsJson,
   }) {
     final seats = seatsJson
-        .map((seat) => TableSessionSeatRecord.fromJson(seat as Map<String, dynamic>))
+        .map((seat) =>
+            TableSessionSeatRecord.fromJson(seat as Map<String, dynamic>))
         .toList(growable: false)
       ..sort((left, right) => left.seatIndex.compareTo(right.seatIndex));
 
@@ -179,6 +181,63 @@ class StartedTableSessionRecord {
 
   final TableSessionRecord session;
   final List<TableSessionSeatRecord> seats;
+}
+
+@immutable
+class SessionDetailRecord {
+  const SessionDetailRecord({
+    required this.session,
+    required this.seats,
+    required this.hands,
+    required this.settlements,
+  });
+
+  factory SessionDetailRecord.fromJson(Map<String, dynamic> json) {
+    final rawSeats = json['seats'] as List<dynamic>? ?? const [];
+    final rawHands = json['hands'] as List<dynamic>? ?? const [];
+    final rawSettlements = json['settlements'] as List<dynamic>? ?? const [];
+
+    final seats = rawSeats
+        .map((seat) =>
+            TableSessionSeatRecord.fromJson(seat as Map<String, dynamic>))
+        .toList(growable: false)
+      ..sort((left, right) => left.seatIndex.compareTo(right.seatIndex));
+    final hands = rawHands
+        .map((hand) => HandResultRecord.fromJson(hand as Map<String, dynamic>))
+        .toList(growable: false)
+      ..sort((left, right) => left.handNumber.compareTo(right.handNumber));
+    final settlements = rawSettlements
+        .map(
+          (settlement) =>
+              HandSettlementRecord.fromJson(settlement as Map<String, dynamic>),
+        )
+        .toList(growable: false);
+
+    return SessionDetailRecord(
+      session: TableSessionRecord.fromJson(
+        json['session'] as Map<String, dynamic>,
+      ),
+      seats: seats,
+      hands: hands,
+      settlements: settlements,
+    );
+  }
+
+  final TableSessionRecord session;
+  final List<TableSessionSeatRecord> seats;
+  final List<HandResultRecord> hands;
+  final List<HandSettlementRecord> settlements;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'session': session.toJson(),
+      'seats': seats.map((seat) => seat.toJson()).toList(growable: false),
+      'hands': hands.map((hand) => hand.toJson()).toList(growable: false),
+      'settlements': settlements
+          .map((settlement) => settlement.toJson())
+          .toList(growable: false),
+    };
+  }
 }
 
 @immutable

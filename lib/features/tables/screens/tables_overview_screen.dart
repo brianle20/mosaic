@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/table_list_controller.dart';
@@ -71,11 +72,34 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   }
 
   Future<void> _openStartSession(EventTableRecord table) async {
-    await Navigator.of(context).pushNamed(
+    final result = await Navigator.of(context).pushNamed(
       AppRouter.startSessionRoute,
       arguments: StartSessionArgs(
         eventId: widget.eventId,
         table: table,
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (result is StartedTableSessionRecord) {
+      await Navigator.of(context).pushNamed(
+        AppRouter.sessionDetailRoute,
+        arguments: SessionDetailArgs(
+          eventId: widget.eventId,
+          sessionId: result.session.id,
+        ),
+      );
+    }
+    await _controller.load(widget.eventId);
+  }
+
+  Future<void> _openSessionDetail(String sessionId) async {
+    await Navigator.of(context).pushNamed(
+      AppRouter.sessionDetailRoute,
+      arguments: SessionDetailArgs(
+        eventId: widget.eventId,
+        sessionId: sessionId,
       ),
     );
     await _controller.load(widget.eventId);
@@ -127,7 +151,13 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                           ),
                           if (_controller.activeSessionsByTableId
                               .containsKey(table.id))
-                            const Text('Session Active'),
+                            GestureDetector(
+                              onTap: () => _openSessionDetail(
+                                _controller
+                                    .activeSessionsByTableId[table.id]!.id,
+                              ),
+                              child: const Text('Session Active'),
+                            ),
                         ],
                       ),
                       const SizedBox(height: 12),

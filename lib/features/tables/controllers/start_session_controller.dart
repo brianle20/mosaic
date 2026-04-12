@@ -33,7 +33,8 @@ class StartSessionController extends ChangeNotifier {
 
     try {
       final guests = await _guestRepository.listGuests(eventId);
-      final assignments = await _guestRepository.listActiveTagAssignments(eventId);
+      final assignments =
+          await _guestRepository.listActiveTagAssignments(eventId);
       guestsById = {
         for (final guest in guests) guest.id: guest,
       };

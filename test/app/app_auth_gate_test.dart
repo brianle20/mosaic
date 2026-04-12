@@ -6,6 +6,8 @@ import 'package:mosaic/app/app.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -150,8 +152,28 @@ class _FakeTableRepository implements TableRepository {
 
 class _FakeSessionRepository implements SessionRepository {
   @override
+  Future<SessionDetailRecord> editHand(EditHandResultInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async =>
       const [];
+
+  @override
+  Future<SessionDetailRecord> loadSessionDetail(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> recordHand(RecordHandResultInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord?> readCachedSessionDetail(
+          String sessionId) async =>
+      null;
 
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
@@ -161,13 +183,29 @@ class _FakeSessionRepository implements SessionRepository {
   Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
+    throw UnimplementedError();
+  }
+}
+
+class _FakeLeaderboardRepository implements LeaderboardRepository {
+  @override
+  Future<List<LeaderboardEntry>> loadLeaderboard(String eventId) async =>
+      const [];
+
+  @override
+  Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId) async =>
+      const [];
 }
 
 class _FakeNfcService implements NfcService {
   const _FakeNfcService();
 
   @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) async {
+  Future<TagScanResult?> scanPlayerTagForAssignment(
+      BuildContext context) async {
     return null;
   }
 
@@ -195,6 +233,7 @@ void main() {
           guestRepository: _FakeGuestRepository(),
           tableRepository: _FakeTableRepository(),
           sessionRepository: _FakeSessionRepository(),
+          leaderboardRepository: _FakeLeaderboardRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
@@ -235,6 +274,7 @@ void main() {
           guestRepository: _FakeGuestRepository(),
           tableRepository: _FakeTableRepository(),
           sessionRepository: _FakeSessionRepository(),
+          leaderboardRepository: _FakeLeaderboardRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
@@ -277,6 +317,7 @@ void main() {
           guestRepository: _FakeGuestRepository(),
           tableRepository: _FakeTableRepository(),
           sessionRepository: _FakeSessionRepository(),
+          leaderboardRepository: _FakeLeaderboardRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
