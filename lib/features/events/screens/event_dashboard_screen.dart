@@ -108,6 +108,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     );
   }
 
+  String _flagStatusLabel(bool isOpen) => isOpen ? 'Open' : 'Closed';
+
   @override
   Widget build(BuildContext context) {
     final event = _controller.event;
@@ -171,6 +173,13 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     onPressed: _openGuests,
                     child: const Text('Add Guest'),
                   ),
+                if (lifecycleStatus == EventLifecycleStatus.draft)
+                  FilledButton(
+                    onPressed: _controller.isSubmittingLifecycle
+                        ? null
+                        : () => _controller.startEvent(),
+                    child: const Text('Start Event'),
+                  ),
                 if (lifecycleStatus == EventLifecycleStatus.active)
                   FilledButton(
                     onPressed: _controller.isSubmittingLifecycle
@@ -187,6 +196,53 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   ),
               ],
             ),
+            if (lifecycleStatus == EventLifecycleStatus.active) ...[
+              const SizedBox(height: 24),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Live Operations',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      Text('Check-In: ${_flagStatusLabel(event!.checkinOpen)}'),
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: _controller.isSubmittingLifecycle
+                            ? null
+                            : () => _controller.setOperationalFlags(
+                                  checkinOpen: !event.checkinOpen,
+                                  scoringOpen: event.scoringOpen,
+                                ),
+                        child: Text(
+                          event.checkinOpen
+                              ? 'Close Check-In'
+                              : 'Open Check-In',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text('Scoring: ${_flagStatusLabel(event.scoringOpen)}'),
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: _controller.isSubmittingLifecycle
+                            ? null
+                            : () => _controller.setOperationalFlags(
+                                  checkinOpen: event.checkinOpen,
+                                  scoringOpen: !event.scoringOpen,
+                                ),
+                        child: Text(
+                          event.scoringOpen ? 'Close Scoring' : 'Open Scoring',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             Card(
               child: Padding(
@@ -199,6 +255,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       const Text('This event is finalized.'),
                     Text(
                       switch (lifecycleStatus) {
+                        EventLifecycleStatus.draft =>
+                          'Finish setup, then start the event to open check-in.',
+                        EventLifecycleStatus.active =>
+                          'Use the live operations controls to open or close check-in and scoring during the event.',
                         EventLifecycleStatus.completed =>
                           'This event is completed. Review standings and prizes before finalizing.',
                         EventLifecycleStatus.finalized =>

@@ -10,6 +10,14 @@ class _RecordingSessionRepository implements SessionRepository {
   EditHandResultInput? editedInput;
   VoidHandResultInput? voidedInput;
 
+  @override
+  Future<SessionDetailRecord> endSession({
+    required String sessionId,
+    required String reason,
+  }) {
+    throw UnimplementedError();
+  }
+
   SessionDetailRecord _detailFromStatus(HandResultStatus status) {
     return SessionDetailRecord.fromJson({
       'session': {
@@ -100,6 +108,11 @@ class _RecordingSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<SessionDetailRecord> pauseSession(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
     recordedInput = input;
     return _detailFromStatus(HandResultStatus.recorded);
@@ -113,6 +126,11 @@ class _RecordingSessionRepository implements SessionRepository {
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
       const [];
+
+  @override
+  Future<SessionDetailRecord> resumeSession(String sessionId) {
+    throw UnimplementedError();
+  }
 
   @override
   Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {

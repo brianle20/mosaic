@@ -77,16 +77,75 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         eventId: widget.eventId, sessionId: widget.sessionId);
   }
 
+  Future<void> _showEndSessionDialog() async {
+    final formKey = GlobalKey<FormState>();
+    final reasonController = TextEditingController();
+
+    final shouldSubmit = await showDialog<bool>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('End Session Early'),
+              content: Form(
+                key: formKey,
+                child: TextFormField(
+                  controller: reasonController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Reason',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Reason is required.';
+                    }
+                    return null;
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    if (formKey.currentState?.validate() ?? false) {
+                      Navigator.of(context).pop(true);
+                    }
+                  },
+                  child: const Text('End Session'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!shouldSubmit) {
+      return;
+    }
+
+    await _controller.endSession(reasonController.text.trim());
+  }
+
   @override
   Widget build(BuildContext context) {
     final detail = _controller.detail;
+    final sessionStatus = detail?.session.status;
+    final canRecordHand = sessionStatus == SessionStatus.active;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Session Detail')),
-      floatingActionButton: FilledButton(
-        onPressed: detail == null ? null : _openHandEntry,
-        child: const Text('Record Hand'),
-      ),
+      floatingActionButton: canRecordHand
+          ? FilledButton(
+              onPressed: detail == null ? null : _openHandEntry,
+              child: const Text('Record Hand'),
+            )
+          : null,
       body: AsyncBody(
         isLoading: _controller.isLoading,
         error: _controller.error,
@@ -99,6 +158,56 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             : ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (_controller.actionError case final actionError?)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Card(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(actionError),
+                        ),
+                      ),
+                    ),
+                  Text(
+                    'Status: ${detail.session.status.name}',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  if (detail.session.status == SessionStatus.endedEarly &&
+                      detail.session.endReason != null) ...[
+                    const SizedBox(height: 8),
+                    Text('Session ended early: ${detail.session.endReason}'),
+                  ],
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      if (detail.session.status == SessionStatus.active)
+                        FilledButton(
+                          onPressed: _controller.isSubmittingOperation
+                              ? null
+                              : () => _controller.pauseSession(),
+                          child: const Text('Pause Session'),
+                        ),
+                      if (detail.session.status == SessionStatus.paused)
+                        FilledButton(
+                          onPressed: _controller.isSubmittingOperation
+                              ? null
+                              : () => _controller.resumeSession(),
+                          child: const Text('Resume Session'),
+                        ),
+                      if (detail.session.status == SessionStatus.active ||
+                          detail.session.status == SessionStatus.paused)
+                        OutlinedButton(
+                          onPressed: _controller.isSubmittingOperation
+                              ? null
+                              : _showEndSessionDialog,
+                          child: const Text('End Early'),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   Text(
                     'Current East',
                     style: Theme.of(context).textTheme.titleMedium,

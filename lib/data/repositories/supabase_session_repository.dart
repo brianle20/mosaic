@@ -103,6 +103,39 @@ class SupabaseSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<SessionDetailRecord> pauseSession(String sessionId) async {
+    await _runRpcSingle(
+      'pause_table_session',
+      {'target_table_session_id': sessionId},
+    );
+    return loadSessionDetail(sessionId);
+  }
+
+  @override
+  Future<SessionDetailRecord> resumeSession(String sessionId) async {
+    await _runRpcSingle(
+      'resume_table_session',
+      {'target_table_session_id': sessionId},
+    );
+    return loadSessionDetail(sessionId);
+  }
+
+  @override
+  Future<SessionDetailRecord> endSession({
+    required String sessionId,
+    required String reason,
+  }) async {
+    await _runRpcSingle(
+      'end_table_session',
+      {
+        'target_table_session_id': sessionId,
+        'target_end_reason': reason,
+      },
+    );
+    return loadSessionDetail(sessionId);
+  }
+
+  @override
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
     final handRow =
         await _runRpcSingle('record_hand_result', input.toRpcParams());

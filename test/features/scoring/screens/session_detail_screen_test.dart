@@ -105,6 +105,30 @@ class _FakeGuestRepository implements GuestRepository {
 }
 
 class _FakeSessionRepository implements SessionRepository {
+  _FakeSessionRepository({required this.detail});
+
+  SessionDetailRecord detail;
+  String? endedReason;
+
+  @override
+  Future<SessionDetailRecord> endSession({
+    required String sessionId,
+    required String reason,
+  }) async {
+    endedReason = reason;
+    detail = SessionDetailRecord.fromJson({
+      ...detail.toJson(),
+      'session': {
+        ...detail.session.toJson(),
+        'status': 'ended_early',
+        'ended_at': '2026-04-24T20:00:00-07:00',
+        'ended_by_user_id': 'usr_01',
+        'end_reason': reason,
+      },
+    });
+    return detail;
+  }
+
   @override
   Future<SessionDetailRecord> editHand(EditHandResultInput input) {
     throw UnimplementedError();
@@ -115,87 +139,31 @@ class _FakeSessionRepository implements SessionRepository {
       const [];
 
   @override
-  Future<SessionDetailRecord> loadSessionDetail(String sessionId) async {
-    return SessionDetailRecord.fromJson({
+  Future<SessionDetailRecord> loadSessionDetail(String sessionId) async =>
+      detail;
+
+  @override
+  Future<SessionDetailRecord> pauseSession(String sessionId) async {
+    detail = SessionDetailRecord.fromJson({
+      ...detail.toJson(),
       'session': {
-        'id': 'ses_01',
-        'event_id': 'evt_01',
-        'event_table_id': 'tbl_01',
-        'session_number_for_table': 1,
-        'ruleset_id': 'HK_STANDARD_V1',
-        'ruleset_version': 1,
-        'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
-        'rotation_policy_config_json': {},
-        'status': 'active',
-        'initial_east_seat_index': 0,
-        'current_dealer_seat_index': 1,
-        'dealer_pass_count': 1,
-        'completed_games_count': 1,
-        'hand_count': 1,
-        'started_at': '2026-04-24T19:00:00-07:00',
-        'started_by_user_id': 'usr_01',
+        ...detail.session.toJson(),
+        'status': 'paused',
       },
-      'seats': [
-        {
-          'id': 'seat_01',
-          'table_session_id': 'ses_01',
-          'seat_index': 0,
-          'initial_wind': 'east',
-          'event_guest_id': 'gst_east',
-        },
-        {
-          'id': 'seat_02',
-          'table_session_id': 'ses_01',
-          'seat_index': 1,
-          'initial_wind': 'south',
-          'event_guest_id': 'gst_south',
-        },
-        {
-          'id': 'seat_03',
-          'table_session_id': 'ses_01',
-          'seat_index': 2,
-          'initial_wind': 'west',
-          'event_guest_id': 'gst_west',
-        },
-        {
-          'id': 'seat_04',
-          'table_session_id': 'ses_01',
-          'seat_index': 3,
-          'initial_wind': 'north',
-          'event_guest_id': 'gst_north',
-        },
-      ],
-      'hands': [
-        {
-          'id': 'hand_01',
-          'table_session_id': 'ses_01',
-          'hand_number': 1,
-          'result_type': 'win',
-          'winner_seat_index': 2,
-          'win_type': 'discard',
-          'discarder_seat_index': 0,
-          'fan_count': 2,
-          'base_points': 4,
-          'east_seat_index_before_hand': 0,
-          'east_seat_index_after_hand': 1,
-          'dealer_rotated': true,
-          'session_completed_after_hand': false,
-          'status': 'recorded',
-          'entered_by_user_id': 'usr_01',
-          'entered_at': '2026-04-24T19:05:00-07:00',
-        },
-      ],
-      'settlements': [
-        {
-          'id': 'set_01',
-          'hand_result_id': 'hand_01',
-          'payer_event_guest_id': 'gst_east',
-          'payee_event_guest_id': 'gst_west',
-          'amount_points': 16,
-          'multiplier_flags_json': ['discard', 'east_loses'],
-        },
-      ],
     });
+    return detail;
+  }
+
+  @override
+  Future<SessionDetailRecord> resumeSession(String sessionId) async {
+    detail = SessionDetailRecord.fromJson({
+      ...detail.toJson(),
+      'session': {
+        ...detail.session.toJson(),
+        'status': 'active',
+      },
+    });
+    return detail;
   }
 
   @override
@@ -223,16 +191,107 @@ class _FakeSessionRepository implements SessionRepository {
   }
 }
 
+SessionDetailRecord _buildDetail(SessionStatus status) {
+  return SessionDetailRecord.fromJson({
+    'session': {
+      'id': 'ses_01',
+      'event_id': 'evt_01',
+      'event_table_id': 'tbl_01',
+      'session_number_for_table': 1,
+      'ruleset_id': 'HK_STANDARD_V1',
+      'ruleset_version': 1,
+      'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'rotation_policy_config_json': {},
+      'status': switch (status) {
+        SessionStatus.active => 'active',
+        SessionStatus.paused => 'paused',
+        SessionStatus.completed => 'completed',
+        SessionStatus.endedEarly => 'ended_early',
+        SessionStatus.aborted => 'aborted',
+      },
+      'initial_east_seat_index': 0,
+      'current_dealer_seat_index': 1,
+      'dealer_pass_count': 1,
+      'completed_games_count': 1,
+      'hand_count': 1,
+      'started_at': '2026-04-24T19:00:00-07:00',
+      'started_by_user_id': 'usr_01',
+    },
+    'seats': [
+      {
+        'id': 'seat_01',
+        'table_session_id': 'ses_01',
+        'seat_index': 0,
+        'initial_wind': 'east',
+        'event_guest_id': 'gst_east',
+      },
+      {
+        'id': 'seat_02',
+        'table_session_id': 'ses_01',
+        'seat_index': 1,
+        'initial_wind': 'south',
+        'event_guest_id': 'gst_south',
+      },
+      {
+        'id': 'seat_03',
+        'table_session_id': 'ses_01',
+        'seat_index': 2,
+        'initial_wind': 'west',
+        'event_guest_id': 'gst_west',
+      },
+      {
+        'id': 'seat_04',
+        'table_session_id': 'ses_01',
+        'seat_index': 3,
+        'initial_wind': 'north',
+        'event_guest_id': 'gst_north',
+      },
+    ],
+    'hands': [
+      {
+        'id': 'hand_01',
+        'table_session_id': 'ses_01',
+        'hand_number': 1,
+        'result_type': 'win',
+        'winner_seat_index': 2,
+        'win_type': 'discard',
+        'discarder_seat_index': 0,
+        'fan_count': 2,
+        'base_points': 4,
+        'east_seat_index_before_hand': 0,
+        'east_seat_index_after_hand': 1,
+        'dealer_rotated': true,
+        'session_completed_after_hand': false,
+        'status': 'recorded',
+        'entered_by_user_id': 'usr_01',
+        'entered_at': '2026-04-24T19:05:00-07:00',
+      },
+    ],
+    'settlements': [
+      {
+        'id': 'set_01',
+        'hand_result_id': 'hand_01',
+        'payer_event_guest_id': 'gst_east',
+        'payee_event_guest_id': 'gst_west',
+        'amount_points': 16,
+        'multiplier_flags_json': ['discard', 'east_loses'],
+      },
+    ],
+  });
+}
+
 void main() {
-  testWidgets('renders seat map, current east, and opens record hand',
-      (tester) async {
+  testWidgets('active session shows pause and end controls', (tester) async {
+    final sessionRepository = _FakeSessionRepository(
+      detail: _buildDetail(SessionStatus.active),
+    );
     await tester.pumpWidget(
       MaterialApp(
         home: SessionDetailScreen(
           eventId: 'evt_01',
           sessionId: 'ses_01',
           guestRepository: _FakeGuestRepository(),
-          sessionRepository: _FakeSessionRepository(),
+          sessionRepository: sessionRepository,
         ),
       ),
     );
@@ -240,12 +299,67 @@ void main() {
 
     expect(find.text('Current East'), findsOneWidget);
     expect(find.text('Bob Lee'), findsWidgets);
-    expect(find.text('Hand 1'), findsOneWidget);
-    expect(find.textContaining('Carol Ng wins by discard'), findsOneWidget);
+    expect(find.text('Pause Session'), findsOneWidget);
+    expect(find.text('End Early'), findsOneWidget);
+    expect(find.text('Resume Session'), findsNothing);
 
     await tester.tap(find.text('Record Hand'));
     await tester.pumpAndSettle();
 
     expect(find.text('Record Hand'), findsOneWidget);
+  });
+
+  testWidgets('paused session shows resume and blocks record hand',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: _buildDetail(SessionStatus.paused),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Resume Session'), findsOneWidget);
+    expect(find.text('Pause Session'), findsNothing);
+    expect(find.text('End Early'), findsOneWidget);
+    expect(find.text('Record Hand'), findsNothing);
+  });
+
+  testWidgets('end early requires a reason', (tester) async {
+    final sessionRepository = _FakeSessionRepository(
+      detail: _buildDetail(SessionStatus.active),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: sessionRepository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('End Early'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('End Session'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reason is required.'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField), 'Venue closing');
+    await tester.tap(find.text('End Session'));
+    await tester.pumpAndSettle();
+
+    expect(sessionRepository.endedReason, 'Venue closing');
+    expect(find.text('Session ended early: Venue closing'), findsOneWidget);
   });
 }

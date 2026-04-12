@@ -19,14 +19,48 @@ class _EventRepository implements EventRepository {
     this.event, {
     this.onComplete,
     this.onFinalize,
+    this.onStart,
+    this.onSetOperationalFlags,
   });
 
   EventRecord event;
   final Future<EventRecord> Function(String eventId)? onComplete;
   final Future<EventRecord> Function(String eventId)? onFinalize;
+  final Future<EventRecord> Function(String eventId)? onStart;
+  final Future<EventRecord> Function(
+    String eventId,
+    bool checkinOpen,
+    bool scoringOpen,
+  )? onSetOperationalFlags;
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> startEvent(String eventId) async {
+    final handler = onStart;
+    if (handler != null) {
+      event = await handler(eventId);
+      return event;
+    }
+
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> setOperationalFlags({
+    required String eventId,
+    required bool checkinOpen,
+    required bool scoringOpen,
+  }) async {
+    final handler = onSetOperationalFlags;
+    if (handler != null) {
+      event = await handler(eventId, checkinOpen, scoringOpen);
+      return event;
+    }
+
     throw UnimplementedError();
   }
 
@@ -210,6 +244,14 @@ class _TableRepository implements TableRepository {
 
 class _SessionRepository implements SessionRepository {
   @override
+  Future<SessionDetailRecord> endSession({
+    required String sessionId,
+    required String reason,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<SessionDetailRecord> editHand(EditHandResultInput input) {
     throw UnimplementedError();
   }
@@ -220,6 +262,11 @@ class _SessionRepository implements SessionRepository {
 
   @override
   Future<SessionDetailRecord> loadSessionDetail(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> pauseSession(String sessionId) {
     throw UnimplementedError();
   }
 
@@ -237,6 +284,11 @@ class _SessionRepository implements SessionRepository {
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
       const [];
+
+  @override
+  Future<SessionDetailRecord> resumeSession(String sessionId) {
+    throw UnimplementedError();
+  }
 
   @override
   Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
@@ -270,6 +322,20 @@ class _NfcService implements NfcService {
 }
 
 void main() {
+  final draftEvent = EventRecord.fromJson(const {
+    'id': 'evt_00',
+    'owner_user_id': 'usr_01',
+    'title': 'Draft Friday Night Mahjong',
+    'timezone': 'America/Los_Angeles',
+    'starts_at': '2026-04-24T19:00:00-07:00',
+    'lifecycle_status': 'draft',
+    'checkin_open': false,
+    'scoring_open': false,
+    'cover_charge_cents': 2000,
+    'prize_budget_cents': 50000,
+    'default_ruleset_id': 'HK_STANDARD_V1',
+    'prevailing_wind': 'east',
+  });
   final activeEvent = EventRecord.fromJson(const {
     'id': 'evt_01',
     'owner_user_id': 'usr_01',
@@ -306,6 +372,21 @@ void main() {
     'starts_at': '2026-04-24T19:00:00-07:00',
     'lifecycle_status': 'finalized',
     'checkin_open': false,
+    'scoring_open': false,
+    'cover_charge_cents': 2000,
+    'prize_budget_cents': 50000,
+    'default_ruleset_id': 'HK_STANDARD_V1',
+    'prevailing_wind': 'east',
+  });
+
+  final activeCheckinOnlyEvent = EventRecord.fromJson(const {
+    'id': 'evt_04',
+    'owner_user_id': 'usr_01',
+    'title': 'Live Friday Night Mahjong',
+    'timezone': 'America/Los_Angeles',
+    'starts_at': '2026-04-24T19:00:00-07:00',
+    'lifecycle_status': 'active',
+    'checkin_open': true,
     'scoring_open': false,
     'cover_charge_cents': 2000,
     'prize_budget_cents': 50000,
@@ -380,6 +461,85 @@ void main() {
     expect(find.text('Finalize Event'), findsNothing);
   });
 
+  testWidgets('draft event shows Start Event action', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_00'),
+          eventRepository: _EventRepository(
+            draftEvent,
+            onStart: (_) async => activeCheckinOnlyEvent,
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start Event'), findsOneWidget);
+    expect(find.text('Complete Event'), findsNothing);
+  });
+
+  testWidgets('starting a draft event enables live controls', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_00'),
+          eventRepository: _EventRepository(
+            draftEvent,
+            onStart: (_) async => activeCheckinOnlyEvent,
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Start Event'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Check-In: Open'), findsOneWidget);
+    expect(find.text('Scoring: Closed'), findsOneWidget);
+    expect(find.text('Close Check-In'), findsOneWidget);
+    expect(find.text('Open Scoring'), findsOneWidget);
+  });
+
+  testWidgets('active event exposes operational flag actions', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_04'),
+          eventRepository: _EventRepository(
+            activeCheckinOnlyEvent,
+            onSetOperationalFlags: (_, checkinOpen, scoringOpen) async {
+              return EventRecord.fromJson({
+                ...activeCheckinOnlyEvent.toJson(),
+                'checkin_open': checkinOpen,
+                'scoring_open': scoringOpen,
+              });
+            },
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Check-In: Open'), findsOneWidget);
+    expect(find.text('Scoring: Closed'), findsOneWidget);
+    expect(find.text('Close Check-In'), findsOneWidget);
+    expect(find.text('Open Scoring'), findsOneWidget);
+
+    await tester.tap(find.text('Open Scoring'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Scoring: Open'), findsOneWidget);
+    expect(find.text('Close Scoring'), findsOneWidget);
+  });
+
   testWidgets('completed event shows Finalize Event action', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -449,6 +609,35 @@ void main() {
       find.text(
         '1 active or paused session(s) must be ended before changing the event lifecycle.',
       ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('blocked operational flag error renders when update fails',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_04'),
+          eventRepository: _EventRepository(
+            activeCheckinOnlyEvent,
+            onSetOperationalFlags: (_, __, ___) async {
+              throw StateError(
+                  'Scoring can only open while the event is active.');
+            },
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open Scoring'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Scoring can only open while the event is active.'),
       findsOneWidget,
     );
   });

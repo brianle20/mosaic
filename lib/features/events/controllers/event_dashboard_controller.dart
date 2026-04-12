@@ -90,4 +90,51 @@ class EventDashboardController extends ChangeNotifier {
     }
     return message;
   }
+
+  Future<void> startEvent() async {
+    final currentEvent = event;
+    if (currentEvent == null || isSubmittingLifecycle) {
+      return;
+    }
+
+    isSubmittingLifecycle = true;
+    lifecycleError = null;
+    notifyListeners();
+
+    try {
+      event = await _eventRepository.startEvent(currentEvent.id);
+    } catch (exception) {
+      lifecycleError = _formatLifecycleError(exception);
+    }
+
+    isSubmittingLifecycle = false;
+    notifyListeners();
+  }
+
+  Future<void> setOperationalFlags({
+    required bool checkinOpen,
+    required bool scoringOpen,
+  }) async {
+    final currentEvent = event;
+    if (currentEvent == null || isSubmittingLifecycle) {
+      return;
+    }
+
+    isSubmittingLifecycle = true;
+    lifecycleError = null;
+    notifyListeners();
+
+    try {
+      event = await _eventRepository.setOperationalFlags(
+        eventId: currentEvent.id,
+        checkinOpen: checkinOpen,
+        scoringOpen: scoringOpen,
+      );
+    } catch (exception) {
+      lifecycleError = _formatLifecycleError(exception);
+    }
+
+    isSubmittingLifecycle = false;
+    notifyListeners();
+  }
 }

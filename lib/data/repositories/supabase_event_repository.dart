@@ -38,6 +38,36 @@ class SupabaseEventRepository implements EventRepository {
   }
 
   @override
+  Future<EventRecord> startEvent(String eventId) async {
+    final response = await _runMutation(
+      'start_event',
+      {'target_event_id': eventId},
+    );
+    final record = EventRecord.fromJson(response);
+    await _saveEventRecord(record);
+    return record;
+  }
+
+  @override
+  Future<EventRecord> setOperationalFlags({
+    required String eventId,
+    required bool checkinOpen,
+    required bool scoringOpen,
+  }) async {
+    final response = await _runMutation(
+      'set_event_operational_flags',
+      {
+        'target_event_id': eventId,
+        'target_checkin_open': checkinOpen,
+        'target_scoring_open': scoringOpen,
+      },
+    );
+    final record = EventRecord.fromJson(response);
+    await _saveEventRecord(record);
+    return record;
+  }
+
+  @override
   Future<EventRecord> completeEvent(String eventId) async {
     final response = await _runMutation(
       'complete_event',

@@ -15,6 +15,20 @@ class _FakeEventRepository implements EventRepository {
   }
 
   @override
+  Future<EventRecord> startEvent(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> setOperationalFlags({
+    required String eventId,
+    required bool checkinOpen,
+    required bool scoringOpen,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventRecord> completeEvent(String eventId) {
     throw UnimplementedError();
   }

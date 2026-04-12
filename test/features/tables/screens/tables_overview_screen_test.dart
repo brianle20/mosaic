@@ -44,6 +44,14 @@ class _FakeSessionRepository implements SessionRepository {
   final List<TableSessionRecord> sessions;
 
   @override
+  Future<SessionDetailRecord> endSession({
+    required String sessionId,
+    required String reason,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<SessionDetailRecord> editHand(EditHandResultInput input) {
     throw UnimplementedError();
   }
@@ -54,6 +62,11 @@ class _FakeSessionRepository implements SessionRepository {
 
   @override
   Future<SessionDetailRecord> loadSessionDetail(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> pauseSession(String sessionId) {
     throw UnimplementedError();
   }
 
@@ -70,6 +83,11 @@ class _FakeSessionRepository implements SessionRepository {
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
       sessions;
+
+  @override
+  Future<SessionDetailRecord> resumeSession(String sessionId) {
+    throw UnimplementedError();
+  }
 
   @override
   Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
