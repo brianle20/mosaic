@@ -217,8 +217,31 @@ class SupabasePrizeRepository implements PrizeRepository {
         .select()
         .eq('event_id', eventId)
         .order('rank_start', ascending: true);
-    return rows
-        .map((row) => row.cast<String, dynamic>())
+    final awardRows =
+        rows.map((row) => row.cast<String, dynamic>()).toList(growable: false);
+    final guestIds = awardRows
+        .map((row) => row['event_guest_id'])
+        .whereType<String>()
+        .toSet()
+        .toList(growable: false);
+    if (guestIds.isEmpty) {
+      return awardRows;
+    }
+
+    final guests = await client
+        .from('event_guests')
+        .select('id, display_name')
+        .inFilter('id', guestIds);
+    final guestNamesById = {
+      for (final guest in guests)
+        guest['id'] as String: guest['display_name'] as String,
+    };
+
+    return awardRows
+        .map((row) => {
+              ...row,
+              'display_name': guestNamesById[row['event_guest_id'] as String],
+            })
         .toList(growable: false);
   }
 
@@ -255,9 +278,29 @@ class SupabasePrizeRepository implements PrizeRepository {
 
   Future<void> _saveMergedAward(PrizeAwardRecord award) async {
     final currentAwards = await readCachedPrizeAwards(award.eventId);
+    final existingAward = currentAwards
+        .where((existingAward) => existingAward.id == award.id)
+        .firstWhere(
+          (_) => true,
+          orElse: () => award,
+        );
+    final mergedAward = PrizeAwardRecord(
+      id: award.id,
+      eventId: award.eventId,
+      eventGuestId: award.eventGuestId,
+      displayName: award.displayName ?? existingAward.displayName,
+      rankStart: award.rankStart,
+      rankEnd: award.rankEnd,
+      displayRank: award.displayRank,
+      awardAmountCents: award.awardAmountCents,
+      status: award.status,
+      paidMethod: award.paidMethod,
+      paidAt: award.paidAt,
+      paidNote: award.paidNote,
+    );
     final mergedAwards = [
       ...currentAwards.where((existingAward) => existingAward.id != award.id),
-      award,
+      mergedAward,
     ]..sort((left, right) {
         final rankComparison = left.rankStart.compareTo(right.rankStart);
         if (rankComparison != 0) {

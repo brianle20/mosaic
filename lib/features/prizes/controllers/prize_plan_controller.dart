@@ -28,6 +28,15 @@ class PrizePlanController extends ChangeNotifier {
   List<PrizeAwardRecord> lockedAwards = const [];
 
   Future<void> load() async {
+    final cachedPlan = await prizeRepository.readCachedPrizePlan(eventId);
+    if (cachedPlan != null) {
+      draft = PrizePlanDraft.fromDetail(cachedPlan);
+      previewRows = await prizeRepository.readCachedPrizePreview(eventId);
+      lockedAwards = cachedPlan.plan.status == PrizePlanStatus.locked
+          ? await prizeRepository.readCachedPrizeAwards(eventId)
+          : const [];
+    }
+
     isLoading = true;
     error = null;
     notifyListeners();
@@ -48,7 +57,9 @@ class PrizePlanController extends ChangeNotifier {
         lockedAwards = const [];
       }
     } catch (err) {
-      error = err.toString();
+      if (cachedPlan == null) {
+        error = err.toString();
+      }
     } finally {
       isLoading = false;
       notifyListeners();

@@ -232,6 +232,7 @@ class PrizeAwardRecord {
     required this.displayRank,
     required this.awardAmountCents,
     required this.status,
+    this.displayName,
     this.paidMethod,
     this.paidAt,
     this.paidNote,
@@ -242,6 +243,7 @@ class PrizeAwardRecord {
       id: _requiredString(json, 'id'),
       eventId: _requiredString(json, 'event_id'),
       eventGuestId: _requiredString(json, 'event_guest_id'),
+      displayName: _optionalString(json, 'display_name'),
       rankStart: _requiredInt(json, 'rank_start'),
       rankEnd: _requiredInt(json, 'rank_end'),
       displayRank: _requiredString(json, 'display_rank'),
@@ -256,6 +258,7 @@ class PrizeAwardRecord {
   final String id;
   final String eventId;
   final String eventGuestId;
+  final String? displayName;
   final int rankStart;
   final int rankEnd;
   final String displayRank;
@@ -270,6 +273,7 @@ class PrizeAwardRecord {
       'id': id,
       'event_id': eventId,
       'event_guest_id': eventGuestId,
+      'display_name': displayName,
       'rank_start': rankStart,
       'rank_end': rankEnd,
       'display_rank': displayRank,

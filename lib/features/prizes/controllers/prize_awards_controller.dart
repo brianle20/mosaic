@@ -16,6 +16,7 @@ class PrizeAwardsController extends ChangeNotifier {
   List<PrizeAwardRecord> awards = const [];
 
   Future<void> load() async {
+    awards = await prizeRepository.readCachedPrizeAwards(eventId);
     isLoading = true;
     error = null;
     notifyListeners();
@@ -23,7 +24,9 @@ class PrizeAwardsController extends ChangeNotifier {
     try {
       awards = await prizeRepository.loadPrizeAwards(eventId);
     } catch (err) {
-      error = err.toString();
+      if (awards.isEmpty) {
+        error = err.toString();
+      }
     } finally {
       isLoading = false;
       notifyListeners();
@@ -36,9 +39,10 @@ class PrizeAwardsController extends ChangeNotifier {
       paidMethod: 'cash',
     );
     awards = [
-      updated,
       ...awards.where((award) => award.id != awardId),
+      updated,
     ];
+    awards.sort((left, right) => left.rankStart.compareTo(right.rankStart));
     notifyListeners();
   }
 
