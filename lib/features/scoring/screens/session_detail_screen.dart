@@ -5,6 +5,7 @@ import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/session_detail_controller.dart';
 import 'package:mosaic/features/scoring/screens/hand_entry_screen.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class SessionDetailScreen extends StatefulWidget {
   const SessionDetailScreen({
@@ -170,13 +171,22 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       ),
                     ),
                   Text(
-                    'Status: ${detail.session.status.name}',
+                    'Session Status',
                     style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  StatusChip(
+                    label: _sessionStatusLabel(detail.session.status),
+                    tone: _sessionStatusTone(detail.session.status),
                   ),
                   if (detail.session.status == SessionStatus.endedEarly &&
                       detail.session.endReason != null) ...[
                     const SizedBox(height: 8),
                     Text('Session ended early: ${detail.session.endReason}'),
+                  ],
+                  if (!canRecordHand) ...[
+                    const SizedBox(height: 8),
+                    Text(_handEntryStatusMessage(detail.session.status)),
                   ],
                   const SizedBox(height: 16),
                   Wrap(
@@ -213,6 +223,11 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 8),
+                  Text(
+                    'Current East Seat',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: 4),
                   Text(_guestNameForSeat(
                       detail, detail.session.currentDealerSeatIndex)),
                   const SizedBox(height: 16),
@@ -274,5 +289,39 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     }
 
     return '$winnerName wins by self-draw, ${hand.fanCount} fan';
+  }
+
+  String _sessionStatusLabel(SessionStatus status) {
+    return switch (status) {
+      SessionStatus.active => 'Active Session',
+      SessionStatus.paused => 'Paused Session',
+      SessionStatus.completed => 'Completed Session',
+      SessionStatus.endedEarly => 'Ended Early',
+      SessionStatus.aborted => 'Aborted Session',
+    };
+  }
+
+  StatusChipTone _sessionStatusTone(SessionStatus status) {
+    return switch (status) {
+      SessionStatus.active => StatusChipTone.success,
+      SessionStatus.paused => StatusChipTone.warning,
+      SessionStatus.completed => StatusChipTone.neutral,
+      SessionStatus.endedEarly => StatusChipTone.warning,
+      SessionStatus.aborted => StatusChipTone.danger,
+    };
+  }
+
+  String _handEntryStatusMessage(SessionStatus status) {
+    return switch (status) {
+      SessionStatus.paused =>
+        'Hand entry is unavailable while this session is paused.',
+      SessionStatus.endedEarly =>
+        'Hand entry is closed because this session ended early.',
+      SessionStatus.completed =>
+        'Hand entry is closed because this session is complete.',
+      SessionStatus.aborted =>
+        'Hand entry is unavailable because this session was aborted.',
+      SessionStatus.active => '',
+    };
   }
 }

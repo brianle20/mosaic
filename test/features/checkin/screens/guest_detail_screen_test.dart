@@ -267,6 +267,13 @@ void main() {
 
     expect(find.text('Check In and Assign Tag'), findsOneWidget);
     expect(find.text('Tag Unassigned'), findsOneWidget);
+    expect(find.text('Attendance Status'), findsOneWidget);
+    expect(find.text('Cover Status'), findsOneWidget);
+    expect(find.text('Player Tag'), findsOneWidget);
+    expect(
+      find.text('This guest is ready to check in and receive a player tag.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('shows blocked eligibility messaging for unpaid guest',
@@ -299,7 +306,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('paid or comped'), findsOneWidget);
+    expect(
+      find.text(
+          'Mark this guest paid or comped before assigning a player tag.'),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Update the cover status, then return here to continue check-in.',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Check In and Assign Tag'), findsNothing);
   });
 

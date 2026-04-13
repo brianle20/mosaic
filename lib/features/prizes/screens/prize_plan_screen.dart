@@ -3,6 +3,7 @@ import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/prizes/controllers/prize_plan_controller.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class PrizePlanScreen extends StatefulWidget {
   const PrizePlanScreen({
@@ -77,6 +78,8 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
           ),
           const SizedBox(height: 8),
           Text('${widget.prizeBudgetCents} cents'),
+          const SizedBox(height: 12),
+          const Text('Preview awards before locking the official payout list.'),
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,
@@ -185,7 +188,11 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
           const SizedBox(height: 12),
           if (_controller.previewRows.isNotEmpty) ...[
             const Text(
-              'Preview',
+              'Lock awards only when this preview matches the standings you want to pay out.',
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Preview Awards',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -203,6 +210,11 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
               child: const Text('Lock Prize Awards'),
             ),
             if (_controller.lockedAwards.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const StatusChip(
+                label: 'Locked Awards Available',
+                tone: StatusChipTone.success,
+              ),
               const SizedBox(height: 8),
               OutlinedButton(
                 onPressed: _openLockedAwards,

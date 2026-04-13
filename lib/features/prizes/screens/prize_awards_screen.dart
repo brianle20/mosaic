@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/prizes/controllers/prize_awards_controller.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class PrizeAwardsScreen extends StatefulWidget {
   const PrizeAwardsScreen({
@@ -54,6 +55,15 @@ class _PrizeAwardsScreenState extends State<PrizeAwardsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          const Text(
+            'Official Payout Checklist',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Use this locked list to track which awards are still payable, paid out, or void.',
+          ),
+          const SizedBox(height: 16),
           if (_controller.error != null) Text(_controller.error!),
           for (final award in _controller.awards)
             Card(
@@ -68,7 +78,10 @@ class _PrizeAwardsScreenState extends State<PrizeAwardsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text('${award.awardAmountCents} cents'),
-                    Text(_statusLabel(award.status)),
+                    StatusChip(
+                      label: _statusLabel(award.status),
+                      tone: _statusTone(award.status),
+                    ),
                   ],
                 ),
               ),
@@ -94,9 +107,17 @@ class _PrizeAwardsScreenState extends State<PrizeAwardsScreen> {
 
   String _statusLabel(PrizeAwardStatus status) {
     return switch (status) {
-      PrizeAwardStatus.planned => 'planned',
-      PrizeAwardStatus.paid => 'paid',
-      PrizeAwardStatus.voided => 'void',
+      PrizeAwardStatus.planned => 'Ready to Pay',
+      PrizeAwardStatus.paid => 'Paid Out',
+      PrizeAwardStatus.voided => 'Void Award',
+    };
+  }
+
+  StatusChipTone _statusTone(PrizeAwardStatus status) {
+    return switch (status) {
+      PrizeAwardStatus.planned => StatusChipTone.warning,
+      PrizeAwardStatus.paid => StatusChipTone.success,
+      PrizeAwardStatus.voided => StatusChipTone.neutral,
     };
   }
 }

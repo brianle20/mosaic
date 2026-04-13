@@ -137,17 +137,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Official Payout Checklist'), findsOneWidget);
     expect(find.text('Alice Wong'), findsOneWidget);
-    expect(find.text('planned'), findsNWidgets(2));
+    expect(find.text('Ready to Pay'), findsNWidgets(2));
 
     await tester.tap(find.text('Mark Paid').first);
     await tester.pumpAndSettle();
     expect(repository.markPaidCount, 1);
-    expect(find.text('paid'), findsOneWidget);
+    expect(find.text('Paid Out'), findsOneWidget);
 
     await tester.tap(find.text('Void').first);
     await tester.pumpAndSettle();
     expect(repository.voidCount, 1);
-    expect(find.text('void'), findsOneWidget);
+    expect(find.text('Void Award'), findsOneWidget);
   });
 }

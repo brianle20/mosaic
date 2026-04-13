@@ -130,7 +130,9 @@ void main() {
 
     expect(find.text('Guests'), findsOneWidget);
     expect(find.text('Alice Wong'), findsOneWidget);
-    expect(find.textContaining('paid'), findsOneWidget);
+    expect(find.text('Paid'), findsOneWidget);
+    expect(find.text('Checked In'), findsOneWidget);
     expect(find.text('Tag Assigned'), findsOneWidget);
+    expect(find.text('Ready to Play'), findsOneWidget);
   });
 }

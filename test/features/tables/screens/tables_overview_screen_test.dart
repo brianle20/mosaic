@@ -163,9 +163,13 @@ void main() {
     expect(find.text('Tables'), findsOneWidget);
     expect(find.text('Table 1'), findsOneWidget);
     expect(find.text('Table 2'), findsOneWidget);
-    expect(find.text('Table Tag Bound'), findsOneWidget);
-    expect(find.text('Table Tag Unbound'), findsOneWidget);
-    expect(find.text('Session Active'), findsOneWidget);
+    expect(find.text('Points Table'), findsOneWidget);
+    expect(find.text('Casual Table'), findsOneWidget);
+    expect(find.text('Tag Bound'), findsOneWidget);
+    expect(find.text('Tag Unbound'), findsOneWidget);
+    expect(find.text('Live Session'), findsOneWidget);
+    expect(find.text('Unavailable for New Session'), findsOneWidget);
+    expect(find.text('Casual play only'), findsOneWidget);
     expect(find.text('Start Session'), findsOneWidget);
   });
 }

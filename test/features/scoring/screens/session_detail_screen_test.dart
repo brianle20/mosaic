@@ -319,7 +319,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Session Status'), findsOneWidget);
+    expect(find.text('Active Session'), findsOneWidget);
     expect(find.text('Current East'), findsOneWidget);
+    expect(find.text('Current East Seat'), findsOneWidget);
     expect(find.text('Bob Lee'), findsWidgets);
     expect(find.text('Pause Session'), findsOneWidget);
     expect(find.text('End Early'), findsOneWidget);
@@ -347,6 +350,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Paused Session'), findsOneWidget);
+    expect(
+      find.text('Hand entry is unavailable while this session is paused.'),
+      findsOneWidget,
+    );
     expect(find.text('Resume Session'), findsOneWidget);
     expect(find.text('Pause Session'), findsNothing);
     expect(find.text('End Early'), findsOneWidget);
@@ -382,6 +390,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(sessionRepository.endedReason, 'Venue closing');
+    expect(find.text('Ended Early'), findsOneWidget);
     expect(find.text('Session ended early: Venue closing'), findsOneWidget);
   });
 }
