@@ -5,6 +5,7 @@ import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/table_list_controller.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class TablesOverviewScreen extends StatefulWidget {
   const TablesOverviewScreen({
@@ -143,11 +144,19 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          Text(table.mode.name),
-                          Text(
-                            table.nfcTagId == null
-                                ? 'Table Tag Unbound'
-                                : 'Table Tag Bound',
+                          StatusChip(
+                            label: _modeLabel(table.mode),
+                            tone: table.mode == EventTableMode.points
+                                ? StatusChipTone.success
+                                : StatusChipTone.neutral,
+                          ),
+                          StatusChip(
+                            label: table.nfcTagId == null
+                                ? 'Tag Unbound'
+                                : 'Tag Bound',
+                            tone: table.nfcTagId == null
+                                ? StatusChipTone.warning
+                                : StatusChipTone.success,
                           ),
                           if (_controller.activeSessionsByTableId
                               .containsKey(table.id))
@@ -156,9 +165,17 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                                 _controller
                                     .activeSessionsByTableId[table.id]!.id,
                               ),
-                              child: const Text('Session Active'),
+                              child: const StatusChip(
+                                label: 'Live Session',
+                                tone: StatusChipTone.warning,
+                              ),
                             ),
                         ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _tableSummary(table),
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 12),
                       Wrap(
@@ -193,5 +210,32 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         ),
       ),
     );
+  }
+
+  String _modeLabel(EventTableMode mode) {
+    return switch (mode) {
+      EventTableMode.points => 'Points Table',
+      EventTableMode.casual => 'Casual Table',
+      EventTableMode.inactive => 'Inactive Table',
+    };
+  }
+
+  String _tableSummary(EventTableRecord table) {
+    final hasLiveSession = _controller.activeSessionsByTableId.containsKey(
+      table.id,
+    );
+    if (hasLiveSession) {
+      return 'Unavailable for New Session';
+    }
+    if (table.mode == EventTableMode.points && table.nfcTagId == null) {
+      return 'Ready for Seating or Tag Binding';
+    }
+    if (table.mode == EventTableMode.points) {
+      return 'Ready to Start a Session';
+    }
+    if (table.mode == EventTableMode.casual) {
+      return 'Casual play only';
+    }
+    return 'Inactive for this event';
   }
 }

@@ -4,6 +4,7 @@ import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class EventDashboardScreen extends StatefulWidget {
   const EventDashboardScreen({
@@ -122,6 +123,57 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
   String _flagStatusLabel(bool isOpen) => isOpen ? 'Open' : 'Closed';
 
+  String _eventPhaseLabel(EventLifecycleStatus? status) {
+    return switch (status) {
+      EventLifecycleStatus.draft => 'Ready to Start',
+      EventLifecycleStatus.active => 'Live Event',
+      EventLifecycleStatus.completed => 'Review Before Finalizing',
+      EventLifecycleStatus.finalized => 'Results Locked',
+      EventLifecycleStatus.cancelled => 'Cancelled',
+      null => 'Loading Event',
+    };
+  }
+
+  StatusChipTone _eventPhaseTone(EventLifecycleStatus? status) {
+    return switch (status) {
+      EventLifecycleStatus.draft => StatusChipTone.warning,
+      EventLifecycleStatus.active => StatusChipTone.success,
+      EventLifecycleStatus.completed => StatusChipTone.warning,
+      EventLifecycleStatus.finalized => StatusChipTone.neutral,
+      EventLifecycleStatus.cancelled => StatusChipTone.danger,
+      null => StatusChipTone.neutral,
+    };
+  }
+
+  StatusChipTone _flagTone(bool isOpen) {
+    return isOpen ? StatusChipTone.success : StatusChipTone.warning;
+  }
+
+  String _formatLifecycleMessage(EventLifecycleStatus? lifecycleStatus) {
+    return switch (lifecycleStatus) {
+      EventLifecycleStatus.draft =>
+        'Finish setup, then start the event to open check-in.',
+      EventLifecycleStatus.active =>
+        'Use the live operations controls to open or close check-in and scoring during the event.',
+      EventLifecycleStatus.completed =>
+        'Review standings and locked prizes before finalizing.',
+      EventLifecycleStatus.finalized =>
+        'Standings and awards are locked for this event.',
+      EventLifecycleStatus.cancelled =>
+        'This event was cancelled and is no longer live.',
+      null =>
+        'Check-in, tables, sessions, scoring, and prizes are available from the dashboard actions above.',
+    };
+  }
+
+  String _formatLifecycleError(String message) {
+    if (message ==
+        '1 active or paused session(s) must be ended before changing the event lifecycle.') {
+      return 'End all active or paused sessions before changing the event phase.';
+    }
+    return message;
+  }
+
   @override
   Widget build(BuildContext context) {
     final event = _controller.event;
@@ -143,7 +195,15 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 12),
-            Text('Status: ${event?.lifecycleStatus.name ?? 'draft'}'),
+            Text(
+              'Event Phase',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            StatusChip(
+              label: _eventPhaseLabel(lifecycleStatus),
+              tone: _eventPhaseTone(lifecycleStatus),
+            ),
             const SizedBox(height: 8),
             Text('Guests: ${_controller.guestCount}'),
             if (_controller.lifecycleError case final lifecycleError?)
@@ -153,11 +213,16 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   color: Theme.of(context).colorScheme.errorContainer,
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(lifecycleError),
+                    child: Text(_formatLifecycleError(lifecycleError)),
                   ),
                 ),
               ),
             const SizedBox(height: 20),
+            Text(
+              'Actions',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -225,7 +290,22 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 12),
-                      Text('Check-In: ${_flagStatusLabel(event!.checkinOpen)}'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          StatusChip(
+                            label:
+                                'Check-In ${_flagStatusLabel(event!.checkinOpen)}',
+                            tone: _flagTone(event.checkinOpen),
+                          ),
+                          StatusChip(
+                            label:
+                                'Scoring ${_flagStatusLabel(event.scoringOpen)}',
+                            tone: _flagTone(event.scoringOpen),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 8),
                       OutlinedButton(
                         onPressed: _controller.isSubmittingLifecycle
@@ -240,8 +320,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                               : 'Open Check-In',
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Text('Scoring: ${_flagStatusLabel(event.scoringOpen)}'),
                       const SizedBox(height: 8),
                       OutlinedButton(
                         onPressed: _controller.isSubmittingLifecycle
@@ -268,20 +346,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (lifecycleStatus == EventLifecycleStatus.finalized)
-                      const Text('This event is finalized.'),
+                      const Text('Final Event State'),
                     Text(
-                      switch (lifecycleStatus) {
-                        EventLifecycleStatus.draft =>
-                          'Finish setup, then start the event to open check-in.',
-                        EventLifecycleStatus.active =>
-                          'Use the live operations controls to open or close check-in and scoring during the event.',
-                        EventLifecycleStatus.completed =>
-                          'This event is completed. Review standings and prizes before finalizing.',
-                        EventLifecycleStatus.finalized =>
-                          'Standings and awards are locked.',
-                        _ =>
-                          'Check-in, tables, sessions, scoring, and prizes are available from the dashboard actions above.',
-                      },
+                      _formatLifecycleMessage(lifecycleStatus),
                     ),
                   ],
                 ),

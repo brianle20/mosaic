@@ -6,6 +6,7 @@ import 'package:mosaic/features/checkin/controllers/guest_check_in_controller.da
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
 import 'package:mosaic/features/checkin/screens/add_cover_entry_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class GuestDetailScreen extends StatefulWidget {
   const GuestDetailScreen({
@@ -89,11 +90,45 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
               style: Theme.of(context).textTheme.headlineMedium,
             ),
             const SizedBox(height: 12),
-            Text('Attendance: ${guest?.attendanceStatus.name ?? 'expected'}'),
+            Text(
+              'Attendance Status',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             const SizedBox(height: 8),
-            Text('Cover: ${guest?.coverStatus.name ?? 'unpaid'}'),
+            StatusChip(
+              label: guest == null
+                  ? 'Expected'
+                  : _attendanceLabel(guest.attendanceStatus),
+              tone: guest?.isCheckedIn == true
+                  ? StatusChipTone.success
+                  : StatusChipTone.neutral,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Cover Status',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
             const SizedBox(height: 8),
-            Text(assignment == null ? 'Tag Unassigned' : 'Tag Assigned'),
+            StatusChip(
+              label: guest == null
+                  ? 'Unpaid'
+                  : _coverStatusLabel(guest.coverStatus),
+              tone: guest == null
+                  ? StatusChipTone.neutral
+                  : _coverStatusTone(guest.coverStatus),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Player Tag',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            StatusChip(
+              label: assignment == null ? 'Tag Unassigned' : 'Tag Assigned',
+              tone: assignment == null
+                  ? StatusChipTone.warning
+                  : StatusChipTone.success,
+            ),
             if (assignment?.tag.displayLabel != null) ...[
               const SizedBox(height: 8),
               Text(assignment!.tag.displayLabel!),
@@ -135,12 +170,32 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
               const Card(
                 child: Padding(
                   padding: EdgeInsets.all(16),
-                  child: Text(
-                    'Guests must be paid or comped before receiving a player tag.',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Mark this guest paid or comped before assigning a player tag.',
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Update the cover status, then return here to continue check-in.',
+                      ),
+                    ],
                   ),
                 ),
               ),
             if (guest != null && guest.isEligibleForPlayerTagAssignment) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  assignment == null
+                      ? (guest.isCheckedIn
+                          ? 'This guest is ready for a player tag.'
+                          : 'This guest is ready to check in and receive a player tag.')
+                      : 'This guest already has a player tag. Replace it only if needed.',
+                ),
+              ),
               if (!guest.isCheckedIn && assignment == null)
                 FilledButton(
                   onPressed: _controller.isSubmitting
@@ -203,5 +258,34 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
       CoverEntryMethod.refund => 'Refund',
     };
     return '$methodLabel ${entry.amountCents}';
+  }
+
+  String _attendanceLabel(AttendanceStatus status) {
+    return switch (status) {
+      AttendanceStatus.expected => 'Expected',
+      AttendanceStatus.checkedIn => 'Checked In',
+      AttendanceStatus.checkedOut => 'Checked Out',
+      AttendanceStatus.noShow => 'No Show',
+    };
+  }
+
+  String _coverStatusLabel(CoverStatus status) {
+    return switch (status) {
+      CoverStatus.unpaid => 'Unpaid',
+      CoverStatus.paid => 'Paid',
+      CoverStatus.partial => 'Partial',
+      CoverStatus.comped => 'Comped',
+      CoverStatus.refunded => 'Refunded',
+    };
+  }
+
+  StatusChipTone _coverStatusTone(CoverStatus status) {
+    return switch (status) {
+      CoverStatus.paid => StatusChipTone.success,
+      CoverStatus.comped => StatusChipTone.success,
+      CoverStatus.partial => StatusChipTone.warning,
+      CoverStatus.unpaid => StatusChipTone.warning,
+      CoverStatus.refunded => StatusChipTone.neutral,
+    };
   }
 }

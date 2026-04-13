@@ -101,6 +101,10 @@ void main() {
     expect(find.text('None'), findsOneWidget);
     expect(find.text('Fixed'), findsOneWidget);
     expect(find.text('Percentage'), findsOneWidget);
+    expect(
+      find.text('Preview awards before locking the official payout list.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -212,6 +216,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.previewCount, 1);
+    expect(find.text('Preview Awards'), findsWidgets);
+    expect(
+      find.text(
+          'Lock awards only when this preview matches the standings you want to pay out.'),
+      findsOneWidget,
+    );
     await tester.scrollUntilVisible(
       find.text('Alice Wong'),
       200,

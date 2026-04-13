@@ -4,6 +4,7 @@ import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/guests/controllers/guest_roster_controller.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class GuestRosterScreen extends StatefulWidget {
   const GuestRosterScreen({
@@ -93,15 +94,40 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                 child: ListTile(
                   key: ValueKey('guest-row-${guest.id}'),
                   title: Text(guest.displayName),
-                  subtitle: Wrap(
-                    spacing: 8,
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(guest.coverStatus.name),
-                      Text(guest.attendanceStatus.name),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          StatusChip(
+                            label: _coverStatusLabel(guest.coverStatus),
+                            tone: _coverStatusTone(guest.coverStatus),
+                          ),
+                          StatusChip(
+                            label: _attendanceLabel(guest.attendanceStatus),
+                            tone: guest.isCheckedIn
+                                ? StatusChipTone.success
+                                : StatusChipTone.neutral,
+                          ),
+                          StatusChip(
+                            label: _controller.activeTagAssignments
+                                    .containsKey(guest.id)
+                                ? 'Tag Assigned'
+                                : 'Tag Unassigned',
+                            tone: _controller.activeTagAssignments
+                                    .containsKey(guest.id)
+                                ? StatusChipTone.success
+                                : StatusChipTone.warning,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       Text(
-                        _controller.activeTagAssignments.containsKey(guest.id)
-                            ? 'Tag Assigned'
-                            : 'Tag Unassigned',
+                        _rowSummary(guest),
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),
@@ -117,5 +143,51 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         ),
       ),
     );
+  }
+
+  String _attendanceLabel(AttendanceStatus status) {
+    return switch (status) {
+      AttendanceStatus.expected => 'Expected',
+      AttendanceStatus.checkedIn => 'Checked In',
+      AttendanceStatus.checkedOut => 'Checked Out',
+      AttendanceStatus.noShow => 'No Show',
+    };
+  }
+
+  String _coverStatusLabel(CoverStatus status) {
+    return switch (status) {
+      CoverStatus.unpaid => 'Unpaid',
+      CoverStatus.paid => 'Paid',
+      CoverStatus.partial => 'Partial',
+      CoverStatus.comped => 'Comped',
+      CoverStatus.refunded => 'Refunded',
+    };
+  }
+
+  StatusChipTone _coverStatusTone(CoverStatus status) {
+    return switch (status) {
+      CoverStatus.paid => StatusChipTone.success,
+      CoverStatus.comped => StatusChipTone.success,
+      CoverStatus.partial => StatusChipTone.warning,
+      CoverStatus.unpaid => StatusChipTone.warning,
+      CoverStatus.refunded => StatusChipTone.neutral,
+    };
+  }
+
+  String _rowSummary(EventGuestRecord guest) {
+    final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
+    if (guest.isCheckedIn && guest.isEligibleForPlayerTagAssignment && hasTag) {
+      return 'Ready to Play';
+    }
+    if (!guest.isEligibleForPlayerTagAssignment) {
+      return 'Needs payment or comp before tag assignment';
+    }
+    if (!guest.isCheckedIn) {
+      return 'Ready for check-in';
+    }
+    if (!hasTag) {
+      return 'Needs player tag';
+    }
+    return 'Operational status available';
   }
 }

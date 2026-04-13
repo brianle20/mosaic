@@ -568,6 +568,12 @@ void main() {
 
     expect(find.text('Start Event'), findsOneWidget);
     expect(find.text('Complete Event'), findsNothing);
+    expect(find.text('Event Phase'), findsOneWidget);
+    expect(find.text('Ready to Start'), findsOneWidget);
+    expect(
+      find.text('Finish setup, then start the event to open check-in.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('starting a draft event enables live controls', (tester) async {
@@ -589,8 +595,10 @@ void main() {
     await tester.tap(find.text('Start Event'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Check-In: Open'), findsOneWidget);
-    expect(find.text('Scoring: Closed'), findsOneWidget);
+    expect(find.text('Event Phase'), findsOneWidget);
+    expect(find.text('Live Event'), findsOneWidget);
+    expect(find.text('Check-In Open'), findsOneWidget);
+    expect(find.text('Scoring Closed'), findsOneWidget);
     expect(find.text('Close Check-In'), findsOneWidget);
     expect(find.text('Open Scoring'), findsOneWidget);
   });
@@ -617,15 +625,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Check-In: Open'), findsOneWidget);
-    expect(find.text('Scoring: Closed'), findsOneWidget);
+    expect(find.text('Live Operations'), findsOneWidget);
+    expect(find.text('Check-In Open'), findsOneWidget);
+    expect(find.text('Scoring Closed'), findsOneWidget);
     expect(find.text('Close Check-In'), findsOneWidget);
     expect(find.text('Open Scoring'), findsOneWidget);
 
     await tester.tap(find.text('Open Scoring'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Scoring: Open'), findsOneWidget);
+    expect(find.text('Scoring Open'), findsOneWidget);
     expect(find.text('Close Scoring'), findsOneWidget);
   });
 
@@ -647,6 +656,11 @@ void main() {
 
     expect(find.text('Finalize Event'), findsOneWidget);
     expect(find.text('Complete Event'), findsNothing);
+    expect(find.text('Review Before Finalizing'), findsOneWidget);
+    expect(
+      find.text('Review standings and locked prizes before finalizing.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('finalized event hides live operation actions', (tester) async {
@@ -662,7 +676,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('This event is finalized.'), findsOneWidget);
+    expect(find.text('Results Locked'), findsOneWidget);
+    expect(
+      find.text('Standings and awards are locked for this event.'),
+      findsOneWidget,
+    );
     expect(find.text('Guests'), findsNothing);
     expect(find.text('Tables'), findsNothing);
     expect(find.text('Add Guest'), findsNothing);
@@ -696,8 +714,7 @@ void main() {
 
     expect(
       find.text(
-        '1 active or paused session(s) must be ended before changing the event lifecycle.',
-      ),
+          'End all active or paused sessions before changing the event phase.'),
       findsOneWidget,
     );
   });
