@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/prizes/controllers/prize_awards_controller.dart';
+import 'package:mosaic/widgets/empty_state_card.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 class PrizeAwardsScreen extends StatefulWidget {
@@ -65,6 +66,15 @@ class _PrizeAwardsScreenState extends State<PrizeAwardsScreen> {
           ),
           const SizedBox(height: 16),
           if (_controller.error != null) Text(_controller.error!),
+          if (_controller.awards.isEmpty) ...[
+            const EmptyStateCard(
+              icon: Icons.checklist_rtl,
+              title: 'No locked awards yet',
+              message:
+                  'Preview and lock prize awards before using the payout checklist.',
+            ),
+            const SizedBox(height: 16),
+          ],
           for (final award in _controller.awards)
             Card(
               child: ListTile(

@@ -101,6 +101,28 @@ class _FakeSessionRepository implements SessionRepository {
 }
 
 void main() {
+  testWidgets('renders an intentional empty state when no tables exist',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          tableRepository: _FakeTableRepository(const []),
+          sessionRepository: _FakeSessionRepository(const []),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No tables yet'), findsOneWidget);
+    expect(
+      find.text('Add a points or casual table before starting live seating.'),
+      findsOneWidget,
+    );
+    expect(find.text('Add Table'), findsOneWidget);
+  });
+
   testWidgets('renders table cards and statuses', (tester) async {
     final tableRepository = _FakeTableRepository([
       EventTableRecord.fromJson(const {

@@ -5,6 +5,7 @@ import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/table_list_controller.dart';
+import 'package:mosaic/widgets/empty_state_card.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 class TablesOverviewScreen extends StatefulWidget {
@@ -204,7 +205,12 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
             if (_controller.tables.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 24),
-                child: Text('No tables yet.'),
+                child: EmptyStateCard(
+                  icon: Icons.table_restaurant,
+                  title: 'No tables yet',
+                  message:
+                      'Add a points or casual table before starting live seating.',
+                ),
               ),
           ],
         ),

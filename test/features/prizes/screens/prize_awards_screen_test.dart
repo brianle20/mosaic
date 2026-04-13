@@ -97,6 +97,29 @@ class _AwardsRepository implements PrizeRepository {
 }
 
 void main() {
+  testWidgets('renders an intentional empty state when no locked awards exist',
+      (tester) async {
+    final repository = _AwardsRepository(const []);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PrizeAwardsScreen(
+          eventId: 'evt_01',
+          guestNamesById: const {},
+          prizeRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No locked awards yet'), findsOneWidget);
+    expect(
+      find.text(
+          'Preview and lock prize awards before using the payout checklist.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('renders locked awards and updates statuses', (tester) async {
     final repository = _AwardsRepository(
       const [

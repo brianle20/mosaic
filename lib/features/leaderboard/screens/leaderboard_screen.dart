@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/leaderboard/controllers/leaderboard_controller.dart';
+import 'package:mosaic/widgets/empty_state_card.dart';
 
 class LeaderboardScreen extends StatefulWidget {
   const LeaderboardScreen({
@@ -69,7 +70,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
             if (_controller.entries.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 24),
-                child: Text('No standings yet.'),
+                child: EmptyStateCard(
+                  icon: Icons.leaderboard,
+                  title: 'No scored results yet',
+                  message:
+                      'Record hands in an active session to populate the leaderboard.',
+                ),
               ),
           ],
         ),

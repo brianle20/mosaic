@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mosaic/widgets/empty_state_card.dart';
 
 class AsyncBody extends StatelessWidget {
   const AsyncBody({
@@ -17,25 +18,38 @@ class AsyncBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(
+                'Loading…',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     if (error != null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(error!, textAlign: TextAlign.center),
-              if (onRetry != null) ...[
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: onRetry,
-                  child: const Text('Retry'),
-                ),
-              ],
-            ],
+          child: EmptyStateCard(
+            icon: Icons.error_outline,
+            title: 'Something needs attention',
+            message: error!,
+            action: onRetry == null
+                ? null
+                : FilledButton(
+                    onPressed: onRetry,
+                    child: const Text('Retry'),
+                  ),
           ),
         ),
       );

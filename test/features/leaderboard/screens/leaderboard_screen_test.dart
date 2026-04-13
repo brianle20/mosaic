@@ -30,6 +30,28 @@ class _RecordingLeaderboardRepository implements LeaderboardRepository {
 }
 
 void main() {
+  testWidgets('renders an intentional empty state when no scored results exist',
+      (tester) async {
+    final repository = _RecordingLeaderboardRepository(entries: const []);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LeaderboardScreen(
+          eventId: 'evt_01',
+          leaderboardRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No scored results yet'), findsOneWidget);
+    expect(
+      find.text(
+          'Record hands in an active session to populate the leaderboard.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('renders ordered leaderboard standings', (tester) async {
     final repository = _RecordingLeaderboardRepository(
       entries: const [

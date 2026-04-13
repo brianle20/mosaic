@@ -58,6 +58,14 @@ void main() {
     );
 
     expect(find.text('Host Sign In'), findsOneWidget);
+    expect(
+        find.text('Run live Mahjong events from one phone.'), findsOneWidget);
+    expect(
+      find.text(
+        'Sign in with the host account to manage check-in, sessions, scoring, and prizes.',
+      ),
+      findsOneWidget,
+    );
     expect(find.byType(TextFormField), findsNWidgets(2));
     expect(find.text('Sign In'), findsOneWidget);
   });
@@ -124,5 +132,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Invalid email or password.'), findsOneWidget);
+    expect(
+      find.text('Use the single host account for this event operation.'),
+      findsOneWidget,
+    );
   });
 }

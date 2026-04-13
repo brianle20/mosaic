@@ -57,6 +57,26 @@ class _FakeEventRepository implements EventRepository {
 }
 
 void main() {
+  testWidgets('renders an intentional empty state when no events exist',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(
+          eventRepository: _FakeEventRepository(const []),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No events yet'), findsOneWidget);
+    expect(
+      find.text(
+          'Create your first event to start check-in, seating, scoring, and prizes.'),
+      findsOneWidget,
+    );
+    expect(find.text('Create Event'), findsOneWidget);
+  });
+
   testWidgets('renders loaded events and create action', (tester) async {
     var signOutTapped = false;
     final repository = _FakeEventRepository([

@@ -3,6 +3,7 @@ import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/activity/controllers/activity_controller.dart';
+import 'package:mosaic/widgets/empty_state_card.dart';
 
 class ActivityScreen extends StatefulWidget {
   const ActivityScreen({
@@ -79,7 +80,12 @@ class _ActivityScreenState extends State<ActivityScreen> {
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.all(24),
-                        child: Text('No activity yet for this event.'),
+                        child: EmptyStateCard(
+                          icon: Icons.history,
+                          title: 'No activity yet',
+                          message:
+                              'Event actions, payments, sessions, and prize updates will appear here.',
+                        ),
                       ),
                     )
                   : ListView.builder(

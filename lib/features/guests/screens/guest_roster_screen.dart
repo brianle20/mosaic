@@ -8,6 +8,7 @@ import 'package:mosaic/features/checkin/screens/add_cover_entry_screen.dart';
 import 'package:mosaic/features/guests/controllers/guest_roster_controller.dart';
 import 'package:mosaic/features/guests/widgets/guest_quick_action_bar.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/widgets/empty_state_card.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 class GuestRosterScreen extends StatefulWidget {
@@ -78,14 +79,14 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   Future<void> _markPaid(EventGuestRecord guest) async {
     await _runQuickAction(
       () => _controller.markPaid(guest.id),
-      successMessage: 'Marked ${guest.displayName} paid',
+      successMessage: '${guest.displayName} is now marked paid.',
     );
   }
 
   Future<void> _markComped(EventGuestRecord guest) async {
     await _runQuickAction(
       () => _controller.markComped(guest.id),
-      successMessage: 'Marked ${guest.displayName} comped',
+      successMessage: '${guest.displayName} is now marked comped.',
     );
   }
 
@@ -95,7 +96,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         guestId: guest.id,
         scanForTag: () => widget.nfcService.scanPlayerTagForAssignment(context),
       ),
-      successMessage: 'Assigned player tag to ${guest.displayName}',
+      successMessage: '${guest.displayName} is checked in and tagged.',
     );
   }
 
@@ -105,7 +106,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         guestId: guest.id,
         scanForTag: () => widget.nfcService.scanPlayerTagForAssignment(context),
       ),
-      successMessage: 'Assigned player tag to ${guest.displayName}',
+      successMessage: 'Player tag assigned to ${guest.displayName}.',
     );
   }
 
@@ -124,7 +125,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         guestId: guest.id,
         input: submission,
       ),
-      successMessage: 'Saved cover entry for ${guest.displayName}',
+      successMessage: 'Cover entry saved for ${guest.displayName}.',
     );
   }
 
@@ -227,7 +228,12 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
             if (_controller.guests.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 24),
-                child: Text('No guests yet.'),
+                child: EmptyStateCard(
+                  icon: Icons.people_outline,
+                  title: 'No guests yet',
+                  message:
+                      'Add guests to start check-in, tag assignment, and live seating.',
+                ),
               ),
           ],
         ),

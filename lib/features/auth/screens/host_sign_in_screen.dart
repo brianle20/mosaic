@@ -74,14 +74,32 @@ class _HostSignInScreenState extends State<HostSignInScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Icon(
+                      Icons.grid_view_rounded,
+                      size: 40,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(height: 16),
                     Text(
                       'Host Sign In',
                       style: Theme.of(context).textTheme.headlineMedium,
                       textAlign: TextAlign.center,
                     ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Run live Mahjong events from one phone.',
+                      style: Theme.of(context).textTheme.titleMedium,
+                      textAlign: TextAlign.center,
+                    ),
                     const SizedBox(height: 12),
                     const Text(
-                      'Sign in with the host account to manage Mosaic events.',
+                      'Sign in with the host account to manage check-in, sessions, scoring, and prizes.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Use the single host account for this event operation.',
+                      style: Theme.of(context).textTheme.bodySmall,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),

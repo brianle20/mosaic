@@ -137,6 +137,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('No activity yet for this event.'), findsOneWidget);
+    expect(find.text('No activity yet'), findsOneWidget);
+    expect(
+      find.text(
+          'Event actions, payments, sessions, and prize updates will appear here.'),
+      findsOneWidget,
+    );
   });
 }
