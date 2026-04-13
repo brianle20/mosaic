@@ -203,6 +203,34 @@ void main() {
 
     test('maps paid and void prize award mutations', () async {
       final cache = await LocalCache.create();
+      await cache.savePrizeAwards('evt_01', [
+        PrizeAwardRecord.fromJson(const {
+          'id': 'award_01',
+          'event_id': 'evt_01',
+          'event_guest_id': 'gst_01',
+          'rank_start': 1,
+          'rank_end': 1,
+          'display_rank': '1',
+          'award_amount_cents': 15000,
+          'status': 'planned',
+          'paid_method': null,
+          'paid_at': null,
+          'paid_note': null,
+        }),
+        PrizeAwardRecord.fromJson(const {
+          'id': 'award_02',
+          'event_id': 'evt_01',
+          'event_guest_id': 'gst_02',
+          'rank_start': 2,
+          'rank_end': 2,
+          'display_rank': '2',
+          'award_amount_cents': 10000,
+          'status': 'planned',
+          'paid_method': null,
+          'paid_at': null,
+          'paid_note': null,
+        }),
+      ]);
       final repository = SupabasePrizeRepository(
         client: SupabaseClient('https://example.com', 'publishable-key'),
         cache: cache,
@@ -253,6 +281,13 @@ void main() {
       expect(paid.paidMethod, 'cash');
       expect(voided.status, PrizeAwardStatus.voided);
       expect(voided.paidNote, 'Left early');
+
+      final cached = await repository.readCachedPrizeAwards('evt_01');
+      expect(cached, hasLength(2));
+      expect(cached.first.status, PrizeAwardStatus.paid);
+      expect(cached.first.paidMethod, 'cash');
+      expect(cached.last.status, PrizeAwardStatus.voided);
+      expect(cached.last.paidNote, 'Left early');
     });
   });
 }

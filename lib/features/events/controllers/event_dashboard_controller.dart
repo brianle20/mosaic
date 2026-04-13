@@ -21,21 +21,33 @@ class EventDashboardController extends ChangeNotifier {
   int guestCount = 0;
 
   Future<void> load(String eventId) async {
+    final cachedEvent = (await _eventRepository.readCachedEvents())
+        .where((record) => record.id == eventId)
+        .firstOrNull;
+    final cachedGuests = await _guestRepository.readCachedGuests(eventId);
+
     isLoading = true;
     error = null;
     lifecycleError = null;
+    event = cachedEvent;
+    guestCount = cachedGuests.length;
     notifyListeners();
 
     try {
-      event = await _eventRepository.getEvent(eventId) ??
-          (await _eventRepository.readCachedEvents())
-              .where((record) => record.id == eventId)
-              .firstOrNull;
-      guestCount = (await _guestRepository.readCachedGuests(eventId)).length;
+      event = await _eventRepository.getEvent(eventId) ?? event;
+    } catch (exception) {
+      if (event == null) {
+        error = exception.toString();
+      }
+    }
+
+    try {
       final remoteGuests = await _guestRepository.listGuests(eventId);
       guestCount = remoteGuests.length;
     } catch (exception) {
-      error = exception.toString();
+      if (event == null && guestCount == 0) {
+        error ??= exception.toString();
+      }
     }
 
     isLoading = false;
