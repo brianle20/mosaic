@@ -3,7 +3,11 @@ import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
+import 'package:mosaic/features/checkin/screens/add_cover_entry_screen.dart';
 import 'package:mosaic/features/guests/controllers/guest_roster_controller.dart';
+import 'package:mosaic/features/guests/widgets/guest_quick_action_bar.dart';
+import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 class GuestRosterScreen extends StatefulWidget {
@@ -12,11 +16,13 @@ class GuestRosterScreen extends StatefulWidget {
     required this.eventId,
     required this.eventTitle,
     required this.guestRepository,
+    required this.nfcService,
   });
 
   final String eventId;
   final String eventTitle;
   final GuestRepository guestRepository;
+  final NfcService nfcService;
 
   @override
   State<GuestRosterScreen> createState() => _GuestRosterScreenState();
@@ -67,6 +73,86 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       ),
     );
     await _controller.load(widget.eventId);
+  }
+
+  Future<void> _markPaid(EventGuestRecord guest) async {
+    await _runQuickAction(
+      () => _controller.markPaid(guest.id),
+      successMessage: 'Marked ${guest.displayName} paid',
+    );
+  }
+
+  Future<void> _markComped(EventGuestRecord guest) async {
+    await _runQuickAction(
+      () => _controller.markComped(guest.id),
+      successMessage: 'Marked ${guest.displayName} comped',
+    );
+  }
+
+  Future<void> _checkInAndAssign(EventGuestRecord guest) async {
+    await _runQuickAction(
+      () => _controller.checkInAndAssign(
+        guestId: guest.id,
+        scanForTag: () => widget.nfcService.scanPlayerTagForAssignment(context),
+      ),
+      successMessage: 'Assigned player tag to ${guest.displayName}',
+    );
+  }
+
+  Future<void> _assignTag(EventGuestRecord guest) async {
+    await _runQuickAction(
+      () => _controller.assignTag(
+        guestId: guest.id,
+        scanForTag: () => widget.nfcService.scanPlayerTagForAssignment(context),
+      ),
+      successMessage: 'Assigned player tag to ${guest.displayName}',
+    );
+  }
+
+  Future<void> _addCoverEntry(EventGuestRecord guest) async {
+    final submission = await Navigator.of(context).push<SubmitCoverEntryInput>(
+      MaterialPageRoute(
+        builder: (_) => const AddCoverEntryScreen(),
+      ),
+    );
+    if (submission == null) {
+      return;
+    }
+
+    await _runQuickAction(
+      () => _controller.recordCoverEntry(
+        guestId: guest.id,
+        input: submission,
+      ),
+      successMessage: 'Saved cover entry for ${guest.displayName}',
+    );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _runQuickAction(
+    Future<bool> Function() action, {
+    required String successMessage,
+  }) async {
+    try {
+      final didComplete = await action();
+      if (!mounted) {
+        return;
+      }
+      if (!didComplete) {
+        return;
+      }
+      _showMessage(successMessage);
+    } catch (exception) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(_formatActionError(exception));
+    }
   }
 
   @override
@@ -129,6 +215,10 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                         _rowSummary(guest),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                      const SizedBox(height: 8),
+                      GuestQuickActionBar(
+                        children: _quickActionsForGuest(guest),
+                      ),
                     ],
                   ),
                   onTap: () => _openGuestDetail(guest),
@@ -143,6 +233,48 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         ),
       ),
     );
+  }
+
+  List<Widget> _quickActionsForGuest(EventGuestRecord guest) {
+    final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
+    final isSubmitting = _controller.isSubmittingGuest(guest.id);
+    final actions = <Widget>[];
+
+    if (!guest.isEligibleForPlayerTagAssignment) {
+      actions.addAll([
+        OutlinedButton(
+          onPressed: isSubmitting ? null : () => _markPaid(guest),
+          child: const Text('Mark Paid'),
+        ),
+        OutlinedButton(
+          onPressed: isSubmitting ? null : () => _markComped(guest),
+          child: const Text('Mark Comped'),
+        ),
+      ]);
+    } else if (!guest.isCheckedIn) {
+      actions.add(
+        FilledButton(
+          onPressed: isSubmitting ? null : () => _checkInAndAssign(guest),
+          child: const Text('Check In & Tag'),
+        ),
+      );
+    } else if (!hasTag) {
+      actions.add(
+        FilledButton(
+          onPressed: isSubmitting ? null : () => _assignTag(guest),
+          child: const Text('Assign Tag'),
+        ),
+      );
+    }
+
+    actions.add(
+      TextButton(
+        onPressed: isSubmitting ? null : () => _addCoverEntry(guest),
+        child: const Text('Add Cover Entry'),
+      ),
+    );
+
+    return actions;
   }
 
   String _attendanceLabel(AttendanceStatus status) {
@@ -189,5 +321,14 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       return 'Needs player tag';
     }
     return 'Operational status available';
+  }
+
+  String _formatActionError(Object exception) {
+    final message = exception.toString();
+    const prefix = 'Bad state: ';
+    if (message.startsWith(prefix)) {
+      return message.substring(prefix.length);
+    }
+    return message;
   }
 }

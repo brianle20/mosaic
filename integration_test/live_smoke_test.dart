@@ -172,8 +172,8 @@ void main() {
 
       await tester.tap(find.text('Start Event'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Check-In: Open'));
-      await _pumpUntilVisible(tester, find.text('Scoring: Closed'));
+      await _pumpUntilVisible(tester, find.text('Check-In Open'));
+      await _pumpUntilVisible(tester, find.text('Scoring Closed'));
 
       await tester.tap(find.text('Activity'));
       await tester.pumpAndSettle();
@@ -237,13 +237,13 @@ void main() {
 
       await _tapBack(tester);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Check-In: Open'));
-      await _pumpUntilVisible(tester, find.text('Scoring: Closed'));
+      await _pumpUntilVisible(tester, find.text('Check-In Open'));
+      await _pumpUntilVisible(tester, find.text('Scoring Closed'));
       await _pumpUntilVisible(tester, find.text('Open Scoring'));
 
       await tester.tap(find.text('Open Scoring'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Scoring: Open'));
+      await _pumpUntilVisible(tester, find.text('Scoring Open'));
       await _pumpUntilVisible(tester, find.text('Tables'));
 
       await tester.tap(find.text('Tables'));
@@ -286,7 +286,8 @@ void main() {
 
       await _tapBack(tester);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Table Tag Bound'));
+      await _pumpUntilVisible(tester, find.text(tableLabel));
+      await _pumpUntilVisible(tester, find.text('Tag Bound'));
 
       await tester.tap(find.text('Start Session').first);
       await tester.pumpAndSettle();
@@ -478,7 +479,11 @@ void main() {
 
       await tester.tap(find.text('Finalize Event'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('This event is finalized.'));
+      await _pumpUntilVisible(tester, find.text('Results Locked'));
+      await _pumpUntilVisible(
+        tester,
+        find.text('Standings and awards are locked for this event.'),
+      );
 
       final finalizedEventRow = await Supabase.instance.client
           .from('events')

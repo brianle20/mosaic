@@ -88,6 +88,7 @@ class AppRouter {
             eventId: args.eventId,
             eventTitle: args.eventTitle,
             guestRepository: guestRepository,
+            nfcService: nfcService,
           ),
           settings: settings,
         );
