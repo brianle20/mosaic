@@ -7,6 +7,7 @@ class EventListController extends ChangeNotifier {
       : _eventRepository = eventRepository;
 
   final EventRepository _eventRepository;
+  bool _isDisposed = false;
 
   bool isLoading = true;
   String? error;
@@ -15,13 +16,16 @@ class EventListController extends ChangeNotifier {
   Future<void> load() async {
     isLoading = true;
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     final cachedEvents = await _eventRepository.readCachedEvents();
+    if (_isDisposed) {
+      return;
+    }
     if (cachedEvents.isNotEmpty) {
       events = cachedEvents;
       isLoading = false;
-      notifyListeners();
+      _notifyIfActive();
     }
 
     try {
@@ -33,7 +37,22 @@ class EventListController extends ChangeNotifier {
       }
     }
 
+    if (_isDisposed) {
+      return;
+    }
     isLoading = false;
-    notifyListeners();
+    _notifyIfActive();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
+  void _notifyIfActive() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
   }
 }

@@ -1,24 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
-import 'package:mosaic/main.dart' as app;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const _hostEmail = String.fromEnvironment('HOST_EMAIL');
-const _hostPassword = String.fromEnvironment('HOST_PASSWORD');
+import 'support/live_fixture_factory.dart';
+import 'support/live_test_harness.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  ensureIntegrationTestBinding();
 
-  testWidgets(
-      'host can run live operations, score hands, configure prizes, and finalize',
-      (tester) async {
-    if (_hostEmail.isEmpty || _hostPassword.isEmpty) {
-      fail(
-        'HOST_EMAIL and HOST_PASSWORD dart defines are required for the live smoke test.',
-      );
-    }
-
+  testWidgets('live_golden_full_event_lifecycle', (tester) async {
     final suffix = DateTime.now().millisecondsSinceEpoch;
     final eventTitle = 'Smoke Event $suffix';
     final venueName = 'Simulator Clubhouse';
@@ -43,40 +33,12 @@ void main() {
     String? eventId;
     String? tableId;
 
-    app.main();
-    await tester.pump();
-
-    await _pumpUntilAny(
-      tester,
-      [
-        find.text('Host Sign In'),
-        find.text('Events'),
-        find.textContaining('SUPABASE_'),
-      ],
-    );
-
-    if (find.text('Sign out').evaluate().isNotEmpty) {
-      await tester.tap(find.text('Sign out'));
-      await tester.pump();
-      await _pumpUntilVisible(tester, find.text('Host Sign In'));
-    }
-
-    expect(find.text('Host Sign In'), findsOneWidget);
-
-    await tester.enterText(find.byType(TextFormField).at(0), _hostEmail);
-    await tester.enterText(find.byType(TextFormField).at(1), _hostPassword);
-    await tester.tap(find.widgetWithText(FilledButton, 'Sign In'));
-    await tester.pump();
-
-    await _pumpUntilVisible(
-      tester,
-      find.widgetWithText(FilledButton, 'Create Event'),
-    );
+    await bootAndSignIn(tester);
 
     try {
       await tester.tap(find.widgetWithText(FilledButton, 'Create Event'));
       await tester.pump();
-      await _pumpUntilVisible(tester, find.text('Create Event'));
+      await pumpUntilVisible(tester, find.text('Create Event'));
 
       await tester.enterText(find.byType(TextFormField).at(0), eventTitle);
       await tester.enterText(
@@ -94,8 +56,8 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Save Event'));
       await tester.pump();
 
-      await _pumpUntilVisible(tester, find.text(eventTitle));
-      await _pumpUntilVisible(tester, find.text('Guests: 0'));
+      await pumpUntilVisible(tester, find.text(eventTitle));
+      await pumpUntilVisible(tester, find.text('Guests: 0'));
 
       final eventRow = await Supabase.instance.client
           .from('events')
@@ -108,8 +70,8 @@ void main() {
 
       await tester.tap(find.text('Guests'));
       await tester.pump();
-      await _pumpUntilVisible(tester, find.text('No guests yet'));
-      await _pumpUntilVisible(
+      await pumpUntilVisible(tester, find.text('No guests yet'));
+      await pumpUntilVisible(
         tester,
         find.text(
           'Add guests to start check-in, tag assignment, and live seating.',
@@ -117,12 +79,12 @@ void main() {
       );
 
       for (var index = 0; index < guestNames.length; index++) {
-        await _addPaidGuest(
+        await addPaidGuestViaUi(
           tester,
           guestName: guestNames[index],
           suffix: '$suffix-$index',
         );
-        await _pumpUntilVisible(tester, find.text(guestNames[index]));
+        await pumpUntilVisible(tester, find.text(guestNames[index]));
       }
 
       final guestRows = await Supabase.instance.client
@@ -136,13 +98,13 @@ void main() {
       final firstGuestName = guestRows.first['display_name'] as String;
       final firstGuestFinder =
           find.byKey(ValueKey('guest-row-$firstGuestId')).hitTestable();
-      await _pumpUntilVisible(tester, firstGuestFinder);
+      await pumpUntilVisible(tester, firstGuestFinder);
       await tester.tap(firstGuestFinder);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Cover Ledger'));
+      await pumpUntilVisible(tester, find.text('Cover Ledger'));
       await tester.tap(find.text('Add Cover Entry'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Record Cover Entry'));
+      await pumpUntilVisible(tester, find.text('Record Cover Entry'));
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Amount (cents)'),
         '2000',
@@ -155,8 +117,8 @@ void main() {
       );
       await tester.tap(find.text('Save Cover Entry'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Paid at door via smoke test'));
-      await _pumpUntilVisible(tester, find.text(firstGuestName));
+      await pumpUntilVisible(tester, find.text('Paid at door via smoke test'));
+      await pumpUntilVisible(tester, find.text(firstGuestName));
 
       final coverEntryRows = await Supabase.instance.client
           .from('guest_cover_entries')
@@ -169,33 +131,33 @@ void main() {
       expect(coverEntryRows.first['method'], 'cash');
       expect(coverEntryRows.first['note'], 'Paid at door via smoke test');
 
-      await _tapBack(tester);
+      await tapBack(tester);
       await tester.pumpAndSettle();
 
-      await _tapBack(tester);
+      await tapBack(tester);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Start Event'));
+      await pumpUntilVisible(tester, find.text('Start Event'));
 
       await tester.tap(find.text('Start Event'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Check-In Open'));
-      await _pumpUntilVisible(tester, find.text('Scoring Closed'));
+      await pumpUntilVisible(tester, find.text('Check-In Open'));
+      await pumpUntilVisible(tester, find.text('Scoring Closed'));
 
       await tester.tap(find.text('Activity'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(
+      await pumpUntilVisible(
           tester, find.text('Recorded cover entry: cash 2000'));
-      await _pumpUntilVisible(tester, find.text('Started event'));
+      await pumpUntilVisible(tester, find.text('Started event'));
 
       await tester.tap(find.text('Payments'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(
+      await pumpUntilVisible(
           tester, find.text('Recorded cover entry: cash 2000'));
       expect(find.text('Started event'), findsNothing);
 
-      await _tapBack(tester);
+      await tapBack(tester);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Guests'));
+      await pumpUntilVisible(tester, find.text('Guests'));
 
       await tester.tap(find.text('Guests'));
       await tester.pumpAndSettle();
@@ -208,25 +170,25 @@ void main() {
 
         final guestRowFinder =
             find.byKey(ValueKey('guest-row-$guestId')).hitTestable();
-        await _pumpUntilVisible(tester, guestRowFinder);
+        await pumpUntilVisible(tester, guestRowFinder);
         await tester.ensureVisible(guestRowFinder);
         await tester.tap(guestRowFinder);
         await tester.pumpAndSettle();
-        await _pumpUntilVisible(tester, find.text('Check In and Assign Tag'));
+        await pumpUntilVisible(tester, find.text('Check In and Assign Tag'));
 
         await tester.tap(find.text('Check In and Assign Tag'));
         await tester.pumpAndSettle();
-        await _pumpUntilVisible(tester, find.text('Enter Tag UID'));
+        await pumpUntilVisible(tester, find.text('Enter Tag UID'));
 
         final assignmentTagField = find.byType(TextField).hitTestable();
-        await _pumpUntilVisible(tester, assignmentTagField);
+        await pumpUntilVisible(tester, assignmentTagField);
         await tester.enterText(assignmentTagField, playerTagUids[index]);
         await tester.tap(find.text('Use Tag'));
         await tester.pumpAndSettle();
 
-        await _pumpUntilVisible(tester, find.text('Replace Tag'));
-        await _pumpUntilVisible(tester, find.text('Tag Assigned'));
-        await _tapBack(tester);
+        await pumpUntilVisible(tester, find.text('Replace Tag'));
+        await pumpUntilVisible(tester, find.text('Tag Assigned'));
+        await tapBack(tester);
         await tester.pumpAndSettle();
       }
 
@@ -241,24 +203,24 @@ void main() {
         isTrue,
       );
 
-      await _tapBack(tester);
+      await tapBack(tester);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Check-In Open'));
-      await _pumpUntilVisible(tester, find.text('Scoring Closed'));
-      await _pumpUntilVisible(tester, find.text('Open Scoring'));
+      await pumpUntilVisible(tester, find.text('Check-In Open'));
+      await pumpUntilVisible(tester, find.text('Scoring Closed'));
+      await pumpUntilVisible(tester, find.text('Open Scoring'));
 
       await tester.tap(find.text('Open Scoring'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Scoring Open'));
-      await _pumpUntilVisible(tester, find.text('Tables'));
+      await pumpUntilVisible(tester, find.text('Scoring Open'));
+      await pumpUntilVisible(tester, find.text('Tables'));
 
       await tester.tap(find.text('Tables'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Add Table'));
+      await pumpUntilVisible(tester, find.text('Add Table'));
 
       await tester.tap(find.text('Add Table'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Add Table'));
+      await pumpUntilVisible(tester, find.text('Add Table'));
 
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Label'),
@@ -266,7 +228,7 @@ void main() {
       );
       await tester.tap(find.text('Save Table'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text(tableLabel));
+      await pumpUntilVisible(tester, find.text(tableLabel));
 
       final tableRows = await Supabase.instance.client
           .from('event_tables')
@@ -278,50 +240,58 @@ void main() {
 
       await tester.tap(find.text('Bind Table Tag').first);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Edit Table'));
+      await pumpUntilVisible(tester, find.text('Edit Table'));
 
       await tester.tap(find.text('Bind Table Tag'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Scan Table Tag'));
+      await pumpUntilVisible(tester, find.text('Scan Table Tag'));
       final tableTagField = find.byType(TextField).hitTestable();
-      await _pumpUntilVisible(tester, tableTagField);
+      await pumpUntilVisible(tester, tableTagField);
       await tester.enterText(tableTagField, tableTagUid);
       await tester.tap(find.text('Use Tag'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Table Tag Bound'));
+      await pumpUntilVisible(tester, find.text('Table Tag Bound'));
 
-      await _tapBack(tester);
+      await tapBack(tester);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text(tableLabel));
-      await _pumpUntilVisible(tester, find.text('Tag Bound'));
+      await pumpUntilVisible(tester, find.text(tableLabel));
+      await pumpUntilVisible(tester, find.text('Tag Bound'));
 
       await tester.tap(find.text('Start Session').first);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Scan Table Tag'));
+      await pumpUntilVisible(tester, find.text('Scan Table Tag'));
 
-      await _scanSessionStep(tester, tableTagUid, 'Scan Table Tag');
-      await _scanSessionStep(tester, playerTagUids[0], 'Scan East Player Tag');
-      await _scanSessionStep(
+      await scanSessionStepViaUi(tester, tableTagUid, 'Scan Table Tag');
+      await scanSessionStepViaUi(
+        tester,
+        playerTagUids[0],
+        'Scan East Player Tag',
+      );
+      await scanSessionStepViaUi(
         tester,
         playerTagUids[1],
         'Scan South Player Tag',
       );
-      await _scanSessionStep(tester, playerTagUids[2], 'Scan West Player Tag');
-      await _scanSessionStep(
+      await scanSessionStepViaUi(
+        tester,
+        playerTagUids[2],
+        'Scan West Player Tag',
+      );
+      await scanSessionStepViaUi(
         tester,
         playerTagUids[3],
         'Scan North Player Tag',
       );
 
-      await _pumpUntilVisible(tester, find.text('Review Session'));
+      await pumpUntilVisible(tester, find.text('Review Session'));
       for (final guestName in guestNames) {
-        await _pumpUntilVisible(tester, find.text(guestName));
+        await pumpUntilVisible(tester, find.text(guestName));
       }
 
       await tester.tap(find.text('Confirm Start Session'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Session Detail'));
-      await _pumpUntilVisible(tester, find.text('Pause Session'));
+      await pumpUntilVisible(tester, find.text('Session Detail'));
+      await pumpUntilVisible(tester, find.text('Pause Session'));
 
       final sessionRows = await Supabase.instance.client
           .from('table_sessions')
@@ -345,27 +315,27 @@ void main() {
 
       await tester.tap(find.text('Pause Session'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Resume Session'));
+      await pumpUntilVisible(tester, find.text('Resume Session'));
 
       await tester.tap(find.text('Resume Session'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(
+      await pumpUntilVisible(
         tester,
         find.widgetWithText(FilledButton, 'Record Hand'),
       );
 
-      await _recordDiscardHand(
+      await recordDiscardHandViaUi(
         tester,
         winnerLabel: '${guestNames[2]} (West)',
         discarderLabel: '${guestNames[0]} (East)',
         fanCount: '2',
       );
-      await _recordSelfDrawHand(
+      await recordSelfDrawHandViaUi(
         tester,
         winnerLabel: '${guestNames[1]} (South)',
         fanCount: '1',
       );
-      await _recordWashoutHand(tester);
+      await recordWashoutHandViaUi(tester);
 
       final recordedHands = await Supabase.instance.client
           .from('hand_results')
@@ -383,13 +353,13 @@ void main() {
       expect(leaderboardBeforeVoid[1]['display_name'], guestNames[2]);
       expect(leaderboardBeforeVoid[1]['total_points'], 16);
 
-      await _pumpUntilVisible(tester, find.text('Hand 2'));
+      await pumpUntilVisible(tester, find.text('Hand 2'));
       await tester.tap(find.text('Hand 2'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Void Hand'));
+      await pumpUntilVisible(tester, find.text('Void Hand'));
       await tester.tap(find.text('Void Hand'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Session Detail'));
+      await pumpUntilVisible(tester, find.text('Session Detail'));
 
       final leaderboardAfterVoid = await Supabase.instance.client.rpc(
         'get_event_leaderboard',
@@ -403,30 +373,30 @@ void main() {
           .toSet();
       expect(tiedEntries, containsAll(<String>[guestNames[1], guestNames[3]]));
 
-      await _endSessionEarly(tester, 'Smoke test wrap-up');
-      await _pumpUntilVisible(
+      await endSessionEarlyViaUi(tester, 'Smoke test wrap-up');
+      await pumpUntilVisible(
         tester,
         find.text('Session ended early: Smoke test wrap-up'),
       );
 
-      await _tapBack(tester);
+      await tapBack(tester);
       await tester.pumpAndSettle();
-      await _tapBack(tester);
+      await tapBack(tester);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Leaderboard'));
+      await pumpUntilVisible(tester, find.text('Leaderboard'));
 
       await tester.tap(find.text('Leaderboard'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text(guestNames[2]));
-      await _pumpUntilVisible(tester, find.text('24 pts'));
+      await pumpUntilVisible(tester, find.text(guestNames[2]));
+      await pumpUntilVisible(tester, find.text('24 pts'));
 
-      await _tapBack(tester);
+      await tapBack(tester);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Prizes'));
+      await pumpUntilVisible(tester, find.text('Prizes'));
 
       await tester.tap(find.text('Prizes'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Prize Plan'));
+      await pumpUntilVisible(tester, find.text('Prize Plan'));
 
       await Supabase.instance.client.rpc(
         'upsert_prize_plan',
@@ -475,18 +445,18 @@ void main() {
       expect(prizeAwards.first['status'], 'paid');
       expect(prizeAwards.first['paid_method'], 'cash');
 
-      await _tapBack(tester);
+      await tapBack(tester);
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Complete Event'));
+      await pumpUntilVisible(tester, find.text('Complete Event'));
 
       await tester.tap(find.text('Complete Event'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Finalize Event'));
+      await pumpUntilVisible(tester, find.text('Finalize Event'));
 
       await tester.tap(find.text('Finalize Event'));
       await tester.pumpAndSettle();
-      await _pumpUntilVisible(tester, find.text('Results Locked'));
-      await _pumpUntilVisible(
+      await pumpUntilVisible(tester, find.text('Results Locked'));
+      await pumpUntilVisible(
         tester,
         find.text('Standings and awards are locked for this event.'),
       );
@@ -558,193 +528,4 @@ void main() {
       }
     }
   });
-}
-
-Future<void> _addPaidGuest(
-  WidgetTester tester, {
-  required String guestName,
-  required String suffix,
-}) async {
-  final addGuestButton =
-      find.widgetWithText(FilledButton, 'Add Guest').hitTestable();
-  await _pumpUntilVisible(tester, addGuestButton);
-  await tester.ensureVisible(addGuestButton);
-  await tester.tap(addGuestButton);
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('Add Guest'));
-
-  await tester.enterText(find.widgetWithText(TextFormField, 'Name'), guestName);
-  await tester.enterText(
-    find.widgetWithText(TextFormField, 'Phone'),
-    '+1415555${suffix.replaceAll('-', '').padLeft(5, '0').substring(0, 5)}',
-  );
-  await tester.enterText(
-    find.widgetWithText(TextFormField, 'Email'),
-    'smoke+$suffix@example.com',
-  );
-  await tester.enterText(
-    find.widgetWithText(TextFormField, 'Cover Amount (cents)'),
-    '2000',
-  );
-  await tester.tap(find.text('unpaid').last);
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('paid').last);
-  await tester.pumpAndSettle();
-  await tester.enterText(
-    find.widgetWithText(TextFormField, 'Note'),
-    'Live smoke test guest',
-  );
-  await tester.tap(find.widgetWithText(FilledButton, 'Save Guest'));
-  await tester.pumpAndSettle();
-}
-
-Future<void> _scanSessionStep(
-  WidgetTester tester,
-  String uid,
-  String prompt,
-) async {
-  await _pumpUntilVisible(tester, find.text(prompt));
-  await tester.tap(find.text('Scan Next Tag'));
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text(prompt));
-  final tagField = find.byType(TextField).hitTestable();
-  await _pumpUntilVisible(tester, tagField);
-  await tester.enterText(tagField, uid);
-  await tester.tap(find.text('Use Tag'));
-  await tester.pumpAndSettle();
-}
-
-Future<void> _endSessionEarly(WidgetTester tester, String reason) async {
-  await _pumpUntilVisible(tester, find.text('End Early'));
-  await tester.tap(find.text('End Early'));
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('End Session Early'));
-  await tester.enterText(find.byType(TextFormField).last, reason);
-  await tester.tap(find.text('End Session'));
-  await tester.pumpAndSettle();
-}
-
-Future<void> _recordDiscardHand(
-  WidgetTester tester, {
-  required String winnerLabel,
-  required String discarderLabel,
-  required String fanCount,
-}) async {
-  final recordHandButton =
-      find.widgetWithText(FilledButton, 'Record Hand').hitTestable();
-  await _pumpUntilVisible(tester, recordHandButton);
-  await tester.tap(recordHandButton);
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('Self Draw'));
-
-  await tester.tap(find.text('Discard').hitTestable());
-  await tester.pumpAndSettle();
-
-  await tester.tap(find.text('Winner'));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text(winnerLabel).last);
-  await tester.pumpAndSettle();
-
-  await tester.tap(find.text('Discarder'));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text(discarderLabel).last);
-  await tester.pumpAndSettle();
-
-  await tester.enterText(
-      find.widgetWithText(TextFormField, 'Fan Count'), fanCount);
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('Scoring Preview'));
-
-  await tester.tap(find.text('Save Hand'));
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('Session Detail'));
-  await _pumpUntilVisible(tester, recordHandButton);
-}
-
-Future<void> _recordSelfDrawHand(
-  WidgetTester tester, {
-  required String winnerLabel,
-  required String fanCount,
-}) async {
-  final recordHandButton =
-      find.widgetWithText(FilledButton, 'Record Hand').hitTestable();
-  await _pumpUntilVisible(tester, recordHandButton);
-  await tester.tap(recordHandButton);
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('Self Draw'));
-
-  await tester.tap(find.text('Winner'));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text(winnerLabel).last);
-  await tester.pumpAndSettle();
-
-  await tester.enterText(
-      find.widgetWithText(TextFormField, 'Fan Count'), fanCount);
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('Scoring Preview'));
-
-  await tester.tap(find.text('Save Hand'));
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('Session Detail'));
-  await _pumpUntilVisible(tester, recordHandButton);
-}
-
-Future<void> _recordWashoutHand(WidgetTester tester) async {
-  final recordHandButton =
-      find.widgetWithText(FilledButton, 'Record Hand').hitTestable();
-  await _pumpUntilVisible(tester, recordHandButton);
-  await tester.tap(recordHandButton);
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('Washout'));
-
-  await tester.tap(find.text('Washout'));
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('Scoring Preview'));
-
-  await tester.tap(find.text('Save Hand'));
-  await tester.pumpAndSettle();
-  await _pumpUntilVisible(tester, find.text('Session Detail'));
-  await _pumpUntilVisible(tester, recordHandButton);
-}
-
-Future<void> _pumpUntilVisible(
-  WidgetTester tester,
-  Finder finder, {
-  Duration timeout = const Duration(seconds: 30),
-}) async {
-  final end = DateTime.now().add(timeout);
-  while (DateTime.now().isBefore(end)) {
-    await tester.pump(const Duration(milliseconds: 200));
-    if (finder.evaluate().isNotEmpty) {
-      return;
-    }
-  }
-
-  fail('Timed out waiting for ${finder.describeMatch(Plurality.many)}');
-}
-
-Future<void> _pumpUntilAny(
-  WidgetTester tester,
-  List<Finder> finders, {
-  Duration timeout = const Duration(seconds: 30),
-}) async {
-  final end = DateTime.now().add(timeout);
-  while (DateTime.now().isBefore(end)) {
-    await tester.pump(const Duration(milliseconds: 200));
-    for (final finder in finders) {
-      if (finder.evaluate().isNotEmpty) {
-        return;
-      }
-    }
-  }
-
-  fail(
-    'Timed out waiting for any of: ${finders.map((finder) => finder.describeMatch(Plurality.many)).join(', ')}',
-  );
-}
-
-Future<void> _tapBack(WidgetTester tester) async {
-  final backButton = find.byTooltip('Back').hitTestable().first;
-  await _pumpUntilVisible(tester, backButton);
-  await tester.tap(backButton);
 }
