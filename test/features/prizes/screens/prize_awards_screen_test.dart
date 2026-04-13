@@ -26,6 +26,7 @@ class _AwardsRepository implements PrizeRepository {
       id: awardId,
       eventId: 'evt_01',
       eventGuestId: 'gst_01',
+      displayName: 'Alice Wong',
       rankStart: 1,
       rankEnd: 1,
       displayRank: '1',
@@ -48,6 +49,7 @@ class _AwardsRepository implements PrizeRepository {
       id: awardId,
       eventId: 'evt_01',
       eventGuestId: 'gst_02',
+      displayName: 'Bob Lee',
       rankStart: 2,
       rankEnd: 2,
       displayRank: '2',
@@ -127,6 +129,7 @@ void main() {
           id: 'award_01',
           eventId: 'evt_01',
           eventGuestId: 'gst_01',
+          displayName: 'Alice Wong',
           rankStart: 1,
           rankEnd: 1,
           displayRank: '1',
@@ -137,6 +140,7 @@ void main() {
           id: 'award_02',
           eventId: 'evt_01',
           eventGuestId: 'gst_02',
+          displayName: 'Bob Lee',
           rankStart: 2,
           rankEnd: 2,
           displayRank: '2',
@@ -163,6 +167,22 @@ void main() {
     expect(find.text('Official Payout Checklist'), findsOneWidget);
     expect(find.text('Alice Wong'), findsOneWidget);
     expect(find.text('Ready to Pay'), findsNWidgets(2));
+    expect(
+      find.descendant(
+        of: find.ancestor(
+            of: find.text('Alice Wong'), matching: find.byType(Card)),
+        matching: find.text('Mark Paid'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.ancestor(
+            of: find.text('Alice Wong'), matching: find.byType(Card)),
+        matching: find.text('Void'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Mark Paid').first);
     await tester.pumpAndSettle();
@@ -173,5 +193,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(repository.voidCount, 1);
     expect(find.text('Void Award'), findsOneWidget);
+  });
+
+  testWidgets('uses award display names when no fallback name map is provided',
+      (tester) async {
+    final repository = _AwardsRepository(
+      const [
+        PrizeAwardRecord(
+          id: 'award_01',
+          eventId: 'evt_01',
+          eventGuestId: 'gst_01',
+          displayName: 'Alice Wong',
+          rankStart: 1,
+          rankEnd: 1,
+          displayRank: '1',
+          awardAmountCents: 15000,
+          status: PrizeAwardStatus.planned,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PrizeAwardsScreen(
+          eventId: 'evt_01',
+          guestNamesById: const {},
+          prizeRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice Wong'), findsOneWidget);
+    expect(find.text('gst_01'), findsNothing);
   });
 }

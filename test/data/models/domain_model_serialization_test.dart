@@ -355,6 +355,7 @@ void main() {
         'id': 'award_01',
         'event_id': 'evt_01',
         'event_guest_id': 'gst_01',
+        'display_name': 'Alice Wong',
         'rank_start': 1,
         'rank_end': 1,
         'display_rank': '1',
@@ -367,8 +368,10 @@ void main() {
 
       expect(award.rankStart, 1);
       expect(award.displayRank, '1');
+      expect(award.displayName, 'Alice Wong');
       expect(award.awardAmountCents, 15000);
       expect(award.status, PrizeAwardStatus.planned);
+      expect(award.toJson()['display_name'], 'Alice Wong');
     });
   });
 

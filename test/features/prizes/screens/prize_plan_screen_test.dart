@@ -186,6 +186,7 @@ void main() {
           id: 'award_01',
           eventId: 'evt_01',
           eventGuestId: 'gst_01',
+          displayName: 'Alice Wong',
           rankStart: 1,
           rankEnd: 1,
           displayRank: '1',
@@ -249,5 +250,71 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.lockCount, 1);
+  });
+
+  testWidgets(
+      'shows locked awards action when reopening an already locked plan',
+      (tester) async {
+    final loadedPlan = PrizePlanDetail(
+      plan: PrizePlanRecord.fromJson(
+        const {
+          'id': 'pp_01',
+          'event_id': 'evt_01',
+          'mode': 'fixed',
+          'status': 'locked',
+          'reserve_fixed_cents': 0,
+          'reserve_percentage_bps': 0,
+          'note': 'Locked plan',
+          'row_version': 1,
+        },
+        prizeBudgetCents: 50000,
+      ),
+      tiers: const [
+        PrizeTierRecord(
+          id: 'tier_01',
+          prizePlanId: 'pp_01',
+          place: 1,
+          label: '1st',
+          fixedAmountCents: 15000,
+        ),
+      ],
+    );
+    final repository = _RecordingPrizeRepository(
+      loadedPlan: loadedPlan,
+      lockedAwards: const [
+        PrizeAwardRecord(
+          id: 'award_01',
+          eventId: 'evt_01',
+          eventGuestId: 'gst_01',
+          displayName: 'Alice Wong',
+          rankStart: 1,
+          rankEnd: 1,
+          displayRank: '1',
+          awardAmountCents: 15000,
+          status: PrizeAwardStatus.planned,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PrizePlanScreen(
+          eventId: 'evt_01',
+          prizeBudgetCents: 50000,
+          prizeRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('Locked Awards Available'),
+      200,
+      scrollable: scrollable,
+    );
+
+    expect(find.text('Locked Awards Available'), findsOneWidget);
+    expect(find.text('View Locked Awards'), findsOneWidget);
   });
 }

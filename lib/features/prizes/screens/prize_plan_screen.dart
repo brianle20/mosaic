@@ -58,6 +58,9 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
         guestNamesById: {
           for (final row in _controller.previewRows)
             row.eventGuestId: row.displayName,
+          for (final award in _controller.lockedAwards)
+            if (award.displayName case final displayName?)
+              award.eventGuestId: displayName,
         },
       ),
     );
@@ -80,7 +83,8 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
           Text('${widget.prizeBudgetCents} cents'),
           const SizedBox(height: 12),
           const Text('Preview awards before locking the official payout list.'),
-          if (_controller.previewRows.isEmpty) ...[
+          if (_controller.previewRows.isEmpty &&
+              _controller.lockedAwards.isEmpty) ...[
             const SizedBox(height: 8),
             Text(
               'Choose a prize mode and tiers when you are ready to preview payouts.',
@@ -215,18 +219,18 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
                   _controller.isSubmitting ? null : _controller.lockAwards,
               child: const Text('Lock Prize Awards'),
             ),
-            if (_controller.lockedAwards.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const StatusChip(
-                label: 'Locked Awards Available',
-                tone: StatusChipTone.success,
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed: _openLockedAwards,
-                child: const Text('View Locked Awards'),
-              ),
-            ],
+          ],
+          if (_controller.lockedAwards.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const StatusChip(
+              label: 'Locked Awards Available',
+              tone: StatusChipTone.success,
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton(
+              onPressed: _openLockedAwards,
+              child: const Text('View Locked Awards'),
+            ),
           ],
         ],
       ),
