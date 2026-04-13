@@ -151,7 +151,9 @@ class SupabasePrizeRepository implements PrizeRepository {
         'target_paid_note': paidNote,
       },
     );
-    return PrizeAwardRecord.fromJson(response);
+    final award = PrizeAwardRecord.fromJson(response);
+    await _saveMergedAward(award);
+    return award;
   }
 
   @override
@@ -166,7 +168,9 @@ class SupabasePrizeRepository implements PrizeRepository {
         'target_paid_note': paidNote,
       },
     );
-    return PrizeAwardRecord.fromJson(response);
+    final award = PrizeAwardRecord.fromJson(response);
+    await _saveMergedAward(award);
+    return award;
   }
 
   Future<Map<String, dynamic>?> _loadPrizePlanPayload(String eventId) async {
@@ -247,5 +251,20 @@ class SupabasePrizeRepository implements PrizeRepository {
     throw StateError(
       'Expected a map or list response from $functionName but received ${response.runtimeType}.',
     );
+  }
+
+  Future<void> _saveMergedAward(PrizeAwardRecord award) async {
+    final currentAwards = await readCachedPrizeAwards(award.eventId);
+    final mergedAwards = [
+      ...currentAwards.where((existingAward) => existingAward.id != award.id),
+      award,
+    ]..sort((left, right) {
+        final rankComparison = left.rankStart.compareTo(right.rankStart);
+        if (rankComparison != 0) {
+          return rankComparison;
+        }
+        return left.id.compareTo(right.id);
+      });
+    await cache.savePrizeAwards(award.eventId, mergedAwards);
   }
 }

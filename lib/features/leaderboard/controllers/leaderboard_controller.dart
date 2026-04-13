@@ -14,12 +14,15 @@ class LeaderboardController extends ChangeNotifier {
   Future<void> load(String eventId) async {
     isLoading = true;
     error = null;
+    entries = await leaderboardRepository.readCachedLeaderboard(eventId);
     notifyListeners();
 
     try {
       entries = await leaderboardRepository.loadLeaderboard(eventId);
     } catch (err) {
-      error = err.toString();
+      if (entries.isEmpty) {
+        error = err.toString();
+      }
     } finally {
       isLoading = false;
       notifyListeners();
