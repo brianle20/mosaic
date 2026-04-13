@@ -16,6 +16,15 @@ enum CoverStatus {
   refunded,
 }
 
+enum CoverEntryMethod {
+  cash,
+  venmo,
+  zelle,
+  other,
+  comp,
+  refund,
+}
+
 @immutable
 class CreateGuestInput {
   const CreateGuestInput({
@@ -182,13 +191,68 @@ class EventGuestRecord {
 class GuestDetailRecord {
   const GuestDetailRecord({
     required this.guest,
+    this.coverEntries = const [],
     this.activeTagAssignment,
   });
 
   final EventGuestRecord guest;
+  final List<GuestCoverEntryRecord> coverEntries;
   final GuestTagAssignmentSummary? activeTagAssignment;
 
   bool get hasAssignedPlayerTag => activeTagAssignment?.isActive ?? false;
+}
+
+@immutable
+class GuestCoverEntryRecord {
+  const GuestCoverEntryRecord({
+    required this.id,
+    required this.eventId,
+    required this.eventGuestId,
+    required this.amountCents,
+    required this.method,
+    required this.recordedByUserId,
+    required this.recordedAt,
+    this.note,
+    this.createdAt,
+  });
+
+  factory GuestCoverEntryRecord.fromJson(Map<String, dynamic> json) {
+    return GuestCoverEntryRecord(
+      id: _requiredString(json, 'id'),
+      eventId: _requiredString(json, 'event_id'),
+      eventGuestId: _requiredString(json, 'event_guest_id'),
+      amountCents: _requiredInt(json, 'amount_cents'),
+      method: _coverEntryMethodFromJson(_requiredString(json, 'method')),
+      recordedByUserId: _requiredString(json, 'recorded_by_user_id'),
+      recordedAt: _requiredDateTime(json, 'recorded_at'),
+      note: _optionalString(json, 'note'),
+      createdAt: _optionalDateTime(json, 'created_at'),
+    );
+  }
+
+  final String id;
+  final String eventId;
+  final String eventGuestId;
+  final int amountCents;
+  final CoverEntryMethod method;
+  final String recordedByUserId;
+  final DateTime recordedAt;
+  final String? note;
+  final DateTime? createdAt;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'event_id': eventId,
+      'event_guest_id': eventGuestId,
+      'amount_cents': amountCents,
+      'method': _coverEntryMethodToJson(method),
+      'recorded_by_user_id': recordedByUserId,
+      'recorded_at': recordedAt.toIso8601String(),
+      'note': note,
+      'created_at': createdAt?.toIso8601String(),
+    };
+  }
 }
 
 String _requiredString(Map<String, dynamic> json, String key) {
@@ -265,6 +329,15 @@ DateTime? _optionalDateTime(Map<String, dynamic> json, String key) {
   throw FormatException('Expected ISO-8601 string or null for $key.');
 }
 
+DateTime _requiredDateTime(Map<String, dynamic> json, String key) {
+  final value = _optionalDateTime(json, key);
+  if (value != null) {
+    return value;
+  }
+
+  throw FormatException('Expected ISO-8601 string for $key.');
+}
+
 AttendanceStatus _attendanceStatusFromJson(String value) {
   return switch (value) {
     'expected' => AttendanceStatus.expected,
@@ -302,5 +375,28 @@ String _coverStatusToJson(CoverStatus value) {
     CoverStatus.partial => 'partial',
     CoverStatus.comped => 'comped',
     CoverStatus.refunded => 'refunded',
+  };
+}
+
+CoverEntryMethod _coverEntryMethodFromJson(String value) {
+  return switch (value) {
+    'cash' => CoverEntryMethod.cash,
+    'venmo' => CoverEntryMethod.venmo,
+    'zelle' => CoverEntryMethod.zelle,
+    'other' => CoverEntryMethod.other,
+    'comp' => CoverEntryMethod.comp,
+    'refund' => CoverEntryMethod.refund,
+    _ => throw FormatException('Unknown cover entry method: $value'),
+  };
+}
+
+String _coverEntryMethodToJson(CoverEntryMethod value) {
+  return switch (value) {
+    CoverEntryMethod.cash => 'cash',
+    CoverEntryMethod.venmo => 'venmo',
+    CoverEntryMethod.zelle => 'zelle',
+    CoverEntryMethod.other => 'other',
+    CoverEntryMethod.comp => 'comp',
+    CoverEntryMethod.refund => 'refund',
   };
 }

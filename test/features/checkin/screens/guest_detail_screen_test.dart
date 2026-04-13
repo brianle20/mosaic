@@ -13,6 +13,9 @@ class _FakeGuestRepository implements GuestRepository {
   GuestDetailRecord detail;
   String? lastAssignedUid;
   String? lastReplacedUid;
+  int? lastRecordedAmountCents;
+  CoverEntryMethod? lastRecordedMethod;
+  String? lastRecordedNote;
 
   @override
   Future<GuestDetailRecord> assignGuestTag({
@@ -39,6 +42,7 @@ class _FakeGuestRepository implements GuestRepository {
             DateTime.parse('2026-04-24T19:15:00-07:00'),
         rowVersion: detail.guest.rowVersion,
       ),
+      coverEntries: detail.coverEntries,
       activeTagAssignment: GuestTagAssignmentSummary.fromJson({
         'assignment_id': 'asg_new',
         'event_id': detail.guest.eventId,
@@ -76,6 +80,7 @@ class _FakeGuestRepository implements GuestRepository {
         checkedInAt: DateTime.parse('2026-04-24T19:15:00-07:00'),
         rowVersion: detail.guest.rowVersion,
       ),
+      coverEntries: detail.coverEntries,
       activeTagAssignment: detail.activeTagAssignment,
     );
   }
@@ -89,6 +94,12 @@ class _FakeGuestRepository implements GuestRepository {
   Future<GuestDetailRecord?> getGuestDetail(String guestId) async => detail;
 
   @override
+  Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
+      String guestId) async {
+    return detail.coverEntries;
+  }
+
+  @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async => const [];
 
   @override
@@ -100,6 +111,43 @@ class _FakeGuestRepository implements GuestRepository {
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       const [];
+
+  @override
+  Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
+    String guestId,
+  ) async {
+    return detail.coverEntries;
+  }
+
+  @override
+  Future<GuestDetailRecord> recordCoverEntry({
+    required String guestId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    String? note,
+  }) async {
+    lastRecordedAmountCents = amountCents;
+    lastRecordedMethod = method;
+    lastRecordedNote = note;
+    return detail = GuestDetailRecord(
+      guest: detail.guest,
+      coverEntries: [
+        GuestCoverEntryRecord(
+          id: 'cov_new',
+          eventId: detail.guest.eventId,
+          eventGuestId: detail.guest.id,
+          amountCents: amountCents,
+          method: method,
+          recordedByUserId: 'usr_01',
+          recordedAt: DateTime.parse('2026-04-24T19:20:00-07:00'),
+          note: note,
+          createdAt: DateTime.parse('2026-04-24T19:20:00-07:00'),
+        ),
+        ...detail.coverEntries,
+      ],
+      activeTagAssignment: detail.activeTagAssignment,
+    );
+  }
 
   @override
   Future<GuestDetailRecord> replaceGuestTag({
@@ -126,6 +174,7 @@ class _FakeGuestRepository implements GuestRepository {
             DateTime.parse('2026-04-24T19:15:00-07:00'),
         rowVersion: detail.guest.rowVersion,
       ),
+      coverEntries: detail.coverEntries,
       activeTagAssignment: GuestTagAssignmentSummary.fromJson({
         'assignment_id': 'asg_replaced',
         'event_id': detail.guest.eventId,
@@ -473,5 +522,113 @@ void main() {
 
     expect(repository.lastAssignedUid, '04AABB');
     expect(find.text('Replace Tag'), findsOneWidget);
+  });
+
+  testWidgets('shows a cover ledger section with newest entries first',
+      (tester) async {
+    final repository = _FakeGuestRepository(
+      GuestDetailRecord(
+        guest: EventGuestRecord.fromJson(const {
+          'id': 'gst_08',
+          'event_id': 'evt_01',
+          'display_name': 'Hana Ko',
+          'normalized_name': 'hana ko',
+          'attendance_status': 'checked_in',
+          'cover_status': 'paid',
+          'cover_amount_cents': 2000,
+          'is_comped': false,
+          'has_scored_play': false,
+        }),
+        coverEntries: [
+          GuestCoverEntryRecord(
+            id: 'cov_02',
+            eventId: 'evt_01',
+            eventGuestId: 'gst_08',
+            amountCents: -500,
+            method: CoverEntryMethod.refund,
+            recordedByUserId: 'usr_01',
+            recordedAt: DateTime.parse('2026-04-24T19:10:00-07:00'),
+            note: 'Refunded duplicate charge',
+            createdAt: DateTime.parse('2026-04-24T19:10:00-07:00'),
+          ),
+          GuestCoverEntryRecord(
+            id: 'cov_01',
+            eventId: 'evt_01',
+            eventGuestId: 'gst_08',
+            amountCents: 2000,
+            method: CoverEntryMethod.cash,
+            recordedByUserId: 'usr_01',
+            recordedAt: DateTime.parse('2026-04-24T19:00:00-07:00'),
+            note: 'Paid at door',
+            createdAt: DateTime.parse('2026-04-24T19:00:00-07:00'),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestDetailScreen(
+          guestId: 'gst_08',
+          eventId: 'evt_01',
+          guestRepository: repository,
+          nfcService: const _FakeNfcService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cover Ledger'), findsOneWidget);
+    expect(find.text('Refunded duplicate charge'), findsOneWidget);
+    expect(find.text('Paid at door'), findsOneWidget);
+  });
+
+  testWidgets('adds a cover ledger entry from the guest detail screen',
+      (tester) async {
+    final repository = _FakeGuestRepository(
+      GuestDetailRecord(
+        guest: EventGuestRecord.fromJson(const {
+          'id': 'gst_09',
+          'event_id': 'evt_01',
+          'display_name': 'Ian Q',
+          'normalized_name': 'ian q',
+          'attendance_status': 'expected',
+          'cover_status': 'partial',
+          'cover_amount_cents': 1000,
+          'is_comped': false,
+          'has_scored_play': false,
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestDetailScreen(
+          guestId: 'gst_09',
+          eventId: 'evt_01',
+          guestRepository: repository,
+          nfcService: const _FakeNfcService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add Cover Entry'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Record Cover Entry'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField).first, '2000');
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Venmo'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byType(TextFormField).last, 'Paid after seating');
+    await tester.tap(find.text('Save Cover Entry'));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastRecordedAmountCents, 2000);
+    expect(repository.lastRecordedMethod, CoverEntryMethod.venmo);
+    expect(repository.lastRecordedNote, 'Paid after seating');
+    expect(find.text('Paid after seating'), findsOneWidget);
   });
 }

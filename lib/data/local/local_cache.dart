@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -21,6 +22,7 @@ class LocalCache {
   static const _eventsKey = 'events';
   static const _eventKeyPrefix = 'event:';
   static const _guestListKeyPrefix = 'guests:';
+  static const _guestCoverEntriesKeyPrefix = 'guest-cover-entries:';
   static const _tableListKeyPrefix = 'tables:';
   static const _sessionListKeyPrefix = 'sessions:';
   static const _sessionDetailKeyPrefix = 'session-detail:';
@@ -28,6 +30,7 @@ class LocalCache {
   static const _prizePlanKeyPrefix = 'prize-plan:';
   static const _prizePreviewKeyPrefix = 'prize-preview:';
   static const _prizeAwardsKeyPrefix = 'prize-awards:';
+  static const _activityKeyPrefix = 'activity:';
 
   Future<void> saveEvents(List<EventRecord> events) async {
     await _preferences.setString(
@@ -81,6 +84,29 @@ class LocalCache {
     return decoded
         .map(
             (guest) => EventGuestRecord.fromJson(guest as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
+  Future<void> saveGuestCoverEntries(
+    String guestId,
+    List<GuestCoverEntryRecord> entries,
+  ) async {
+    await _preferences.setString(
+      '$_guestCoverEntriesKeyPrefix$guestId',
+      jsonEncode(entries.map((entry) => entry.toJson()).toList()),
+    );
+  }
+
+  List<GuestCoverEntryRecord> readGuestCoverEntries(String guestId) {
+    final raw = _preferences.getString('$_guestCoverEntriesKeyPrefix$guestId');
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((entry) =>
+            GuestCoverEntryRecord.fromJson(entry as Map<String, dynamic>))
         .toList(growable: false);
   }
 
@@ -233,6 +259,35 @@ class LocalCache {
     return decoded
         .map((award) =>
             PrizeAwardRecord.fromJson((award as Map).cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
+  Future<void> saveActivity(
+    String eventId,
+    EventActivityCategory category,
+    List<EventActivityEntry> entries,
+  ) async {
+    await _preferences.setString(
+      '$_activityKeyPrefix$eventId:${category.name}',
+      jsonEncode(
+          entries.map((entry) => entry.toJson()).toList(growable: false)),
+    );
+  }
+
+  List<EventActivityEntry> readActivity(
+    String eventId,
+    EventActivityCategory category,
+  ) {
+    final raw =
+        _preferences.getString('$_activityKeyPrefix$eventId:${category.name}');
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((entry) =>
+            EventActivityEntry.fromJson((entry as Map).cast<String, dynamic>()))
         .toList(growable: false);
   }
 }

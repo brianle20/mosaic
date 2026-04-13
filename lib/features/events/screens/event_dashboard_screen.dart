@@ -108,6 +108,18 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     );
   }
 
+  void _openActivity() {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    Navigator.of(context).pushNamed(
+      AppRouter.activityRoute,
+      arguments: ActivityArgs(eventId: event.id),
+    );
+  }
+
   String _flagStatusLabel(bool isOpen) => isOpen ? 'Open' : 'Closed';
 
   @override
@@ -163,6 +175,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 FilledButton(
                   onPressed: _openLeaderboard,
                   child: const Text('Leaderboard'),
+                ),
+                FilledButton(
+                  onPressed: _openActivity,
+                  child: const Text('Activity'),
                 ),
                 FilledButton(
                   onPressed: _openPrizes,

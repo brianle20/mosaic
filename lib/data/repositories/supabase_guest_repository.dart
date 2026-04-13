@@ -8,6 +8,9 @@ typedef GuestByIdLoader = Future<Map<String, dynamic>> Function(String guestId);
 typedef ActiveAssignmentLoader = Future<Map<String, dynamic>?> Function(
   String guestId,
 );
+typedef CoverEntriesLoader = Future<List<Map<String, dynamic>>> Function(
+  String guestId,
+);
 typedef RpcSingleRunner = Future<Map<String, dynamic>> Function(
   String functionName,
   Map<String, dynamic> params,
@@ -19,15 +22,18 @@ class SupabaseGuestRepository implements GuestRepository {
     required this.cache,
     GuestByIdLoader? guestByIdLoader,
     ActiveAssignmentLoader? activeAssignmentLoader,
+    CoverEntriesLoader? coverEntriesLoader,
     RpcSingleRunner? rpcSingleRunner,
   })  : _guestByIdLoader = guestByIdLoader,
         _activeAssignmentLoader = activeAssignmentLoader,
+        _coverEntriesLoader = coverEntriesLoader,
         _rpcSingleRunner = rpcSingleRunner;
 
   final SupabaseClient client;
   final LocalCache cache;
   final GuestByIdLoader? _guestByIdLoader;
   final ActiveAssignmentLoader? _activeAssignmentLoader;
+  final CoverEntriesLoader? _coverEntriesLoader;
   final RpcSingleRunner? _rpcSingleRunner;
 
   @override
@@ -42,9 +48,11 @@ class SupabaseGuestRepository implements GuestRepository {
     final assignment = assignmentRow == null
         ? null
         : GuestTagAssignmentSummary.fromJson(assignmentRow);
+    final coverEntries = await loadGuestCoverEntries(guestId);
     await _saveMergedGuestList(guest.eventId, guest);
     return GuestDetailRecord(
       guest: guest,
+      coverEntries: coverEntries,
       activeTagAssignment: assignment,
     );
   }
@@ -75,6 +83,19 @@ class SupabaseGuestRepository implements GuestRepository {
         .toList(growable: false);
     await cache.saveGuests(eventId, guests);
     return guests;
+  }
+
+  @override
+  Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
+    String guestId,
+  ) async {
+    final rows = await _loadCoverEntries(guestId);
+    final entries = rows
+        .map(GuestCoverEntryRecord.fromJson)
+        .toList(growable: false)
+      ..sort((left, right) => right.recordedAt.compareTo(left.recordedAt));
+    await cache.saveGuestCoverEntries(guestId, entries);
+    return entries;
   }
 
   @override
@@ -117,6 +138,38 @@ class SupabaseGuestRepository implements GuestRepository {
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async {
     return cache.readGuests(eventId);
+  }
+
+  @override
+  Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
+    String guestId,
+  ) async {
+    return cache.readGuestCoverEntries(guestId);
+  }
+
+  @override
+  Future<GuestDetailRecord> recordCoverEntry({
+    required String guestId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    String? note,
+  }) async {
+    await _runRpcSingle(
+      'record_cover_entry',
+      {
+        'target_event_guest_id': guestId,
+        'target_amount_cents': amountCents,
+        'target_method': _coverEntryMethodName(method),
+        'target_note': note,
+      },
+    );
+
+    final detail = await getGuestDetail(guestId);
+    if (detail == null) {
+      throw StateError('Updated guest could not be reloaded.');
+    }
+
+    return detail;
   }
 
   @override
@@ -314,6 +367,44 @@ class SupabaseGuestRepository implements GuestRepository {
     }
   }
 
+  Future<List<Map<String, dynamic>>> _loadCoverEntries(String guestId) async {
+    final coverEntriesLoader = _coverEntriesLoader;
+    if (coverEntriesLoader != null) {
+      return coverEntriesLoader(guestId);
+    }
+
+    try {
+      final result = await client.rpc(
+        'list_guest_cover_entries',
+        params: {
+          'target_event_guest_id': guestId,
+        },
+      );
+      if (result is! List) {
+        throw StateError(
+          'Expected list_guest_cover_entries to return a list.',
+        );
+      }
+
+      return result
+          .map((row) => (row as Map).cast<String, dynamic>())
+          .toList(growable: false);
+    } catch (exception) {
+      if (!_shouldUseFallback(exception, 'list_guest_cover_entries')) {
+        rethrow;
+      }
+
+      final rows = await client
+          .from('guest_cover_entries')
+          .select()
+          .eq('event_guest_id', guestId)
+          .order('recorded_at', ascending: false);
+      return rows
+          .map((row) => (row as Map).cast<String, dynamic>())
+          .toList(growable: false);
+    }
+  }
+
   Future<Map<String, dynamic>> _runRpcSingle(
     String functionName,
     Map<String, dynamic> params,
@@ -372,6 +463,23 @@ class SupabaseGuestRepository implements GuestRepository {
         (message.contains('could not find') ||
             message.contains('schema cache') ||
             message.contains('404'));
+  }
+
+  String _coverEntryMethodName(CoverEntryMethod method) {
+    switch (method) {
+      case CoverEntryMethod.cash:
+        return 'cash';
+      case CoverEntryMethod.venmo:
+        return 'venmo';
+      case CoverEntryMethod.zelle:
+        return 'zelle';
+      case CoverEntryMethod.other:
+        return 'other';
+      case CoverEntryMethod.comp:
+        return 'comp';
+      case CoverEntryMethod.refund:
+        return 'refund';
+    }
   }
 
   Future<void> _assignGuestTagFallback({

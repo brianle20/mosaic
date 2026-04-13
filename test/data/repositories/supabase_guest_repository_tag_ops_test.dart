@@ -33,6 +33,7 @@ void main() {
           };
         },
         activeAssignmentLoader: (_) async => null,
+        coverEntriesLoader: (_) async => const [],
       );
 
       final detail = await repository.checkInGuest('gst_01');
@@ -91,6 +92,7 @@ void main() {
             'status': 'active',
           },
         },
+        coverEntriesLoader: (_) async => const [],
       );
 
       final detail = await repository.assignGuestTag(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/screens/guest_detail_screen.dart';
+import 'package:mosaic/features/activity/screens/activity_screen.dart';
 import 'package:mosaic/features/events/screens/create_event_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
@@ -24,6 +25,7 @@ class AppRouter {
     required this.tableRepository,
     required this.sessionRepository,
     required this.leaderboardRepository,
+    required this.activityRepository,
     required this.prizeRepository,
     required this.nfcService,
   });
@@ -33,6 +35,7 @@ class AppRouter {
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
   final LeaderboardRepository leaderboardRepository;
+  final ActivityRepository activityRepository;
   final PrizeRepository prizeRepository;
   final NfcService nfcService;
 
@@ -47,6 +50,7 @@ class AppRouter {
   static const startSessionRoute = '/tables/start-session';
   static const sessionDetailRoute = '/sessions/detail';
   static const leaderboardRoute = '/leaderboard';
+  static const activityRoute = '/activity';
   static const prizePlanRoute = '/prizes/plan';
   static const prizeAwardsRoute = '/prizes/awards';
 
@@ -163,6 +167,15 @@ class AppRouter {
           ),
           settings: settings,
         );
+      case activityRoute:
+        final args = settings.arguments as ActivityArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => ActivityScreen(
+            eventId: args.eventId,
+            activityRepository: activityRepository,
+          ),
+          settings: settings,
+        );
       case prizePlanRoute:
         final args = settings.arguments as PrizePlanArgs;
         return MaterialPageRoute<void>(
@@ -242,6 +255,14 @@ class TablesOverviewArgs {
 
   final String eventId;
   final String eventTitle;
+}
+
+class ActivityArgs {
+  const ActivityArgs({
+    required this.eventId,
+  });
+
+  final String eventId;
 }
 
 class TableFormArgs {
