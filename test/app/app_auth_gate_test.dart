@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/app/app.dart';
+import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -98,6 +99,12 @@ class _FakeEventRepository implements EventRepository {
 
 class _FakeGuestRepository implements GuestRepository {
   @override
+  Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
+    String guestId,
+  ) async =>
+      const [];
+
+  @override
   Future<GuestDetailRecord> assignGuestTag({
     required String guestId,
     required String scannedUid,
@@ -131,6 +138,22 @@ class _FakeGuestRepository implements GuestRepository {
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       const [];
+
+  @override
+  Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
+    String guestId,
+  ) async =>
+      const [];
+
+  @override
+  Future<GuestDetailRecord> recordCoverEntry({
+    required String guestId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    String? note,
+  }) {
+    throw UnimplementedError();
+  }
 
   @override
   Future<GuestDetailRecord> replaceGuestTag({
@@ -299,6 +322,22 @@ class _FakePrizeRepository implements PrizeRepository {
   }
 }
 
+class _FakeActivityRepository implements ActivityRepository {
+  @override
+  Future<List<EventActivityEntry>> loadActivity(
+    String eventId,
+    EventActivityCategory category,
+  ) async =>
+      const [];
+
+  @override
+  Future<List<EventActivityEntry>> readCachedActivity(
+    String eventId,
+    EventActivityCategory category,
+  ) async =>
+      const [];
+}
+
 class _FakeNfcService implements NfcService {
   const _FakeNfcService();
 
@@ -333,6 +372,7 @@ void main() {
           tableRepository: _FakeTableRepository(),
           sessionRepository: _FakeSessionRepository(),
           leaderboardRepository: _FakeLeaderboardRepository(),
+          activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           nfcService: const _FakeNfcService(),
         ),
@@ -375,6 +415,7 @@ void main() {
           tableRepository: _FakeTableRepository(),
           sessionRepository: _FakeSessionRepository(),
           leaderboardRepository: _FakeLeaderboardRepository(),
+          activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           nfcService: const _FakeNfcService(),
         ),
@@ -419,6 +460,7 @@ void main() {
           tableRepository: _FakeTableRepository(),
           sessionRepository: _FakeSessionRepository(),
           leaderboardRepository: _FakeLeaderboardRepository(),
+          activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           nfcService: const _FakeNfcService(),
         ),

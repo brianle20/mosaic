@@ -1,4 +1,5 @@
 import 'package:mosaic/data/models/auth_models.dart';
+import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -49,6 +50,12 @@ abstract interface class GuestRepository {
 
   Future<List<EventGuestRecord>> listGuests(String eventId);
 
+  Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
+    String guestId,
+  );
+
+  Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(String guestId);
+
   Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
     String eventId,
   );
@@ -58,6 +65,13 @@ abstract interface class GuestRepository {
   Future<EventGuestRecord> createGuest(CreateGuestInput input);
 
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input);
+
+  Future<GuestDetailRecord> recordCoverEntry({
+    required String guestId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    String? note,
+  });
 
   Future<GuestDetailRecord> checkInGuest(String guestId);
 
@@ -157,4 +171,16 @@ abstract interface class LeaderboardRepository {
   Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId);
 
   Future<List<LeaderboardEntry>> loadLeaderboard(String eventId);
+}
+
+abstract interface class ActivityRepository {
+  Future<List<EventActivityEntry>> readCachedActivity(
+    String eventId,
+    EventActivityCategory category,
+  );
+
+  Future<List<EventActivityEntry>> loadActivity(
+    String eventId,
+    EventActivityCategory category,
+  );
 }

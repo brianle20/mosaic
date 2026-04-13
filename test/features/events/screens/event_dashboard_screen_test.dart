@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -10,6 +11,7 @@ import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/activity/screens/activity_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
@@ -99,6 +101,12 @@ class _EventRepository implements EventRepository {
 
 class _GuestRepository implements GuestRepository {
   @override
+  Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
+    String guestId,
+  ) async =>
+      const [];
+
+  @override
   Future<GuestDetailRecord> assignGuestTag({
     required String guestId,
     required String scannedUid,
@@ -134,6 +142,22 @@ class _GuestRepository implements GuestRepository {
       const [];
 
   @override
+  Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
+    String guestId,
+  ) async =>
+      const [];
+
+  @override
+  Future<GuestDetailRecord> recordCoverEntry({
+    required String guestId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<GuestDetailRecord> replaceGuestTag({
     required String guestId,
     required String scannedUid,
@@ -155,6 +179,22 @@ class _LeaderboardRepository implements LeaderboardRepository {
 
   @override
   Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId) async =>
+      const [];
+}
+
+class _ActivityRepository implements ActivityRepository {
+  @override
+  Future<List<EventActivityEntry>> loadActivity(
+    String eventId,
+    EventActivityCategory category,
+  ) async =>
+      const [];
+
+  @override
+  Future<List<EventActivityEntry>> readCachedActivity(
+    String eventId,
+    EventActivityCategory category,
+  ) async =>
       const [];
 }
 
@@ -410,6 +450,22 @@ void main() {
     expect(find.text('Prizes'), findsOneWidget);
   });
 
+  testWidgets('dashboard exposes an activity action', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Activity'), findsOneWidget);
+  });
+
   testWidgets('prizes action routes into the prize plan screen', (
     tester,
   ) async {
@@ -419,6 +475,7 @@ void main() {
       tableRepository: _TableRepository(),
       sessionRepository: _SessionRepository(),
       leaderboardRepository: _LeaderboardRepository(),
+      activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       nfcService: const _NfcService(),
     );
@@ -442,6 +499,38 @@ void main() {
     expect(find.byType(PrizePlanScreen), findsOneWidget);
     expect(find.text('Prize Budget'), findsOneWidget);
     expect(find.text('50000 cents'), findsOneWidget);
+  });
+
+  testWidgets('activity action routes into the activity screen',
+      (tester) async {
+    final router = AppRouter(
+      eventRepository: _EventRepository(activeEvent),
+      guestRepository: _GuestRepository(),
+      tableRepository: _TableRepository(),
+      sessionRepository: _SessionRepository(),
+      leaderboardRepository: _LeaderboardRepository(),
+      activityRepository: _ActivityRepository(),
+      prizeRepository: _PrizeRepository(),
+      nfcService: const _NfcService(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+        onGenerateRoute: router.onGenerateRoute,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Activity'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ActivityScreen), findsOneWidget);
   });
 
   testWidgets('active event shows Complete Event action', (tester) async {

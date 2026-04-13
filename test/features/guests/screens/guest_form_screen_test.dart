@@ -9,6 +9,12 @@ class _RecordingGuestRepository implements GuestRepository {
   CreateGuestInput? created;
 
   @override
+  Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
+    String guestId,
+  ) async =>
+      const [];
+
+  @override
   Future<GuestDetailRecord> assignGuestTag({
     required String guestId,
     required String scannedUid,
@@ -56,6 +62,22 @@ class _RecordingGuestRepository implements GuestRepository {
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       const [];
+
+  @override
+  Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
+    String guestId,
+  ) async =>
+      const [];
+
+  @override
+  Future<GuestDetailRecord> recordCoverEntry({
+    required String guestId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    String? note,
+  }) {
+    throw UnimplementedError();
+  }
 
   @override
   Future<GuestDetailRecord> replaceGuestTag({

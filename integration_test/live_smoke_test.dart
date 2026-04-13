@@ -126,6 +126,46 @@ void main() {
           .order('display_name', ascending: true);
       expect(guestRows, hasLength(4));
 
+      final firstGuestId = guestRows.first['id'] as String;
+      final firstGuestName = guestRows.first['display_name'] as String;
+      final firstGuestFinder =
+          find.byKey(ValueKey('guest-row-$firstGuestId')).hitTestable();
+      await _pumpUntilVisible(tester, firstGuestFinder);
+      await tester.tap(firstGuestFinder);
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Cover Ledger'));
+      await tester.tap(find.text('Add Cover Entry'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Record Cover Entry'));
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Amount (cents)'),
+        '2000',
+      );
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Cash'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Note'),
+        'Paid at door via smoke test',
+      );
+      await tester.tap(find.text('Save Cover Entry'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Paid at door via smoke test'));
+      await _pumpUntilVisible(tester, find.text(firstGuestName));
+
+      final coverEntryRows = await Supabase.instance.client
+          .from('guest_cover_entries')
+          .select('event_guest_id, amount_cents, method, note')
+          .eq('event_id', eventId)
+          .order('recorded_at', ascending: false);
+      expect(coverEntryRows, hasLength(1));
+      expect(coverEntryRows.first['event_guest_id'], firstGuestId);
+      expect(coverEntryRows.first['amount_cents'], 2000);
+      expect(coverEntryRows.first['method'], 'cash');
+      expect(coverEntryRows.first['note'], 'Paid at door via smoke test');
+
+      await _tapBack(tester);
+      await tester.pumpAndSettle();
+
       await _tapBack(tester);
       await tester.pumpAndSettle();
       await _pumpUntilVisible(tester, find.text('Start Event'));
@@ -134,6 +174,22 @@ void main() {
       await tester.pumpAndSettle();
       await _pumpUntilVisible(tester, find.text('Check-In: Open'));
       await _pumpUntilVisible(tester, find.text('Scoring: Closed'));
+
+      await tester.tap(find.text('Activity'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(
+          tester, find.text('Recorded cover entry: cash 2000'));
+      await _pumpUntilVisible(tester, find.text('Started event'));
+
+      await tester.tap(find.text('Payments'));
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(
+          tester, find.text('Recorded cover entry: cash 2000'));
+      expect(find.text('Started event'), findsNothing);
+
+      await _tapBack(tester);
+      await tester.pumpAndSettle();
+      await _pumpUntilVisible(tester, find.text('Guests'));
 
       await tester.tap(find.text('Guests'));
       await tester.pumpAndSettle();
@@ -433,6 +489,12 @@ void main() {
       expect(finalizedEventRow['checkin_open'], isFalse);
       expect(finalizedEventRow['scoring_open'], isFalse);
     } finally {
+      if (eventId != null) {
+        await Supabase.instance.client
+            .from('guest_cover_entries')
+            .delete()
+            .eq('event_id', eventId);
+      }
       if (eventId != null) {
         await Supabase.instance.client
             .from('prize_awards')

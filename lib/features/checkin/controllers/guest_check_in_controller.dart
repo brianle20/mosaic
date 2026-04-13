@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
 class GuestCheckInController extends ChangeNotifier {
@@ -130,6 +131,29 @@ class GuestCheckInController extends ChangeNotifier {
         guestId: guestId,
         scanForTag: scanForTag,
         replaceExistingAssignment: true,
+      );
+    } catch (exception) {
+      actionError = exception.toString();
+    }
+
+    isSubmitting = false;
+    notifyListeners();
+  }
+
+  Future<void> recordCoverEntry({
+    required String guestId,
+    required SubmitCoverEntryInput input,
+  }) async {
+    isSubmitting = true;
+    actionError = null;
+    notifyListeners();
+
+    try {
+      detail = await _guestRepository.recordCoverEntry(
+        guestId: guestId,
+        amountCents: input.amountCents,
+        method: input.method,
+        note: input.note,
       );
     } catch (exception) {
       actionError = exception.toString();

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/controllers/guest_check_in_controller.dart';
+import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
+import 'package:mosaic/features/checkin/screens/add_cover_entry_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
 class GuestDetailScreen extends StatefulWidget {
@@ -48,6 +51,22 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
     }
   }
 
+  Future<void> _openAddCoverEntry() async {
+    final submission = await Navigator.of(context).push<SubmitCoverEntryInput>(
+      MaterialPageRoute(
+        builder: (_) => const AddCoverEntryScreen(),
+      ),
+    );
+    if (submission == null) {
+      return;
+    }
+
+    await _controller.recordCoverEntry(
+      guestId: widget.guestId,
+      input: submission,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final detail = _controller.detail;
@@ -79,6 +98,38 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
               const SizedBox(height: 8),
               Text(assignment!.tag.displayLabel!),
             ],
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Cover Ledger',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton(
+                  onPressed:
+                      _controller.isSubmitting ? null : _openAddCoverEntry,
+                  child: const Text('Add Cover Entry'),
+                ),
+              ],
+            ),
+            if (detail != null && detail.coverEntries.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('No cover entries recorded yet.'),
+                ),
+              ),
+            if (detail != null && detail.coverEntries.isNotEmpty)
+              ...detail.coverEntries.map(
+                (entry) => Card(
+                  child: ListTile(
+                    title: Text(_coverEntrySummary(entry)),
+                    subtitle: entry.note == null ? null : Text(entry.note!),
+                  ),
+                ),
+              ),
             const SizedBox(height: 24),
             if (guest != null && !guest.isEligibleForPlayerTagAssignment)
               const Card(
@@ -140,5 +191,17 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
         ),
       ),
     );
+  }
+
+  String _coverEntrySummary(GuestCoverEntryRecord entry) {
+    final methodLabel = switch (entry.method) {
+      CoverEntryMethod.cash => 'Cash',
+      CoverEntryMethod.venmo => 'Venmo',
+      CoverEntryMethod.zelle => 'Zelle',
+      CoverEntryMethod.other => 'Other',
+      CoverEntryMethod.comp => 'Comp',
+      CoverEntryMethod.refund => 'Refund',
+    };
+    return '$methodLabel ${entry.amountCents}';
   }
 }

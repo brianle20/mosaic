@@ -4,6 +4,7 @@ import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/theme/app_theme.dart';
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/data/repositories/supabase_activity_repository.dart';
 import 'package:mosaic/data/repositories/supabase_auth_repository.dart';
 import 'package:mosaic/data/repositories/supabase_event_repository.dart';
 import 'package:mosaic/data/repositories/supabase_guest_repository.dart';
@@ -29,6 +30,7 @@ class MosaicApp extends StatelessWidget {
     this.tableRepository,
     this.sessionRepository,
     this.leaderboardRepository,
+    this.activityRepository,
     this.prizeRepository,
     this.nfcService,
   });
@@ -41,6 +43,7 @@ class MosaicApp extends StatelessWidget {
   final TableRepository? tableRepository;
   final SessionRepository? sessionRepository;
   final LeaderboardRepository? leaderboardRepository;
+  final ActivityRepository? activityRepository;
   final PrizeRepository? prizeRepository;
   final NfcService? nfcService;
 
@@ -60,6 +63,7 @@ class MosaicApp extends StatelessWidget {
         tableRepository != null &&
         sessionRepository != null &&
         leaderboardRepository != null &&
+        activityRepository != null &&
         prizeRepository != null &&
         nfcService != null) {
       return _AppWithRepositories(
@@ -69,6 +73,7 @@ class MosaicApp extends StatelessWidget {
         tableRepository: tableRepository!,
         sessionRepository: sessionRepository!,
         leaderboardRepository: leaderboardRepository!,
+        activityRepository: activityRepository!,
         prizeRepository: prizeRepository!,
         nfcService: nfcService!,
       );
@@ -82,6 +87,7 @@ class MosaicApp extends StatelessWidget {
           TableRepository tableRepository,
           SessionRepository sessionRepository,
           LeaderboardRepository leaderboardRepository,
+          ActivityRepository activityRepository,
           PrizeRepository prizeRepository,
           NfcService nfcService,
         })>(
@@ -110,6 +116,7 @@ class MosaicApp extends StatelessWidget {
           tableRepository: snapshot.data!.tableRepository,
           sessionRepository: snapshot.data!.sessionRepository,
           leaderboardRepository: snapshot.data!.leaderboardRepository,
+          activityRepository: snapshot.data!.activityRepository,
           prizeRepository: snapshot.data!.prizeRepository,
           nfcService: snapshot.data!.nfcService,
         );
@@ -125,6 +132,7 @@ class MosaicApp extends StatelessWidget {
         TableRepository tableRepository,
         SessionRepository sessionRepository,
         LeaderboardRepository leaderboardRepository,
+        ActivityRepository activityRepository,
         PrizeRepository prizeRepository,
         NfcService nfcService,
       })> _loadRepositories() async {
@@ -149,6 +157,10 @@ class MosaicApp extends StatelessWidget {
         cache: cache,
       ),
       leaderboardRepository: SupabaseLeaderboardRepository(
+        client: client,
+        cache: cache,
+      ),
+      activityRepository: SupabaseActivityRepository(
         client: client,
         cache: cache,
       ),
@@ -223,6 +235,7 @@ class _AppWithRepositories extends StatelessWidget {
     required this.tableRepository,
     required this.sessionRepository,
     required this.leaderboardRepository,
+    required this.activityRepository,
     required this.prizeRepository,
     required this.nfcService,
   });
@@ -233,6 +246,7 @@ class _AppWithRepositories extends StatelessWidget {
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
   final LeaderboardRepository leaderboardRepository;
+  final ActivityRepository activityRepository;
   final PrizeRepository prizeRepository;
   final NfcService nfcService;
 
@@ -244,6 +258,7 @@ class _AppWithRepositories extends StatelessWidget {
       tableRepository: tableRepository,
       sessionRepository: sessionRepository,
       leaderboardRepository: leaderboardRepository,
+      activityRepository: activityRepository,
       prizeRepository: prizeRepository,
       nfcService: nfcService,
     );
