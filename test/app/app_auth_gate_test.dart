@@ -362,6 +362,21 @@ class _FakeNfcService implements NfcService {
 }
 
 void main() {
+  testWidgets(
+      'shows intentional app startup loading copy before repositories resolve',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: MosaicApp()));
+
+    expect(find.text('Mosaic'), findsOneWidget);
+    expect(find.text('Preparing host tools...'), findsOneWidget);
+    expect(
+      find.text(
+          'Connecting your event workspace and restoring the host session.'),
+      findsOneWidget,
+    );
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
+
   testWidgets('renders host sign in when signed out', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -473,5 +488,20 @@ void main() {
 
     expect(find.text('Host Sign In'), findsOneWidget);
     expect(find.text('Events'), findsNothing);
+  });
+
+  testWidgets('renders a clearer startup error state', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MosaicApp(startupError: 'Missing Supabase URL'),
+      ),
+    );
+
+    expect(find.text('Unable to Start Mosaic'), findsOneWidget);
+    expect(
+      find.text('Check the app configuration and try again.'),
+      findsOneWidget,
+    );
+    expect(find.text('Missing Supabase URL'), findsOneWidget);
   });
 }

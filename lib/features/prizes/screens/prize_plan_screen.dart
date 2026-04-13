@@ -80,6 +80,12 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
           Text('${widget.prizeBudgetCents} cents'),
           const SizedBox(height: 12),
           const Text('Preview awards before locking the official payout list.'),
+          if (_controller.previewRows.isEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Choose a prize mode and tiers when you are ready to preview payouts.',
+            ),
+          ],
           const SizedBox(height: 16),
           Wrap(
             spacing: 8,

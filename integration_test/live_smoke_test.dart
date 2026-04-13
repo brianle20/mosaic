@@ -108,7 +108,13 @@ void main() {
 
       await tester.tap(find.text('Guests'));
       await tester.pump();
-      await _pumpUntilVisible(tester, find.text('No guests yet.'));
+      await _pumpUntilVisible(tester, find.text('No guests yet'));
+      await _pumpUntilVisible(
+        tester,
+        find.text(
+          'Add guests to start check-in, tag assignment, and live seating.',
+        ),
+      );
 
       for (var index = 0; index < guestNames.length; index++) {
         await _addPaidGuest(

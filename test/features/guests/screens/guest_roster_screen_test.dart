@@ -264,6 +264,24 @@ Widget _buildRosterApp({
 }
 
 void main() {
+  testWidgets('renders an intentional empty state when no guests exist',
+      (tester) async {
+    await tester.pumpWidget(
+      _buildRosterApp(
+        guestRepository: _FakeGuestRepository(const []),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No guests yet'), findsOneWidget);
+    expect(
+      find.text(
+          'Add guests to start check-in, tag assignment, and live seating.'),
+      findsOneWidget,
+    );
+    expect(find.text('Add Guest'), findsOneWidget);
+  });
+
   testWidgets('renders guests and row-specific quick actions', (tester) async {
     final repository = _FakeGuestRepository(
       [
@@ -357,7 +375,7 @@ void main() {
 
     expect(find.text('Paid'), findsOneWidget);
     expect(find.text('Check In & Tag'), findsOneWidget);
-    expect(find.text('Marked Alice Wong paid'), findsOneWidget);
+    expect(find.text('Alice Wong is now marked paid.'), findsOneWidget);
   });
 
   testWidgets('mark comped updates the row and shows feedback', (tester) async {
@@ -378,7 +396,7 @@ void main() {
 
     expect(find.text('Comped'), findsOneWidget);
     expect(find.text('Check In & Tag'), findsOneWidget);
-    expect(find.text('Marked Alice Wong comped'), findsOneWidget);
+    expect(find.text('Alice Wong is now marked comped.'), findsOneWidget);
   });
 
   testWidgets('check in and tag completes from the roster', (tester) async {
@@ -399,7 +417,7 @@ void main() {
 
     expect(find.text('Checked In'), findsOneWidget);
     expect(find.text('Tag Assigned'), findsOneWidget);
-    expect(find.text('Assigned player tag to Alice Wong'), findsOneWidget);
+    expect(find.text('Alice Wong is checked in and tagged.'), findsOneWidget);
   });
 
   testWidgets('assigns a tag for an already checked-in guest', (tester) async {
@@ -419,7 +437,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tag Assigned'), findsOneWidget);
-    expect(find.text('Assigned player tag to Alice Wong'), findsOneWidget);
+    expect(find.text('Player tag assigned to Alice Wong.'), findsOneWidget);
   });
 
   testWidgets('adds a cover entry from the roster and stays in place',
@@ -449,6 +467,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Guests'), findsOneWidget);
-    expect(find.text('Saved cover entry for Alice Wong'), findsOneWidget);
+    expect(find.text('Cover entry saved for Alice Wong.'), findsOneWidget);
   });
 }

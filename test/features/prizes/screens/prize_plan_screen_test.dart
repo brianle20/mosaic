@@ -105,6 +105,11 @@ void main() {
       find.text('Preview awards before locking the official payout list.'),
       findsOneWidget,
     );
+    expect(
+      find.text(
+          'Choose a prize mode and tiers when you are ready to preview payouts.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -126,7 +131,11 @@ void main() {
     await tester.tap(find.text('Fixed'));
     await tester.pumpAndSettle();
     final previewButton = find.text('Preview Awards');
-    await tester.ensureVisible(previewButton);
+    await tester.scrollUntilVisible(
+      previewButton,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(previewButton);
     await tester.pumpAndSettle();
 

@@ -4,6 +4,7 @@ import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_list_controller.dart';
+import 'package:mosaic/widgets/empty_state_card.dart';
 
 class EventListScreen extends StatefulWidget {
   const EventListScreen({
@@ -101,7 +102,12 @@ class _EventListScreenState extends State<EventListScreen> {
             if (_controller.events.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 24),
-                child: Text('No events yet.'),
+                child: EmptyStateCard(
+                  icon: Icons.event_note,
+                  title: 'No events yet',
+                  message:
+                      'Create your first event to start check-in, seating, scoring, and prizes.',
+                ),
               ),
           ],
         ),
