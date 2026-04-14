@@ -180,6 +180,21 @@ Future<void> addPaidGuestViaUi(
   required String guestName,
   required String suffix,
 }) async {
+  await addGuestViaUi(
+    tester,
+    guestName: guestName,
+    suffix: suffix,
+    coverStatus: 'paid',
+  );
+}
+
+Future<void> addGuestViaUi(
+  WidgetTester tester, {
+  required String guestName,
+  required String suffix,
+  String coverStatus = 'paid',
+  String coverAmountCents = '2000',
+}) async {
   final addGuestButton =
       find.widgetWithText(FilledButton, 'Add Guest').hitTestable();
   await pumpUntilVisible(tester, addGuestButton);
@@ -199,18 +214,75 @@ Future<void> addPaidGuestViaUi(
   );
   await tester.enterText(
     find.widgetWithText(TextFormField, 'Cover Amount (cents)'),
-    '2000',
+    coverAmountCents,
   );
-  await tester.tap(find.text('unpaid').last);
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('paid').last);
-  await tester.pumpAndSettle();
+  if (coverStatus != 'unpaid') {
+    await tester.tap(
+      find
+          .byWidgetPredicate((widget) => widget is DropdownButtonFormField)
+          .last,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(coverStatus).last);
+    await tester.pumpAndSettle();
+  }
   await tester.enterText(
     find.widgetWithText(TextFormField, 'Note'),
     'Live smoke test guest',
   );
   await tester.tap(find.widgetWithText(FilledButton, 'Save Guest'));
   await tester.pumpAndSettle();
+}
+
+Future<void> checkInGuestViaRpc(String guestId) async {
+  await Supabase.instance.client.rpc(
+    'check_in_guest',
+    params: {'target_event_guest_id': guestId},
+  );
+}
+
+Future<void> registerPlayerTagViaRpc(
+  String tagUid, {
+  String? displayLabel,
+}) async {
+  await Supabase.instance.client.rpc(
+    'register_nfc_tag',
+    params: {
+      'scanned_uid': tagUid,
+      'requested_tag_type': 'player',
+      'scanned_display_label': displayLabel,
+    },
+  );
+}
+
+Future<void> upsertFixedPrizePlanViaRpc(
+  String eventId, {
+  required List<int> fixedAmounts,
+  String note = 'Live blocker test prize plan',
+}) async {
+  await Supabase.instance.client.rpc(
+    'upsert_prize_plan',
+    params: {
+      'target_event_id': eventId,
+      'target_mode': 'fixed',
+      'target_reserve_fixed_cents': 0,
+      'target_reserve_percentage_bps': 0,
+      'target_note': note,
+      'target_tiers': [
+        for (var index = 0; index < fixedAmounts.length; index++)
+          {
+            'place': index + 1,
+            'label': '${index + 1}${switch (index) {
+              0 => 'st',
+              1 => 'nd',
+              2 => 'rd',
+              _ => 'th',
+            }}',
+            'fixed_amount_cents': fixedAmounts[index],
+          },
+      ],
+    },
+  );
 }
 
 Future<void> scanSessionStepViaUi(

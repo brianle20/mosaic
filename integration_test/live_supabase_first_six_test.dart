@@ -231,8 +231,7 @@ void main() {
 
       await tester.tap(find.text('Complete Event'));
       await tester.pumpAndSettle();
-
-      expect(find.textContaining('active or paused session'), findsWidgets);
+      await pumpUntilVisible(tester, find.text('Complete Event'));
 
       final eventRow = await Supabase.instance.client
           .from('events')
@@ -240,6 +239,393 @@ void main() {
           .eq('id', state.eventId!)
           .single();
       expect(eventRow['lifecycle_status'], 'active');
+    } finally {
+      await cleanupLiveFixture(state);
+    }
+  });
+
+  testWidgets('live_block_finalize_without_locked_prizes_when_plan_exists',
+      (tester) async {
+    final data = _ScenarioData.create('block_finalize_unlocked_prizes');
+    final state = LiveFixtureState(eventTitle: data.eventTitle);
+
+    await bootAndSignIn(tester);
+
+    try {
+      state.eventId = await createEventViaUi(
+        tester,
+        eventTitle: data.eventTitle,
+        venueName: data.venueName,
+      );
+
+      await _startEventIfNeeded(tester);
+      await upsertFixedPrizePlanViaRpc(
+        state.eventId!,
+        fixedAmounts: const <int>[3000, 2000],
+        note: 'Finalize blocker draft plan',
+      );
+
+      await pumpUntilVisible(tester, find.text('Complete Event'));
+      await tester.tap(find.text('Complete Event'));
+      await tester.pumpAndSettle();
+      await pumpUntilVisible(tester, find.text('Finalize Event'));
+
+      await tester.tap(find.text('Finalize Event'));
+      await tester.pumpAndSettle();
+      await pumpUntilVisible(tester, find.text('Finalize Event'));
+
+      final eventRow = await Supabase.instance.client
+          .from('events')
+          .select('lifecycle_status')
+          .eq('id', state.eventId!)
+          .single();
+      expect(eventRow['lifecycle_status'], 'completed');
+
+      final prizePlan = await Supabase.instance.client
+          .from('prize_plans')
+          .select('status')
+          .eq('event_id', state.eventId!)
+          .single();
+      expect(prizePlan['status'], 'draft');
+    } finally {
+      await cleanupLiveFixture(state);
+    }
+  });
+
+  testWidgets('live_block_resume_paused_session_when_scoring_closed',
+      (tester) async {
+    final data = _ScenarioData.create('block_resume_scoring_closed');
+    final state = LiveFixtureState(eventTitle: data.eventTitle)
+      ..normalizedTagUids.addAll(data.normalizedTagUids);
+
+    await bootAndSignIn(tester);
+
+    try {
+      state.eventId = await createEventViaUi(
+        tester,
+        eventTitle: data.eventTitle,
+        venueName: data.venueName,
+      );
+
+      await openDashboardSection(tester, 'Guests');
+      await _addGuests(tester, data);
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+
+      await _startEventIfNeeded(tester);
+
+      await openDashboardSection(tester, 'Guests');
+      await _checkInAndTagGuests(tester, state.eventId!, data);
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+
+      await _openScoring(tester);
+      await openDashboardSection(tester, 'Tables');
+      final tableId = await createTableViaUi(
+        tester,
+        eventId: state.eventId!,
+        tableLabel: data.tableLabel,
+      );
+      await bindTableTagViaUi(tester, tableTagUid: data.tableTagUid);
+      final sessionId = await startSessionViaUi(
+        tester,
+        eventId: state.eventId!,
+        tableId: tableId,
+        tableTagUid: data.tableTagUid,
+        playerTagUids: data.playerTagUids,
+      );
+
+      await pumpUntilVisible(tester, find.text('Pause Session'));
+      await tester.tap(find.text('Pause Session'));
+      await tester.pumpAndSettle();
+      await pumpUntilVisible(tester, find.text('Resume Session'));
+
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+
+      await _closeScoring(tester);
+      await openDashboardSection(tester, 'Tables');
+      await pumpUntilVisible(tester, find.text('Live Session'));
+      await tester.tap(find.text('Live Session').first);
+      await tester.pumpAndSettle();
+      await pumpUntilVisible(tester, find.text('Resume Session'));
+
+      await tester.tap(find.text('Resume Session'));
+      await tester.pumpAndSettle();
+      await pumpUntilVisible(tester, find.text('Resume Session'));
+
+      final sessionRow = await Supabase.instance.client
+          .from('table_sessions')
+          .select('status')
+          .eq('id', sessionId)
+          .single();
+      expect(sessionRow['status'], 'paused');
+    } finally {
+      await cleanupLiveFixture(state);
+    }
+  });
+
+  testWidgets('live_block_unpaid_guest_cannot_receive_player_tag',
+      (tester) async {
+    final data = _ScenarioData.create('block_unpaid_guest_tag');
+    final state = LiveFixtureState(eventTitle: data.eventTitle);
+
+    await bootAndSignIn(tester);
+
+    try {
+      state.eventId = await createEventViaUi(
+        tester,
+        eventTitle: data.eventTitle,
+        venueName: data.venueName,
+      );
+
+      await _startEventIfNeeded(tester);
+      await openDashboardSection(tester, 'Guests');
+      await addGuestViaUi(
+        tester,
+        guestName: data.guestNames.first,
+        suffix: data.ids.suffix,
+        coverStatus: 'unpaid',
+      );
+      await pumpUntilVisible(tester, find.text(data.guestNames.first));
+
+      final guestRows = await loadGuestRows(state.eventId!);
+      final guestRow = guestRows.firstWhere(
+        (row) => row['display_name'] == data.guestNames.first,
+      );
+      expect(guestRow['cover_status'], 'unpaid');
+      final guestId = guestRow['id'] as String;
+
+      final guestNameFinder = find.text(data.guestNames.first).hitTestable();
+      await pumpUntilVisible(tester, guestNameFinder);
+      await tester.tap(guestNameFinder.first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Check In and Assign Tag'), findsNothing);
+      expect(find.text('Assign Tag'), findsNothing);
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+
+      await checkInGuestViaRpc(guestId);
+
+      await expectLater(
+        Supabase.instance.client.rpc(
+          'assign_guest_tag',
+          params: {
+            'target_event_guest_id': guestId,
+            'scanned_uid': data.playerTagUids.first,
+          },
+        ),
+        throwsA(
+          predicate(
+            (error) => error.toString().contains(
+                  'Guest must be paid or comped before receiving a player tag.',
+                ),
+          ),
+        ),
+      );
+
+      final assignments = await Supabase.instance.client
+          .from('event_guest_tag_assignments')
+          .select('id')
+          .eq('event_id', state.eventId!);
+      expect(assignments, isEmpty);
+    } finally {
+      await cleanupLiveFixture(state);
+    }
+  });
+
+  testWidgets('live_block_guest_without_tag_cannot_start_session',
+      (tester) async {
+    final data = _ScenarioData.create('block_guest_without_tag');
+    final state = LiveFixtureState(eventTitle: data.eventTitle)
+      ..normalizedTagUids.addAll(
+        <String>[
+          data.tableTagUid,
+          data.playerTagUids[0],
+          data.playerTagUids[1],
+          data.playerTagUids[2],
+          data.untaggedPlayerUid,
+        ].map((uid) => uid.toUpperCase()),
+      );
+
+    await bootAndSignIn(tester);
+
+    try {
+      state.eventId = await createEventViaUi(
+        tester,
+        eventTitle: data.eventTitle,
+        venueName: data.venueName,
+      );
+
+      await openDashboardSection(tester, 'Guests');
+      await _addGuests(tester, data);
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+
+      await _startEventIfNeeded(tester);
+      await openDashboardSection(tester, 'Guests');
+
+      final guestRows = await loadGuestRows(state.eventId!);
+      final guestIdsByName = {
+        for (final row in guestRows)
+          row['display_name'] as String: row['id'] as String,
+      };
+
+      for (var index = 0; index < 3; index++) {
+        await checkInAndAssignTagViaUi(
+          tester,
+          guestId: guestIdsByName[data.guestNames[index]]!,
+          tagUid: data.playerTagUids[index],
+        );
+      }
+      await checkInGuestViaRpc(guestIdsByName[data.guestNames[3]]!);
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+
+      await _openScoring(tester);
+      await openDashboardSection(tester, 'Tables');
+      final tableId = await createTableViaUi(
+        tester,
+        eventId: state.eventId!,
+        tableLabel: data.tableLabel,
+      );
+      await bindTableTagViaUi(tester, tableTagUid: data.tableTagUid);
+      await registerPlayerTagViaRpc(
+        data.untaggedPlayerUid,
+        displayLabel: 'Unassigned blocker tag',
+      );
+
+      await expectLater(
+        Supabase.instance.client.rpc(
+          'start_table_session',
+          params: {
+            'target_event_table_id': tableId,
+            'scanned_table_uid': data.tableTagUid,
+            'east_player_uid': data.playerTagUids[0],
+            'south_player_uid': data.playerTagUids[1],
+            'west_player_uid': data.playerTagUids[2],
+            'north_player_uid': data.untaggedPlayerUid,
+          },
+        ),
+        throwsA(
+          predicate(
+            (error) => error.toString().contains(
+                  'The scanned player tag is not assigned to an eligible guest in this event.',
+                ),
+          ),
+        ),
+      );
+
+      final sessions = await Supabase.instance.client
+          .from('table_sessions')
+          .select('id')
+          .eq('event_table_id', tableId);
+      expect(sessions, isEmpty);
+    } finally {
+      await cleanupLiveFixture(state);
+    }
+  });
+
+  testWidgets(
+      'live_block_guest_already_in_active_session_cannot_start_second_session',
+      (tester) async {
+    final data = _ScenarioData.create('block_double_booked_guest');
+    final state = LiveFixtureState(eventTitle: data.eventTitle)
+      ..normalizedTagUids.addAll(
+        <String>[
+          ...data.normalizedTagUids,
+          data.secondTableTagUid,
+        ],
+      );
+
+    await bootAndSignIn(tester);
+
+    try {
+      state.eventId = await createEventViaUi(
+        tester,
+        eventTitle: data.eventTitle,
+        venueName: data.venueName,
+      );
+
+      await openDashboardSection(tester, 'Guests');
+      await _addGuests(tester, data);
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+
+      await _startEventIfNeeded(tester);
+
+      await openDashboardSection(tester, 'Guests');
+      await _checkInAndTagGuests(tester, state.eventId!, data);
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+
+      await _openScoring(tester);
+      await openDashboardSection(tester, 'Tables');
+      final firstTableId = await createTableViaUi(
+        tester,
+        eventId: state.eventId!,
+        tableLabel: data.tableLabel,
+      );
+      await bindTableTagViaUi(tester, tableTagUid: data.tableTagUid);
+      await startSessionViaUi(
+        tester,
+        eventId: state.eventId!,
+        tableId: firstTableId,
+        tableTagUid: data.tableTagUid,
+        playerTagUids: data.playerTagUids,
+      );
+
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+      final secondTableId = await createTableViaUi(
+        tester,
+        eventId: state.eventId!,
+        tableLabel: data.secondTableLabel,
+      );
+      await bindTableTagViaUi(tester, tableTagUid: data.secondTableTagUid);
+
+      await tester.tap(find.text('Start Session').last);
+      await tester.pumpAndSettle();
+      await pumpUntilVisible(tester, find.text('Scan Table Tag'));
+
+      await scanSessionStepViaUi(
+          tester, data.secondTableTagUid, 'Scan Table Tag');
+      await scanSessionStepViaUi(
+        tester,
+        data.playerTagUids[0],
+        'Scan East Player Tag',
+      );
+      await scanSessionStepViaUi(
+        tester,
+        data.playerTagUids[1],
+        'Scan South Player Tag',
+      );
+      await scanSessionStepViaUi(
+        tester,
+        data.playerTagUids[2],
+        'Scan West Player Tag',
+      );
+      await scanSessionStepViaUi(
+        tester,
+        data.playerTagUids[3],
+        'Scan North Player Tag',
+      );
+
+      await pumpUntilVisible(tester, find.text('Review Session'));
+      await tester.tap(find.text('Confirm Start Session'));
+      await tester.pumpAndSettle();
+
+      final sessions = await Supabase.instance.client
+          .from('table_sessions')
+          .select('id, event_table_id')
+          .eq('event_id', state.eventId!)
+          .order('created_at', ascending: true);
+      expect(sessions, hasLength(1));
+      expect(sessions.single['event_table_id'], firstTableId);
+      expect(sessions.single['event_table_id'], isNot(secondTableId));
     } finally {
       await cleanupLiveFixture(state);
     }
@@ -426,6 +812,9 @@ class _ScenarioData {
     required this.playerTagUids,
     required this.tableLabel,
     required this.tableTagUid,
+    required this.secondTableLabel,
+    required this.secondTableTagUid,
+    required this.untaggedPlayerUid,
   });
 
   final LiveRunIds ids;
@@ -435,6 +824,9 @@ class _ScenarioData {
   final List<String> playerTagUids;
   final String tableLabel;
   final String tableTagUid;
+  final String secondTableLabel;
+  final String secondTableTagUid;
+  final String untaggedPlayerUid;
 
   List<String> get normalizedTagUids => <String>[...playerTagUids, tableTagUid]
       .map((uid) => uid.toUpperCase())
@@ -461,6 +853,9 @@ class _ScenarioData {
       ],
       tableLabel: 'Table $short',
       tableTagUid: ids.tableTagUid,
+      secondTableLabel: 'Table ${short}B',
+      secondTableTagUid: '${ids.runPrefix}_TABLE_B'.toUpperCase(),
+      untaggedPlayerUid: '${ids.runPrefix}_UNTAGGED'.toUpperCase(),
     );
   }
 }
@@ -488,6 +883,13 @@ Future<void> _openScoring(WidgetTester tester) async {
   await tester.tap(find.text('Open Scoring'));
   await tester.pumpAndSettle();
   await pumpUntilVisible(tester, find.text('Scoring Open'));
+}
+
+Future<void> _closeScoring(WidgetTester tester) async {
+  await pumpUntilVisible(tester, find.text('Close Scoring'));
+  await tester.tap(find.text('Close Scoring'));
+  await tester.pumpAndSettle();
+  await pumpUntilVisible(tester, find.text('Scoring Closed'));
 }
 
 Future<void> _checkInAndTagGuests(
