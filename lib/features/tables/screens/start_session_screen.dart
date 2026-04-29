@@ -14,6 +14,7 @@ class StartSessionScreen extends StatefulWidget {
     required this.guestRepository,
     required this.sessionRepository,
     required this.nfcService,
+    this.preverifiedTableTagUid,
   });
 
   final String eventId;
@@ -21,6 +22,7 @@ class StartSessionScreen extends StatefulWidget {
   final GuestRepository guestRepository;
   final SessionRepository sessionRepository;
   final NfcService nfcService;
+  final String? preverifiedTableTagUid;
 
   @override
   State<StartSessionScreen> createState() => _StartSessionScreenState();
@@ -36,6 +38,7 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
       table: widget.table,
       guestRepository: widget.guestRepository,
       sessionRepository: widget.sessionRepository,
+      preverifiedTableTagUid: widget.preverifiedTableTagUid,
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);

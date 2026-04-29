@@ -1,5 +1,6 @@
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,16 +10,31 @@ typedef TableRpcSingleRunner = Future<Map<String, dynamic>> Function(
   Map<String, dynamic> params,
 );
 
+typedef TableTagByUidLoader = Future<Map<String, dynamic>?> Function(
+  String normalizedUid,
+);
+
+typedef TableByTagLoader = Future<Map<String, dynamic>?> Function(
+  String eventId,
+  String tagId,
+);
+
 class SupabaseTableRepository implements TableRepository {
   SupabaseTableRepository({
     required this.client,
     required this.cache,
     TableRpcSingleRunner? rpcSingleRunner,
-  }) : _rpcSingleRunner = rpcSingleRunner;
+    TableTagByUidLoader? tagByUidLoader,
+    TableByTagLoader? tableByTagLoader,
+  })  : _rpcSingleRunner = rpcSingleRunner,
+        _tagByUidLoader = tagByUidLoader,
+        _tableByTagLoader = tableByTagLoader;
 
   final SupabaseClient client;
   final LocalCache cache;
   final TableRpcSingleRunner? _rpcSingleRunner;
+  final TableTagByUidLoader? _tagByUidLoader;
+  final TableByTagLoader? _tableByTagLoader;
 
   @override
   Future<EventTableRecord> bindTableTag({
@@ -83,6 +99,44 @@ class SupabaseTableRepository implements TableRepository {
   }
 
   @override
+  Future<EventTableRecord> resolveTableByTag({
+    required String eventId,
+    required String scannedUid,
+  }) async {
+    final normalizedUid = _normalizeTagUid(scannedUid);
+    final tagRow = await _loadTagByUid(normalizedUid);
+    if (tagRow == null) {
+      throw const TableTagResolutionException(
+        TableTagResolutionFailure.unknownTag,
+      );
+    }
+
+    if (tagRow['default_tag_type'] != 'table') {
+      throw const TableTagResolutionException(
+        TableTagResolutionFailure.nonTableTag,
+      );
+    }
+
+    final tagId = tagRow['id'] as String?;
+    if (tagId == null || tagId.isEmpty) {
+      throw const TableTagResolutionException(
+        TableTagResolutionFailure.unknownTag,
+      );
+    }
+
+    final tableRow = await _loadTableByTag(eventId, tagId);
+    if (tableRow == null) {
+      throw const TableTagResolutionException(
+        TableTagResolutionFailure.wrongEventOrUnbound,
+      );
+    }
+
+    final table = EventTableRecord.fromJson(tableRow);
+    await _saveMergedTables(eventId, table);
+    return table;
+  }
+
+  @override
   Future<EventTableRecord> updateTable(UpdateEventTableInput input) async {
     final row = await _runRpcSingle(
       'update_event_table',
@@ -96,6 +150,38 @@ class SupabaseTableRepository implements TableRepository {
     final table = EventTableRecord.fromJson(row);
     await _saveMergedTables(table.eventId, table);
     return table;
+  }
+
+  Future<Map<String, dynamic>?> _loadTagByUid(String normalizedUid) async {
+    final loader = _tagByUidLoader;
+    if (loader != null) {
+      return loader(normalizedUid);
+    }
+
+    final row = await client
+        .from('nfc_tags')
+        .select('id, default_tag_type')
+        .eq('uid_hex', normalizedUid)
+        .maybeSingle();
+    return row?.cast<String, dynamic>();
+  }
+
+  Future<Map<String, dynamic>?> _loadTableByTag(
+    String eventId,
+    String tagId,
+  ) async {
+    final loader = _tableByTagLoader;
+    if (loader != null) {
+      return loader(eventId, tagId);
+    }
+
+    final row = await client
+        .from('event_tables')
+        .select()
+        .eq('event_id', eventId)
+        .eq('nfc_tag_id', tagId)
+        .maybeSingle();
+    return row?.cast<String, dynamic>();
   }
 
   Future<Map<String, dynamic>> _runRpcSingle(
@@ -135,6 +221,10 @@ class SupabaseTableRepository implements TableRepository {
       });
     await cache.saveTables(eventId, mergedTables);
   }
+}
+
+String _normalizeTagUid(String value) {
+  return value.replaceAll(RegExp(r'[^0-9A-Za-z]+'), '').toUpperCase();
 }
 
 String _rotationPolicyToJson(RotationPolicyType value) {

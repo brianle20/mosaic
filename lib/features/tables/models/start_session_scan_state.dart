@@ -23,6 +23,13 @@ class StartSessionScanState {
     );
   }
 
+  factory StartSessionScanState.withTableTag(String normalizedUid) {
+    return StartSessionScanState(
+      tableTagUid: normalizedUid,
+      scannedPlayerUids: const [],
+    );
+  }
+
   final String? tableTagUid;
   final List<String> scannedPlayerUids;
 

@@ -79,6 +79,9 @@ class AppRouter {
             guestRepository: guestRepository,
             leaderboardRepository: leaderboardRepository,
             prizeRepository: prizeRepository,
+            tableRepository: tableRepository,
+            sessionRepository: sessionRepository,
+            nfcService: nfcService,
           ),
           settings: settings,
         );
@@ -149,6 +152,7 @@ class AppRouter {
             guestRepository: guestRepository,
             sessionRepository: sessionRepository,
             nfcService: nfcService,
+            preverifiedTableTagUid: args.preverifiedTableTagUid,
           ),
           settings: settings,
         );
@@ -289,10 +293,12 @@ class StartSessionArgs {
   const StartSessionArgs({
     required this.eventId,
     required this.table,
+    this.preverifiedTableTagUid,
   });
 
   final String eventId;
   final EventTableRecord table;
+  final String? preverifiedTableTagUid;
 }
 
 class SessionDetailArgs {

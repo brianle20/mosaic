@@ -11,8 +11,12 @@ class StartSessionController extends ChangeNotifier {
     required this.table,
     required GuestRepository guestRepository,
     required SessionRepository sessionRepository,
+    String? preverifiedTableTagUid,
   })  : _guestRepository = guestRepository,
-        _sessionRepository = sessionRepository;
+        _sessionRepository = sessionRepository,
+        state = preverifiedTableTagUid == null
+            ? StartSessionScanState.initial()
+            : StartSessionScanState.withTableTag(preverifiedTableTagUid);
 
   final EventTableRecord table;
   final GuestRepository _guestRepository;
@@ -22,7 +26,7 @@ class StartSessionController extends ChangeNotifier {
   bool isSubmitting = false;
   String? error;
   String? actionError;
-  StartSessionScanState state = StartSessionScanState.initial();
+  StartSessionScanState state;
   Map<String, EventGuestRecord> guestsById = const {};
   Map<String, GuestTagAssignmentSummary> assignmentsByGuestId = const {};
 

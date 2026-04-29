@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/supabase_table_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -119,6 +120,121 @@ void main() {
       expect(updated.nfcTagId, 'tag_table_01');
       expect(updated.defaultRotationPolicyType,
           RotationPolicyType.dealerCycleReturnToInitialEast);
+    });
+
+    test('resolves an event table by scanned table tag uid', () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseTableRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        tagByUidLoader: (normalizedUid) async {
+          expect(normalizedUid, 'TABLE001');
+          return const {
+            'id': 'tag_table_01',
+            'default_tag_type': 'table',
+          };
+        },
+        tableByTagLoader: (eventId, tagId) async {
+          expect(eventId, 'evt_01');
+          expect(tagId, 'tag_table_01');
+          return const {
+            'id': 'tbl_01',
+            'event_id': 'evt_01',
+            'label': 'Table 1',
+            'display_order': 1,
+            'nfc_tag_id': 'tag_table_01',
+            'default_ruleset_id': 'HK_STANDARD_V1',
+            'default_rotation_policy_type':
+                'dealer_cycle_return_to_initial_east',
+            'default_rotation_policy_config_json': {},
+          };
+        },
+      );
+
+      final table = await repository.resolveTableByTag(
+        eventId: 'evt_01',
+        scannedUid: ' table-001 ',
+      );
+
+      expect(table.id, 'tbl_01');
+      expect(table.nfcTagId, 'tag_table_01');
+    });
+
+    test('throws unknownTag when scanned table tag is unknown', () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseTableRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        tagByUidLoader: (_) async => null,
+      );
+
+      expect(
+        () => repository.resolveTableByTag(
+          eventId: 'evt_01',
+          scannedUid: 'missing-table',
+        ),
+        throwsA(
+          isA<TableTagResolutionException>().having(
+            (exception) => exception.failure,
+            'failure',
+            TableTagResolutionFailure.unknownTag,
+          ),
+        ),
+      );
+    });
+
+    test('throws nonTableTag when scanned tag is not a table tag', () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseTableRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        tagByUidLoader: (_) async => const {
+          'id': 'tag_player_01',
+          'default_tag_type': 'player',
+        },
+      );
+
+      expect(
+        () => repository.resolveTableByTag(
+          eventId: 'evt_01',
+          scannedUid: 'player-001',
+        ),
+        throwsA(
+          isA<TableTagResolutionException>().having(
+            (exception) => exception.failure,
+            'failure',
+            TableTagResolutionFailure.nonTableTag,
+          ),
+        ),
+      );
+    });
+
+    test('throws wrongEventOrUnbound when tag is not assigned in event',
+        () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseTableRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        tagByUidLoader: (_) async => const {
+          'id': 'tag_table_02',
+          'default_tag_type': 'table',
+        },
+        tableByTagLoader: (_, __) async => null,
+      );
+
+      expect(
+        () => repository.resolveTableByTag(
+          eventId: 'evt_01',
+          scannedUid: 'table-002',
+        ),
+        throwsA(
+          isA<TableTagResolutionException>().having(
+            (exception) => exception.failure,
+            'failure',
+            TableTagResolutionFailure.wrongEventOrUnbound,
+          ),
+        ),
+      );
     });
   });
 }

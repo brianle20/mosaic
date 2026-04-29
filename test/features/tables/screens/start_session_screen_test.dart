@@ -434,6 +434,82 @@ void main() {
     expect(sessionRepository.startedInput!.eastPlayerUid, 'PLAYER-EAST');
   });
 
+  testWidgets(
+    'preverified table tag starts at east player and submits table uid',
+    (tester) async {
+      final sessionRepository = _FakeSessionRepository();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StartSessionScreen(
+            eventId: 'evt_01',
+            table: EventTableRecord.fromJson(const {
+              'id': 'tbl_01',
+              'event_id': 'evt_01',
+              'label': 'Table 1',
+              'mode': 'points',
+              'display_order': 1,
+              'nfc_tag_id': 'tag_table_01',
+              'default_ruleset_id': 'HK_STANDARD_V1',
+              'default_rotation_policy_type':
+                  'dealer_cycle_return_to_initial_east',
+              'default_rotation_policy_config_json': {},
+              'status': 'active',
+            }),
+            preverifiedTableTagUid: 'TABLE-001',
+            guestRepository: _FakeGuestRepository(
+              guests: buildGuests(),
+              assignments: buildAssignments(),
+            ),
+            sessionRepository: sessionRepository,
+            nfcService: _QueuedNfcService([
+              const TagScanResult(
+                rawUid: 'PLAYER-EAST',
+                normalizedUid: 'PLAYER-EAST',
+                isManualEntry: true,
+              ),
+              const TagScanResult(
+                rawUid: 'PLAYER-SOUTH',
+                normalizedUid: 'PLAYER-SOUTH',
+                isManualEntry: true,
+              ),
+              const TagScanResult(
+                rawUid: 'PLAYER-WEST',
+                normalizedUid: 'PLAYER-WEST',
+                isManualEntry: true,
+              ),
+              const TagScanResult(
+                rawUid: 'PLAYER-NORTH',
+                normalizedUid: 'PLAYER-NORTH',
+                isManualEntry: true,
+              ),
+            ]),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Scan Table Tag'), findsNothing);
+      expect(find.text('Scan East Player Tag'), findsOneWidget);
+
+      await tester.tap(find.text('Scan Next Tag'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Scan Next Tag'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Scan Next Tag'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Scan Next Tag'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Confirm Start Session'));
+      await tester.pumpAndSettle();
+
+      expect(sessionRepository.startedInput, isNotNull);
+      expect(sessionRepository.startedInput!.scannedTableUid, 'TABLE-001');
+      expect(sessionRepository.startedInput!.eastPlayerUid, 'PLAYER-EAST');
+    },
+  );
+
   testWidgets('shows an inline error for a duplicate player scan',
       (tester) async {
     await tester.pumpWidget(

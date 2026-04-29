@@ -5,6 +5,9 @@ import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_list_controller.dart';
 import 'package:mosaic/features/events/models/event_form_formatters.dart';
+import 'package:mosaic/widgets/app_actions.dart';
+import 'package:mosaic/widgets/app_chrome.dart';
+import 'package:mosaic/widgets/app_surfaces.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
@@ -114,52 +117,52 @@ class _EventListScreenState extends State<EventListScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppListSurface(
+        key: ValueKey('eventRowSurface-${event.id}'),
         onTap: () => _openEvent(event),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                event.title,
-                style: textTheme.titleMedium,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              event.title,
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
               ),
-              const SizedBox(height: 2),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  StatusChip(
-                    label: _eventPhaseLabel(event),
-                    tone: _eventPhaseTone(event),
-                  ),
-                  Text(
-                    formatEventTileStart(
-                      event.startsAt,
-                      timezone: event.timezone,
-                    ),
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-              if (location != null) ...[
-                const SizedBox(height: 2),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                StatusChip(
+                  label: _eventPhaseLabel(event),
+                  tone: _eventPhaseTone(event),
+                ),
                 Text(
-                  location,
+                  formatEventTileStart(
+                    event.startsAt,
+                    timezone: event.timezone,
+                  ),
                   style: textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
+            ),
+            if (location != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                location,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -167,31 +170,28 @@ class _EventListScreenState extends State<EventListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Events'),
-        actions: [
-          if (widget.onSignOut != null)
-            TextButton(
-              onPressed: _signOut,
-              child: const Text('Sign out'),
-            ),
-        ],
-      ),
+    return SoftHostScaffold(
+      title: 'Events',
+      actions: [
+        if (widget.onSignOut != null)
+          UtilityActionButton(
+            key: const ValueKey('eventsSignOutAction'),
+            label: 'Sign out',
+            onPressed: _signOut,
+          ),
+      ],
       body: AsyncBody(
         isLoading: _controller.isLoading,
         error: _controller.error,
         onRetry: _controller.load,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.zero,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.icon(
-                onPressed: _openCreateEvent,
-                icon: const Icon(Icons.add),
-                label: const Text('Create Event'),
-              ),
+            HeroActionButton(
+              key: const ValueKey('eventsCreateHeroAction'),
+              onPressed: _openCreateEvent,
+              icon: Icons.add,
+              label: 'Create Event',
             ),
             const SizedBox(height: 16),
             for (final event in _controller.events) _buildEventCard(event),

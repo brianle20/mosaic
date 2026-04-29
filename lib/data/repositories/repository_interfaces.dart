@@ -108,6 +108,11 @@ abstract interface class TableRepository {
 
   Future<List<EventTableRecord>> listTables(String eventId);
 
+  Future<EventTableRecord> resolveTableByTag({
+    required String eventId,
+    required String scannedUid,
+  });
+
   Future<EventTableRecord> createTable(CreateEventTableInput input);
 
   Future<EventTableRecord> updateTable(UpdateEventTableInput input);

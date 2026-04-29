@@ -10,10 +10,12 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/activity/screens/activity_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
+import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
 class _EventRepository implements EventRepository {
@@ -296,6 +298,14 @@ class _PrizeRepository implements PrizeRepository {
 }
 
 class _TableRepository implements TableRepository {
+  const _TableRepository({
+    this.resolvedTable,
+    this.resolveError,
+  });
+
+  final EventTableRecord? resolvedTable;
+  final Object? resolveError;
+
   @override
   Future<EventTableRecord> bindTableTag({
     required String tableId,
@@ -318,12 +328,36 @@ class _TableRepository implements TableRepository {
       const [];
 
   @override
+  Future<EventTableRecord> resolveTableByTag({
+    required String eventId,
+    required String scannedUid,
+  }) async {
+    final error = resolveError;
+    if (error != null) {
+      throw error;
+    }
+
+    final table = resolvedTable;
+    if (table != null) {
+      return table;
+    }
+
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventTableRecord> updateTable(UpdateEventTableInput input) {
     throw UnimplementedError();
   }
 }
 
 class _SessionRepository implements SessionRepository {
+  const _SessionRepository({
+    this.sessions = const [],
+  });
+
+  final List<TableSessionRecord> sessions;
+
   @override
   Future<SessionDetailRecord> endSession({
     required String sessionId,
@@ -339,11 +373,46 @@ class _SessionRepository implements SessionRepository {
 
   @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async =>
-      const [];
+      sessions;
 
   @override
-  Future<SessionDetailRecord> loadSessionDetail(String sessionId) {
-    throw UnimplementedError();
+  Future<SessionDetailRecord> loadSessionDetail(String sessionId) async {
+    final session = sessions.firstWhere((session) => session.id == sessionId);
+    return SessionDetailRecord(
+      session: session,
+      seats: const [
+        TableSessionSeatRecord(
+          id: 'seat_1',
+          tableSessionId: 'sess_01',
+          seatIndex: 0,
+          initialWind: SeatWind.east,
+          eventGuestId: 'guest_east',
+        ),
+        TableSessionSeatRecord(
+          id: 'seat_2',
+          tableSessionId: 'sess_01',
+          seatIndex: 1,
+          initialWind: SeatWind.south,
+          eventGuestId: 'guest_south',
+        ),
+        TableSessionSeatRecord(
+          id: 'seat_3',
+          tableSessionId: 'sess_01',
+          seatIndex: 2,
+          initialWind: SeatWind.west,
+          eventGuestId: 'guest_west',
+        ),
+        TableSessionSeatRecord(
+          id: 'seat_4',
+          tableSessionId: 'sess_01',
+          seatIndex: 3,
+          initialWind: SeatWind.north,
+          eventGuestId: 'guest_north',
+        ),
+      ],
+      hands: const [],
+      settlements: const [],
+    );
   }
 
   @override
@@ -383,7 +452,11 @@ class _SessionRepository implements SessionRepository {
 }
 
 class _NfcService implements NfcService {
-  const _NfcService();
+  const _NfcService({
+    this.tableScanResult,
+  });
+
+  final TagScanResult? tableScanResult;
 
   @override
   Future<TagScanResult?> scanPlayerTagForAssignment(
@@ -399,7 +472,8 @@ class _NfcService implements NfcService {
       null;
 
   @override
-  Future<TagScanResult?> scanTableTag(BuildContext context) async => null;
+  Future<TagScanResult?> scanTableTag(BuildContext context) async =>
+      tableScanResult;
 }
 
 class _RecordingNavigatorObserver extends NavigatorObserver {
@@ -434,6 +508,82 @@ PrizePlanDetail _fixedPrizePlan(List<int> fixedAmountCents) {
       ),
     ),
   );
+}
+
+EventTableRecord _table({
+  String id = 'tbl_01',
+  String eventId = 'evt_01',
+  String label = 'Table 1',
+}) {
+  return EventTableRecord.fromJson({
+    'id': id,
+    'event_id': eventId,
+    'label': label,
+    'display_order': 1,
+    'nfc_tag_id': 'tag_table_01',
+    'default_ruleset_id': 'HK_STANDARD_V1',
+    'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+    'default_rotation_policy_config_json': const {},
+  });
+}
+
+TableSessionRecord _session({
+  required String id,
+  String eventId = 'evt_01',
+  String tableId = 'tbl_01',
+  SessionStatus status = SessionStatus.active,
+}) {
+  return TableSessionRecord(
+    id: id,
+    eventId: eventId,
+    eventTableId: tableId,
+    sessionNumberForTable: 1,
+    rulesetId: 'HK_STANDARD_V1',
+    rulesetVersion: 1,
+    rotationPolicyType: RotationPolicyType.dealerCycleReturnToInitialEast,
+    rotationPolicyConfig: const {},
+    status: status,
+    initialEastSeatIndex: 0,
+    currentDealerSeatIndex: 0,
+    dealerPassCount: 0,
+    completedGamesCount: 0,
+    handCount: 0,
+    startedAt: DateTime.parse('2026-04-24T19:00:00-07:00'),
+    startedByUserId: 'usr_01',
+  );
+}
+
+TagScanResult _tableScanResult([String uid = 'TABLE-001']) {
+  return TagScanResult(
+    rawUid: uid,
+    normalizedUid: uid,
+    isManualEntry: true,
+  );
+}
+
+Future<void> _pumpDashboard(
+  WidgetTester tester, {
+  required EventRecord event,
+  PrizeRepository? prizeRepository,
+  TableRepository? tableRepository,
+  SessionRepository? sessionRepository,
+  NfcService? nfcService,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: EventDashboardScreen(
+        args: EventDashboardArgs(eventId: event.id),
+        eventRepository: _EventRepository(event),
+        guestRepository: _GuestRepository(),
+        leaderboardRepository: _LeaderboardRepository(),
+        prizeRepository: prizeRepository,
+        tableRepository: tableRepository,
+        sessionRepository: sessionRepository,
+        nfcService: nfcService,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -552,7 +702,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Prize Pool: \$250.00'), findsOneWidget);
+    expect(find.text('Prize Pool'), findsOneWidget);
+    expect(find.text('\$250.00'), findsOneWidget);
   });
 
   testWidgets('prizes action refreshes the dashboard prize pool on return', (
@@ -593,14 +744,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Prize Pool: \$100.00'), findsOneWidget);
+    expect(find.text('\$100.00'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Prizes'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Prizes'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Done editing prizes'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Prize Pool: \$250.00'), findsOneWidget);
+    expect(find.text('\$250.00'), findsOneWidget);
   });
 
   testWidgets('prizes action routes into the prize plan screen', (
@@ -630,6 +783,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Prizes'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Prizes'));
     await tester.pumpAndSettle();
 
@@ -664,10 +819,314 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Activity'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Activity'));
     await tester.pumpAndSettle();
 
     expect(find.byType(ActivityScreen), findsOneWidget);
+  });
+
+  testWidgets('scan table routes to active table session', (tester) async {
+    final table = _table();
+    final activeSession = _session(id: 'sess_active');
+    final sessionRepository = _SessionRepository(sessions: [activeSession]);
+    final router = AppRouter(
+      eventRepository: _EventRepository(activeEvent),
+      guestRepository: _GuestRepository(),
+      tableRepository: _TableRepository(resolvedTable: table),
+      sessionRepository: sessionRepository,
+      leaderboardRepository: _LeaderboardRepository(),
+      activityRepository: _ActivityRepository(),
+      prizeRepository: _PrizeRepository(),
+      nfcService: _NfcService(tableScanResult: _tableScanResult()),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(resolvedTable: table),
+          sessionRepository: sessionRepository,
+          nfcService: _NfcService(tableScanResult: _tableScanResult()),
+        ),
+        onGenerateRoute: router.onGenerateRoute,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan Table'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SessionDetailScreen), findsOneWidget);
+    expect(find.text('Session Detail'), findsOneWidget);
+  });
+
+  testWidgets('scan table routes to paused table session', (tester) async {
+    final table = _table();
+    final pausedSession = _session(
+      id: 'sess_paused',
+      status: SessionStatus.paused,
+    );
+    final sessionRepository = _SessionRepository(sessions: [pausedSession]);
+    final router = AppRouter(
+      eventRepository: _EventRepository(activeEvent),
+      guestRepository: _GuestRepository(),
+      tableRepository: _TableRepository(resolvedTable: table),
+      sessionRepository: sessionRepository,
+      leaderboardRepository: _LeaderboardRepository(),
+      activityRepository: _ActivityRepository(),
+      prizeRepository: _PrizeRepository(),
+      nfcService: _NfcService(tableScanResult: _tableScanResult()),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(resolvedTable: table),
+          sessionRepository: sessionRepository,
+          nfcService: _NfcService(tableScanResult: _tableScanResult()),
+        ),
+        onGenerateRoute: router.onGenerateRoute,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan Table'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SessionDetailScreen), findsOneWidget);
+    expect(find.text('Resume Session'), findsOneWidget);
+  });
+
+  testWidgets('scan table starts preverified table flow at east player prompt',
+      (tester) async {
+    final table = _table();
+    final router = AppRouter(
+      eventRepository: _EventRepository(activeEvent),
+      guestRepository: _GuestRepository(),
+      tableRepository: _TableRepository(resolvedTable: table),
+      sessionRepository: const _SessionRepository(),
+      leaderboardRepository: _LeaderboardRepository(),
+      activityRepository: _ActivityRepository(),
+      prizeRepository: _PrizeRepository(),
+      nfcService: _NfcService(tableScanResult: _tableScanResult()),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(resolvedTable: table),
+          sessionRepository: const _SessionRepository(),
+          nfcService: _NfcService(tableScanResult: _tableScanResult()),
+        ),
+        onGenerateRoute: router.onGenerateRoute,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan Table'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start Session'), findsOneWidget);
+    expect(find.text('Table 1'), findsOneWidget);
+    expect(find.text('Scan Table Tag'), findsNothing);
+    expect(find.text('Scan East Player Tag'), findsOneWidget);
+  });
+
+  testWidgets('scan table shows message when scoring is closed',
+      (tester) async {
+    final table = _table(eventId: 'evt_04');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_04'),
+          eventRepository: _EventRepository(activeCheckinOnlyEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(resolvedTable: table),
+          sessionRepository: const _SessionRepository(),
+          nfcService: _NfcService(tableScanResult: _tableScanResult()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan Table'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Open scoring before starting a table session.'),
+      findsOneWidget,
+    );
+    expect(find.text('Live Friday Night Mahjong'), findsWidgets);
+  });
+
+  testWidgets('scan table resolution error renders on dashboard',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: const _TableRepository(
+            resolveError: TableTagResolutionException(
+              TableTagResolutionFailure.unknownTag,
+            ),
+          ),
+          sessionRepository: const _SessionRepository(),
+          nfcService: _NfcService(tableScanResult: _tableScanResult()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan Table'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Unknown table tag. Bind this tag to a table first.'),
+      findsOneWidget,
+    );
+    expect(find.text('Friday Night Mahjong'), findsWidgets);
+  });
+
+  testWidgets('scoring-open event uses live host console hierarchy',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      event: activeEvent,
+      prizeRepository: _PrizeRepository(
+        loadedPlan: _fixedPrizePlan([17500]),
+      ),
+      tableRepository: _TableRepository(resolvedTable: _table()),
+      sessionRepository: const _SessionRepository(),
+      nfcService: _NfcService(tableScanResult: _tableScanResult()),
+    );
+
+    expect(find.text(activeEvent.title), findsOneWidget);
+    expect(find.text('Event Phase'), findsNothing);
+    expect(
+      find.text(
+        'Use the live operations controls to open or close check-in and scoring during the event.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Scoring Open'), findsOneWidget);
+    expect(find.text('Check-In Open'), findsOneWidget);
+    expect(find.text('Guests'), findsWidgets);
+    expect(find.text('Prize Pool'), findsOneWidget);
+    expect(find.text('Scan Table'), findsOneWidget);
+    expect(find.text('Tables'), findsOneWidget);
+    expect(find.text('Leaderboard'), findsOneWidget);
+    expect(find.text('Live Operations'), findsOneWidget);
+    expect(find.text('Close Scoring'), findsOneWidget);
+    expect(find.text('Event options'), findsOneWidget);
+
+    final scanTop = tester.getTopLeft(find.text('Scan Table')).dy;
+    final guestsTop = tester.getTopLeft(find.text('Guests').last).dy;
+    final optionsTop = tester.getTopLeft(find.text('Event options')).dy;
+
+    expect(scanTop, lessThan(guestsTop));
+    expect(guestsTop, lessThan(optionsTop));
+  });
+
+  testWidgets('live console renders event title once', (tester) async {
+    await _pumpDashboard(
+      tester,
+      event: activeEvent,
+      tableRepository: _TableRepository(resolvedTable: _table()),
+      sessionRepository: const _SessionRepository(),
+      nfcService: _NfcService(tableScanResult: _tableScanResult()),
+    );
+
+    expect(find.text(activeEvent.title), findsOneWidget);
+  });
+
+  testWidgets('polished dashboard back button is square', (tester) async {
+    await _pumpDashboard(
+      tester,
+      event: activeEvent,
+      tableRepository: _TableRepository(resolvedTable: _table()),
+      sessionRepository: const _SessionRepository(),
+      nfcService: _NfcService(tableScanResult: _tableScanResult()),
+    );
+
+    final backButton = find.byKey(const ValueKey('eventDashboardBackButton'));
+    final size = tester.getSize(backButton);
+
+    expect(size.width, size.height);
+  });
+
+  testWidgets('draft event uses polished event dashboard shell',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      event: draftEvent,
+      tableRepository: _TableRepository(resolvedTable: _table()),
+      sessionRepository: const _SessionRepository(),
+      nfcService: _NfcService(tableScanResult: _tableScanResult()),
+    );
+
+    expect(find.text(draftEvent.title), findsOneWidget);
+    expect(find.text('Event Phase'), findsNothing);
+    expect(find.text('Check-In Closed'), findsOneWidget);
+    expect(find.text('Scoring Closed'), findsOneWidget);
+    expect(find.text('Open Check-In'), findsOneWidget);
+    expect(find.text('Scan Table'), findsNothing);
+    expect(find.text('Event options'), findsOneWidget);
+  });
+
+  testWidgets('completed event uses polished event dashboard shell',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      event: completedEvent,
+      prizeRepository: _PrizeRepository(
+        loadedPlan: _fixedPrizePlan([17500]),
+      ),
+    );
+
+    expect(find.text(completedEvent.title), findsOneWidget);
+    expect(find.text('Event Phase'), findsNothing);
+    expect(find.text('Check-In Open'), findsOneWidget);
+    expect(find.text('Scoring Closed'), findsOneWidget);
+    expect(find.text('Finalize Event'), findsOneWidget);
+    expect(find.text('Event options'), findsOneWidget);
+  });
+
+  testWidgets('check-in open scoring closed does not make scan table the hero',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      event: activeCheckinOnlyEvent,
+      tableRepository:
+          _TableRepository(resolvedTable: _table(eventId: 'evt_04')),
+      sessionRepository: const _SessionRepository(),
+      nfcService: _NfcService(tableScanResult: _tableScanResult()),
+    );
+
+    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Scan Table'), findsOneWidget);
+
+    final openScoringTop = tester.getTopLeft(find.text('Open Scoring')).dy;
+    final scanTableTop = tester.getTopLeft(find.text('Scan Table')).dy;
+
+    expect(openScoringTop, lessThan(scanTableTop));
   });
 
   testWidgets('active event shows Complete Event action', (tester) async {
@@ -707,13 +1166,34 @@ void main() {
     expect(find.text('Open Check-In'), findsOneWidget);
     expect(find.text('Start Event'), findsNothing);
     expect(find.text('Complete Event'), findsNothing);
-    expect(find.text('Event Phase'), findsOneWidget);
+    expect(find.text('Event Phase'), findsNothing);
     expect(find.text('Setup'), findsOneWidget);
     expect(
       find.text(
           'Finish setup, then open check-in when hosts are ready to receive guests.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('draft event hides scan table action even with scan dependencies',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_00'),
+          eventRepository: _EventRepository(draftEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(resolvedTable: _table()),
+          sessionRepository: const _SessionRepository(),
+          nfcService: _NfcService(tableScanResult: _tableScanResult()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tables'), findsOneWidget);
+    expect(find.text('Scan Table'), findsNothing);
   });
 
   testWidgets('draft event can be deleted after confirmation', (tester) async {
@@ -778,6 +1258,8 @@ void main() {
 
     expect(find.text('Cancel Event'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Cancel Event'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel Event'));
     await tester.pumpAndSettle();
 
@@ -820,6 +1302,8 @@ void main() {
 
     expect(find.text('Revert to Draft'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Revert to Draft'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Revert to Draft'));
     await tester.pumpAndSettle();
 
@@ -860,8 +1344,8 @@ void main() {
     await tester.tap(find.text('Open Check-In'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Event Phase'), findsOneWidget);
-    expect(find.text('Check-In Open'), findsNWidgets(2));
+    expect(find.text('Event Phase'), findsNothing);
+    expect(find.text('Check-In Open'), findsOneWidget);
     expect(find.text('Scoring Closed'), findsOneWidget);
     expect(find.text('Close Check-In'), findsNothing);
     expect(find.text('Open Scoring'), findsOneWidget);
@@ -890,14 +1374,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Live Operations'), findsOneWidget);
-    expect(find.text('Check-In Open'), findsNWidgets(2));
+    expect(find.text('Check-In Open'), findsOneWidget);
     expect(find.text('Scoring Closed'), findsOneWidget);
     expect(find.text('Close Check-In'), findsNothing);
     expect(find.text('Open Scoring'), findsOneWidget);
 
-    await tester.drag(find.byType(ListView), const Offset(0, -240));
+    await tester.ensureVisible(find.text('Open Scoring'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Open Scoring'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, 400));
     await tester.pumpAndSettle();
 
     expect(find.text('Scoring Open'), findsOneWidget);
@@ -947,7 +1434,7 @@ void main() {
       find.text('Standings and awards are locked for this event.'),
       findsOneWidget,
     );
-    expect(find.text('Guests'), findsNothing);
+    expect(find.text('Guests'), findsOneWidget);
     expect(find.text('Tables'), findsNothing);
     expect(find.text('Add Guest'), findsNothing);
     expect(find.text('Complete Event'), findsNothing);
@@ -975,6 +1462,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Complete Event'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Complete Event'));
     await tester.pumpAndSettle();
 

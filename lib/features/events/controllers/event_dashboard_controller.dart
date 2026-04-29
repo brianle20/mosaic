@@ -2,25 +2,56 @@ import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
+import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+
+sealed class DashboardTableScanResult {
+  const DashboardTableScanResult();
+}
+
+class DashboardTableScanOpenSession extends DashboardTableScanResult {
+  const DashboardTableScanOpenSession({required this.sessionId});
+
+  final String sessionId;
+}
+
+class DashboardTableScanStartSession extends DashboardTableScanResult {
+  const DashboardTableScanStartSession({
+    required this.table,
+    required this.preverifiedTableTagUid,
+  });
+
+  final EventTableRecord table;
+  final String preverifiedTableTagUid;
+}
 
 class EventDashboardController extends ChangeNotifier {
   EventDashboardController({
     required EventRepository eventRepository,
     required GuestRepository guestRepository,
     PrizeRepository? prizeRepository,
+    TableRepository? tableRepository,
+    SessionRepository? sessionRepository,
   })  : _eventRepository = eventRepository,
         _guestRepository = guestRepository,
-        _prizeRepository = prizeRepository;
+        _prizeRepository = prizeRepository,
+        _tableRepository = tableRepository,
+        _sessionRepository = sessionRepository;
 
   final EventRepository _eventRepository;
   final GuestRepository _guestRepository;
   final PrizeRepository? _prizeRepository;
+  final TableRepository? _tableRepository;
+  final SessionRepository? _sessionRepository;
 
   bool isLoading = true;
   bool isSubmittingLifecycle = false;
+  bool isScanningTable = false;
   String? error;
   String? lifecycleError;
+  String? tableScanError;
   EventRecord? event;
   int guestCount = 0;
   int? prizePoolCents;
@@ -37,6 +68,7 @@ class EventDashboardController extends ChangeNotifier {
     isLoading = true;
     error = null;
     lifecycleError = null;
+    tableScanError = null;
     event = cachedEvent;
     guestCount = cachedGuests.length;
     prizePoolCents = _totalPrizeCents(cachedPrizePlan);
@@ -243,5 +275,60 @@ class EventDashboardController extends ChangeNotifier {
 
     isSubmittingLifecycle = false;
     notifyListeners();
+  }
+
+  Future<DashboardTableScanResult?> resolveScannedTableTag(
+    String normalizedUid,
+  ) async {
+    final currentEvent = event;
+    final tableRepository = _tableRepository;
+    final sessionRepository = _sessionRepository;
+    if (currentEvent == null ||
+        tableRepository == null ||
+        sessionRepository == null ||
+        isScanningTable) {
+      return null;
+    }
+
+    isScanningTable = true;
+    tableScanError = null;
+    notifyListeners();
+
+    try {
+      final table = await tableRepository.resolveTableByTag(
+        eventId: currentEvent.id,
+        scannedUid: normalizedUid,
+      );
+      final sessions = await sessionRepository.listSessions(currentEvent.id);
+      final liveSession = sessions.firstWhereOrNull(
+        (session) =>
+            session.eventTableId == table.id &&
+            (session.status == SessionStatus.active ||
+                session.status == SessionStatus.paused),
+      );
+
+      if (liveSession != null) {
+        return DashboardTableScanOpenSession(sessionId: liveSession.id);
+      }
+
+      if (!currentEvent.scoringOpen) {
+        tableScanError = 'Open scoring before starting a table session.';
+        return null;
+      }
+
+      return DashboardTableScanStartSession(
+        table: table,
+        preverifiedTableTagUid: normalizedUid,
+      );
+    } on TableTagResolutionException catch (exception) {
+      tableScanError = exception.message;
+      return null;
+    } catch (exception) {
+      tableScanError = _formatLifecycleError(exception);
+      return null;
+    } finally {
+      isScanningTable = false;
+      notifyListeners();
+    }
   }
 }

@@ -167,6 +167,96 @@ void main() {
     expect(signOutTapped, isTrue);
   });
 
+  testWidgets('event list uses the soft host shell and hero create action',
+      (tester) async {
+    final repository = _FakeEventRepository([
+      eventRecord(
+        id: 'evt_01',
+        title: 'Friday Night Mahjong',
+        startsAt: '2026-04-24T19:00:00-07:00',
+        lifecycleStatus: 'draft',
+        createdAt: '2026-04-24T17:00:00-07:00',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(eventRepository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('softHostScaffold')), findsOneWidget);
+    expect(find.byKey(const ValueKey('glassTitlePill-Events')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('eventsCreateHeroAction')), findsOneWidget);
+
+    final createButton = find.byKey(const ValueKey('eventsCreateHeroAction'));
+    final size = tester.getSize(createButton);
+    expect(size.width, greaterThan(300));
+    expect(size.height, greaterThanOrEqualTo(56));
+  });
+
+  testWidgets('event list sign out uses compact glass top action',
+      (tester) async {
+    var signOutTapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(
+          eventRepository: _FakeEventRepository(const []),
+          onSignOut: () async {
+            signOutTapped = true;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final signOutAction = find.byKey(const ValueKey('eventsSignOutAction'));
+    expect(signOutAction, findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
+
+    final size = tester.getSize(signOutAction);
+    expect(size.height, 40);
+
+    await tester.tap(signOutAction);
+    await tester.pumpAndSettle();
+
+    expect(signOutTapped, isTrue);
+  });
+
+  testWidgets('event rows use shared list surfaces without Card widgets',
+      (tester) async {
+    final repository = _FakeEventRepository([
+      eventRecord(
+        id: 'evt_01',
+        title: 'Friday Night Mahjong',
+        startsAt: '2026-04-24T19:00:00-07:00',
+        lifecycleStatus: 'draft',
+        createdAt: '2026-04-24T17:00:00-07:00',
+        venueName: 'Green Room',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(eventRepository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final rowSurface = find.byKey(const ValueKey('eventRowSurface-evt_01'));
+    expect(rowSurface, findsOneWidget);
+    expect(
+      find.descendant(of: rowSurface, matching: find.byType(Card)),
+      findsNothing,
+    );
+    expect(find.text('Friday Night Mahjong'), findsOneWidget);
+    expect(find.widgetWithText(StatusChip, 'Setup'), findsOneWidget);
+    expect(find.text('Green Room'), findsOneWidget);
+  });
+
   testWidgets('sorts newest-created first and shows human tile details',
       (tester) async {
     final repository = _FakeEventRepository([
@@ -312,21 +402,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final cardFinder = find.ancestor(
-      of: find.text('Test Event 2'),
-      matching: find.byType(Card),
-    );
-    final cardTop = tester.getTopLeft(cardFinder).dy;
-    final cardBottom = tester.getBottomRight(cardFinder).dy;
+    final rowSurface = find.byKey(const ValueKey('eventRowSurface-evt_02'));
+    final surfaceTop = tester.getTopLeft(rowSurface).dy;
+    final surfaceBottom = tester.getBottomRight(rowSurface).dy;
     final contentTop = tester.getTopLeft(find.text('Test Event 2')).dy;
     final contentBottom = tester.getBottomRight(find.text('Test Venue')).dy;
 
     expect(
-      (contentTop - cardTop - (cardBottom - contentBottom)).abs(),
+      (contentTop - surfaceTop - (surfaceBottom - contentBottom)).abs(),
       lessThanOrEqualTo(4),
     );
     expect(
-      find.descendant(of: cardFinder, matching: find.byType(ListTile)),
+      find.descendant(of: rowSurface, matching: find.byType(ListTile)),
       findsNothing,
     );
   });

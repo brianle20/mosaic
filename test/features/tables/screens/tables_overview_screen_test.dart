@@ -33,6 +33,14 @@ class _FakeTableRepository implements TableRepository {
       tables;
 
   @override
+  Future<EventTableRecord> resolveTableByTag({
+    required String eventId,
+    required String scannedUid,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventTableRecord> updateTable(UpdateEventTableInput input) {
     throw UnimplementedError();
   }
