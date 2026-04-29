@@ -23,12 +23,16 @@ class _EventRepository implements EventRepository {
     this.onFinalize,
     this.onStart,
     this.onSetOperationalFlags,
+    this.onCancel,
+    this.onDelete,
   });
 
   EventRecord event;
   final Future<EventRecord> Function(String eventId)? onComplete;
   final Future<EventRecord> Function(String eventId)? onFinalize;
   final Future<EventRecord> Function(String eventId)? onStart;
+  final Future<EventRecord> Function(String eventId)? onCancel;
+  final Future<void> Function(String eventId)? onDelete;
   final Future<EventRecord> Function(
     String eventId,
     bool checkinOpen,
@@ -37,6 +41,28 @@ class _EventRepository implements EventRepository {
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> cancelEvent(String eventId) async {
+    final handler = onCancel;
+    if (handler != null) {
+      event = await handler(eventId);
+      return event;
+    }
+
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteEvent(String eventId) async {
+    final handler = onDelete;
+    if (handler != null) {
+      await handler(eventId);
+      return;
+    }
+
     throw UnimplementedError();
   }
 
@@ -361,6 +387,16 @@ class _NfcService implements NfcService {
   Future<TagScanResult?> scanTableTag(BuildContext context) async => null;
 }
 
+class _RecordingNavigatorObserver extends NavigatorObserver {
+  bool didPopRoute = false;
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    didPopRoute = true;
+    super.didPop(route, previousRoute);
+  }
+}
+
 void main() {
   final draftEvent = EventRecord.fromJson(const {
     'id': 'evt_00',
@@ -576,6 +612,84 @@ void main() {
     );
   });
 
+  testWidgets('draft event can be deleted after confirmation', (tester) async {
+    var deletedEventId = '';
+    final navigatorObserver = _RecordingNavigatorObserver();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorObservers: [navigatorObserver],
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_00'),
+          eventRepository: _EventRepository(
+            draftEvent,
+            onDelete: (eventId) async {
+              deletedEventId = eventId;
+            },
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete Event'), findsOneWidget);
+
+    await tester.tap(find.text('Delete Event'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete this event?'), findsOneWidget);
+
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(deletedEventId, 'evt_00');
+    expect(navigatorObserver.didPopRoute, isTrue);
+  });
+
+  testWidgets('active event can be cancelled after confirmation',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(
+            activeEvent,
+            onCancel: (_) async {
+              return EventRecord.fromJson({
+                ...activeEvent.toJson(),
+                'lifecycle_status': 'cancelled',
+                'checkin_open': false,
+                'scoring_open': false,
+              });
+            },
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cancel Event'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel Event'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cancel this event?'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel Event').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cancelled'), findsOneWidget);
+    expect(
+      find.text('This event was cancelled and is no longer live.'),
+      findsOneWidget,
+    );
+    expect(find.text('Complete Event'), findsNothing);
+  });
+
   testWidgets('starting a draft event enables live controls', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -631,6 +745,8 @@ void main() {
     expect(find.text('Close Check-In'), findsOneWidget);
     expect(find.text('Open Scoring'), findsOneWidget);
 
+    await tester.drag(find.byType(ListView), const Offset(0, -240));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Open Scoring'));
     await tester.pumpAndSettle();
 
@@ -739,6 +855,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.drag(find.byType(ListView), const Offset(0, -240));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Open Scoring'));
     await tester.pumpAndSettle();
 

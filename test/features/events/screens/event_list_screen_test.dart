@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
@@ -11,6 +12,16 @@ class _FakeEventRepository implements EventRepository {
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> cancelEvent(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteEvent(String eventId) {
     throw UnimplementedError();
   }
 
@@ -117,5 +128,57 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(signOutTapped, isTrue);
+  });
+
+  testWidgets('refreshes events after returning from an event dashboard',
+      (tester) async {
+    final repository = _FakeEventRepository([
+      EventRecord.fromJson(const {
+        'id': 'evt_01',
+        'owner_user_id': 'usr_01',
+        'title': 'Friday Night Mahjong',
+        'timezone': 'America/Los_Angeles',
+        'starts_at': '2026-04-24T19:00:00-07:00',
+        'lifecycle_status': 'draft',
+        'checkin_open': false,
+        'scoring_open': false,
+        'cover_charge_cents': 2000,
+        'prize_budget_cents': 50000,
+        'default_ruleset_id': 'HK_STANDARD_V1',
+        'prevailing_wind': 'east',
+      }),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(eventRepository: repository),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.eventDashboardRoute) {
+            return MaterialPageRoute<void>(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () {
+                    repository.events.clear();
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Delete and return'),
+                ),
+              ),
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Friday Night Mahjong'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete and return'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Friday Night Mahjong'), findsNothing);
+    expect(find.text('No events yet'), findsOneWidget);
   });
 }

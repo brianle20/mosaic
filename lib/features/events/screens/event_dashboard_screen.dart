@@ -121,6 +121,67 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     );
   }
 
+  Future<void> _confirmDeleteEvent() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete this event?'),
+        content: const Text(
+          'This removes the draft event and its setup data.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep Event'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final deleted = await _controller.deleteEvent();
+    if (!mounted || !deleted) {
+      return;
+    }
+
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _confirmCancelEvent() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel this event?'),
+        content: const Text(
+          'This closes check-in and scoring and marks the event as cancelled.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep Event'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Cancel Event'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    await _controller.cancelEvent();
+  }
+
   String _flagStatusLabel(bool isOpen) => isOpen ? 'Open' : 'Closed';
 
   String _eventPhaseLabel(EventLifecycleStatus? status) {
@@ -180,7 +241,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     final lifecycleStatus = event?.lifecycleStatus;
     final showLiveActions = lifecycleStatus != null &&
         lifecycleStatus != EventLifecycleStatus.completed &&
-        lifecycleStatus != EventLifecycleStatus.finalized;
+        lifecycleStatus != EventLifecycleStatus.finalized &&
+        lifecycleStatus != EventLifecycleStatus.cancelled;
     return Scaffold(
       appBar: AppBar(title: Text(event?.title ?? 'Event Dashboard')),
       body: AsyncBody(
@@ -274,6 +336,21 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                         ? null
                         : () => _controller.finalizeEvent(),
                     child: const Text('Finalize Event'),
+                  ),
+                if (lifecycleStatus == EventLifecycleStatus.draft)
+                  OutlinedButton(
+                    onPressed: _controller.isSubmittingLifecycle
+                        ? null
+                        : _confirmDeleteEvent,
+                    child: const Text('Delete Event'),
+                  ),
+                if (lifecycleStatus == EventLifecycleStatus.active ||
+                    lifecycleStatus == EventLifecycleStatus.completed)
+                  OutlinedButton(
+                    onPressed: _controller.isSubmittingLifecycle
+                        ? null
+                        : _confirmCancelEvent,
+                    child: const Text('Cancel Event'),
                   ),
               ],
             ),

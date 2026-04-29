@@ -49,11 +49,16 @@ class _EventListScreenState extends State<EventListScreen> {
     Navigator.of(context).pushNamed(AppRouter.createEventRoute);
   }
 
-  void _openEvent(EventRecord event) {
-    Navigator.of(context).pushNamed(
+  Future<void> _openEvent(EventRecord event) async {
+    await Navigator.of(context).pushNamed(
       AppRouter.eventDashboardRoute,
       arguments: EventDashboardArgs(eventId: event.id),
     );
+    if (!mounted) {
+      return;
+    }
+
+    await _controller.load();
   }
 
   Future<void> _signOut() async {

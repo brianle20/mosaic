@@ -106,6 +106,10 @@ class _HostSignInScreenState extends State<HostSignInScreen> {
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
+                      textCapitalization: TextCapitalization.none,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      autofillHints: const [AutofillHints.email],
                       decoration: InputDecoration(
                         labelText: 'Email',
                         errorText: _showValidation ? draft.emailError : null,
@@ -116,6 +120,10 @@ class _HostSignInScreenState extends State<HostSignInScreen> {
                     TextFormField(
                       controller: _passwordController,
                       obscureText: true,
+                      enableInteractiveSelection: true,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      autofillHints: const [AutofillHints.password],
                       decoration: InputDecoration(
                         labelText: 'Password',
                         errorText: _showValidation ? draft.passwordError : null,

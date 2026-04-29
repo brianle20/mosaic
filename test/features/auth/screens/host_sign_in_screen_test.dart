@@ -70,6 +70,55 @@ void main() {
     expect(find.text('Sign In'), findsOneWidget);
   });
 
+  testWidgets('configures email input for email entry', (tester) async {
+    final controller = AuthController(authRepository: _FakeAuthRepository());
+    await controller.bootstrap();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HostSignInScreen(authController: controller),
+      ),
+    );
+
+    final emailEditable = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byType(TextFormField).first,
+        matching: find.byType(EditableText),
+      ),
+    );
+
+    expect(emailEditable.keyboardType, TextInputType.emailAddress);
+    expect(emailEditable.textCapitalization, TextCapitalization.none);
+    expect(emailEditable.autocorrect, isFalse);
+    expect(emailEditable.enableSuggestions, isFalse);
+    expect(emailEditable.autofillHints, contains(AutofillHints.email));
+  });
+
+  testWidgets('configures password input for secure paste entry',
+      (tester) async {
+    final controller = AuthController(authRepository: _FakeAuthRepository());
+    await controller.bootstrap();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HostSignInScreen(authController: controller),
+      ),
+    );
+
+    final passwordEditable = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byType(TextFormField).last,
+        matching: find.byType(EditableText),
+      ),
+    );
+
+    expect(passwordEditable.obscureText, isTrue);
+    expect(passwordEditable.enableInteractiveSelection, isTrue);
+    expect(passwordEditable.autocorrect, isFalse);
+    expect(passwordEditable.enableSuggestions, isFalse);
+    expect(passwordEditable.autofillHints, contains(AutofillHints.password));
+  });
+
   testWidgets('shows validation messages for missing fields', (tester) async {
     final controller = AuthController(authRepository: _FakeAuthRepository());
     await controller.bootstrap();

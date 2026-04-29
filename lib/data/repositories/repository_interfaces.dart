@@ -43,6 +43,10 @@ abstract interface class EventRepository {
   Future<EventRecord> completeEvent(String eventId);
 
   Future<EventRecord> finalizeEvent(String eventId);
+
+  Future<EventRecord> cancelEvent(String eventId);
+
+  Future<void> deleteEvent(String eventId);
 }
 
 abstract interface class GuestRepository {

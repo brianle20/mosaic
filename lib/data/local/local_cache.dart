@@ -58,6 +58,13 @@ class LocalCache {
     );
   }
 
+  Future<void> removeEvent(String eventId) async {
+    await _preferences.remove('$_eventKeyPrefix$eventId');
+    final remainingEvents =
+        readEvents().where((event) => event.id != eventId).toList();
+    await saveEvents(remainingEvents);
+  }
+
   EventRecord? readEvent(String eventId) {
     final raw = _preferences.getString('$_eventKeyPrefix$eventId');
     if (raw == null || raw.isEmpty) {

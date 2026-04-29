@@ -57,6 +57,16 @@ class _FakeEventRepository implements EventRepository {
   }
 
   @override
+  Future<EventRecord> cancelEvent(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> deleteEvent(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventRecord> startEvent(String eventId) {
     throw UnimplementedError();
   }

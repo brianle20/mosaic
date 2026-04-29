@@ -7,17 +7,27 @@ typedef EventMutationRunner = Future<Map<String, dynamic>> Function(
   String functionName,
   Map<String, dynamic> params,
 );
+typedef EventCancellationRunner = Future<Map<String, dynamic>> Function(
+  String eventId,
+);
+typedef EventDeletionRunner = Future<void> Function(String eventId);
 
 class SupabaseEventRepository implements EventRepository {
   SupabaseEventRepository({
     required this.client,
     required this.cache,
     EventMutationRunner? eventMutationRunner,
-  }) : _eventMutationRunner = eventMutationRunner;
+    EventCancellationRunner? eventCancellationRunner,
+    EventDeletionRunner? eventDeletionRunner,
+  })  : _eventMutationRunner = eventMutationRunner,
+        _eventCancellationRunner = eventCancellationRunner,
+        _eventDeletionRunner = eventDeletionRunner;
 
   final SupabaseClient client;
   final LocalCache cache;
   final EventMutationRunner? _eventMutationRunner;
+  final EventCancellationRunner? _eventCancellationRunner;
+  final EventDeletionRunner? _eventDeletionRunner;
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) async {
@@ -87,6 +97,39 @@ class SupabaseEventRepository implements EventRepository {
     final record = EventRecord.fromJson(response);
     await _saveEventRecord(record);
     return record;
+  }
+
+  @override
+  Future<EventRecord> cancelEvent(String eventId) async {
+    final runner = _eventCancellationRunner;
+    final response = runner != null
+        ? await runner(eventId)
+        : await client
+            .from('events')
+            .update({
+              'lifecycle_status': 'cancelled',
+              'checkin_open': false,
+              'scoring_open': false,
+            })
+            .eq('id', eventId)
+            .select()
+            .single();
+
+    final record = EventRecord.fromJson(response);
+    await _saveEventRecord(record);
+    return record;
+  }
+
+  @override
+  Future<void> deleteEvent(String eventId) async {
+    final runner = _eventDeletionRunner;
+    if (runner != null) {
+      await runner(eventId);
+    } else {
+      await client.from('events').delete().eq('id', eventId);
+    }
+
+    await cache.removeEvent(eventId);
   }
 
   @override

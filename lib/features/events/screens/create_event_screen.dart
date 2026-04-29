@@ -1,9 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_form_controller.dart';
 import 'package:mosaic/features/events/models/event_form_draft.dart';
+import 'package:mosaic/features/events/models/event_form_formatters.dart';
+
+const createEventTitleFieldKey = Key('create-event-title-field');
+const createEventStartsTileKey = Key('create-event-starts-tile');
+const createEventVenueNameFieldKey = Key('create-event-venue-name-field');
+const createEventVenueAddressFieldKey = Key(
+  'create-event-venue-address-field',
+);
+const createEventCoverChargeFieldKey = Key('create-event-cover-charge-field');
+const createEventPrizeBudgetFieldKey = Key('create-event-prize-budget-field');
 
 class CreateEventScreen extends StatefulWidget {
   const CreateEventScreen({
@@ -24,16 +35,17 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final _titleController = TextEditingController();
   final _venueNameController = TextEditingController();
   final _venueAddressController = TextEditingController();
-  final _coverChargeController = TextEditingController(text: '0');
-  final _prizeBudgetController = TextEditingController(text: '0');
+  final _coverChargeController = TextEditingController(text: '0.00');
+  final _prizeBudgetController = TextEditingController(text: '0.00');
   late final EventFormController _controller;
 
-  String _timezone = 'America/Los_Angeles';
-  final DateTime _startsAt = DateTime.now().add(const Duration(days: 1));
+  final String _timezone = 'America/Los_Angeles';
+  late DateTime _startsAt;
 
   @override
   void initState() {
     super.initState();
+    _startsAt = defaultEventStartAt(DateTime.now());
     _controller = EventFormController(eventRepository: widget.eventRepository)
       ..addListener(_handleUpdate);
   }
@@ -58,15 +70,63 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   EventFormDraft _buildDraft() {
+    final coverCharge = parseMoneyAmount(_coverChargeController.text);
+    final prizeBudget = parseMoneyAmount(_prizeBudgetController.text);
+
     return EventFormDraft(
       title: _titleController.text,
       timezone: _timezone,
       venueName: _venueNameController.text,
       venueAddress: _venueAddressController.text,
-      coverChargeCents: int.tryParse(_coverChargeController.text) ?? -1,
-      prizeBudgetCents: int.tryParse(_prizeBudgetController.text) ?? -1,
+      coverChargeCents: coverCharge.cents ?? -1,
+      prizeBudgetCents: prizeBudget.cents ?? -1,
       startsAt: _startsAt,
     );
+  }
+
+  String? _moneyValidationMessage(MoneyInputError error) {
+    return switch (error) {
+      MoneyInputError.invalid => 'Enter a valid amount.',
+      MoneyInputError.negative => 'Amount must be zero or more.',
+      MoneyInputError.tooManyDecimalPlaces =>
+        'Use dollars and cents, like \$15 or \$15.50.',
+    };
+  }
+
+  String? _moneyFieldError(String value) {
+    final result = parseMoneyAmount(value);
+    final error = result.error;
+    return error == null ? null : _moneyValidationMessage(error);
+  }
+
+  Future<void> _pickStartsAt() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _startsAt,
+      firstDate: DateTime.now().subtract(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+    );
+    if (!mounted || pickedDate == null) {
+      return;
+    }
+
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_startsAt),
+    );
+    if (!mounted || pickedTime == null) {
+      return;
+    }
+
+    setState(() {
+      _startsAt = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime.hour,
+        pickedTime.minute,
+      );
+    });
   }
 
   Future<void> _submit() async {
@@ -107,47 +167,58 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             TextFormField(
+              key: createEventTitleFieldKey,
               controller: _titleController,
               decoration: const InputDecoration(labelText: 'Title'),
               validator: (_) => _buildDraft().titleError,
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              initialValue: _timezone,
-              decoration: const InputDecoration(labelText: 'Timezone'),
-              onChanged: (value) => _timezone = value,
-              validator: (_) => _buildDraft().timezoneError,
-            ),
-            const SizedBox(height: 12),
             ListTile(
+              key: createEventStartsTileKey,
               contentPadding: EdgeInsets.zero,
-              title: const Text('Starts At'),
-              subtitle: Text(_startsAt.toLocal().toString()),
+              title: const Text('Starts'),
+              subtitle: Text(formatEventStart(_startsAt)),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: _pickStartsAt,
             ),
             TextFormField(
+              key: createEventVenueNameFieldKey,
               controller: _venueNameController,
               decoration: const InputDecoration(labelText: 'Venue Name'),
             ),
             const SizedBox(height: 12),
             TextFormField(
+              key: createEventVenueAddressFieldKey,
               controller: _venueAddressController,
               decoration: const InputDecoration(labelText: 'Venue Address'),
             ),
             const SizedBox(height: 12),
             TextFormField(
+              key: createEventCoverChargeFieldKey,
               controller: _coverChargeController,
-              keyboardType: TextInputType.number,
-              decoration:
-                  const InputDecoration(labelText: 'Cover Charge (cents)'),
-              validator: (_) => _buildDraft().coverChargeError,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: const [_MoneyCentsInputFormatter()],
+              decoration: const InputDecoration(
+                labelText: 'Cover Charge',
+                prefixText: r'$',
+              ),
+              validator: (value) => _moneyFieldError(value ?? ''),
             ),
             const SizedBox(height: 12),
             TextFormField(
+              key: createEventPrizeBudgetFieldKey,
               controller: _prizeBudgetController,
-              keyboardType: TextInputType.number,
-              decoration:
-                  const InputDecoration(labelText: 'Prize Budget (cents)'),
-              validator: (_) => _buildDraft().prizeBudgetError,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: const [_MoneyCentsInputFormatter()],
+              decoration: const InputDecoration(
+                labelText: 'Prize Budget',
+                prefixText: r'$',
+              ),
+              validator: (value) => _moneyFieldError(value ?? ''),
             ),
             if (_controller.submitError != null) ...[
               const SizedBox(height: 12),
@@ -157,6 +228,31 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _MoneyCentsInputFormatter extends TextInputFormatter {
+  const _MoneyCentsInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text.trim();
+    if (text.startsWith('-') || RegExp('[A-Za-z]').hasMatch(text)) {
+      return newValue;
+    }
+
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final cents = digits.isEmpty ? 0 : int.parse(digits);
+    final formatted =
+        '${cents ~/ 100}.${(cents % 100).toString().padLeft(2, '0')}';
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }
