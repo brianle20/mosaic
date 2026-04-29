@@ -23,13 +23,13 @@ class EventListController extends ChangeNotifier {
       return;
     }
     if (cachedEvents.isNotEmpty) {
-      events = cachedEvents;
+      events = _latestCreatedFirst(cachedEvents);
       isLoading = false;
       _notifyIfActive();
     }
 
     try {
-      events = await _eventRepository.listEvents();
+      events = _latestCreatedFirst(await _eventRepository.listEvents());
       error = null;
     } catch (exception) {
       if (events.isEmpty) {
@@ -54,5 +54,10 @@ class EventListController extends ChangeNotifier {
     if (!_isDisposed) {
       notifyListeners();
     }
+  }
+
+  List<EventRecord> _latestCreatedFirst(List<EventRecord> records) {
+    return List<EventRecord>.from(records)
+      ..sort((left, right) => right.createdAt.compareTo(left.createdAt));
   }
 }

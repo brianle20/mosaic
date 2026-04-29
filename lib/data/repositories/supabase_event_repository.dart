@@ -168,7 +168,7 @@ class SupabaseEventRepository implements EventRepository {
     final rows = await client
         .from('events')
         .select()
-        .order('starts_at', ascending: true);
+        .order('created_at', ascending: false);
 
     final records =
         rows.map((row) => EventRecord.fromJson(row)).toList(growable: false);
@@ -189,7 +189,7 @@ class SupabaseEventRepository implements EventRepository {
     final mergedEvents = [
       ...currentEvents.where((event) => event.id != record.id),
       record,
-    ]..sort((left, right) => left.startsAt.compareTo(right.startsAt));
+    ]..sort((left, right) => right.createdAt.compareTo(left.createdAt));
 
     await cache.saveEvent(record);
     await cache.saveEvents(mergedEvents);

@@ -70,6 +70,7 @@ class EventRecord {
     required this.title,
     required this.timezone,
     required this.startsAt,
+    required this.createdAt,
     required this.lifecycleStatus,
     required this.checkinOpen,
     required this.scoringOpen,
@@ -95,6 +96,8 @@ class EventRecord {
       venueAddress: _optionalString(json, 'venue_address'),
       timezone: _requiredString(json, 'timezone'),
       startsAt: _requiredDateTime(json, 'starts_at'),
+      createdAt: _optionalDateTime(json, 'created_at') ??
+          _requiredDateTime(json, 'starts_at'),
       endsAt: _optionalDateTime(json, 'ends_at'),
       lifecycleStatus: _eventLifecycleStatusFromJson(
         _requiredString(json, 'lifecycle_status'),
@@ -120,6 +123,7 @@ class EventRecord {
   final String? venueAddress;
   final String timezone;
   final DateTime startsAt;
+  final DateTime createdAt;
   final DateTime? endsAt;
   final EventLifecycleStatus lifecycleStatus;
   final bool checkinOpen;
@@ -141,6 +145,7 @@ class EventRecord {
       'venue_address': venueAddress,
       'timezone': timezone,
       'starts_at': startsAt.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
       'ends_at': endsAt?.toIso8601String(),
       'lifecycle_status': lifecycleStatus.name,
       'checkin_open': checkinOpen,

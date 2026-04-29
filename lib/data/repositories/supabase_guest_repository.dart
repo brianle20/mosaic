@@ -16,6 +16,8 @@ typedef RpcSingleRunner = Future<Map<String, dynamic>> Function(
   Map<String, dynamic> params,
 );
 
+const _eventGuestSelect = '*, guest_profile:guest_profiles(*)';
+
 class SupabaseGuestRepository implements GuestRepository {
   SupabaseGuestRepository({
     required this.client,
@@ -35,6 +37,15 @@ class SupabaseGuestRepository implements GuestRepository {
   final ActiveAssignmentLoader? _activeAssignmentLoader;
   final CoverEntriesLoader? _coverEntriesLoader;
   final RpcSingleRunner? _rpcSingleRunner;
+
+  String? _currentUserId() {
+    final userId = client.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) {
+      return null;
+    }
+
+    return userId;
+  }
 
   @override
   Future<GuestDetailRecord?> getGuestDetail(String guestId) async {
@@ -59,10 +70,15 @@ class SupabaseGuestRepository implements GuestRepository {
 
   @override
   Future<EventGuestRecord> createGuest(CreateGuestInput input) async {
+    final profile = await _resolveProfileForCreate(input);
+    await _ensureProfileIsNotOnEvent(
+      eventId: input.eventId,
+      guestProfileId: profile.id,
+    );
     final inserted = await client
         .from('event_guests')
-        .insert(input.toInsertJson())
-        .select()
+        .insert(input.toInsertJson(guestProfileId: profile.id))
+        .select(_eventGuestSelect)
         .single();
 
     final guest = EventGuestRecord.fromJson(inserted);
@@ -74,7 +90,7 @@ class SupabaseGuestRepository implements GuestRepository {
   Future<List<EventGuestRecord>> listGuests(String eventId) async {
     final rows = await client
         .from('event_guests')
-        .select()
+        .select(_eventGuestSelect)
         .eq('event_id', eventId)
         .order('display_name', ascending: true);
 
@@ -138,6 +154,60 @@ class SupabaseGuestRepository implements GuestRepository {
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async {
     return cache.readGuests(eventId);
+  }
+
+  @override
+  Future<List<GuestProfileMatch>> findGuestProfileMatches(
+    GuestProfileLookupInput input,
+  ) async {
+    final userId = _currentUserId();
+    if (userId == null) {
+      return const [];
+    }
+
+    final matches = <GuestProfileMatch>[];
+    final seenProfileIds = <String>{};
+
+    Future<void> addMatch(
+      GuestProfileRecord? profile,
+      GuestProfileMatchType matchType,
+    ) async {
+      if (profile == null || !seenProfileIds.add(profile.id)) {
+        return;
+      }
+      matches.add(GuestProfileMatch(profile: profile, matchType: matchType));
+    }
+
+    if (input.phoneE164 case final phoneE164?) {
+      await addMatch(
+        await _findProfileByPhone(userId: userId, phoneE164: phoneE164),
+        GuestProfileMatchType.phone,
+      );
+    }
+
+    if (input.emailLower case final emailLower?) {
+      await addMatch(
+        await _findProfileByEmail(userId: userId, emailLower: emailLower),
+        GuestProfileMatchType.email,
+      );
+    }
+
+    if (input.normalizedName.isNotEmpty) {
+      final nameRows = await client
+          .from('guest_profiles')
+          .select()
+          .eq('owner_user_id', userId)
+          .eq('normalized_name', input.normalizedName)
+          .limit(3);
+      for (final row in nameRows) {
+        await addMatch(
+          GuestProfileRecord.fromJson(row),
+          GuestProfileMatchType.name,
+        );
+      }
+    }
+
+    return matches;
   }
 
   @override
@@ -278,11 +348,23 @@ class SupabaseGuestRepository implements GuestRepository {
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) async {
+    final existingGuest = await _loadGuestById(input.id);
+    if (existingGuest == null) {
+      throw StateError('Guest could not be found.');
+    }
+    final currentGuest = EventGuestRecord.fromJson(existingGuest);
+    await _updateProfileForGuest(
+      guestProfileId: currentGuest.guestProfileId,
+      displayName: input.displayName,
+      normalizedName: input.normalizedName,
+      phoneE164: input.phoneE164,
+      emailLower: input.emailLower,
+    );
     final updated = await client
         .from('event_guests')
         .update(input.toUpdateJson())
         .eq('id', input.id)
-        .select()
+        .select(_eventGuestSelect)
         .single();
 
     final guest = EventGuestRecord.fromJson(updated);
@@ -302,6 +384,162 @@ class SupabaseGuestRepository implements GuestRepository {
     await cache.saveGuests(eventId, mergedGuests);
   }
 
+  Future<GuestProfileRecord> _resolveProfileForCreate(
+    CreateGuestInput input,
+  ) async {
+    final userId = _currentUserId();
+    if (userId == null) {
+      throw StateError('A signed-in host is required to add a guest.');
+    }
+
+    final phoneProfile = input.phoneE164 == null
+        ? null
+        : await _findProfileByPhone(
+            userId: userId,
+            phoneE164: input.phoneE164!,
+          );
+    final emailProfile = input.emailLower == null
+        ? null
+        : await _findProfileByEmail(
+            userId: userId,
+            emailLower: input.emailLower!,
+          );
+
+    if (phoneProfile != null &&
+        emailProfile != null &&
+        phoneProfile.id != emailProfile.id) {
+      throw StateError(
+        'Phone and email match different guest profiles. Review the guest details before saving.',
+      );
+    }
+
+    final matchedProfile = phoneProfile ?? emailProfile;
+    if (matchedProfile != null) {
+      return _fillBlankProfileFields(
+        profile: matchedProfile,
+        phoneE164: input.phoneE164,
+        emailLower: input.emailLower,
+      );
+    }
+
+    final inserted = await client
+        .from('guest_profiles')
+        .insert({
+          'owner_user_id': userId,
+          'display_name': input.displayName,
+          'normalized_name': input.normalizedName,
+          'phone_e164': input.phoneE164,
+          'email_lower': input.emailLower,
+        })
+        .select()
+        .single();
+
+    return GuestProfileRecord.fromJson(inserted);
+  }
+
+  Future<void> _ensureProfileIsNotOnEvent({
+    required String eventId,
+    required String guestProfileId,
+  }) async {
+    final existing = await client
+        .from('event_guests')
+        .select('id, display_name')
+        .eq('event_id', eventId)
+        .eq('guest_profile_id', guestProfileId)
+        .maybeSingle();
+    if (existing != null) {
+      throw StateError('This guest is already on this event.');
+    }
+  }
+
+  Future<GuestProfileRecord?> _findProfileByPhone({
+    required String userId,
+    required String phoneE164,
+  }) async {
+    final row = await client
+        .from('guest_profiles')
+        .select()
+        .eq('owner_user_id', userId)
+        .eq('phone_e164', phoneE164)
+        .maybeSingle();
+    final castRow = _castRow(row);
+    return castRow == null ? null : GuestProfileRecord.fromJson(castRow);
+  }
+
+  Future<GuestProfileRecord?> _findProfileByEmail({
+    required String userId,
+    required String emailLower,
+  }) async {
+    final row = await client
+        .from('guest_profiles')
+        .select()
+        .eq('owner_user_id', userId)
+        .eq('email_lower', emailLower)
+        .maybeSingle();
+    final castRow = _castRow(row);
+    return castRow == null ? null : GuestProfileRecord.fromJson(castRow);
+  }
+
+  Future<GuestProfileRecord> _fillBlankProfileFields({
+    required GuestProfileRecord profile,
+    required String? phoneE164,
+    required String? emailLower,
+  }) async {
+    final updates = <String, dynamic>{};
+    if (profile.phoneE164 == null && phoneE164 != null) {
+      updates['phone_e164'] = phoneE164;
+    }
+    if (profile.emailLower == null && emailLower != null) {
+      updates['email_lower'] = emailLower;
+    }
+
+    if (updates.isEmpty) {
+      return profile;
+    }
+
+    final updated = await client
+        .from('guest_profiles')
+        .update(updates)
+        .eq('id', profile.id)
+        .select()
+        .single();
+    return GuestProfileRecord.fromJson(updated);
+  }
+
+  Future<void> _updateProfileForGuest({
+    required String guestProfileId,
+    required String displayName,
+    required String normalizedName,
+    required String? phoneE164,
+    required String? emailLower,
+  }) async {
+    final userId = _currentUserId();
+    if (userId == null) {
+      throw StateError('A signed-in host is required to edit a guest.');
+    }
+
+    final phoneProfile = phoneE164 == null
+        ? null
+        : await _findProfileByPhone(userId: userId, phoneE164: phoneE164);
+    final emailProfile = emailLower == null
+        ? null
+        : await _findProfileByEmail(userId: userId, emailLower: emailLower);
+
+    if (phoneProfile != null && phoneProfile.id != guestProfileId) {
+      throw StateError('Phone is already used by another guest profile.');
+    }
+    if (emailProfile != null && emailProfile.id != guestProfileId) {
+      throw StateError('Email is already used by another guest profile.');
+    }
+
+    await client.from('guest_profiles').update({
+      'display_name': displayName,
+      'normalized_name': normalizedName,
+      'phone_e164': phoneE164,
+      'email_lower': emailLower,
+    }).eq('id', guestProfileId);
+  }
+
   Future<Map<String, dynamic>?> _loadGuestById(String guestId) async {
     final guestByIdLoader = _guestByIdLoader;
     if (guestByIdLoader != null) {
@@ -310,7 +548,7 @@ class SupabaseGuestRepository implements GuestRepository {
 
     final row = await client
         .from('event_guests')
-        .select()
+        .select(_eventGuestSelect)
         .eq('id', guestId)
         .maybeSingle();
     return _castRow(row);

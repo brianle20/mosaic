@@ -19,6 +19,26 @@ void main() {
       expect(draft.coverAmountError, 'Cover amount must be zero or more.');
     });
 
+    test('normalizes US phone numbers to E.164', () {
+      const draft = GuestFormDraft(
+        displayName: 'Alice',
+        phoneE164: '(415) 555-2671',
+      );
+
+      expect(draft.phoneError, isNull);
+      expect(draft.toCreateInput(eventId: 'evt_01').phoneE164, '+14155552671');
+    });
+
+    test('rejects invalid phone numbers', () {
+      const draft = GuestFormDraft(
+        displayName: 'Alice',
+        phoneE164: '12345',
+      );
+
+      expect(draft.phoneError, 'Enter a 10-digit phone number.');
+      expect(draft.isValid, isFalse);
+    });
+
     test('warns when a normalized name matches an existing guest', () {
       const draft = GuestFormDraft(displayName: 'Alice Wong');
       final warning = draft.duplicateNameWarning(
@@ -26,6 +46,7 @@ void main() {
           EventGuestRecord(
             id: 'gst_01',
             eventId: 'evt_01',
+            guestProfileId: 'prf_01',
             displayName: 'ALICE WONG',
             normalizedName: 'alice wong',
             attendanceStatus: AttendanceStatus.expected,
@@ -38,6 +59,49 @@ void main() {
       );
 
       expect(warning, 'Another guest with this name already exists.');
+    });
+
+    test('returns the matching duplicate guest by normalized name', () {
+      const draft = GuestFormDraft(displayName: '  Alice   Wong ');
+      const existingGuest = EventGuestRecord(
+        id: 'gst_01',
+        eventId: 'evt_01',
+        guestProfileId: 'prf_01',
+        displayName: 'ALICE WONG',
+        normalizedName: 'alice wong',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.unpaid,
+        coverAmountCents: 0,
+        isComped: false,
+        hasScoredPlay: false,
+      );
+
+      final duplicate = draft.duplicateNameMatch(const [existingGuest]);
+
+      expect(duplicate, same(existingGuest));
+    });
+
+    test('ignores the edited guest when matching duplicate names', () {
+      const draft = GuestFormDraft(displayName: 'Alice Wong');
+      const existingGuest = EventGuestRecord(
+        id: 'gst_01',
+        eventId: 'evt_01',
+        guestProfileId: 'prf_01',
+        displayName: 'Alice Wong',
+        normalizedName: 'alice wong',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.unpaid,
+        coverAmountCents: 0,
+        isComped: false,
+        hasScoredPlay: false,
+      );
+
+      final duplicate = draft.duplicateNameMatch(
+        const [existingGuest],
+        excludeGuestId: 'gst_01',
+      );
+
+      expect(duplicate, isNull);
     });
   });
 }

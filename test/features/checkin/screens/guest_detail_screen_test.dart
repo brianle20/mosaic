@@ -28,6 +28,7 @@ class _FakeGuestRepository implements GuestRepository {
       guest: EventGuestRecord(
         id: detail.guest.id,
         eventId: detail.guest.eventId,
+        guestProfileId: detail.guest.guestProfileId,
         displayName: detail.guest.displayName,
         normalizedName: detail.guest.normalizedName,
         phoneE164: detail.guest.phoneE164,
@@ -67,6 +68,7 @@ class _FakeGuestRepository implements GuestRepository {
       guest: EventGuestRecord(
         id: detail.guest.id,
         eventId: detail.guest.eventId,
+        guestProfileId: detail.guest.guestProfileId,
         displayName: detail.guest.displayName,
         normalizedName: detail.guest.normalizedName,
         phoneE164: detail.guest.phoneE164,
@@ -89,6 +91,12 @@ class _FakeGuestRepository implements GuestRepository {
   Future<EventGuestRecord> createGuest(CreateGuestInput input) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<GuestProfileMatch>> findGuestProfileMatches(
+    GuestProfileLookupInput input,
+  ) async =>
+      const [];
 
   @override
   Future<GuestDetailRecord?> getGuestDetail(String guestId) async => detail;
@@ -160,6 +168,7 @@ class _FakeGuestRepository implements GuestRepository {
       guest: EventGuestRecord(
         id: detail.guest.id,
         eventId: detail.guest.eventId,
+        guestProfileId: detail.guest.guestProfileId,
         displayName: detail.guest.displayName,
         normalizedName: detail.guest.normalizedName,
         phoneE164: detail.guest.phoneE164,

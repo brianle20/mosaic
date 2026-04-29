@@ -63,6 +63,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       arguments: GuestRosterArgs(
         eventId: event.id,
         eventTitle: event.title,
+        eventCoverChargeCents: event.coverChargeCents,
       ),
     );
   }

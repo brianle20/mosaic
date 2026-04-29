@@ -68,6 +68,10 @@ abstract interface class GuestRepository {
 
   Future<GuestDetailRecord?> getGuestDetail(String guestId);
 
+  Future<List<GuestProfileMatch>> findGuestProfileMatches(
+    GuestProfileLookupInput input,
+  );
+
   Future<EventGuestRecord> createGuest(CreateGuestInput input);
 
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input);

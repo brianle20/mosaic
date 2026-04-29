@@ -16,12 +16,14 @@ class GuestRosterScreen extends StatefulWidget {
     super.key,
     required this.eventId,
     required this.eventTitle,
+    required this.eventCoverChargeCents,
     required this.guestRepository,
     required this.nfcService,
   });
 
   final String eventId;
   final String eventTitle;
+  final int eventCoverChargeCents;
   final GuestRepository guestRepository;
   final NfcService nfcService;
 
@@ -60,6 +62,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       arguments: GuestFormArgs(
         eventId: widget.eventId,
         existingGuests: _controller.guests,
+        defaultCoverAmountCents: widget.eventCoverChargeCents,
       ),
     );
     await _controller.load(widget.eventId);

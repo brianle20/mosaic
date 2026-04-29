@@ -87,6 +87,7 @@ class AppRouter {
           builder: (_) => GuestRosterScreen(
             eventId: args.eventId,
             eventTitle: args.eventTitle,
+            eventCoverChargeCents: args.eventCoverChargeCents,
             guestRepository: guestRepository,
             nfcService: nfcService,
           ),
@@ -98,6 +99,7 @@ class AppRouter {
           builder: (_) => GuestFormScreen(
             eventId: args.eventId,
             existingGuests: args.existingGuests,
+            defaultCoverAmountCents: args.defaultCoverAmountCents,
             initialGuest: args.initialGuest,
             guestRepository: guestRepository,
           ),
@@ -220,21 +222,25 @@ class GuestRosterArgs {
   const GuestRosterArgs({
     required this.eventId,
     required this.eventTitle,
+    required this.eventCoverChargeCents,
   });
 
   final String eventId;
   final String eventTitle;
+  final int eventCoverChargeCents;
 }
 
 class GuestFormArgs {
   const GuestFormArgs({
     required this.eventId,
     required this.existingGuests,
+    required this.defaultCoverAmountCents,
     this.initialGuest,
   });
 
   final String eventId;
   final List<EventGuestRecord> existingGuests;
+  final int defaultCoverAmountCents;
   final EventGuestRecord? initialGuest;
 }
 

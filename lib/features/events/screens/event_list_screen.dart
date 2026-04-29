@@ -45,8 +45,13 @@ class _EventListScreenState extends State<EventListScreen> {
     }
   }
 
-  void _openCreateEvent() {
-    Navigator.of(context).pushNamed(AppRouter.createEventRoute);
+  Future<void> _openCreateEvent() async {
+    await Navigator.of(context).pushNamed(AppRouter.createEventRoute);
+    if (!mounted) {
+      return;
+    }
+
+    await _controller.load();
   }
 
   Future<void> _openEvent(EventRecord event) async {
@@ -63,6 +68,97 @@ class _EventListScreenState extends State<EventListScreen> {
 
   Future<void> _signOut() async {
     await widget.onSignOut?.call();
+  }
+
+  String _eventPhaseLabel(EventLifecycleStatus status) {
+    return switch (status) {
+      EventLifecycleStatus.draft => 'Ready to Start',
+      EventLifecycleStatus.active => 'In Progress',
+      EventLifecycleStatus.completed => 'Completed',
+      EventLifecycleStatus.finalized => 'Finalized',
+      EventLifecycleStatus.cancelled => 'Cancelled',
+    };
+  }
+
+  String _formatTileStart(DateTime startsAt) {
+    final localStartsAt = startsAt.toLocal();
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final month = months[localStartsAt.month - 1];
+    final hour = localStartsAt.hour;
+    final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+    final minute = localStartsAt.minute.toString().padLeft(2, '0');
+    final meridiem = hour < 12 ? 'AM' : 'PM';
+
+    return '$month ${localStartsAt.day}, $displayHour:$minute $meridiem';
+  }
+
+  String? _eventLocation(EventRecord event) {
+    final venueName = event.venueName?.trim();
+    if (venueName != null && venueName.isNotEmpty) {
+      return venueName;
+    }
+
+    final venueAddress = event.venueAddress?.trim();
+    if (venueAddress != null && venueAddress.isNotEmpty) {
+      return venueAddress;
+    }
+
+    return null;
+  }
+
+  Widget _buildEventCard(EventRecord event) {
+    final location = _eventLocation(event);
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openEvent(event),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                event.title,
+                style: textTheme.titleMedium,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${_eventPhaseLabel(event.lifecycleStatus)} • ${_formatTileStart(event.startsAt)}',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (location != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  location,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -94,16 +190,7 @@ class _EventListScreenState extends State<EventListScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            for (final event in _controller.events)
-              Card(
-                child: ListTile(
-                  title: Text(event.title),
-                  subtitle: Text(
-                    '${event.timezone} • ${event.lifecycleStatus.name}',
-                  ),
-                  onTap: () => _openEvent(event),
-                ),
-              ),
+            for (final event in _controller.events) _buildEventCard(event),
             if (_controller.events.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 24),

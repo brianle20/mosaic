@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+
 enum MoneyInputError { invalid, negative, tooManyDecimalPlaces }
 
 class MoneyInputParseResult {
@@ -45,6 +47,35 @@ MoneyInputParseResult parseMoneyAmount(String input) {
   final cents = decimalDigits.padRight(2, '0');
 
   return MoneyInputParseResult.valid(dollars * 100 + int.parse(cents));
+}
+
+String formatMoneyCents(int cents) {
+  final normalizedCents = cents < 0 ? 0 : cents;
+  return '${normalizedCents ~/ 100}.${(normalizedCents % 100).toString().padLeft(2, '0')}';
+}
+
+class MoneyCentsInputFormatter extends TextInputFormatter {
+  const MoneyCentsInputFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final text = newValue.text.trim();
+    if (text.startsWith('-') || RegExp('[A-Za-z]').hasMatch(text)) {
+      return newValue;
+    }
+
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final cents = digits.isEmpty ? 0 : int.parse(digits);
+    final formatted = formatMoneyCents(cents);
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
 }
 
 DateTime defaultEventStartAt(DateTime now) {

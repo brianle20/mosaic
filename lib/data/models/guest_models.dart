@@ -25,6 +25,81 @@ enum CoverEntryMethod {
   refund,
 }
 
+enum GuestProfileMatchType {
+  phone,
+  email,
+  name,
+}
+
+@immutable
+class GuestProfileRecord {
+  const GuestProfileRecord({
+    required this.id,
+    required this.ownerUserId,
+    required this.displayName,
+    required this.normalizedName,
+    this.phoneE164,
+    this.emailLower,
+    this.rowVersion = 1,
+  });
+
+  factory GuestProfileRecord.fromJson(Map<String, dynamic> json) {
+    return GuestProfileRecord(
+      id: _requiredString(json, 'id'),
+      ownerUserId: _requiredString(json, 'owner_user_id'),
+      displayName: _requiredString(json, 'display_name'),
+      normalizedName: _requiredString(json, 'normalized_name'),
+      phoneE164: _optionalString(json, 'phone_e164'),
+      emailLower: _optionalString(json, 'email_lower'),
+      rowVersion: _intOrDefault(json, 'row_version', 1),
+    );
+  }
+
+  final String id;
+  final String ownerUserId;
+  final String displayName;
+  final String normalizedName;
+  final String? phoneE164;
+  final String? emailLower;
+  final int rowVersion;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'owner_user_id': ownerUserId,
+      'display_name': displayName,
+      'normalized_name': normalizedName,
+      'phone_e164': phoneE164,
+      'email_lower': emailLower,
+      'row_version': rowVersion,
+    };
+  }
+}
+
+@immutable
+class GuestProfileMatch {
+  const GuestProfileMatch({
+    required this.profile,
+    required this.matchType,
+  });
+
+  final GuestProfileRecord profile;
+  final GuestProfileMatchType matchType;
+}
+
+@immutable
+class GuestProfileLookupInput {
+  const GuestProfileLookupInput({
+    required this.normalizedName,
+    this.phoneE164,
+    this.emailLower,
+  });
+
+  final String normalizedName;
+  final String? phoneE164;
+  final String? emailLower;
+}
+
 @immutable
 class CreateGuestInput {
   const CreateGuestInput({
@@ -49,9 +124,10 @@ class CreateGuestInput {
   final bool isComped;
   final String? note;
 
-  Map<String, dynamic> toInsertJson() {
+  Map<String, dynamic> toInsertJson({String? guestProfileId}) {
     return {
       'event_id': eventId,
+      if (guestProfileId != null) 'guest_profile_id': guestProfileId,
       'display_name': displayName,
       'normalized_name': normalizedName,
       'phone_e164': phoneE164,
@@ -111,6 +187,7 @@ class EventGuestRecord {
   const EventGuestRecord({
     required this.id,
     required this.eventId,
+    required this.guestProfileId,
     required this.displayName,
     required this.normalizedName,
     required this.attendanceStatus,
@@ -126,13 +203,19 @@ class EventGuestRecord {
   });
 
   factory EventGuestRecord.fromJson(Map<String, dynamic> json) {
+    final profile = _optionalGuestProfile(json);
     return EventGuestRecord(
       id: _requiredString(json, 'id'),
       eventId: _requiredString(json, 'event_id'),
-      displayName: _requiredString(json, 'display_name'),
-      normalizedName: _requiredString(json, 'normalized_name'),
-      phoneE164: _optionalString(json, 'phone_e164'),
-      emailLower: _optionalString(json, 'email_lower'),
+      guestProfileId: _optionalString(json, 'guest_profile_id') ??
+          profile?.id ??
+          _requiredString(json, 'id'),
+      displayName:
+          profile?.displayName ?? _requiredString(json, 'display_name'),
+      normalizedName:
+          profile?.normalizedName ?? _requiredString(json, 'normalized_name'),
+      phoneE164: profile?.phoneE164 ?? _optionalString(json, 'phone_e164'),
+      emailLower: profile?.emailLower ?? _optionalString(json, 'email_lower'),
       attendanceStatus: _attendanceStatusFromJson(
         _requiredString(json, 'attendance_status'),
       ),
@@ -148,6 +231,7 @@ class EventGuestRecord {
 
   final String id;
   final String eventId;
+  final String guestProfileId;
   final String displayName;
   final String normalizedName;
   final String? phoneE164;
@@ -171,6 +255,7 @@ class EventGuestRecord {
     return {
       'id': id,
       'event_id': eventId,
+      'guest_profile_id': guestProfileId,
       'display_name': displayName,
       'normalized_name': normalizedName,
       'phone_e164': phoneE164,
@@ -336,6 +421,23 @@ DateTime _requiredDateTime(Map<String, dynamic> json, String key) {
   }
 
   throw FormatException('Expected ISO-8601 string for $key.');
+}
+
+GuestProfileRecord? _optionalGuestProfile(Map<String, dynamic> json) {
+  final value = json['guest_profile'] ?? json['guest_profiles'];
+  if (value == null) {
+    return null;
+  }
+
+  if (value is Map<String, dynamic>) {
+    return GuestProfileRecord.fromJson(value);
+  }
+
+  if (value is Map) {
+    return GuestProfileRecord.fromJson(value.cast<String, dynamic>());
+  }
+
+  throw FormatException('Expected guest profile row or null.');
 }
 
 AttendanceStatus _attendanceStatusFromJson(String value) {

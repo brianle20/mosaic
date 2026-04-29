@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/features/guests/models/guest_contact_formatters.dart';
 
 @immutable
 class GuestFormDraft {
@@ -35,26 +36,69 @@ class GuestFormDraft {
     return null;
   }
 
+  String? get phoneError {
+    if (phoneE164.trim().isEmpty) {
+      return null;
+    }
+
+    return normalizeUsPhoneToE164(phoneE164) == null
+        ? 'Enter a 10-digit phone number.'
+        : null;
+  }
+
+  String? phoneE164Value() {
+    return normalizeUsPhoneToE164(phoneE164);
+  }
+
+  String? emailLowerValue() {
+    final trimmed = email.trim();
+    return trimmed.isEmpty ? null : trimmed.toLowerCase();
+  }
+
   String normalizedDisplayName() {
     return displayName.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
 
-  String? duplicateNameWarning(Iterable<EventGuestRecord> existingGuests) {
+  EventGuestRecord? duplicateNameMatch(
+    Iterable<EventGuestRecord> existingGuests, {
+    String? excludeGuestId,
+  }) {
     final normalized = normalizedDisplayName();
     if (normalized.isEmpty) {
       return null;
     }
 
     for (final guest in existingGuests) {
+      if (guest.id == excludeGuestId) {
+        continue;
+      }
       if (guest.normalizedName == normalized) {
-        return 'Another guest with this name already exists.';
+        return guest;
       }
     }
 
     return null;
   }
 
-  bool get isValid => displayNameError == null && coverAmountError == null;
+  String? duplicateNameWarning(
+    Iterable<EventGuestRecord> existingGuests, {
+    String? excludeGuestId,
+  }) {
+    final duplicate = duplicateNameMatch(
+      existingGuests,
+      excludeGuestId: excludeGuestId,
+    );
+    if (duplicate == null) {
+      return null;
+    }
+
+    return 'Another guest with this name already exists.';
+  }
+
+  bool get isValid =>
+      displayNameError == null &&
+      phoneError == null &&
+      coverAmountError == null;
 
   CreateGuestInput toCreateInput({required String eventId}) {
     final normalizedName = normalizedDisplayName();
@@ -62,8 +106,8 @@ class GuestFormDraft {
       eventId: eventId,
       displayName: displayName.trim(),
       normalizedName: normalizedName,
-      phoneE164: phoneE164.trim().isEmpty ? null : phoneE164.trim(),
-      emailLower: email.trim().isEmpty ? null : email.trim().toLowerCase(),
+      phoneE164: phoneE164Value(),
+      emailLower: emailLowerValue(),
       coverStatus: coverStatus,
       coverAmountCents: coverAmountCents,
       isComped: coverStatus == CoverStatus.comped,
@@ -81,8 +125,8 @@ class GuestFormDraft {
       eventId: eventId,
       displayName: displayName.trim(),
       normalizedName: normalizedName,
-      phoneE164: phoneE164.trim().isEmpty ? null : phoneE164.trim(),
-      emailLower: email.trim().isEmpty ? null : email.trim().toLowerCase(),
+      phoneE164: phoneE164Value(),
+      emailLower: emailLowerValue(),
       coverStatus: coverStatus,
       coverAmountCents: coverAmountCents,
       isComped: coverStatus == CoverStatus.comped,

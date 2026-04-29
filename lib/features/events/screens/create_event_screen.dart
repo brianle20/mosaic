@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -199,7 +198,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              inputFormatters: const [_MoneyCentsInputFormatter()],
+              inputFormatters: const [MoneyCentsInputFormatter()],
               decoration: const InputDecoration(
                 labelText: 'Cover Charge',
                 prefixText: r'$',
@@ -213,7 +212,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              inputFormatters: const [_MoneyCentsInputFormatter()],
+              inputFormatters: const [MoneyCentsInputFormatter()],
               decoration: const InputDecoration(
                 labelText: 'Prize Budget',
                 prefixText: r'$',
@@ -228,31 +227,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _MoneyCentsInputFormatter extends TextInputFormatter {
-  const _MoneyCentsInputFormatter();
-
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final text = newValue.text.trim();
-    if (text.startsWith('-') || RegExp('[A-Za-z]').hasMatch(text)) {
-      return newValue;
-    }
-
-    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
-    final cents = digits.isEmpty ? 0 : int.parse(digits);
-    final formatted =
-        '${cents ~/ 100}.${(cents % 100).toString().padLeft(2, '0')}';
-
-    return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

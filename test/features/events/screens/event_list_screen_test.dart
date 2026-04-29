@@ -66,13 +66,43 @@ class _FakeEventRepository implements EventRepository {
   }
 
   @override
-  Future<List<EventRecord>> listEvents() async => events;
+  Future<List<EventRecord>> listEvents() async =>
+      List<EventRecord>.from(events);
 
   @override
-  Future<List<EventRecord>> readCachedEvents() async => events;
+  Future<List<EventRecord>> readCachedEvents() async =>
+      List<EventRecord>.from(events);
 }
 
 void main() {
+  EventRecord eventRecord({
+    required String id,
+    required String title,
+    required String startsAt,
+    required String lifecycleStatus,
+    required String createdAt,
+    String? venueName,
+    String? venueAddress,
+  }) {
+    return EventRecord.fromJson({
+      'id': id,
+      'owner_user_id': 'usr_01',
+      'title': title,
+      'venue_name': venueName,
+      'venue_address': venueAddress,
+      'timezone': 'America/Los_Angeles',
+      'starts_at': startsAt,
+      'lifecycle_status': lifecycleStatus,
+      'checkin_open': false,
+      'scoring_open': false,
+      'cover_charge_cents': 2000,
+      'prize_budget_cents': 50000,
+      'default_ruleset_id': 'HK_STANDARD_V1',
+      'prevailing_wind': 'east',
+      'created_at': createdAt,
+    });
+  }
+
   testWidgets('renders an intentional empty state when no events exist',
       (tester) async {
     await tester.pumpWidget(
@@ -135,6 +165,86 @@ void main() {
     expect(signOutTapped, isTrue);
   });
 
+  testWidgets('sorts newest-created first and shows human tile details',
+      (tester) async {
+    final repository = _FakeEventRepository([
+      eventRecord(
+        id: 'evt_01',
+        title: 'Test Event 1',
+        startsAt: '2026-04-24T19:00:00-07:00',
+        lifecycleStatus: 'cancelled',
+        createdAt: '2026-04-24T17:00:00-07:00',
+      ),
+      eventRecord(
+        id: 'evt_02',
+        title: 'Test Event 2',
+        startsAt: '2026-04-30T00:30:00-07:00',
+        lifecycleStatus: 'draft',
+        createdAt: '2026-04-29T14:40:00-07:00',
+        venueName: 'Green Room',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(eventRepository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(find.text('Test Event 2')).dy,
+      lessThan(tester.getTopLeft(find.text('Test Event 1')).dy),
+    );
+    expect(
+      find.text('Ready to Start • Apr 30, 12:30 AM'),
+      findsOneWidget,
+    );
+    expect(find.text('Green Room'), findsOneWidget);
+    expect(find.text('Cancelled • Apr 24, 7:00 PM'), findsOneWidget);
+    expect(find.text('America/Los_Angeles • draft'), findsNothing);
+    expect(find.text('America/Los_Angeles • cancelled'), findsNothing);
+  });
+
+  testWidgets('event tile content has balanced vertical padding',
+      (tester) async {
+    final repository = _FakeEventRepository([
+      eventRecord(
+        id: 'evt_02',
+        title: 'Test Event 2',
+        startsAt: '2026-04-29T19:00:00-07:00',
+        lifecycleStatus: 'draft',
+        createdAt: '2026-04-29T14:40:00-07:00',
+        venueName: 'Test Venue',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(eventRepository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final cardFinder = find.ancestor(
+      of: find.text('Test Event 2'),
+      matching: find.byType(Card),
+    );
+    final cardTop = tester.getTopLeft(cardFinder).dy;
+    final cardBottom = tester.getBottomRight(cardFinder).dy;
+    final contentTop = tester.getTopLeft(find.text('Test Event 2')).dy;
+    final contentBottom = tester.getBottomRight(find.text('Test Venue')).dy;
+
+    expect(
+      (contentTop - cardTop - (cardBottom - contentBottom)).abs(),
+      lessThanOrEqualTo(4),
+    );
+    expect(
+      find.descendant(of: cardFinder, matching: find.byType(ListTile)),
+      findsNothing,
+    );
+  });
+
   testWidgets('refreshes events after returning from an event dashboard',
       (tester) async {
     final repository = _FakeEventRepository([
@@ -185,5 +295,75 @@ void main() {
 
     expect(find.text('Friday Night Mahjong'), findsNothing);
     expect(find.text('No events yet'), findsOneWidget);
+  });
+
+  testWidgets('refreshes events after returning from create event',
+      (tester) async {
+    final repository = _FakeEventRepository([
+      EventRecord.fromJson(const {
+        'id': 'evt_01',
+        'owner_user_id': 'usr_01',
+        'title': 'Test Event 1',
+        'timezone': 'America/Los_Angeles',
+        'starts_at': '2026-04-24T19:00:00-07:00',
+        'lifecycle_status': 'cancelled',
+        'checkin_open': false,
+        'scoring_open': false,
+        'cover_charge_cents': 2000,
+        'prize_budget_cents': 50000,
+        'default_ruleset_id': 'HK_STANDARD_V1',
+        'prevailing_wind': 'east',
+      }),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(eventRepository: repository),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.createEventRoute) {
+            return MaterialPageRoute<void>(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () {
+                    repository.events.add(
+                      EventRecord.fromJson(const {
+                        'id': 'evt_02',
+                        'owner_user_id': 'usr_01',
+                        'title': 'Test Event 2',
+                        'timezone': 'America/Los_Angeles',
+                        'starts_at': '2026-04-25T19:00:00-07:00',
+                        'lifecycle_status': 'draft',
+                        'checkin_open': false,
+                        'scoring_open': false,
+                        'cover_charge_cents': 2500,
+                        'prize_budget_cents': 50000,
+                        'default_ruleset_id': 'HK_STANDARD_V1',
+                        'prevailing_wind': 'east',
+                      }),
+                    );
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Create and return'),
+                ),
+              ),
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test Event 1'), findsOneWidget);
+    expect(find.text('Test Event 2'), findsNothing);
+
+    await tester.tap(find.text('Create Event'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create and return'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Test Event 1'), findsOneWidget);
+    expect(find.text('Test Event 2'), findsOneWidget);
   });
 }

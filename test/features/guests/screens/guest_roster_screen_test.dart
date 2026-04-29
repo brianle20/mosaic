@@ -59,6 +59,7 @@ class _FakeGuestRepository implements GuestRepository {
     final updatedGuest = EventGuestRecord(
       id: guest.id,
       eventId: guest.eventId,
+      guestProfileId: guest.guestProfileId,
       displayName: guest.displayName,
       normalizedName: guest.normalizedName,
       phoneE164: guest.phoneE164,
@@ -83,6 +84,12 @@ class _FakeGuestRepository implements GuestRepository {
   Future<EventGuestRecord> createGuest(CreateGuestInput input) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<GuestProfileMatch>> findGuestProfileMatches(
+    GuestProfileLookupInput input,
+  ) async =>
+      const [];
 
   @override
   Future<GuestDetailRecord?> getGuestDetail(String guestId) async {
@@ -153,6 +160,7 @@ class _FakeGuestRepository implements GuestRepository {
     final updated = EventGuestRecord(
       id: input.id,
       eventId: input.eventId,
+      guestProfileId: _guestById(input.id).guestProfileId,
       displayName: input.displayName,
       normalizedName: input.normalizedName,
       phoneE164: input.phoneE164,
@@ -242,9 +250,19 @@ EventGuestRecord _guest({
 Widget _buildRosterApp({
   required GuestRepository guestRepository,
   NfcService nfcService = const _FakeNfcService(),
+  int eventCoverChargeCents = 1500,
 }) {
   return MaterialApp(
     onGenerateRoute: (settings) {
+      if (settings.name == AppRouter.guestFormRoute) {
+        final args = settings.arguments as GuestFormArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            body: Text('Default cover: ${args.defaultCoverAmountCents}'),
+          ),
+          settings: settings,
+        );
+      }
       if (settings.name == AppRouter.guestDetailRoute) {
         return MaterialPageRoute<void>(
           builder: (_) =>
@@ -257,6 +275,7 @@ Widget _buildRosterApp({
     home: GuestRosterScreen(
       eventId: 'evt_01',
       eventTitle: 'Friday Night Mahjong',
+      eventCoverChargeCents: eventCoverChargeCents,
       guestRepository: guestRepository,
       nfcService: nfcService,
     ),
@@ -280,6 +299,21 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Add Guest'), findsOneWidget);
+  });
+
+  testWidgets('passes the event cover charge into add guest', (tester) async {
+    await tester.pumpWidget(
+      _buildRosterApp(
+        guestRepository: _FakeGuestRepository(const []),
+        eventCoverChargeCents: 2500,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add Guest'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Default cover: 2500'), findsOneWidget);
   });
 
   testWidgets('renders guests and row-specific quick actions', (tester) async {

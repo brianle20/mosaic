@@ -34,6 +34,12 @@ class _FakeGuestRepository implements GuestRepository {
   }
 
   @override
+  Future<List<GuestProfileMatch>> findGuestProfileMatches(
+    GuestProfileLookupInput input,
+  ) async =>
+      const [];
+
+  @override
   Future<GuestDetailRecord?> getGuestDetail(String guestId) async => null;
 
   @override
