@@ -1084,8 +1084,8 @@ void main() {
 
     expect(find.text(draftEvent.title), findsOneWidget);
     expect(find.text('Event Phase'), findsNothing);
-    expect(find.text('Check-In Closed'), findsOneWidget);
-    expect(find.text('Scoring Closed'), findsOneWidget);
+    expect(find.text('Check-In Not Open'), findsOneWidget);
+    expect(find.text('Scoring Not Open'), findsOneWidget);
     expect(find.text('Open Check-In'), findsOneWidget);
     expect(find.text('Scan Table'), findsNothing);
     expect(find.text('Event options'), findsOneWidget);
@@ -1104,7 +1104,7 @@ void main() {
     expect(find.text(completedEvent.title), findsOneWidget);
     expect(find.text('Event Phase'), findsNothing);
     expect(find.text('Check-In Open'), findsOneWidget);
-    expect(find.text('Scoring Closed'), findsOneWidget);
+    expect(find.text('Scoring Not Open'), findsOneWidget);
     expect(find.text('Finalize Event'), findsOneWidget);
     expect(find.text('Event options'), findsOneWidget);
   });
@@ -1346,7 +1346,7 @@ void main() {
 
     expect(find.text('Event Phase'), findsNothing);
     expect(find.text('Check-In Open'), findsOneWidget);
-    expect(find.text('Scoring Closed'), findsOneWidget);
+    expect(find.text('Scoring Not Open'), findsOneWidget);
     expect(find.text('Close Check-In'), findsNothing);
     expect(find.text('Open Scoring'), findsOneWidget);
   });
@@ -1375,7 +1375,7 @@ void main() {
 
     expect(find.text('Live Operations'), findsOneWidget);
     expect(find.text('Check-In Open'), findsOneWidget);
-    expect(find.text('Scoring Closed'), findsOneWidget);
+    expect(find.text('Scoring Not Open'), findsOneWidget);
     expect(find.text('Close Check-In'), findsNothing);
     expect(find.text('Open Scoring'), findsOneWidget);
 

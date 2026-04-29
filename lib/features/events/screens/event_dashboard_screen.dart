@@ -275,7 +275,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     await _controller.revertToDraft();
   }
 
-  String _flagStatusLabel(bool isOpen) => isOpen ? 'Open' : 'Closed';
+  String _flagStatusLabel(bool isOpen) => isOpen ? 'Open' : 'Not Open';
 
   String _eventPhaseLabel(EventRecord? event) {
     return switch (event?.lifecycleStatus) {
@@ -825,11 +825,11 @@ class _LiveStatusRow extends StatelessWidget {
       children: [
         if (showPhase) StatusChip(label: phaseLabel, tone: phaseTone),
         StatusChip(
-          label: scoringOpen ? 'Scoring Open' : 'Scoring Closed',
+          label: scoringOpen ? 'Scoring Open' : 'Scoring Not Open',
           tone: scoringOpen ? StatusChipTone.success : StatusChipTone.warning,
         ),
         StatusChip(
-          label: checkinOpen ? 'Check-In Open' : 'Check-In Closed',
+          label: checkinOpen ? 'Check-In Open' : 'Check-In Not Open',
           tone: checkinOpen ? StatusChipTone.success : StatusChipTone.warning,
         ),
       ],
