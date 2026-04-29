@@ -22,18 +22,16 @@ void main() {
           expect(functionName, 'create_event_table');
           expect(params['target_event_id'], 'evt_01');
           expect(params['table_label'], 'Table 1');
-          expect(params['table_mode'], 'points');
+          expect(params.containsKey('table_mode'), isFalse);
           return {
             'id': 'tbl_01',
             'event_id': 'evt_01',
             'label': 'Table 1',
-            'mode': 'points',
             'display_order': 1,
             'default_ruleset_id': 'HK_STANDARD_V1',
             'default_rotation_policy_type':
                 'dealer_cycle_return_to_initial_east',
             'default_rotation_policy_config_json': {},
-            'status': 'active',
           };
         },
       );
@@ -42,13 +40,11 @@ void main() {
         const CreateEventTableInput(
           eventId: 'evt_01',
           label: 'Table 1',
-          mode: EventTableMode.points,
           displayOrder: 1,
         ),
       );
 
       expect(created.label, 'Table 1');
-      expect(created.mode, EventTableMode.points);
 
       final cachedTables = await repository.readCachedTables('evt_01');
       expect(cachedTables, hasLength(1));
@@ -64,18 +60,16 @@ void main() {
           expect(functionName, 'update_event_table');
           expect(params['target_event_table_id'], 'tbl_01');
           expect(params['table_label'], 'Table A');
-          expect(params['table_mode'], 'casual');
+          expect(params.containsKey('table_mode'), isFalse);
           return {
             'id': 'tbl_01',
             'event_id': 'evt_01',
             'label': 'Table A',
-            'mode': 'casual',
             'display_order': 2,
             'default_ruleset_id': 'HK_STANDARD_V1',
             'default_rotation_policy_type':
                 'dealer_cycle_return_to_initial_east',
             'default_rotation_policy_config_json': {},
-            'status': 'active',
           };
         },
       );
@@ -85,13 +79,11 @@ void main() {
           id: 'tbl_01',
           eventId: 'evt_01',
           label: 'Table A',
-          mode: EventTableMode.casual,
           displayOrder: 2,
         ),
       );
 
       expect(updated.label, 'Table A');
-      expect(updated.mode, EventTableMode.casual);
     });
 
     test('binds a table tag from the bind_table_tag RPC', () async {

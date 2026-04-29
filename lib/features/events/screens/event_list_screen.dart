@@ -71,10 +71,12 @@ class _EventListScreenState extends State<EventListScreen> {
     await widget.onSignOut?.call();
   }
 
-  String _eventPhaseLabel(EventLifecycleStatus status) {
-    return switch (status) {
-      EventLifecycleStatus.draft => 'Ready to Start',
-      EventLifecycleStatus.active => 'In Progress',
+  String _eventPhaseLabel(EventRecord event) {
+    return switch (event.lifecycleStatus) {
+      EventLifecycleStatus.draft => 'Setup',
+      EventLifecycleStatus.active when event.scoringOpen => 'Scoring Open',
+      EventLifecycleStatus.active when event.checkinOpen => 'Check-In Open',
+      EventLifecycleStatus.active => 'Active',
       EventLifecycleStatus.completed => 'Completed',
       EventLifecycleStatus.finalized => 'Finalized',
       EventLifecycleStatus.cancelled => 'Cancelled',
@@ -116,7 +118,7 @@ class _EventListScreenState extends State<EventListScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                '${_eventPhaseLabel(event.lifecycleStatus)} • ${formatEventTileStart(
+                '${_eventPhaseLabel(event)} • ${formatEventTileStart(
                   event.startsAt,
                   timezone: event.timezone,
                 )}',

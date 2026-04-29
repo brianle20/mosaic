@@ -108,6 +108,7 @@ void main() {
         home: TablesOverviewScreen(
           eventId: 'evt_01',
           eventTitle: 'Friday Night Mahjong',
+          scoringOpen: false,
           tableRepository: _FakeTableRepository(const []),
           sessionRepository: _FakeSessionRepository(const []),
         ),
@@ -117,10 +118,49 @@ void main() {
 
     expect(find.text('No tables yet'), findsOneWidget);
     expect(
-      find.text('Add a points or casual table before starting live seating.'),
+      find.text('Add a table before starting live seating.'),
       findsOneWidget,
     );
     expect(find.text('Add Table'), findsOneWidget);
+  });
+
+  testWidgets('blocks starting a table session while scoring is closed',
+      (tester) async {
+    final tableRepository = _FakeTableRepository([
+      EventTableRecord.fromJson(const {
+        'id': 'tbl_01',
+        'event_id': 'evt_01',
+        'label': 'Table 1',
+        'display_order': 1,
+        'nfc_tag_id': 'tag_01',
+        'default_ruleset_id': 'HK_STANDARD_V1',
+        'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+        'default_rotation_policy_config_json': {},
+      }),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: false,
+          tableRepository: tableRepository,
+          sessionRepository: _FakeSessionRepository(const []),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Open scoring before starting a table session.'),
+      findsOneWidget,
+    );
+
+    final startButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Start Session'),
+    );
+    expect(startButton.onPressed, isNull);
   });
 
   testWidgets('renders table cards and statuses', (tester) async {
@@ -129,24 +169,20 @@ void main() {
         'id': 'tbl_points',
         'event_id': 'evt_01',
         'label': 'Table 1',
-        'mode': 'points',
         'display_order': 1,
         'nfc_tag_id': 'tag_01',
         'default_ruleset_id': 'HK_STANDARD_V1',
         'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'default_rotation_policy_config_json': {},
-        'status': 'active',
       }),
       EventTableRecord.fromJson(const {
         'id': 'tbl_casual',
         'event_id': 'evt_01',
         'label': 'Table 2',
-        'mode': 'casual',
         'display_order': 2,
         'default_ruleset_id': 'HK_STANDARD_V1',
         'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'default_rotation_policy_config_json': {},
-        'status': 'active',
       }),
     ]);
     final sessionRepository = _FakeSessionRepository([
@@ -175,6 +211,7 @@ void main() {
         home: TablesOverviewScreen(
           eventId: 'evt_01',
           eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
           tableRepository: tableRepository,
           sessionRepository: sessionRepository,
         ),
@@ -185,13 +222,15 @@ void main() {
     expect(find.text('Tables'), findsOneWidget);
     expect(find.text('Table 1'), findsOneWidget);
     expect(find.text('Table 2'), findsOneWidget);
-    expect(find.text('Points Table'), findsOneWidget);
-    expect(find.text('Casual Table'), findsOneWidget);
+    expect(find.text('Points Table'), findsNothing);
+    expect(find.text('Casual Table'), findsNothing);
+    expect(find.text('Inactive Table'), findsNothing);
     expect(find.text('Tag Bound'), findsOneWidget);
     expect(find.text('Tag Unbound'), findsOneWidget);
     expect(find.text('Live Session'), findsOneWidget);
     expect(find.text('Unavailable for New Session'), findsOneWidget);
-    expect(find.text('Casual play only'), findsOneWidget);
-    expect(find.text('Start Session'), findsOneWidget);
+    expect(find.text('Casual play only'), findsNothing);
+    expect(find.text('Ready for Seating or Tag Binding'), findsOneWidget);
+    expect(find.text('Start Session'), findsNWidgets(2));
   });
 }

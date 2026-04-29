@@ -28,7 +28,6 @@ class TableFormScreen extends StatefulWidget {
 class _TableFormScreenState extends State<TableFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _labelController;
-  late EventTableMode _mode;
   late final TableFormController _controller;
 
   @override
@@ -37,7 +36,6 @@ class _TableFormScreenState extends State<TableFormScreen> {
     _labelController = TextEditingController(
       text: widget.initialTable?.label ?? '',
     );
-    _mode = widget.initialTable?.mode ?? EventTableMode.points;
     _controller = TableFormController(tableRepository: widget.tableRepository)
       ..addListener(_handleUpdate);
   }
@@ -60,7 +58,6 @@ class _TableFormScreenState extends State<TableFormScreen> {
   TableFormDraft _buildDraft() {
     return TableFormDraft(
       label: _labelController.text,
-      mode: _mode,
     );
   }
 
@@ -111,26 +108,6 @@ class _TableFormScreenState extends State<TableFormScreen> {
               controller: _labelController,
               decoration: const InputDecoration(labelText: 'Label'),
               validator: (_) => _buildDraft().labelError,
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<EventTableMode>(
-              initialValue: _mode,
-              decoration: const InputDecoration(labelText: 'Mode'),
-              items: EventTableMode.values
-                  .map(
-                    (mode) => DropdownMenuItem(
-                      value: mode,
-                      child: Text(mode.name),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() {
-                    _mode = value;
-                  });
-                }
-              },
             ),
             const SizedBox(height: 12),
             const ListTile(

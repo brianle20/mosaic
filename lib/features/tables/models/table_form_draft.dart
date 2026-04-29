@@ -5,11 +5,9 @@ import 'package:mosaic/data/models/table_models.dart';
 class TableFormDraft {
   const TableFormDraft({
     required this.label,
-    required this.mode,
   });
 
   final String label;
-  final EventTableMode mode;
 
   String? get labelError {
     if (label.trim().isEmpty) {
@@ -28,7 +26,6 @@ class TableFormDraft {
     return CreateEventTableInput(
       eventId: eventId,
       label: label.trim(),
-      mode: mode,
       displayOrder: displayOrder,
     );
   }
@@ -42,7 +39,6 @@ class TableFormDraft {
       id: id,
       eventId: eventId,
       label: label.trim(),
-      mode: mode,
       displayOrder: displayOrder,
     );
   }

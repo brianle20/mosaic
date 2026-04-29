@@ -397,11 +397,6 @@ begin
   table_row := app_private.require_owned_table(target_event_table_id);
   perform app_private.require_event_for_scoring(table_row.event_id);
 
-  if table_row.mode <> 'points' then
-    raise exception 'Only points tables can start scored sessions.'
-      using errcode = 'P0001';
-  end if;
-
   if table_row.nfc_tag_id is null then
     raise exception 'A bound table tag is required before starting a session.'
       using errcode = 'P0001';

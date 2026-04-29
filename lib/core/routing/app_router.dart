@@ -123,6 +123,7 @@ class AppRouter {
           builder: (_) => TablesOverviewScreen(
             eventId: args.eventId,
             eventTitle: args.eventTitle,
+            scoringOpen: args.scoringOpen,
             tableRepository: tableRepository,
             sessionRepository: sessionRepository,
           ),
@@ -258,10 +259,12 @@ class TablesOverviewArgs {
   const TablesOverviewArgs({
     required this.eventId,
     required this.eventTitle,
+    required this.scoringOpen,
   });
 
   final String eventId;
   final String eventTitle;
+  final bool scoringOpen;
 }
 
 class ActivityArgs {

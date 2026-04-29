@@ -687,7 +687,8 @@ void main() {
     expect(find.text('Finalize Event'), findsNothing);
   });
 
-  testWidgets('draft event shows Start Event action', (tester) async {
+  testWidgets('draft event shows setup state and open check-in action',
+      (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: EventDashboardScreen(
@@ -703,12 +704,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Start Event'), findsOneWidget);
+    expect(find.text('Open Check-In'), findsOneWidget);
+    expect(find.text('Start Event'), findsNothing);
     expect(find.text('Complete Event'), findsNothing);
     expect(find.text('Event Phase'), findsOneWidget);
-    expect(find.text('Ready to Start'), findsOneWidget);
+    expect(find.text('Setup'), findsOneWidget);
     expect(
-      find.text('Finish setup, then start the event to open check-in.'),
+      find.text(
+          'Finish setup, then open check-in when hosts are ready to receive guests.'),
       findsOneWidget,
     );
   });
@@ -831,8 +834,9 @@ void main() {
     await tester.tap(find.text('Revert'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ready to Start'), findsOneWidget);
-    expect(find.text('Start Event'), findsOneWidget);
+    expect(find.text('Setup'), findsOneWidget);
+    expect(find.text('Open Check-In'), findsOneWidget);
+    expect(find.text('Start Event'), findsNothing);
     expect(find.text('Delete Event'), findsOneWidget);
     expect(find.text('Complete Event'), findsNothing);
   });
@@ -853,14 +857,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Start Event'));
+    await tester.tap(find.text('Open Check-In'));
     await tester.pumpAndSettle();
 
     expect(find.text('Event Phase'), findsOneWidget);
-    expect(find.text('Live Event'), findsOneWidget);
-    expect(find.text('Check-In Open'), findsOneWidget);
+    expect(find.text('Check-In Open'), findsNWidgets(2));
     expect(find.text('Scoring Closed'), findsOneWidget);
-    expect(find.text('Close Check-In'), findsOneWidget);
+    expect(find.text('Close Check-In'), findsNothing);
     expect(find.text('Open Scoring'), findsOneWidget);
   });
 
@@ -887,9 +890,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Live Operations'), findsOneWidget);
-    expect(find.text('Check-In Open'), findsOneWidget);
+    expect(find.text('Check-In Open'), findsNWidgets(2));
     expect(find.text('Scoring Closed'), findsOneWidget);
-    expect(find.text('Close Check-In'), findsOneWidget);
+    expect(find.text('Close Check-In'), findsNothing);
     expect(find.text('Open Scoring'), findsOneWidget);
 
     await tester.drag(find.byType(ListView), const Offset(0, -240));

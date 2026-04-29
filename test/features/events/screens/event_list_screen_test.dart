@@ -84,6 +84,8 @@ void main() {
     String timezone = 'America/Los_Angeles',
     String? venueName,
     String? venueAddress,
+    bool checkinOpen = false,
+    bool scoringOpen = false,
   }) {
     return EventRecord.fromJson({
       'id': id,
@@ -94,8 +96,8 @@ void main() {
       'timezone': timezone,
       'starts_at': startsAt,
       'lifecycle_status': lifecycleStatus,
-      'checkin_open': false,
-      'scoring_open': false,
+      'checkin_open': checkinOpen,
+      'scoring_open': scoringOpen,
       'cover_charge_cents': 2000,
       'default_ruleset_id': 'HK_STANDARD_V1',
       'prevailing_wind': 'east',
@@ -196,7 +198,7 @@ void main() {
       lessThan(tester.getTopLeft(find.text('Test Event 1')).dy),
     );
     expect(
-      find.text('Ready to Start • Apr 30, 12:30 AM'),
+      find.text('Setup • Apr 30, 12:30 AM'),
       findsOneWidget,
     );
     expect(find.text('Green Room'), findsOneWidget);
@@ -224,8 +226,41 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Ready to Start • Apr 30, 5:00 AM'), findsOneWidget);
-    expect(find.text('Ready to Start • Apr 29, 10:00 PM'), findsNothing);
+    expect(find.text('Setup • Apr 30, 5:00 AM'), findsOneWidget);
+    expect(find.text('Setup • Apr 29, 10:00 PM'), findsNothing);
+  });
+
+  testWidgets('event tiles describe active operational state', (tester) async {
+    final repository = _FakeEventRepository([
+      eventRecord(
+        id: 'evt_02',
+        title: 'Check-In Event',
+        startsAt: '2026-04-30T05:00:00Z',
+        lifecycleStatus: 'active',
+        createdAt: '2026-04-29T14:40:00-07:00',
+        checkinOpen: true,
+      ),
+      eventRecord(
+        id: 'evt_03',
+        title: 'Scoring Event',
+        startsAt: '2026-04-30T05:00:00Z',
+        lifecycleStatus: 'active',
+        createdAt: '2026-04-29T14:41:00-07:00',
+        checkinOpen: true,
+        scoringOpen: true,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(eventRepository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Check-In Open • Apr 29, 10:00 PM'), findsOneWidget);
+    expect(find.text('Scoring Open • Apr 29, 10:00 PM'), findsOneWidget);
+    expect(find.textContaining('In Progress'), findsNothing);
   });
 
   testWidgets('event tile content has balanced vertical padding',

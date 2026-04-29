@@ -19,7 +19,6 @@ class _RecordingTableRepository implements TableRepository {
       'id': tableId,
       'event_id': 'evt_01',
       'label': 'Table 1',
-      'mode': 'points',
       'display_order': 1,
       'nfc_tag_id': 'tag_01',
       'default_ruleset_id': 'HK_STANDARD_V1',
@@ -37,7 +36,6 @@ class _RecordingTableRepository implements TableRepository {
       'id': 'tbl_01',
       'event_id': input.eventId,
       'label': input.label,
-      'mode': input.mode.name,
       'display_order': input.displayOrder,
       'default_ruleset_id': input.defaultRulesetId,
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
@@ -103,6 +101,10 @@ void main() {
     await tester.tap(find.text('Save Table'));
     await tester.pump();
     expect(find.text('Table label is required.'), findsOneWidget);
+    expect(find.text('Mode'), findsNothing);
+    expect(find.text('points'), findsNothing);
+    expect(find.text('casual'), findsNothing);
+    expect(find.text('inactive'), findsNothing);
 
     await tester.enterText(find.byType(TextFormField).first, 'Table 1');
     await tester.ensureVisible(find.text('Save Table'));
@@ -110,7 +112,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.created, isNotNull);
-    expect(repository.created!.mode, EventTableMode.points);
     expect(savedTable, isNotNull);
   });
 
@@ -128,7 +129,6 @@ void main() {
             'id': 'tbl_01',
             'event_id': 'evt_01',
             'label': 'Table 1',
-            'mode': 'points',
             'display_order': 1,
             'default_ruleset_id': 'HK_STANDARD_V1',
             'default_rotation_policy_type':

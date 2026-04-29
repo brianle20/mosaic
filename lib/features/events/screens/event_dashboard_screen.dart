@@ -83,6 +83,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       arguments: TablesOverviewArgs(
         eventId: event.id,
         eventTitle: event.title,
+        scoringOpen: event.scoringOpen,
       ),
     );
   }
@@ -222,10 +223,14 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
   String _flagStatusLabel(bool isOpen) => isOpen ? 'Open' : 'Closed';
 
-  String _eventPhaseLabel(EventLifecycleStatus? status) {
-    return switch (status) {
-      EventLifecycleStatus.draft => 'Ready to Start',
-      EventLifecycleStatus.active => 'Live Event',
+  String _eventPhaseLabel(EventRecord? event) {
+    return switch (event?.lifecycleStatus) {
+      EventLifecycleStatus.draft => 'Setup',
+      EventLifecycleStatus.active when event?.scoringOpen == true =>
+        'Scoring Open',
+      EventLifecycleStatus.active when event?.checkinOpen == true =>
+        'Check-In Open',
+      EventLifecycleStatus.active => 'Active',
       EventLifecycleStatus.completed => 'Review Before Finalizing',
       EventLifecycleStatus.finalized => 'Results Locked',
       EventLifecycleStatus.cancelled => 'Cancelled',
@@ -251,7 +256,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
   String _formatLifecycleMessage(EventLifecycleStatus? lifecycleStatus) {
     return switch (lifecycleStatus) {
       EventLifecycleStatus.draft =>
-        'Finish setup, then start the event to open check-in.',
+        'Finish setup, then open check-in when hosts are ready to receive guests.',
       EventLifecycleStatus.active =>
         'Use the live operations controls to open or close check-in and scoring during the event.',
       EventLifecycleStatus.completed =>
@@ -309,7 +314,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             ),
             const SizedBox(height: 8),
             StatusChip(
-              label: _eventPhaseLabel(lifecycleStatus),
+              label: _eventPhaseLabel(event),
               tone: _eventPhaseTone(lifecycleStatus),
             ),
             const SizedBox(height: 8),
@@ -369,7 +374,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                     onPressed: _controller.isSubmittingLifecycle
                         ? null
                         : () => _controller.startEvent(),
-                    child: const Text('Start Event'),
+                    child: const Text('Open Check-In'),
                   ),
                 if (lifecycleStatus == EventLifecycleStatus.active)
                   FilledButton(
@@ -438,20 +443,18 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      OutlinedButton(
-                        onPressed: _controller.isSubmittingLifecycle
-                            ? null
-                            : () => _controller.setOperationalFlags(
-                                  checkinOpen: !event.checkinOpen,
-                                  scoringOpen: event.scoringOpen,
-                                ),
-                        child: Text(
-                          event.checkinOpen
-                              ? 'Close Check-In'
-                              : 'Open Check-In',
+                      if (!event.checkinOpen) ...[
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                          onPressed: _controller.isSubmittingLifecycle
+                              ? null
+                              : () => _controller.setOperationalFlags(
+                                    checkinOpen: true,
+                                    scoringOpen: event.scoringOpen,
+                                  ),
+                          child: const Text('Open Check-In'),
                         ),
-                      ),
+                      ],
                       const SizedBox(height: 8),
                       OutlinedButton(
                         onPressed: _controller.isSubmittingLifecycle

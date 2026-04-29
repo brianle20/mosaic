@@ -1,110 +1,41 @@
--- Mosaic MVP tables and session start
--- Checklist:
---   [x] add table ownership helper
---   [x] add table-tag registration helper
---   [x] add event table create/update RPCs
---   [x] add table-tag binding RPC
---   [x] add scored session start RPC
---   [x] audit table and session operations
+-- Keep tables as physical seating locations; session mode belongs on future sessions.
 
-create or replace function app_private.require_owned_table(
-  target_event_table_id uuid
-)
-returns public.event_tables
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  table_row public.event_tables%rowtype;
+do $$
 begin
-  select event_table.*
-  into table_row
-  from public.event_tables as event_table
-  join public.events as event
-    on event.id = event_table.event_id
-  where event_table.id = target_event_table_id
-    and event.owner_user_id = auth.uid()
-  for update;
-
-  if not found then
-    raise exception 'Table not found for current host.'
-      using errcode = 'P0001';
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'event_tables'
+      and column_name = 'mode'
+  ) then
+    execute 'alter table public.event_tables drop constraint if exists event_tables_mode_check';
+    execute 'alter table public.event_tables drop column mode';
   end if;
-
-  return table_row;
 end;
 $$;
 
-create or replace function app_private.ensure_table_tag(
-  scanned_uid text,
-  scanned_display_label text default null
-)
-returns public.nfc_tags
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  normalized_uid text;
-  tag_row public.nfc_tags%rowtype;
-begin
-  normalized_uid := app_private.normalize_tag_uid(scanned_uid);
+alter table public.event_tables
+  drop column if exists status;
 
-  if normalized_uid = '' then
-    raise exception 'Table tag UID is required.'
-      using errcode = 'P0001';
-  end if;
+drop function if exists public.create_event_table(
+  uuid,
+  text,
+  integer,
+  text,
+  text,
+  jsonb
+);
 
-  select *
-  into tag_row
-  from public.nfc_tags
-  where uid_hex = normalized_uid
-  for update;
-
-  if not found then
-    insert into public.nfc_tags (
-      uid_hex,
-      uid_fingerprint,
-      default_tag_type,
-      display_label,
-      status,
-      first_seen_at,
-      last_seen_at
-    )
-    values (
-      normalized_uid,
-      normalized_uid,
-      'table',
-      scanned_display_label,
-      'active',
-      now(),
-      now()
-    )
-    returning *
-    into tag_row;
-
-    return tag_row;
-  end if;
-
-  if tag_row.default_tag_type = 'player' then
-    raise exception 'A player tag cannot be rebound as a table tag.'
-      using errcode = 'P0001';
-  end if;
-
-  update public.nfc_tags
-  set
-    default_tag_type = 'table',
-    display_label = coalesce(scanned_display_label, display_label),
-    last_seen_at = now(),
-    updated_at = now()
-  where id = tag_row.id
-  returning *
-  into tag_row;
-
-  return tag_row;
-end;
-$$;
+drop function if exists public.create_event_table(
+  uuid,
+  text,
+  text,
+  integer,
+  text,
+  text,
+  jsonb
+);
 
 create or replace function public.create_event_table(
   target_event_id uuid,
@@ -159,6 +90,19 @@ begin
 end;
 $$;
 
+drop function if exists public.update_event_table(
+  uuid,
+  text,
+  integer
+);
+
+drop function if exists public.update_event_table(
+  uuid,
+  text,
+  text,
+  integer
+);
+
 create or replace function public.update_event_table(
   target_event_table_id uuid,
   table_label text,
@@ -190,58 +134,6 @@ begin
     'update',
     to_jsonb(existing_table),
     to_jsonb(updated_table)
-  );
-
-  return updated_table;
-end;
-$$;
-
-create or replace function public.bind_table_tag(
-  target_event_table_id uuid,
-  scanned_uid text,
-  scanned_display_label text default null
-)
-returns public.event_tables
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  existing_table public.event_tables%rowtype;
-  updated_table public.event_tables%rowtype;
-  tag_row public.nfc_tags%rowtype;
-begin
-  existing_table := app_private.require_owned_table(target_event_table_id);
-  tag_row := app_private.ensure_table_tag(scanned_uid, scanned_display_label);
-
-  if exists (
-    select 1
-    from public.event_tables as other_table
-    where other_table.event_id = existing_table.event_id
-      and other_table.nfc_tag_id = tag_row.id
-      and other_table.id <> existing_table.id
-  ) then
-    raise exception 'That table tag is already bound to another table in this event.'
-      using errcode = 'P0001';
-  end if;
-
-  update public.event_tables
-  set nfc_tag_id = tag_row.id
-  where id = existing_table.id
-  returning *
-  into updated_table;
-
-  perform app_private.insert_audit_log(
-    updated_table.event_id,
-    'event_table',
-    updated_table.id::text,
-    'bind_table_tag',
-    to_jsonb(existing_table),
-    to_jsonb(updated_table),
-    jsonb_build_object(
-      'nfc_tag_id', tag_row.id,
-      'uid_hex', tag_row.uid_hex
-    )
   );
 
   return updated_table;
@@ -473,3 +365,5 @@ begin
   return session_row;
 end;
 $$;
+
+select pg_notify('pgrst', 'reload schema');

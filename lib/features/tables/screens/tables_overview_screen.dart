@@ -13,12 +13,14 @@ class TablesOverviewScreen extends StatefulWidget {
     super.key,
     required this.eventId,
     required this.eventTitle,
+    required this.scoringOpen,
     required this.tableRepository,
     required this.sessionRepository,
   });
 
   final String eventId;
   final String eventTitle;
+  final bool scoringOpen;
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
 
@@ -146,12 +148,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                         runSpacing: 8,
                         children: [
                           StatusChip(
-                            label: _modeLabel(table.mode),
-                            tone: table.mode == EventTableMode.points
-                                ? StatusChipTone.success
-                                : StatusChipTone.neutral,
-                          ),
-                          StatusChip(
                             label: table.nfcTagId == null
                                 ? 'Tag Unbound'
                                 : 'Tag Bound',
@@ -191,11 +187,12 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                             onPressed: () => _openEditTable(table),
                             child: const Text('Bind Table Tag'),
                           ),
-                          if (table.mode == EventTableMode.points)
-                            FilledButton(
-                              onPressed: () => _openStartSession(table),
-                              child: const Text('Start Session'),
-                            ),
+                          FilledButton(
+                            onPressed: _canStartSession(table)
+                                ? () => _openStartSession(table)
+                                : null,
+                            child: const Text('Start Session'),
+                          ),
                         ],
                       ),
                     ],
@@ -208,22 +205,13 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 child: EmptyStateCard(
                   icon: Icons.table_restaurant,
                   title: 'No tables yet',
-                  message:
-                      'Add a points or casual table before starting live seating.',
+                  message: 'Add a table before starting live seating.',
                 ),
               ),
           ],
         ),
       ),
     );
-  }
-
-  String _modeLabel(EventTableMode mode) {
-    return switch (mode) {
-      EventTableMode.points => 'Points Table',
-      EventTableMode.casual => 'Casual Table',
-      EventTableMode.inactive => 'Inactive Table',
-    };
   }
 
   String _tableSummary(EventTableRecord table) {
@@ -233,15 +221,18 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     if (hasLiveSession) {
       return 'Unavailable for New Session';
     }
-    if (table.mode == EventTableMode.points && table.nfcTagId == null) {
+    if (table.nfcTagId == null) {
       return 'Ready for Seating or Tag Binding';
     }
-    if (table.mode == EventTableMode.points) {
-      return 'Ready to Start a Session';
+    if (!widget.scoringOpen) {
+      return 'Open scoring before starting a table session.';
     }
-    if (table.mode == EventTableMode.casual) {
-      return 'Casual play only';
-    }
-    return 'Inactive for this event';
+    return 'Ready to Start a Session';
+  }
+
+  bool _canStartSession(EventTableRecord table) {
+    return widget.scoringOpen &&
+        table.nfcTagId != null &&
+        !_controller.activeSessionsByTableId.containsKey(table.id);
   }
 }

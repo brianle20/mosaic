@@ -258,27 +258,26 @@ void main() {
   });
 
   group('EventTableRecord', () {
-    test('parses table defaults and optional bound tag id', () {
+    test('parses table defaults without host-facing mode or status', () {
       final table = EventTableRecord.fromJson(const {
         'id': 'tbl_01',
         'event_id': 'evt_01',
         'label': 'Table 1',
-        'mode': 'points',
         'display_order': 1,
         'nfc_tag_id': 'tag_table_01',
         'default_ruleset_id': 'HK_STANDARD_V1',
         'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'default_rotation_policy_config_json': {},
-        'status': 'active',
       });
 
-      expect(table.mode, EventTableMode.points);
       expect(table.defaultRulesetId, 'HK_STANDARD_V1');
       expect(
         table.defaultRotationPolicyType,
         RotationPolicyType.dealerCycleReturnToInitialEast,
       );
       expect(table.nfcTagId, 'tag_table_01');
+      expect(table.toJson().containsKey('mode'), isFalse);
+      expect(table.toJson().containsKey('status'), isFalse);
     });
   });
 

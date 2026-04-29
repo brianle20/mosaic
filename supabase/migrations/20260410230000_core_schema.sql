@@ -174,15 +174,12 @@ create table public.event_tables (
   id uuid primary key default gen_random_uuid(),
   event_id uuid not null references public.events(id) on delete cascade,
   label text not null,
-  mode text not null check (mode in ('points', 'casual', 'inactive')),
   display_order integer not null default 0,
   nfc_tag_id uuid references public.nfc_tags(id) on delete set null,
   default_ruleset_id text not null default 'HK_STANDARD_V1'
     references public.rulesets(id),
   default_rotation_policy_type text not null default 'dealer_cycle_return_to_initial_east',
   default_rotation_policy_config_json jsonb not null default '{}'::jsonb,
-  status text not null default 'active'
-    check (status in ('active', 'inactive')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

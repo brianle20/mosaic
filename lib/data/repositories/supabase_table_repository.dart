@@ -47,7 +47,6 @@ class SupabaseTableRepository implements TableRepository {
       {
         'target_event_id': input.eventId,
         'table_label': input.label,
-        'table_mode': _tableModeToJson(input.mode),
         'table_display_order': input.displayOrder,
         'target_default_ruleset_id': input.defaultRulesetId,
         'target_default_rotation_policy_type':
@@ -90,7 +89,6 @@ class SupabaseTableRepository implements TableRepository {
       {
         'target_event_table_id': input.id,
         'table_label': input.label,
-        'table_mode': _tableModeToJson(input.mode),
         'table_display_order': input.displayOrder,
       },
     );
@@ -137,14 +135,6 @@ class SupabaseTableRepository implements TableRepository {
       });
     await cache.saveTables(eventId, mergedTables);
   }
-}
-
-String _tableModeToJson(EventTableMode value) {
-  return switch (value) {
-    EventTableMode.points => 'points',
-    EventTableMode.casual => 'casual',
-    EventTableMode.inactive => 'inactive',
-  };
 }
 
 String _rotationPolicyToJson(RotationPolicyType value) {
