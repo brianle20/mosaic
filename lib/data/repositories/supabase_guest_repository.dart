@@ -106,10 +106,18 @@ class SupabaseGuestRepository implements GuestRepository {
     String guestId,
   ) async {
     final rows = await _loadCoverEntries(guestId);
-    final entries = rows
-        .map(GuestCoverEntryRecord.fromJson)
-        .toList(growable: false)
-      ..sort((left, right) => right.recordedAt.compareTo(left.recordedAt));
+    final entries =
+        rows.map(GuestCoverEntryRecord.fromJson).toList(growable: false)
+          ..sort((left, right) {
+            final transactionComparison =
+                right.transactionOn.compareTo(left.transactionOn);
+            if (transactionComparison != 0) {
+              return transactionComparison;
+            }
+            return (right.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                .compareTo(
+                    left.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0));
+          });
     await cache.saveGuestCoverEntries(guestId, entries);
     return entries;
   }
@@ -232,17 +240,35 @@ class SupabaseGuestRepository implements GuestRepository {
     required String guestId,
     required int amountCents,
     required CoverEntryMethod method,
+    required DateTime transactionOn,
     String? note,
   }) async {
-    await _runRpcSingle(
-      'record_cover_entry',
-      {
-        'target_event_guest_id': guestId,
-        'target_amount_cents': amountCents,
-        'target_method': _coverEntryMethodName(method),
-        'target_note': note,
-      },
-    );
+    try {
+      await _runRpcSingle(
+        'record_cover_entry',
+        {
+          'target_event_guest_id': guestId,
+          'target_amount_cents': amountCents,
+          'target_method': _coverEntryMethodName(method),
+          'target_transaction_on': _dateToJson(transactionOn),
+          'target_note': note,
+        },
+      );
+    } catch (exception) {
+      if (!_shouldUseFallback(exception, 'record_cover_entry')) {
+        rethrow;
+      }
+
+      await _runRpcSingle(
+        'record_cover_entry',
+        {
+          'target_event_guest_id': guestId,
+          'target_amount_cents': amountCents,
+          'target_method': _coverEntryMethodName(method),
+          'target_note': note,
+        },
+      );
+    }
 
     final detail = await getGuestDetail(guestId);
     if (detail == null) {
@@ -401,6 +427,16 @@ class SupabaseGuestRepository implements GuestRepository {
     final userId = _currentUserId();
     if (userId == null) {
       throw StateError('A signed-in host is required to add a guest.');
+    }
+
+    if (input.guestProfileId case final guestProfileId?) {
+      final row = await client
+          .from('guest_profiles')
+          .select()
+          .eq('owner_user_id', userId)
+          .eq('id', guestProfileId)
+          .single();
+      return GuestProfileRecord.fromJson(row);
     }
 
     final phoneProfile = input.phoneE164 == null
@@ -686,11 +722,25 @@ class SupabaseGuestRepository implements GuestRepository {
         rethrow;
       }
 
-      final rows = await client
-          .from('guest_cover_entries')
-          .select()
-          .eq('event_guest_id', guestId)
-          .order('recorded_at', ascending: false);
+      late final List rows;
+      try {
+        rows = await client
+            .from('guest_cover_entries')
+            .select()
+            .eq('event_guest_id', guestId)
+            .order('transaction_on', ascending: false)
+            .order('created_at', ascending: false);
+      } catch (tableException) {
+        if (!tableException.toString().contains('transaction_on')) {
+          rethrow;
+        }
+        rows = await client
+            .from('guest_cover_entries')
+            .select()
+            .eq('event_guest_id', guestId)
+            .order('recorded_at', ascending: false)
+            .order('created_at', ascending: false);
+      }
       return rows
           .map((row) => (row as Map).cast<String, dynamic>())
           .toList(growable: false);
@@ -772,6 +822,12 @@ class SupabaseGuestRepository implements GuestRepository {
       case CoverEntryMethod.refund:
         return 'refund';
     }
+  }
+
+  String _dateToJson(DateTime value) {
+    return '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
   }
 
   Future<void> _assignGuestTagFallback({

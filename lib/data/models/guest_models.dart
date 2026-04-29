@@ -119,12 +119,14 @@ class CreateGuestInput {
     this.phoneE164,
     this.emailLower,
     this.instagramHandle,
+    this.guestProfileId,
     this.note,
   });
 
   final String eventId;
   final String displayName;
   final String normalizedName;
+  final String? guestProfileId;
   final String? phoneE164;
   final String? emailLower;
   final String? instagramHandle;
@@ -134,9 +136,11 @@ class CreateGuestInput {
   final String? note;
 
   Map<String, dynamic> toInsertJson({String? guestProfileId}) {
+    final resolvedGuestProfileId = guestProfileId ?? this.guestProfileId;
     return {
       'event_id': eventId,
-      if (guestProfileId != null) 'guest_profile_id': guestProfileId,
+      if (resolvedGuestProfileId != null)
+        'guest_profile_id': resolvedGuestProfileId,
       'display_name': displayName,
       'normalized_name': normalizedName,
       'phone_e164': phoneE164,
@@ -312,7 +316,7 @@ class GuestCoverEntryRecord {
     required this.amountCents,
     required this.method,
     required this.recordedByUserId,
-    required this.recordedAt,
+    required this.transactionOn,
     this.note,
     this.createdAt,
   });
@@ -325,7 +329,7 @@ class GuestCoverEntryRecord {
       amountCents: _requiredInt(json, 'amount_cents'),
       method: _coverEntryMethodFromJson(_requiredString(json, 'method')),
       recordedByUserId: _requiredString(json, 'recorded_by_user_id'),
-      recordedAt: _requiredDateTime(json, 'recorded_at'),
+      transactionOn: _coverEntryTransactionDate(json),
       note: _optionalString(json, 'note'),
       createdAt: _optionalDateTime(json, 'created_at'),
     );
@@ -337,7 +341,7 @@ class GuestCoverEntryRecord {
   final int amountCents;
   final CoverEntryMethod method;
   final String recordedByUserId;
-  final DateTime recordedAt;
+  final DateTime transactionOn;
   final String? note;
   final DateTime? createdAt;
 
@@ -349,11 +353,46 @@ class GuestCoverEntryRecord {
       'amount_cents': amountCents,
       'method': _coverEntryMethodToJson(method),
       'recorded_by_user_id': recordedByUserId,
-      'recorded_at': recordedAt.toIso8601String(),
+      'transaction_on': _dateToJson(transactionOn),
       'note': note,
       'created_at': createdAt?.toIso8601String(),
     };
   }
+}
+
+DateTime _coverEntryTransactionDate(Map<String, dynamic> json) {
+  if (json['transaction_on'] != null) {
+    return _requiredDate(json, 'transaction_on');
+  }
+
+  final recordedAt = _optionalDateTime(json, 'recorded_at');
+  if (recordedAt == null) {
+    throw const FormatException(
+      'Expected transaction_on date or recorded_at timestamp.',
+    );
+  }
+
+  return DateTime(recordedAt.year, recordedAt.month, recordedAt.day);
+}
+
+DateTime _requiredDate(Map<String, dynamic> json, String key) {
+  final value = _requiredString(json, key);
+  final parts = value.split('-');
+  if (parts.length != 3) {
+    throw FormatException('Expected $key to be a date in yyyy-MM-dd format.');
+  }
+
+  return DateTime(
+    int.parse(parts[0]),
+    int.parse(parts[1]),
+    int.parse(parts[2]),
+  );
+}
+
+String _dateToJson(DateTime value) {
+  return '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
 }
 
 String _requiredString(Map<String, dynamic> json, String key) {
@@ -428,15 +467,6 @@ DateTime? _optionalDateTime(Map<String, dynamic> json, String key) {
   }
 
   throw FormatException('Expected ISO-8601 string or null for $key.');
-}
-
-DateTime _requiredDateTime(Map<String, dynamic> json, String key) {
-  final value = _optionalDateTime(json, key);
-  if (value != null) {
-    return value;
-  }
-
-  throw FormatException('Expected ISO-8601 string for $key.');
 }
 
 GuestProfileRecord? _optionalGuestProfile(Map<String, dynamic> json) {

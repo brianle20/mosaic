@@ -295,7 +295,33 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
       CoverEntryMethod.comp => 'Comp',
       CoverEntryMethod.refund => 'Refund',
     };
-    return '$methodLabel ${entry.amountCents}';
+    return '$methodLabel \$${_formatMoneyCents(entry.amountCents)} - '
+        '${_formatDate(entry.transactionOn)}';
+  }
+
+  String _formatMoneyCents(int cents) {
+    final absoluteCents = cents.abs();
+    final formatted =
+        '${absoluteCents ~/ 100}.${(absoluteCents % 100).toString().padLeft(2, '0')}';
+    return cents < 0 ? '-$formatted' : formatted;
+  }
+
+  String _formatDate(DateTime value) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[value.month - 1]} ${value.day}, ${value.year}';
   }
 
   String _attendanceLabel(AttendanceStatus status) {

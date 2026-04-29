@@ -147,12 +147,17 @@ class GuestRosterController extends ChangeNotifier {
   }) async {
     await _runGuestAction(
       guestId,
-      () => _guestRepository.recordCoverEntry(
-        guestId: guestId,
-        amountCents: input.amountCents,
-        method: input.method,
-        note: input.note,
-      ),
+      () async {
+        final detail = await _guestRepository.recordCoverEntry(
+          guestId: guestId,
+          amountCents: input.amountCents,
+          method: input.method,
+          transactionOn: input.transactionOn,
+          note: input.note,
+        );
+        _mergeGuest(detail.guest);
+        _mergeAssignment(guestId, detail.activeTagAssignment);
+      },
     );
     return true;
   }

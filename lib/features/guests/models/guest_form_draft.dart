@@ -117,7 +117,10 @@ class GuestFormDraft {
       instagramHandleError == null &&
       coverAmountError == null;
 
-  CreateGuestInput toCreateInput({required String eventId}) {
+  CreateGuestInput toCreateInput({
+    required String eventId,
+    String? guestProfileId,
+  }) {
     final normalizedName = normalizedDisplayName();
     return CreateGuestInput(
       eventId: eventId,
@@ -126,6 +129,7 @@ class GuestFormDraft {
       phoneE164: phoneE164Value(),
       emailLower: emailLowerValue(),
       instagramHandle: instagramHandleValue(),
+      guestProfileId: guestProfileId,
       coverStatus: coverStatus,
       coverAmountCents: coverAmountCents,
       isComped: coverStatus == CoverStatus.comped,

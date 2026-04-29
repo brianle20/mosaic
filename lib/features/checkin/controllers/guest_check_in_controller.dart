@@ -153,6 +153,7 @@ class GuestCheckInController extends ChangeNotifier {
         guestId: guestId,
         amountCents: input.amountCents,
         method: input.method,
+        transactionOn: input.transactionOn,
         note: input.note,
       );
     } catch (exception) {

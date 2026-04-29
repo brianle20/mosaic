@@ -15,6 +15,7 @@ class _FakeGuestRepository implements GuestRepository {
   String? lastReplacedUid;
   int? lastRecordedAmountCents;
   CoverEntryMethod? lastRecordedMethod;
+  DateTime? lastRecordedTransactionOn;
   String? lastRecordedNote;
   int detailLoadCount = 0;
 
@@ -138,10 +139,12 @@ class _FakeGuestRepository implements GuestRepository {
     required String guestId,
     required int amountCents,
     required CoverEntryMethod method,
+    required DateTime transactionOn,
     String? note,
   }) async {
     lastRecordedAmountCents = amountCents;
     lastRecordedMethod = method;
+    lastRecordedTransactionOn = transactionOn;
     lastRecordedNote = note;
     return detail = GuestDetailRecord(
       guest: detail.guest,
@@ -153,7 +156,7 @@ class _FakeGuestRepository implements GuestRepository {
           amountCents: amountCents,
           method: method,
           recordedByUserId: 'usr_01',
-          recordedAt: DateTime.parse('2026-04-24T19:20:00-07:00'),
+          transactionOn: transactionOn,
           note: note,
           createdAt: DateTime.parse('2026-04-24T19:20:00-07:00'),
         ),
@@ -247,6 +250,10 @@ class _FakeNfcService implements NfcService {
       isManualEntry: true,
     );
   }
+}
+
+DateTime _dateOnly(DateTime value) {
+  return DateTime(value.year, value.month, value.day);
 }
 
 void main() {
@@ -627,7 +634,7 @@ void main() {
             amountCents: -500,
             method: CoverEntryMethod.refund,
             recordedByUserId: 'usr_01',
-            recordedAt: DateTime.parse('2026-04-24T19:10:00-07:00'),
+            transactionOn: DateTime(2026, 4, 24),
             note: 'Refunded duplicate charge',
             createdAt: DateTime.parse('2026-04-24T19:10:00-07:00'),
           ),
@@ -638,7 +645,7 @@ void main() {
             amountCents: 2000,
             method: CoverEntryMethod.cash,
             recordedByUserId: 'usr_01',
-            recordedAt: DateTime.parse('2026-04-24T19:00:00-07:00'),
+            transactionOn: DateTime(2026, 4, 24),
             note: 'Paid at door',
             createdAt: DateTime.parse('2026-04-24T19:00:00-07:00'),
           ),
@@ -698,7 +705,8 @@ void main() {
 
     expect(find.text('Record Cover Entry'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextFormField).first, '2000');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Amount'), '2000');
     await tester.tap(find.widgetWithText(OutlinedButton, 'Venmo'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -708,6 +716,7 @@ void main() {
 
     expect(repository.lastRecordedAmountCents, 2000);
     expect(repository.lastRecordedMethod, CoverEntryMethod.venmo);
+    expect(repository.lastRecordedTransactionOn, _dateOnly(DateTime.now()));
     expect(repository.lastRecordedNote, 'Paid after seating');
     expect(find.text('Paid after seating'), findsOneWidget);
   });

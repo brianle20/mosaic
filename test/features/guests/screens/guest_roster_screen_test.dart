@@ -6,6 +6,7 @@ import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class _FakeGuestRepository implements GuestRepository {
   _FakeGuestRepository(
@@ -124,11 +125,32 @@ class _FakeGuestRepository implements GuestRepository {
     required String guestId,
     required int amountCents,
     required CoverEntryMethod method,
+    required DateTime transactionOn,
     String? note,
   }) async {
     final guest = _guestById(guestId);
+    final updatedGuest = EventGuestRecord(
+      id: guest.id,
+      eventId: guest.eventId,
+      guestProfileId: guest.guestProfileId,
+      displayName: guest.displayName,
+      normalizedName: guest.normalizedName,
+      phoneE164: guest.phoneE164,
+      emailLower: guest.emailLower,
+      instagramHandle: guest.instagramHandle,
+      attendanceStatus: guest.attendanceStatus,
+      coverStatus: amountCents >= guest.coverAmountCents
+          ? CoverStatus.paid
+          : CoverStatus.partial,
+      coverAmountCents: guest.coverAmountCents,
+      isComped: false,
+      hasScoredPlay: guest.hasScoredPlay,
+      note: guest.note,
+      checkedInAt: guest.checkedInAt,
+      rowVersion: guest.rowVersion,
+    );
     return GuestDetailRecord(
-      guest: guest,
+      guest: updatedGuest,
       coverEntries: [
         GuestCoverEntryRecord(
           id: 'cov_$guestId',
@@ -137,7 +159,7 @@ class _FakeGuestRepository implements GuestRepository {
           amountCents: amountCents,
           method: method,
           recordedByUserId: 'usr_01',
-          recordedAt: DateTime.parse('2026-04-24T19:20:00-07:00'),
+          transactionOn: transactionOn,
           note: note,
           createdAt: DateTime.parse('2026-04-24T19:20:00-07:00'),
         ),
@@ -365,11 +387,87 @@ void main() {
     await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
     await tester.pumpAndSettle();
 
-    expect(find.text('Mark Paid'), findsOneWidget);
+    expect(find.text('Mark Paid'), findsNothing);
+    expect(find.text('More'), findsNothing);
+    expect(find.byTooltip('More actions for Uma'), findsOneWidget);
+    expect(find.text('Mark Paid Manually'), findsNothing);
     expect(find.text('Mark Comped'), findsOneWidget);
     expect(find.text('Check In & Tag'), findsOneWidget);
     expect(find.text('Assign Tag'), findsOneWidget);
     expect(find.text('Add Cover Entry'), findsAtLeastNWidgets(3));
+    expect(
+      find.ancestor(
+        of: find.text('Add Cover Entry').first,
+        matching: find.byType(FilledButton),
+      ),
+      findsOneWidget,
+    );
+    final nameCenter = tester.getCenter(find.text('Uma')).dy;
+    final overflowCenter =
+        tester.getCenter(find.byTooltip('More actions for Uma')).dy;
+    expect((overflowCenter - nameCenter).abs(), lessThan(4));
+    final nameText = tester.widget<Text>(find.text('Uma'));
+    expect(nameText.style?.fontSize, greaterThan(16));
+    expect(nameText.style?.fontWeight, FontWeight.w600);
+
+    final addCoverRect = tester
+        .getRect(find.widgetWithText(FilledButton, 'Add Cover Entry').first);
+    final markCompedRect =
+        tester.getRect(find.widgetWithText(OutlinedButton, 'Mark Comped'));
+    expect((markCompedRect.top - addCoverRect.top).abs(), lessThan(2));
+    expect((markCompedRect.height - addCoverRect.height).abs(), lessThan(2));
+    expect(addCoverRect.width, greaterThan(markCompedRect.width));
+
+    final nameRect = tester.getRect(find.text('Uma'));
+    final chipRect = tester.getRect(find.byWidgetPredicate(
+      (widget) => widget is StatusChip && widget.label == 'Unpaid',
+    ));
+    final summaryRect = tester
+        .getRect(find.text('Needs payment or comp before tag assignment'));
+    final nameToChipsGap = chipRect.top - nameRect.bottom;
+    final chipsToSummaryGap = summaryRect.top - chipRect.bottom;
+    final summaryToActionsGap = addCoverRect.top - summaryRect.bottom;
+
+    expect(
+        (chipsToSummaryGap - summaryToActionsGap).abs(), lessThanOrEqualTo(2));
+    expect((nameToChipsGap - chipsToSummaryGap).abs(), lessThanOrEqualTo(6));
+
+    await tester.tap(find.byTooltip('More actions for Uma'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mark Paid Manually'), findsOneWidget);
+  });
+
+  testWidgets('keeps unpaid action buttons single-line on phone width',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_unpaid',
+        name: 'Brian Le',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.unpaid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    final addCoverButton = find.widgetWithText(FilledButton, 'Add Cover Entry');
+    final markCompedButton = find.widgetWithText(OutlinedButton, 'Mark Comped');
+    final addCoverText = find.text('Add Cover Entry');
+
+    expect(tester.getSize(addCoverText).height, lessThan(24));
+    expect(
+      (tester.getSize(addCoverButton).height -
+              tester.getSize(markCompedButton).height)
+          .abs(),
+      lessThan(2),
+    );
   });
 
   testWidgets('guest row still opens guest detail on tap', (tester) async {
@@ -404,7 +502,9 @@ void main() {
     await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Mark Paid'));
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mark Paid Manually'));
     await tester.pumpAndSettle();
 
     expect(find.text('Paid'), findsOneWidget);
@@ -480,8 +580,8 @@ void main() {
       _guest(
         id: 'gst_01',
         name: 'Alice Wong',
-        attendanceStatus: AttendanceStatus.checkedIn,
-        coverStatus: CoverStatus.paid,
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.unpaid,
       ),
     ]);
 
@@ -492,7 +592,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.widgetWithText(TextFormField, 'Amount (cents)'),
+      find.widgetWithText(TextFormField, 'Amount'),
       '2000',
     );
     await tester.tap(find.widgetWithText(OutlinedButton, 'Cash'));
@@ -501,6 +601,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Guests'), findsOneWidget);
+    expect(find.text('Paid'), findsOneWidget);
+    expect(find.text('Ready for check-in'), findsOneWidget);
     expect(find.text('Cover entry saved for Alice Wong.'), findsOneWidget);
   });
 }

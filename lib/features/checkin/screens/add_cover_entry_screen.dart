@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
+import 'package:mosaic/widgets/money_text_form_field.dart';
 
 class AddCoverEntryScreen extends StatefulWidget {
-  const AddCoverEntryScreen({super.key});
+  const AddCoverEntryScreen({
+    super.key,
+    this.initialTransactionOn,
+  });
+
+  final DateTime? initialTransactionOn;
 
   @override
   State<AddCoverEntryScreen> createState() => _AddCoverEntryScreenState();
@@ -11,9 +17,17 @@ class AddCoverEntryScreen extends StatefulWidget {
 
 class _AddCoverEntryScreenState extends State<AddCoverEntryScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController();
+  final _amountController = TextEditingController(text: '0.00');
   final _noteController = TextEditingController();
+  late DateTime _transactionOn;
   CoverEntryMethod? _selectedMethod;
+  bool _hasTriedSubmit = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _transactionOn = _dateOnly(widget.initialTransactionOn ?? DateTime.now());
+  }
 
   @override
   void dispose() {
@@ -26,17 +40,36 @@ class _AddCoverEntryScreenState extends State<AddCoverEntryScreen> {
     return CoverEntryFormDraft(
       amountText: _amountController.text,
       method: _selectedMethod,
+      transactionOn: _transactionOn,
       note: _noteController.text,
     );
   }
 
   void _submit() {
-    setState(() {});
+    setState(() {
+      _hasTriedSubmit = true;
+    });
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
     Navigator.of(context).pop(_buildDraft().toSubmission());
+  }
+
+  Future<void> _pickTransactionDate() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _transactionOn,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(DateTime.now().year + 5, 12, 31),
+    );
+    if (pickedDate == null) {
+      return;
+    }
+
+    setState(() {
+      _transactionOn = _dateOnly(pickedDate);
+    });
   }
 
   @override
@@ -55,11 +88,18 @@ class _AddCoverEntryScreenState extends State<AddCoverEntryScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            TextFormField(
+            MoneyTextFormField(
               controller: _amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Amount (cents)'),
+              labelText: 'Amount',
               validator: (_) => _buildDraft().amountError,
+            ),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: _pickTransactionDate,
+              child: InputDecorator(
+                decoration: const InputDecoration(labelText: 'Date'),
+                child: Text(_formatDate(_transactionOn)),
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -92,20 +132,20 @@ class _AddCoverEntryScreenState extends State<AddCoverEntryScreen> {
                   )
                   .toList(growable: false),
             ),
-            if (_buildDraft().methodError case final methodError?) ...[
-              const SizedBox(height: 8),
-              Text(
-                methodError,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
+            if (_hasTriedSubmit)
+              if (_buildDraft().methodError case final methodError?) ...[
+                const SizedBox(height: 8),
+                Text(
+                  methodError,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
-              ),
-            ],
+              ],
             const SizedBox(height: 16),
             TextFormField(
               controller: _noteController,
               decoration: const InputDecoration(labelText: 'Note'),
-              maxLines: 3,
             ),
           ],
         ),
@@ -122,5 +162,27 @@ class _AddCoverEntryScreenState extends State<AddCoverEntryScreen> {
       CoverEntryMethod.comp => 'Comp',
       CoverEntryMethod.refund => 'Refund',
     };
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  String _formatDate(DateTime value) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[value.month - 1]} ${value.day}, ${value.year}';
   }
 }

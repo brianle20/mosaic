@@ -80,6 +80,7 @@ abstract interface class GuestRepository {
     required String guestId,
     required int amountCents,
     required CoverEntryMethod method,
+    required DateTime transactionOn,
     String? note,
   });
 

@@ -168,6 +168,7 @@ class _FakeGuestRepository implements GuestRepository {
     required String guestId,
     required int amountCents,
     required CoverEntryMethod method,
+    required DateTime transactionOn,
     String? note,
   }) {
     throw UnimplementedError();

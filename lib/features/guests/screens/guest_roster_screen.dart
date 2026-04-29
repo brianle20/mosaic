@@ -11,6 +11,12 @@ import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
+enum _GuestRosterOverflowAction {
+  markPaidManually,
+}
+
+const _guestCardSectionGap = 10.0;
+
 class GuestRosterScreen extends StatefulWidget {
   const GuestRosterScreen({
     super.key,
@@ -181,51 +187,71 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
             const SizedBox(height: 16),
             for (final guest in _controller.guests)
               Card(
-                child: ListTile(
+                child: InkWell(
                   key: ValueKey('guest-row-${guest.id}'),
-                  title: Text(guest.displayName),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          StatusChip(
-                            label: _coverStatusLabel(guest.coverStatus),
-                            tone: _coverStatusTone(guest.coverStatus),
-                          ),
-                          StatusChip(
-                            label: _attendanceLabel(guest.attendanceStatus),
-                            tone: guest.isCheckedIn
-                                ? StatusChipTone.success
-                                : StatusChipTone.neutral,
-                          ),
-                          StatusChip(
-                            label: _controller.activeTagAssignments
-                                    .containsKey(guest.id)
-                                ? 'Tag Assigned'
-                                : 'Tag Unassigned',
-                            tone: _controller.activeTagAssignments
-                                    .containsKey(guest.id)
-                                ? StatusChipTone.success
-                                : StatusChipTone.warning,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _rowSummary(guest),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 8),
-                      GuestQuickActionBar(
-                        children: _quickActionsForGuest(guest),
-                      ),
-                    ],
-                  ),
                   onTap: () => _openGuestDetail(guest),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                guest.displayName,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ),
+                            if (!guest.isEligibleForPlayerTagAssignment)
+                              _buildOverflowMenu(guest),
+                          ],
+                        ),
+                        const SizedBox(height: _guestCardSectionGap),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            StatusChip(
+                              label: _coverStatusLabel(guest.coverStatus),
+                              tone: _coverStatusTone(guest.coverStatus),
+                            ),
+                            StatusChip(
+                              label: _attendanceLabel(guest.attendanceStatus),
+                              tone: guest.isCheckedIn
+                                  ? StatusChipTone.success
+                                  : StatusChipTone.neutral,
+                            ),
+                            StatusChip(
+                              label: _controller.activeTagAssignments
+                                      .containsKey(guest.id)
+                                  ? 'Tag Assigned'
+                                  : 'Tag Unassigned',
+                              tone: _controller.activeTagAssignments
+                                      .containsKey(guest.id)
+                                  ? StatusChipTone.success
+                                  : StatusChipTone.warning,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: _guestCardSectionGap),
+                        Text(
+                          _rowSummary(guest),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: _guestCardSectionGap),
+                        _buildQuickActionsForGuest(guest),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             if (_controller.guests.isEmpty)
@@ -249,18 +275,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     final isSubmitting = _controller.isSubmittingGuest(guest.id);
     final actions = <Widget>[];
 
-    if (!guest.isEligibleForPlayerTagAssignment) {
-      actions.addAll([
-        OutlinedButton(
-          onPressed: isSubmitting ? null : () => _markPaid(guest),
-          child: const Text('Mark Paid'),
-        ),
-        OutlinedButton(
-          onPressed: isSubmitting ? null : () => _markComped(guest),
-          child: const Text('Mark Comped'),
-        ),
-      ]);
-    } else if (!guest.isCheckedIn) {
+    if (!guest.isCheckedIn) {
       actions.add(
         FilledButton(
           onPressed: isSubmitting ? null : () => _checkInAndAssign(guest),
@@ -276,14 +291,95 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       );
     }
 
-    actions.add(
-      TextButton(
-        onPressed: isSubmitting ? null : () => _addCoverEntry(guest),
-        child: const Text('Add Cover Entry'),
-      ),
-    );
+    if (guest.isEligibleForPlayerTagAssignment) {
+      actions.add(
+        TextButton(
+          onPressed: isSubmitting ? null : () => _addCoverEntry(guest),
+          child: const Text('Add Cover Entry'),
+        ),
+      );
+    }
 
     return actions;
+  }
+
+  Widget _buildQuickActionsForGuest(EventGuestRecord guest) {
+    final isSubmitting = _controller.isSubmittingGuest(guest.id);
+    if (!guest.isEligibleForPlayerTagAssignment) {
+      return Row(
+        children: [
+          Expanded(
+            flex: 5,
+            child: FilledButton(
+              style: _compactActionButtonStyle(),
+              onPressed: isSubmitting ? null : () => _addCoverEntry(guest),
+              child: _singleLineButtonLabel('Add Cover Entry'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 4,
+            child: OutlinedButton(
+              style: _compactActionButtonStyle(),
+              onPressed: isSubmitting ? null : () => _markComped(guest),
+              child: _singleLineButtonLabel('Mark Comped'),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return GuestQuickActionBar(
+      children: _quickActionsForGuest(guest),
+    );
+  }
+
+  Widget _buildOverflowMenu(EventGuestRecord guest) {
+    final isSubmitting = _controller.isSubmittingGuest(guest.id);
+    return SizedBox.square(
+      dimension: 32,
+      child: PopupMenuButton<_GuestRosterOverflowAction>(
+        enabled: !isSubmitting,
+        padding: EdgeInsets.zero,
+        iconSize: 20,
+        splashRadius: 18,
+        tooltip: 'More actions for ${guest.displayName}',
+        onSelected: (action) {
+          switch (action) {
+            case _GuestRosterOverflowAction.markPaidManually:
+              _markPaid(guest);
+          }
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: _GuestRosterOverflowAction.markPaidManually,
+            child: Text('Mark Paid Manually'),
+          ),
+        ],
+        icon: const Icon(Icons.more_horiz),
+      ),
+    );
+  }
+
+  ButtonStyle _compactActionButtonStyle() {
+    return ButtonStyle(
+      minimumSize: WidgetStateProperty.all(const Size(0, 44)),
+      padding: WidgetStateProperty.all(
+        const EdgeInsets.symmetric(horizontal: 12),
+      ),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+  }
+
+  Widget _singleLineButtonLabel(String label) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(
+        label,
+        maxLines: 1,
+        softWrap: false,
+      ),
+    );
   }
 
   String _attendanceLabel(AttendanceStatus status) {

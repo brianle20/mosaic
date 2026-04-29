@@ -44,6 +44,7 @@ class _RecordingGuestRepository implements GuestRepository {
       'cover_amount_cents': input.coverAmountCents,
       'is_comped': input.isComped,
       'has_scored_play': false,
+      'guest_profile_id': input.guestProfileId,
       'phone_e164': input.phoneE164,
       'email_lower': input.emailLower,
       'instagram_handle': input.instagramHandle,
@@ -87,6 +88,7 @@ class _RecordingGuestRepository implements GuestRepository {
     required String guestId,
     required int amountCents,
     required CoverEntryMethod method,
+    required DateTime transactionOn,
     String? note,
   }) {
     throw UnimplementedError();
@@ -254,6 +256,68 @@ void main() {
 
     expect(repository.created, isNotNull);
     expect(repository.created!.phoneE164, '+14155552671');
+  });
+
+  testWidgets('requires an explicit action before using a name-only profile', (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository()
+      ..matches = [
+        GuestProfileMatch(
+          matchType: GuestProfileMatchType.name,
+          profile: GuestProfileRecord.fromJson(const {
+            'id': 'prf_estevon',
+            'owner_user_id': 'usr_01',
+            'display_name': 'Estevon Jackson',
+            'normalized_name': 'estevon jackson',
+            'phone_e164': '+14087582753',
+            'instagram_handle': 'estevon',
+          }),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_03',
+          existingGuests: const [],
+          guestRepository: repository,
+          onSaved: (_) {},
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byKey(guestNameFieldKey), 'Estevon Jackson');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Possible match: Estevon Jackson'), findsNothing);
+    expect(find.text('Estevon Jackson exists from another event.'),
+        findsOneWidget);
+    expect(
+      find.text(
+          'Use this guest profile to keep their info synced across events.'),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(OutlinedButton, 'Use Existing Guest'),
+        findsOneWidget);
+    expect(find.text('Using existing guest: Estevon Jackson'), findsNothing);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Use Existing Guest'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Using existing guest: Estevon Jackson'), findsOneWidget);
+    expect(
+        find.text('Estevon Jackson exists from another event.'), findsNothing);
+    expect(find.widgetWithText(TextFormField, 'Phone'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Save Guest'));
+    await tester.tap(find.text('Save Guest'));
+    await tester.pumpAndSettle();
+
+    expect(repository.created?.guestProfileId, 'prf_estevon');
+    expect(repository.created?.phoneE164, '+14087582753');
+    expect(repository.created?.instagramHandle, 'estevon');
   });
 
   testWidgets('debounces profile matching without showing loading text', (

@@ -7,6 +7,7 @@ import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/features/guests/controllers/guest_form_controller.dart';
 import 'package:mosaic/features/guests/models/guest_contact_formatters.dart';
 import 'package:mosaic/features/guests/models/guest_form_draft.dart';
+import 'package:mosaic/widgets/money_text_form_field.dart';
 
 const guestNameFieldKey = Key('guest-name-field');
 const guestCoverAmountFieldKey = Key('guest-cover-amount-field');
@@ -45,6 +46,7 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
   late CoverStatus _coverStatus;
   late final GuestFormController _controller;
   List<GuestProfileMatch> _profileMatches = const [];
+  GuestProfileRecord? _selectedProfile;
   Timer? _profileMatchDebounce;
   int _profileMatchRequestId = 0;
 
@@ -132,6 +134,11 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
   void _scheduleProfileMatchLoad() {
     _profileMatchDebounce?.cancel();
     final draft = _buildDraft();
+    final selectedProfile = _selectedProfile;
+    if (selectedProfile != null &&
+        !_draftStillMatchesSelectedProfile(draft, selectedProfile)) {
+      _selectedProfile = null;
+    }
     if (!_shouldLookupProfileMatches(draft)) {
       _profileMatchRequestId += 1;
       if (mounted) {
@@ -146,6 +153,19 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
       _profileMatchDebounceDuration,
       _loadProfileMatches,
     );
+  }
+
+  bool _draftStillMatchesSelectedProfile(
+    GuestFormDraft draft,
+    GuestProfileRecord profile,
+  ) {
+    final phoneE164 = draft.phoneE164Value();
+    final emailLower = draft.emailLowerValue();
+    final instagramHandle = draft.instagramHandleValue();
+    return draft.normalizedDisplayName() == profile.normalizedName ||
+        (phoneE164 != null && phoneE164 == profile.phoneE164) ||
+        (emailLower != null && emailLower == profile.emailLower) ||
+        (instagramHandle != null && instagramHandle == profile.instagramHandle);
   }
 
   bool _shouldLookupProfileMatches(GuestFormDraft draft) {
@@ -230,15 +250,26 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
   }
 
   void _applyProfile(GuestProfileRecord profile) {
-    _nameController.text = profile.displayName;
-    _phoneController.text = formatPhoneForDisplay(profile.phoneE164);
-    _emailController.text = profile.emailLower ?? '';
-    _instagramController.text = formatInstagramHandleForDisplay(
-      profile.instagramHandle,
-    );
+    setState(() {
+      _selectedProfile = profile;
+      _nameController.text = profile.displayName;
+      _phoneController.text = formatPhoneForDisplay(profile.phoneE164);
+      _emailController.text = profile.emailLower ?? '';
+      _instagramController.text = formatInstagramHandleForDisplay(
+        profile.instagramHandle,
+      );
+    });
   }
 
   Widget _buildProfileMatchMessage() {
+    final selectedProfile = _selectedProfile;
+    if (selectedProfile != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text('Using existing guest: ${selectedProfile.displayName}'),
+      );
+    }
+
     final primaryMatch = _primaryIdentityMatch();
     final nameMatches = _nameOnlyMatches().toList(growable: false);
     if (primaryMatch == null && nameMatches.isEmpty) {
@@ -254,9 +285,25 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
             Text('Using existing guest: ${primaryMatch.profile.displayName}')
           else
             for (final match in nameMatches)
-              TextButton(
-                onPressed: () => _applyProfile(match.profile),
-                child: Text('Possible match: ${match.profile.displayName}'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${match.profile.displayName} exists from another event.',
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Use this guest profile to keep their info synced across events.',
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () => _applyProfile(match.profile),
+                      child: const Text('Use Existing Guest'),
+                    ),
+                  ],
+                ),
               ),
         ],
       ),
@@ -315,6 +362,7 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
     final savedGuest = await _controller.submit(
       eventId: widget.eventId,
       draft: draft,
+      selectedProfile: _selectedProfile ?? _primaryIdentityMatch()?.profile,
       existingGuest: widget.initialGuest,
     );
     if (!mounted || savedGuest == null) {
@@ -407,18 +455,11 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
               },
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              key: guestCoverAmountFieldKey,
+            MoneyTextFormField(
+              fieldKey: guestCoverAmountFieldKey,
               controller: _coverAmountController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: const [MoneyCentsInputFormatter()],
-              decoration: const InputDecoration(
-                labelText: 'Cover Amount',
-                prefixText: r'$',
-              ),
-              validator: (value) => _moneyFieldError(value ?? ''),
+              labelText: 'Cover Amount',
+              validator: _moneyFieldError,
             ),
             const SizedBox(height: 12),
             TextFormField(

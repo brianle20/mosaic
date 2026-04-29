@@ -15,6 +15,7 @@ class GuestFormController extends ChangeNotifier {
   Future<EventGuestRecord?> submit({
     required String eventId,
     required GuestFormDraft draft,
+    GuestProfileRecord? selectedProfile,
     EventGuestRecord? existingGuest,
   }) async {
     if (!draft.isValid) {
@@ -29,7 +30,10 @@ class GuestFormController extends ChangeNotifier {
     try {
       final savedGuest = existingGuest == null
           ? await _guestRepository.createGuest(
-              draft.toCreateInput(eventId: eventId),
+              draft.toCreateInput(
+                eventId: eventId,
+                guestProfileId: selectedProfile?.id,
+              ),
             )
           : await _guestRepository.updateGuest(
               draft.toUpdateInput(

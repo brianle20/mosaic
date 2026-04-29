@@ -1,16 +1,19 @@
 import 'package:meta/meta.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/features/events/models/event_form_formatters.dart';
 
 @immutable
 class SubmitCoverEntryInput {
   const SubmitCoverEntryInput({
     required this.amountCents,
     required this.method,
+    required this.transactionOn,
     this.note,
   });
 
   final int amountCents;
   final CoverEntryMethod method;
+  final DateTime transactionOn;
   final String? note;
 }
 
@@ -19,11 +22,13 @@ class CoverEntryFormDraft {
   const CoverEntryFormDraft({
     this.amountText = '',
     this.method,
+    required this.transactionOn,
     this.note = '',
   });
 
   final String amountText;
   final CoverEntryMethod? method;
+  final DateTime transactionOn;
   final String note;
 
   String? get amountError {
@@ -33,7 +38,7 @@ class CoverEntryFormDraft {
 
     final amount = parsedAmountCents;
     if (amount == null) {
-      return 'Amount must be a whole number.';
+      return 'Enter a valid amount.';
     }
 
     if (amount == 0) {
@@ -54,12 +59,15 @@ class CoverEntryFormDraft {
   bool get isValid => amountError == null && methodError == null;
 
   int? get parsedAmountCents {
-    final normalized = amountText.trim();
-    if (normalized.isEmpty) {
+    if (amountText.trim().isEmpty) {
       return null;
     }
 
-    return int.tryParse(normalized);
+    final result = parseMoneyAmount(amountText);
+    if (!result.isValid) {
+      return null;
+    }
+    return result.cents;
   }
 
   SubmitCoverEntryInput toSubmission() {
@@ -70,6 +78,7 @@ class CoverEntryFormDraft {
     return SubmitCoverEntryInput(
       amountCents: parsedAmountCents!,
       method: method!,
+      transactionOn: transactionOn,
       note: note.trim().isEmpty ? null : note.trim(),
     );
   }

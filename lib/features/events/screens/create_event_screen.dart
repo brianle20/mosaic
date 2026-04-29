@@ -5,6 +5,7 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_form_controller.dart';
 import 'package:mosaic/features/events/models/event_form_draft.dart';
 import 'package:mosaic/features/events/models/event_form_formatters.dart';
+import 'package:mosaic/widgets/money_text_form_field.dart';
 
 const createEventTitleFieldKey = Key('create-event-title-field');
 const createEventStartsTileKey = Key('create-event-starts-tile');
@@ -192,32 +193,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               decoration: const InputDecoration(labelText: 'Venue Address'),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              key: createEventCoverChargeFieldKey,
+            MoneyTextFormField(
+              fieldKey: createEventCoverChargeFieldKey,
               controller: _coverChargeController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: const [MoneyCentsInputFormatter()],
-              decoration: const InputDecoration(
-                labelText: 'Cover Charge',
-                prefixText: r'$',
-              ),
-              validator: (value) => _moneyFieldError(value ?? ''),
+              labelText: 'Cover Charge',
+              validator: _moneyFieldError,
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              key: createEventPrizeBudgetFieldKey,
+            MoneyTextFormField(
+              fieldKey: createEventPrizeBudgetFieldKey,
               controller: _prizeBudgetController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              inputFormatters: const [MoneyCentsInputFormatter()],
-              decoration: const InputDecoration(
-                labelText: 'Prize Budget',
-                prefixText: r'$',
-              ),
-              validator: (value) => _moneyFieldError(value ?? ''),
+              labelText: 'Prize Budget',
+              validator: _moneyFieldError,
             ),
             if (_controller.submitError != null) ...[
               const SizedBox(height: 12),
