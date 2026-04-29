@@ -214,5 +214,62 @@ void main() {
       expect(cache.readEvent('evt_00'), isNull);
       expect(cache.readEvents(), isEmpty);
     });
+
+    test('revertEventToDraft returns a draft event and refreshes cache',
+        () async {
+      final cache = await LocalCache.create();
+      await cache.saveEvents([
+        EventRecord.fromJson(const {
+          'id': 'evt_01',
+          'owner_user_id': 'usr_01',
+          'title': 'Friday Night Mahjong',
+          'timezone': 'America/Los_Angeles',
+          'starts_at': '2026-04-24T19:00:00-07:00',
+          'lifecycle_status': 'active',
+          'checkin_open': true,
+          'scoring_open': true,
+          'cover_charge_cents': 2000,
+          'prize_budget_cents': 50000,
+          'default_ruleset_id': 'HK_STANDARD_V1',
+          'prevailing_wind': 'east',
+          'row_version': 2,
+        }),
+      ]);
+      final repository = SupabaseEventRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        eventRevertRunner: (eventId) async {
+          expect(eventId, 'evt_01');
+          return {
+            'id': 'evt_01',
+            'owner_user_id': 'usr_01',
+            'title': 'Friday Night Mahjong',
+            'timezone': 'America/Los_Angeles',
+            'starts_at': '2026-04-24T19:00:00-07:00',
+            'lifecycle_status': 'draft',
+            'checkin_open': false,
+            'scoring_open': false,
+            'cover_charge_cents': 2000,
+            'prize_budget_cents': 50000,
+            'default_ruleset_id': 'HK_STANDARD_V1',
+            'prevailing_wind': 'east',
+            'row_version': 3,
+          };
+        },
+      );
+
+      final event = await repository.revertEventToDraft('evt_01');
+
+      expect(event.lifecycleStatus, EventLifecycleStatus.draft);
+      expect(event.checkinOpen, isFalse);
+      expect(event.scoringOpen, isFalse);
+
+      final cachedEvent = cache.readEvent('evt_01');
+      expect(cachedEvent, isNotNull);
+      expect(cachedEvent!.lifecycleStatus, EventLifecycleStatus.draft);
+
+      final cachedEvents = cache.readEvents();
+      expect(cachedEvents.single.lifecycleStatus, EventLifecycleStatus.draft);
+    });
   });
 }

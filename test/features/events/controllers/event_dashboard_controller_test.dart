@@ -15,6 +15,7 @@ class _FakeEventRepository implements EventRepository {
   final List<EventRecord> cachedEvents;
   final Future<EventRecord?> Function(String eventId)? eventLoader;
   EventRecord Function(String eventId)? cancelHandler;
+  EventRecord Function(String eventId)? revertToDraftHandler;
   void Function(String eventId)? deleteHandler;
 
   @override
@@ -25,6 +26,15 @@ class _FakeEventRepository implements EventRepository {
   @override
   Future<EventRecord> cancelEvent(String eventId) async {
     final handler = cancelHandler;
+    if (handler == null) {
+      throw UnimplementedError();
+    }
+    return handler(eventId);
+  }
+
+  @override
+  Future<EventRecord> revertEventToDraft(String eventId) async {
+    final handler = revertToDraftHandler;
     if (handler == null) {
       throw UnimplementedError();
     }
@@ -288,6 +298,45 @@ void main() {
     expect(deleted, isTrue);
     expect(deletedEventId, 'evt_00');
     expect(controller.event, isNull);
+    expect(controller.lifecycleError, isNull);
+  });
+
+  test('revertToDraft updates an active event to draft', () async {
+    final activeEvent = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'prize_budget_cents': 50000,
+      'default_ruleset_id': 'HK_STANDARD_V1',
+      'prevailing_wind': 'east',
+    });
+    final repository = _FakeEventRepository(cachedEvents: [activeEvent]);
+    repository.revertToDraftHandler = (eventId) {
+      expect(eventId, 'evt_01');
+      return EventRecord.fromJson({
+        ...activeEvent.toJson(),
+        'lifecycle_status': 'draft',
+        'checkin_open': false,
+        'scoring_open': false,
+      });
+    };
+    final controller = EventDashboardController(
+      eventRepository: repository,
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+    );
+    await controller.load('evt_01');
+
+    await controller.revertToDraft();
+
+    expect(controller.event?.lifecycleStatus, EventLifecycleStatus.draft);
+    expect(controller.event?.checkinOpen, isFalse);
+    expect(controller.event?.scoringOpen, isFalse);
     expect(controller.lifecycleError, isNull);
   });
 }

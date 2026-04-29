@@ -23,6 +23,11 @@ class _CompleterEventRepository implements EventRepository {
   }
 
   @override
+  Future<EventRecord> revertEventToDraft(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<void> deleteEvent(String eventId) {
     throw UnimplementedError();
   }
@@ -72,6 +77,11 @@ class _ImmediateEventRepository implements EventRepository {
 
   @override
   Future<EventRecord> cancelEvent(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> revertEventToDraft(String eventId) {
     throw UnimplementedError();
   }
 

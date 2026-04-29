@@ -46,6 +46,8 @@ abstract interface class EventRepository {
 
   Future<EventRecord> cancelEvent(String eventId);
 
+  Future<EventRecord> revertEventToDraft(String eventId);
+
   Future<void> deleteEvent(String eventId);
 }
 

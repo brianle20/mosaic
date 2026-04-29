@@ -182,6 +182,34 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     await _controller.cancelEvent();
   }
 
+  Future<void> _confirmRevertToDraft() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Revert to draft?'),
+        content: const Text(
+          'Only events with no checked-in guests, sessions, or scores can go back to draft.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep Live'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Revert'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    await _controller.revertToDraft();
+  }
+
   String _flagStatusLabel(bool isOpen) => isOpen ? 'Open' : 'Closed';
 
   String _eventPhaseLabel(EventLifecycleStatus? status) {
@@ -343,6 +371,13 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                         ? null
                         : _confirmDeleteEvent,
                     child: const Text('Delete Event'),
+                  ),
+                if (lifecycleStatus == EventLifecycleStatus.active)
+                  OutlinedButton(
+                    onPressed: _controller.isSubmittingLifecycle
+                        ? null
+                        : _confirmRevertToDraft,
+                    child: const Text('Revert to Draft'),
                   ),
                 if (lifecycleStatus == EventLifecycleStatus.active ||
                     lifecycleStatus == EventLifecycleStatus.completed)

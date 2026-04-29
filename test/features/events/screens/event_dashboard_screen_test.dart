@@ -24,6 +24,7 @@ class _EventRepository implements EventRepository {
     this.onStart,
     this.onSetOperationalFlags,
     this.onCancel,
+    this.onRevertToDraft,
     this.onDelete,
   });
 
@@ -32,6 +33,7 @@ class _EventRepository implements EventRepository {
   final Future<EventRecord> Function(String eventId)? onFinalize;
   final Future<EventRecord> Function(String eventId)? onStart;
   final Future<EventRecord> Function(String eventId)? onCancel;
+  final Future<EventRecord> Function(String eventId)? onRevertToDraft;
   final Future<void> Function(String eventId)? onDelete;
   final Future<EventRecord> Function(
     String eventId,
@@ -47,6 +49,17 @@ class _EventRepository implements EventRepository {
   @override
   Future<EventRecord> cancelEvent(String eventId) async {
     final handler = onCancel;
+    if (handler != null) {
+      event = await handler(eventId);
+      return event;
+    }
+
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> revertEventToDraft(String eventId) async {
+    final handler = onRevertToDraft;
     if (handler != null) {
       event = await handler(eventId);
       return event;
@@ -687,6 +700,52 @@ void main() {
       find.text('This event was cancelled and is no longer live.'),
       findsOneWidget,
     );
+    expect(find.text('Complete Event'), findsNothing);
+  });
+
+  testWidgets('active event can revert to draft after confirmation',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(
+            activeEvent,
+            onRevertToDraft: (_) async {
+              return EventRecord.fromJson({
+                ...activeEvent.toJson(),
+                'lifecycle_status': 'draft',
+                'checkin_open': false,
+                'scoring_open': false,
+              });
+            },
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Revert to Draft'), findsOneWidget);
+
+    await tester.tap(find.text('Revert to Draft'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Revert to draft?'), findsOneWidget);
+    expect(
+      find.text(
+        'Only events with no checked-in guests, sessions, or scores can go back to draft.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Revert'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ready to Start'), findsOneWidget);
+    expect(find.text('Start Event'), findsOneWidget);
+    expect(find.text('Delete Event'), findsOneWidget);
     expect(find.text('Complete Event'), findsNothing);
   });
 

@@ -114,6 +114,26 @@ class EventDashboardController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> revertToDraft() async {
+    final currentEvent = event;
+    if (currentEvent == null || isSubmittingLifecycle) {
+      return;
+    }
+
+    isSubmittingLifecycle = true;
+    lifecycleError = null;
+    notifyListeners();
+
+    try {
+      event = await _eventRepository.revertEventToDraft(currentEvent.id);
+    } catch (exception) {
+      lifecycleError = _formatLifecycleError(exception);
+    }
+
+    isSubmittingLifecycle = false;
+    notifyListeners();
+  }
+
   Future<bool> deleteEvent() async {
     final currentEvent = event;
     if (currentEvent == null || isSubmittingLifecycle) {

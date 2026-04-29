@@ -10,6 +10,9 @@ typedef EventMutationRunner = Future<Map<String, dynamic>> Function(
 typedef EventCancellationRunner = Future<Map<String, dynamic>> Function(
   String eventId,
 );
+typedef EventRevertRunner = Future<Map<String, dynamic>> Function(
+  String eventId,
+);
 typedef EventDeletionRunner = Future<void> Function(String eventId);
 
 class SupabaseEventRepository implements EventRepository {
@@ -18,15 +21,18 @@ class SupabaseEventRepository implements EventRepository {
     required this.cache,
     EventMutationRunner? eventMutationRunner,
     EventCancellationRunner? eventCancellationRunner,
+    EventRevertRunner? eventRevertRunner,
     EventDeletionRunner? eventDeletionRunner,
   })  : _eventMutationRunner = eventMutationRunner,
         _eventCancellationRunner = eventCancellationRunner,
+        _eventRevertRunner = eventRevertRunner,
         _eventDeletionRunner = eventDeletionRunner;
 
   final SupabaseClient client;
   final LocalCache cache;
   final EventMutationRunner? _eventMutationRunner;
   final EventCancellationRunner? _eventCancellationRunner;
+  final EventRevertRunner? _eventRevertRunner;
   final EventDeletionRunner? _eventDeletionRunner;
 
   @override
@@ -121,6 +127,18 @@ class SupabaseEventRepository implements EventRepository {
   }
 
   @override
+  Future<EventRecord> revertEventToDraft(String eventId) async {
+    final runner = _eventRevertRunner;
+    final response = runner != null
+        ? await runner(eventId)
+        : await _revertEventToDraft(eventId);
+
+    final record = EventRecord.fromJson(response);
+    await _saveEventRecord(record);
+    return record;
+  }
+
+  @override
   Future<void> deleteEvent(String eventId) async {
     final runner = _eventDeletionRunner;
     if (runner != null) {
@@ -175,6 +193,80 @@ class SupabaseEventRepository implements EventRepository {
 
     await cache.saveEvent(record);
     await cache.saveEvents(mergedEvents);
+  }
+
+  Future<Map<String, dynamic>> _revertEventToDraft(String eventId) async {
+    final eventRow =
+        await client.from('events').select().eq('id', eventId).single();
+    final event = EventRecord.fromJson(eventRow);
+    if (event.lifecycleStatus != EventLifecycleStatus.active) {
+      throw StateError('Only active events can be reverted to draft.');
+    }
+
+    final guestRows = _rowsFromResponse(
+      await client
+          .from('event_guests')
+          .select('id, attendance_status, checked_in_at')
+          .eq('event_id', eventId),
+    );
+    final hasCheckedInGuest = guestRows.any(_guestHasLiveAttendance);
+    if (hasCheckedInGuest) {
+      throw StateError(
+        'Events with checked-in guests cannot be reverted to draft.',
+      );
+    }
+
+    final sessionRows = _rowsFromResponse(
+      await client
+          .from('table_sessions')
+          .select('id')
+          .eq('event_id', eventId)
+          .limit(1),
+    );
+    if (sessionRows.isNotEmpty) {
+      throw StateError(
+          'Events with table sessions cannot be reverted to draft.');
+    }
+
+    final scoreRows = _rowsFromResponse(
+      await client
+          .from('event_score_totals')
+          .select('id')
+          .eq('event_id', eventId)
+          .limit(1),
+    );
+    if (scoreRows.isNotEmpty) {
+      throw StateError('Events with scores cannot be reverted to draft.');
+    }
+
+    return client
+        .from('events')
+        .update({
+          'lifecycle_status': 'draft',
+          'checkin_open': false,
+          'scoring_open': false,
+        })
+        .eq('id', eventId)
+        .select()
+        .single();
+  }
+
+  bool _guestHasLiveAttendance(Map<String, dynamic> row) {
+    return row['checked_in_at'] != null ||
+        row['attendance_status'] == 'checked_in' ||
+        row['attendance_status'] == 'checked_out';
+  }
+
+  List<Map<String, dynamic>> _rowsFromResponse(Object response) {
+    if (response is List) {
+      return response
+          .map((row) => (row as Map).cast<String, dynamic>())
+          .toList(growable: false);
+    }
+
+    throw StateError(
+      'Expected a list response but received ${response.runtimeType}.',
+    );
   }
 
   Future<Map<String, dynamic>> _runMutation(
