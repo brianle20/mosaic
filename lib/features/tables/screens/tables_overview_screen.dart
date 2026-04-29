@@ -75,29 +75,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     await _controller.load(widget.eventId);
   }
 
-  Future<void> _openStartSession(EventTableRecord table) async {
-    final result = await Navigator.of(context).pushNamed(
-      AppRouter.startSessionRoute,
-      arguments: StartSessionArgs(
-        eventId: widget.eventId,
-        table: table,
-      ),
-    );
-    if (!mounted) {
-      return;
-    }
-    if (result is StartedTableSessionRecord) {
-      await Navigator.of(context).pushNamed(
-        AppRouter.sessionDetailRoute,
-        arguments: SessionDetailArgs(
-          eventId: widget.eventId,
-          sessionId: result.session.id,
-        ),
-      );
-    }
-    await _controller.load(widget.eventId);
-  }
-
   Future<void> _openSessionDetail(String sessionId) async {
     await Navigator.of(context).pushNamed(
       AppRouter.sessionDetailRoute,
@@ -187,12 +164,11 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                             onPressed: () => _openEditTable(table),
                             child: const Text('Bind Table Tag'),
                           ),
-                          FilledButton(
-                            onPressed: _canStartSession(table)
-                                ? () => _openStartSession(table)
-                                : null,
-                            child: const Text('Start Session'),
-                          ),
+                          if (_activeSessionFor(table) case final session?)
+                            FilledButton(
+                              onPressed: () => _openSessionDetail(session.id),
+                              child: const Text('View Session'),
+                            ),
                         ],
                       ),
                     ],
@@ -215,24 +191,19 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   }
 
   String _tableSummary(EventTableRecord table) {
-    final hasLiveSession = _controller.activeSessionsByTableId.containsKey(
-      table.id,
-    );
-    if (hasLiveSession) {
-      return 'Unavailable for New Session';
+    final activeSession = _activeSessionFor(table);
+    if (activeSession != null) {
+      return switch (activeSession.status) {
+        SessionStatus.paused => 'Session Paused',
+        _ => 'Session Active',
+      };
     }
     if (table.nfcTagId == null) {
       return 'Ready for Seating or Tag Binding';
     }
-    if (!widget.scoringOpen) {
-      return 'Open scoring before starting a table session.';
-    }
-    return 'Ready to Start a Session';
+    return 'Scan this table tag from the event dashboard to start seating.';
   }
 
-  bool _canStartSession(EventTableRecord table) {
-    return widget.scoringOpen &&
-        table.nfcTagId != null &&
-        !_controller.activeSessionsByTableId.containsKey(table.id);
-  }
+  TableSessionRecord? _activeSessionFor(EventTableRecord table) =>
+      _controller.activeSessionsByTableId[table.id];
 }

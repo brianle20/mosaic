@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -132,7 +133,7 @@ void main() {
     expect(find.text('Add Table'), findsOneWidget);
   });
 
-  testWidgets('blocks starting a table session while scoring is closed',
+  testWidgets('ready tagged tables explain scan-only session start',
       (tester) async {
     final tableRepository = _FakeTableRepository([
       EventTableRecord.fromJson(const {
@@ -161,14 +162,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Open scoring before starting a table session.'),
+      find.text(
+        'Scan this table tag from the event dashboard to start seating.',
+      ),
       findsOneWidget,
     );
-
-    final startButton = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Start Session'),
-    );
-    expect(startButton.onPressed, isNull);
+    expect(find.text('Start Session'), findsNothing);
   });
 
   testWidgets('renders table cards and statuses', (tester) async {
@@ -236,9 +235,79 @@ void main() {
     expect(find.text('Tag Bound'), findsOneWidget);
     expect(find.text('Tag Unbound'), findsOneWidget);
     expect(find.text('Live Session'), findsOneWidget);
-    expect(find.text('Unavailable for New Session'), findsOneWidget);
+    expect(find.text('Session Active'), findsOneWidget);
     expect(find.text('Casual play only'), findsNothing);
     expect(find.text('Ready for Seating or Tag Binding'), findsOneWidget);
-    expect(find.text('Start Session'), findsNWidgets(2));
+    expect(find.text('Start Session'), findsNothing);
+    expect(find.text('View Session'), findsOneWidget);
+  });
+
+  testWidgets('active table session can be opened from tables view',
+      (tester) async {
+    final tableRepository = _FakeTableRepository([
+      EventTableRecord.fromJson(const {
+        'id': 'tbl_points',
+        'event_id': 'evt_01',
+        'label': 'Table 1',
+        'display_order': 1,
+        'nfc_tag_id': 'tag_01',
+        'default_ruleset_id': 'HK_STANDARD_V1',
+        'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+        'default_rotation_policy_config_json': {},
+      }),
+    ]);
+    final sessionRepository = _FakeSessionRepository([
+      TableSessionRecord.fromJson(const {
+        'id': 'ses_01',
+        'event_id': 'evt_01',
+        'event_table_id': 'tbl_points',
+        'session_number_for_table': 1,
+        'ruleset_id': 'HK_STANDARD_V1',
+        'ruleset_version': 1,
+        'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+        'rotation_policy_config_json': {},
+        'status': 'active',
+        'initial_east_seat_index': 0,
+        'current_dealer_seat_index': 0,
+        'dealer_pass_count': 0,
+        'completed_games_count': 0,
+        'hand_count': 0,
+        'started_at': '2026-04-24T19:00:00-07:00',
+        'started_by_user_id': 'usr_01',
+      }),
+    ]);
+
+    SessionDetailArgs? openedArgs;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: tableRepository,
+          sessionRepository: sessionRepository,
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            openedArgs = settings.arguments! as SessionDetailArgs;
+            return MaterialPageRoute<void>(
+              builder: (context) => const Scaffold(
+                body: Text('Opened Session Detail'),
+              ),
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('View Session'));
+    await tester.pumpAndSettle();
+
+    expect(openedArgs?.eventId, 'evt_01');
+    expect(openedArgs?.sessionId, 'ses_01');
+    expect(find.text('Opened Session Detail'), findsOneWidget);
   });
 }
