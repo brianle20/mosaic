@@ -39,6 +39,32 @@ void main() {
       expect(draft.isValid, isFalse);
     });
 
+    test('normalizes Instagram handles without the leading at sign', () {
+      const draft = GuestFormDraft(
+        displayName: 'Alice',
+        instagramHandle: ' @Alice.Wong_ ',
+      );
+
+      expect(draft.instagramHandleError, isNull);
+      expect(
+        draft.toCreateInput(eventId: 'evt_01').instagramHandle,
+        'alice.wong_',
+      );
+    });
+
+    test('rejects invalid Instagram handles', () {
+      const draft = GuestFormDraft(
+        displayName: 'Alice',
+        instagramHandle: '@alice-wong',
+      );
+
+      expect(
+        draft.instagramHandleError,
+        'Use letters, numbers, periods, or underscores, up to 30 characters.',
+      );
+      expect(draft.isValid, isFalse);
+    });
+
     test('warns when a normalized name matches an existing guest', () {
       const draft = GuestFormDraft(displayName: 'Alice Wong');
       final warning = draft.duplicateNameWarning(

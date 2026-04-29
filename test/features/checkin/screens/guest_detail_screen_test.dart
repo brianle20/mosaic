@@ -16,6 +16,7 @@ class _FakeGuestRepository implements GuestRepository {
   int? lastRecordedAmountCents;
   CoverEntryMethod? lastRecordedMethod;
   String? lastRecordedNote;
+  int detailLoadCount = 0;
 
   @override
   Future<GuestDetailRecord> assignGuestTag({
@@ -99,7 +100,10 @@ class _FakeGuestRepository implements GuestRepository {
       const [];
 
   @override
-  Future<GuestDetailRecord?> getGuestDetail(String guestId) async => detail;
+  Future<GuestDetailRecord?> getGuestDetail(String guestId) async {
+    detailLoadCount += 1;
+    return detail;
+  }
 
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
@@ -108,7 +112,9 @@ class _FakeGuestRepository implements GuestRepository {
   }
 
   @override
-  Future<List<EventGuestRecord>> listGuests(String eventId) async => const [];
+  Future<List<EventGuestRecord>> listGuests(String eventId) async => [
+        detail.guest,
+      ];
 
   @override
   Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
@@ -244,6 +250,54 @@ class _FakeNfcService implements NfcService {
 }
 
 void main() {
+  testWidgets('opens edit guest from the detail screen and reloads on return',
+      (tester) async {
+    final repository = _FakeGuestRepository(
+      GuestDetailRecord(
+        guest: EventGuestRecord.fromJson(const {
+          'id': 'gst_01',
+          'event_id': 'evt_01',
+          'guest_profile_id': 'prf_01',
+          'display_name': 'Brian Le',
+          'normalized_name': 'brian le',
+          'phone_e164': '+14155552671',
+          'email_lower': 'brian@example.com',
+          'attendance_status': 'expected',
+          'cover_status': 'paid',
+          'cover_amount_cents': 2000,
+          'is_comped': false,
+          'has_scored_play': false,
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestDetailScreen(
+          guestId: 'gst_01',
+          eventId: 'evt_01',
+          guestRepository: repository,
+          nfcService: const _FakeNfcService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit'), findsOneWidget);
+
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit Guest'), findsOneWidget);
+    expect(find.text('Brian Le'), findsOneWidget);
+    expect(find.text('(415) 555-2671'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(repository.detailLoadCount, 2);
+  });
+
   testWidgets('shows check-in and assign action for eligible guest',
       (tester) async {
     final repository = _FakeGuestRepository(

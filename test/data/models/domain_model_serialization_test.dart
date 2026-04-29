@@ -32,6 +32,31 @@ void main() {
   });
 
   group('EventGuestRecord', () {
+    test('parses Instagram handles from nested guest profiles', () {
+      final guest = EventGuestRecord.fromJson(const {
+        'id': 'gst_01',
+        'event_id': 'evt_01',
+        'display_name': 'Legacy Name',
+        'normalized_name': 'legacy name',
+        'attendance_status': 'expected',
+        'cover_status': 'unpaid',
+        'cover_amount_cents': 0,
+        'is_comped': false,
+        'has_scored_play': false,
+        'guest_profile': {
+          'id': 'prf_01',
+          'owner_user_id': 'usr_01',
+          'display_name': 'Brian Le',
+          'normalized_name': 'brian le',
+          'instagram_handle': 'brian.le',
+        },
+      });
+
+      expect(guest.displayName, 'Brian Le');
+      expect(guest.instagramHandle, 'brian.le');
+      expect(guest.toJson()['instagram_handle'], 'brian.le');
+    });
+
     test('allows player tag assignment only for paid or comped guests', () {
       final paidGuest = EventGuestRecord.fromJson(const {
         'id': 'gst_paid',

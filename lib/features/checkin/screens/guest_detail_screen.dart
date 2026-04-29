@@ -5,6 +5,7 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/controllers/guest_check_in_controller.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
 import 'package:mosaic/features/checkin/screens/add_cover_entry_screen.dart';
+import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
@@ -68,6 +69,35 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
     );
   }
 
+  Future<void> _openEditGuest(EventGuestRecord guest) async {
+    var existingGuests = await widget.guestRepository.readCachedGuests(
+      widget.eventId,
+    );
+    if (existingGuests.isEmpty) {
+      existingGuests = await widget.guestRepository.listGuests(widget.eventId);
+    }
+    if (!mounted) {
+      return;
+    }
+
+    await Navigator.of(context).push<EventGuestRecord>(
+      MaterialPageRoute(
+        builder: (_) => GuestFormScreen(
+          eventId: widget.eventId,
+          existingGuests: existingGuests,
+          initialGuest: guest,
+          defaultCoverAmountCents: guest.coverAmountCents,
+          guestRepository: widget.guestRepository,
+        ),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+
+    await _controller.load(widget.guestId);
+  }
+
   @override
   Widget build(BuildContext context) {
     final detail = _controller.detail;
@@ -77,6 +107,14 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(guest?.displayName ?? 'Guest'),
+        actions: [
+          if (guest != null)
+            TextButton(
+              onPressed:
+                  _controller.isSubmitting ? null : () => _openEditGuest(guest),
+              child: const Text('Edit'),
+            ),
+        ],
       ),
       body: AsyncBody(
         isLoading: _controller.isLoading,

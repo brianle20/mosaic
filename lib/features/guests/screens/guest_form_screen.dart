@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -8,6 +10,7 @@ import 'package:mosaic/features/guests/models/guest_form_draft.dart';
 
 const guestNameFieldKey = Key('guest-name-field');
 const guestCoverAmountFieldKey = Key('guest-cover-amount-field');
+const _profileMatchDebounceDuration = Duration(milliseconds: 400);
 
 class GuestFormScreen extends StatefulWidget {
   const GuestFormScreen({
@@ -36,12 +39,13 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
+  late final TextEditingController _instagramController;
   late final TextEditingController _noteController;
   late final TextEditingController _coverAmountController;
   late CoverStatus _coverStatus;
   late final GuestFormController _controller;
   List<GuestProfileMatch> _profileMatches = const [];
-  bool _isLoadingProfileMatches = false;
+  Timer? _profileMatchDebounce;
   int _profileMatchRequestId = 0;
 
   @override
@@ -53,6 +57,9 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
       text: formatPhoneForDisplay(guest?.phoneE164),
     );
     _emailController = TextEditingController(text: guest?.emailLower ?? '');
+    _instagramController = TextEditingController(
+      text: formatInstagramHandleForDisplay(guest?.instagramHandle),
+    );
     _noteController = TextEditingController(text: guest?.note ?? '');
     _coverAmountController = TextEditingController(
       text: formatMoneyCents(
@@ -62,20 +69,23 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
     _coverStatus = guest?.coverStatus ?? CoverStatus.unpaid;
     _controller = GuestFormController(guestRepository: widget.guestRepository)
       ..addListener(_handleUpdate);
-    _nameController.addListener(_loadProfileMatches);
-    _phoneController.addListener(_loadProfileMatches);
-    _emailController.addListener(_loadProfileMatches);
-    _loadProfileMatches();
+    _nameController.addListener(_scheduleProfileMatchLoad);
+    _phoneController.addListener(_scheduleProfileMatchLoad);
+    _emailController.addListener(_scheduleProfileMatchLoad);
+    _instagramController.addListener(_scheduleProfileMatchLoad);
   }
 
   @override
   void dispose() {
-    _nameController.removeListener(_loadProfileMatches);
-    _phoneController.removeListener(_loadProfileMatches);
-    _emailController.removeListener(_loadProfileMatches);
+    _profileMatchDebounce?.cancel();
+    _nameController.removeListener(_scheduleProfileMatchLoad);
+    _phoneController.removeListener(_scheduleProfileMatchLoad);
+    _emailController.removeListener(_scheduleProfileMatchLoad);
+    _instagramController.removeListener(_scheduleProfileMatchLoad);
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
+    _instagramController.dispose();
     _noteController.dispose();
     _coverAmountController.dispose();
     _controller
@@ -97,6 +107,7 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
       displayName: _nameController.text,
       phoneE164: _phoneController.text,
       email: _emailController.text,
+      instagramHandle: _instagramController.text,
       note: _noteController.text,
       coverAmountCents: coverAmount.cents ?? -1,
       coverStatus: _coverStatus,
@@ -118,31 +129,63 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
     return error == null ? null : _moneyValidationMessage(error);
   }
 
-  Future<void> _loadProfileMatches() async {
-    final requestId = ++_profileMatchRequestId;
+  void _scheduleProfileMatchLoad() {
+    _profileMatchDebounce?.cancel();
     final draft = _buildDraft();
-    final phoneE164 = draft.phoneE164Value();
-    final emailLower = draft.emailLowerValue();
-    final normalizedName = draft.normalizedDisplayName();
-    if (phoneE164 == null && emailLower == null && normalizedName.isEmpty) {
+    if (!_shouldLookupProfileMatches(draft)) {
+      _profileMatchRequestId += 1;
       if (mounted) {
         setState(() {
           _profileMatches = const [];
-          _isLoadingProfileMatches = false;
         });
       }
       return;
     }
 
-    setState(() {
-      _isLoadingProfileMatches = true;
-    });
+    _profileMatchDebounce = Timer(
+      _profileMatchDebounceDuration,
+      _loadProfileMatches,
+    );
+  }
+
+  bool _shouldLookupProfileMatches(GuestFormDraft draft) {
+    final phoneE164 = draft.phoneE164Value();
+    final emailLower = draft.emailLowerValue();
+    final instagramHandle = draft.instagramHandleValue();
+    final normalizedName = draft.normalizedDisplayName();
+    final guest = widget.initialGuest;
+    if (guest != null &&
+        normalizedName == guest.normalizedName &&
+        phoneE164 == guest.phoneE164 &&
+        emailLower == guest.emailLower &&
+        instagramHandle == guest.instagramHandle) {
+      return false;
+    }
+
+    return phoneE164 != null ||
+        emailLower != null ||
+        instagramHandle != null ||
+        normalizedName.isNotEmpty;
+  }
+
+  Future<void> _loadProfileMatches() async {
+    final requestId = ++_profileMatchRequestId;
+    final draft = _buildDraft();
+    if (!_shouldLookupProfileMatches(draft)) {
+      if (mounted) {
+        setState(() {
+          _profileMatches = const [];
+        });
+      }
+      return;
+    }
 
     final matches = await widget.guestRepository.findGuestProfileMatches(
       GuestProfileLookupInput(
-        normalizedName: normalizedName,
-        phoneE164: phoneE164,
-        emailLower: emailLower,
+        normalizedName: draft.normalizedDisplayName(),
+        phoneE164: draft.phoneE164Value(),
+        emailLower: draft.emailLowerValue(),
+        instagramHandle: draft.instagramHandleValue(),
       ),
     );
     if (!mounted || requestId != _profileMatchRequestId) {
@@ -151,14 +194,14 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
 
     setState(() {
       _profileMatches = matches;
-      _isLoadingProfileMatches = false;
     });
   }
 
   GuestProfileMatch? _primaryIdentityMatch() {
-    for (final match in _profileMatches) {
+    for (final match in _visibleProfileMatches()) {
       if (match.matchType == GuestProfileMatchType.phone ||
-          match.matchType == GuestProfileMatchType.email) {
+          match.matchType == GuestProfileMatchType.email ||
+          match.matchType == GuestProfileMatchType.instagram) {
         return match;
       }
     }
@@ -166,9 +209,20 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
     return null;
   }
 
+  Iterable<GuestProfileMatch> _visibleProfileMatches() {
+    final editedProfileId = widget.initialGuest?.guestProfileId;
+    if (editedProfileId == null) {
+      return _profileMatches;
+    }
+
+    return _profileMatches.where(
+      (match) => match.profile.id != editedProfileId,
+    );
+  }
+
   Iterable<GuestProfileMatch> _nameOnlyMatches() {
     final primaryMatchId = _primaryIdentityMatch()?.profile.id;
-    return _profileMatches.where(
+    return _visibleProfileMatches().where(
       (match) =>
           match.matchType == GuestProfileMatchType.name &&
           match.profile.id != primaryMatchId,
@@ -179,14 +233,15 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
     _nameController.text = profile.displayName;
     _phoneController.text = formatPhoneForDisplay(profile.phoneE164);
     _emailController.text = profile.emailLower ?? '';
+    _instagramController.text = formatInstagramHandleForDisplay(
+      profile.instagramHandle,
+    );
   }
 
   Widget _buildProfileMatchMessage() {
     final primaryMatch = _primaryIdentityMatch();
     final nameMatches = _nameOnlyMatches().toList(growable: false);
-    if (primaryMatch == null &&
-        nameMatches.isEmpty &&
-        !_isLoadingProfileMatches) {
+    if (primaryMatch == null && nameMatches.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -195,9 +250,7 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_isLoadingProfileMatches)
-            const Text('Checking saved guests...')
-          else if (primaryMatch != null)
+          if (primaryMatch != null)
             Text('Using existing guest: ${primaryMatch.profile.displayName}')
           else
             for (final match in nameMatches)
@@ -323,6 +376,15 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
               keyboardType: TextInputType.emailAddress,
               textCapitalization: TextCapitalization.none,
               autocorrect: false,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _instagramController,
+              decoration: const InputDecoration(labelText: 'Instagram'),
+              keyboardType: TextInputType.text,
+              textCapitalization: TextCapitalization.none,
+              autocorrect: false,
+              validator: (_) => _buildDraft().instagramHandleError,
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<CoverStatus>(

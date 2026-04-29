@@ -36,6 +36,26 @@ String formatPhoneForDisplay(String? input) {
   return '($area) $prefix-$line';
 }
 
+String? normalizeInstagramHandle(String input) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+
+  final withoutAt = trimmed.startsWith('@') ? trimmed.substring(1) : trimmed;
+  final normalized = withoutAt.toLowerCase();
+  if (!RegExp(r'^[a-z0-9._]{1,30}$').hasMatch(normalized)) {
+    return null;
+  }
+
+  return normalized;
+}
+
+String formatInstagramHandleForDisplay(String? input) {
+  final normalized = input == null ? null : normalizeInstagramHandle(input);
+  return normalized == null ? '' : '@$normalized';
+}
+
 class UsPhoneInputFormatter extends TextInputFormatter {
   const UsPhoneInputFormatter();
 

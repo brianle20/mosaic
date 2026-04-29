@@ -9,6 +9,7 @@ class _RecordingGuestRepository implements GuestRepository {
   CreateGuestInput? created;
   List<GuestProfileMatch> matches = const [];
   GuestProfileLookupInput? lastLookupInput;
+  int profileLookupCount = 0;
 
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
@@ -45,6 +46,7 @@ class _RecordingGuestRepository implements GuestRepository {
       'has_scored_play': false,
       'phone_e164': input.phoneE164,
       'email_lower': input.emailLower,
+      'instagram_handle': input.instagramHandle,
       'note': input.note,
     });
   }
@@ -53,6 +55,7 @@ class _RecordingGuestRepository implements GuestRepository {
   Future<List<GuestProfileMatch>> findGuestProfileMatches(
     GuestProfileLookupInput input,
   ) async {
+    profileLookupCount += 1;
     lastLookupInput = input;
     return matches;
   }
@@ -107,10 +110,12 @@ class _RecordingGuestRepository implements GuestRepository {
 EventGuestRecord _guestRecord({
   required String id,
   required String name,
+  String? guestProfileId,
 }) {
   return EventGuestRecord.fromJson({
     'id': id,
     'event_id': 'evt_01',
+    if (guestProfileId != null) 'guest_profile_id': guestProfileId,
     'display_name': name,
     'normalized_name': name.trim().toLowerCase().replaceAll(
           RegExp(r'\s+'),
@@ -237,6 +242,7 @@ void main() {
     await tester.enterText(find.byKey(guestNameFieldKey), 'Brian Le');
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Phone'), '4155552671');
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
     expect(find.text('Using existing guest: Brian Le'), findsOneWidget);
@@ -248,6 +254,172 @@ void main() {
 
     expect(repository.created, isNotNull);
     expect(repository.created!.phoneE164, '+14155552671');
+  });
+
+  testWidgets('debounces profile matching without showing loading text', (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository()
+      ..matches = [
+        GuestProfileMatch(
+          matchType: GuestProfileMatchType.phone,
+          profile: GuestProfileRecord.fromJson(const {
+            'id': 'prf_01',
+            'owner_user_id': 'usr_01',
+            'display_name': 'Brian Le',
+            'normalized_name': 'brian le',
+            'phone_e164': '+14155552671',
+          }),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          guestRepository: repository,
+          onSaved: (_) {},
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Phone'),
+      '4155552671',
+    );
+    await tester.pump();
+
+    expect(find.text('Checking saved guests...'), findsNothing);
+    expect(find.text('Using existing guest: Brian Le'), findsNothing);
+    expect(repository.profileLookupCount, 0);
+
+    await tester.pump(const Duration(milliseconds: 399));
+
+    expect(repository.profileLookupCount, 0);
+
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(repository.profileLookupCount, 1);
+    expect(find.text('Checking saved guests...'), findsNothing);
+    expect(find.text('Using existing guest: Brian Le'), findsOneWidget);
+  });
+
+  testWidgets('stores Instagram handles and uses them for profile matching', (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository()
+      ..matches = [
+        GuestProfileMatch(
+          matchType: GuestProfileMatchType.instagram,
+          profile: GuestProfileRecord.fromJson(const {
+            'id': 'prf_01',
+            'owner_user_id': 'usr_01',
+            'display_name': 'Brian Le',
+            'normalized_name': 'brian le',
+            'instagram_handle': 'brian.le',
+          }),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          guestRepository: repository,
+          onSaved: (_) {},
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byKey(guestNameFieldKey), 'Brian Le');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Instagram'),
+      '@Brian.Le',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastLookupInput?.instagramHandle, 'brian.le');
+    expect(find.text('Using existing guest: Brian Le'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Save Guest'));
+    await tester.tap(find.text('Save Guest'));
+    await tester.pumpAndSettle();
+
+    expect(repository.created, isNotNull);
+    expect(repository.created!.instagramHandle, 'brian.le');
+  });
+
+  testWidgets('blocks invalid Instagram handles', (tester) async {
+    final repository = _RecordingGuestRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          guestRepository: repository,
+          onSaved: (_) {},
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byKey(guestNameFieldKey), 'Brian Le');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Instagram'),
+      '@brian-le',
+    );
+    await tester.ensureVisible(find.text('Save Guest'));
+    await tester.tap(find.text('Save Guest'));
+    await tester.pump();
+
+    expect(
+      find.text(
+        'Use letters, numbers, periods, or underscores, up to 30 characters.',
+      ),
+      findsOneWidget,
+    );
+    expect(repository.created, isNull);
+  });
+
+  testWidgets('hides the edited guest profile from possible matches', (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository()
+      ..matches = [
+        GuestProfileMatch(
+          matchType: GuestProfileMatchType.name,
+          profile: GuestProfileRecord.fromJson(const {
+            'id': 'prf_01',
+            'owner_user_id': 'usr_01',
+            'display_name': 'Brian Le',
+            'normalized_name': 'brian le',
+          }),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          initialGuest: _guestRecord(
+            id: 'gst_01',
+            guestProfileId: 'prf_01',
+            name: 'Brian Le',
+          ),
+          guestRepository: repository,
+          onSaved: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Possible match: Brian Le'), findsNothing);
+    expect(find.text('Using existing guest: Brian Le'), findsNothing);
   });
 
   testWidgets('renders note as a compact field', (tester) async {

@@ -28,6 +28,7 @@ enum CoverEntryMethod {
 enum GuestProfileMatchType {
   phone,
   email,
+  instagram,
   name,
 }
 
@@ -40,6 +41,7 @@ class GuestProfileRecord {
     required this.normalizedName,
     this.phoneE164,
     this.emailLower,
+    this.instagramHandle,
     this.rowVersion = 1,
   });
 
@@ -51,6 +53,7 @@ class GuestProfileRecord {
       normalizedName: _requiredString(json, 'normalized_name'),
       phoneE164: _optionalString(json, 'phone_e164'),
       emailLower: _optionalString(json, 'email_lower'),
+      instagramHandle: _optionalString(json, 'instagram_handle'),
       rowVersion: _intOrDefault(json, 'row_version', 1),
     );
   }
@@ -61,6 +64,7 @@ class GuestProfileRecord {
   final String normalizedName;
   final String? phoneE164;
   final String? emailLower;
+  final String? instagramHandle;
   final int rowVersion;
 
   Map<String, dynamic> toJson() {
@@ -71,6 +75,7 @@ class GuestProfileRecord {
       'normalized_name': normalizedName,
       'phone_e164': phoneE164,
       'email_lower': emailLower,
+      'instagram_handle': instagramHandle,
       'row_version': rowVersion,
     };
   }
@@ -93,11 +98,13 @@ class GuestProfileLookupInput {
     required this.normalizedName,
     this.phoneE164,
     this.emailLower,
+    this.instagramHandle,
   });
 
   final String normalizedName;
   final String? phoneE164;
   final String? emailLower;
+  final String? instagramHandle;
 }
 
 @immutable
@@ -111,6 +118,7 @@ class CreateGuestInput {
     required this.isComped,
     this.phoneE164,
     this.emailLower,
+    this.instagramHandle,
     this.note,
   });
 
@@ -119,6 +127,7 @@ class CreateGuestInput {
   final String normalizedName;
   final String? phoneE164;
   final String? emailLower;
+  final String? instagramHandle;
   final CoverStatus coverStatus;
   final int coverAmountCents;
   final bool isComped;
@@ -154,6 +163,7 @@ class UpdateGuestInput {
     required this.isComped,
     this.phoneE164,
     this.emailLower,
+    this.instagramHandle,
     this.note,
   });
 
@@ -163,6 +173,7 @@ class UpdateGuestInput {
   final String normalizedName;
   final String? phoneE164;
   final String? emailLower;
+  final String? instagramHandle;
   final CoverStatus coverStatus;
   final int coverAmountCents;
   final bool isComped;
@@ -197,6 +208,7 @@ class EventGuestRecord {
     required this.hasScoredPlay,
     this.phoneE164,
     this.emailLower,
+    this.instagramHandle,
     this.note,
     this.checkedInAt,
     this.rowVersion = 1,
@@ -216,6 +228,8 @@ class EventGuestRecord {
           profile?.normalizedName ?? _requiredString(json, 'normalized_name'),
       phoneE164: profile?.phoneE164 ?? _optionalString(json, 'phone_e164'),
       emailLower: profile?.emailLower ?? _optionalString(json, 'email_lower'),
+      instagramHandle:
+          profile?.instagramHandle ?? _optionalString(json, 'instagram_handle'),
       attendanceStatus: _attendanceStatusFromJson(
         _requiredString(json, 'attendance_status'),
       ),
@@ -236,6 +250,7 @@ class EventGuestRecord {
   final String normalizedName;
   final String? phoneE164;
   final String? emailLower;
+  final String? instagramHandle;
   final AttendanceStatus attendanceStatus;
   final CoverStatus coverStatus;
   final int coverAmountCents;
@@ -260,6 +275,7 @@ class EventGuestRecord {
       'normalized_name': normalizedName,
       'phone_e164': phoneE164,
       'email_lower': emailLower,
+      'instagram_handle': instagramHandle,
       'attendance_status': _attendanceStatusToJson(attendanceStatus),
       'cover_status': _coverStatusToJson(coverStatus),
       'cover_amount_cents': coverAmountCents,

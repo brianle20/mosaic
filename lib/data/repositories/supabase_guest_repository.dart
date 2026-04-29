@@ -192,6 +192,16 @@ class SupabaseGuestRepository implements GuestRepository {
       );
     }
 
+    if (input.instagramHandle case final instagramHandle?) {
+      await addMatch(
+        await _findProfileByInstagram(
+          userId: userId,
+          instagramHandle: instagramHandle,
+        ),
+        GuestProfileMatchType.instagram,
+      );
+    }
+
     if (input.normalizedName.isNotEmpty) {
       final nameRows = await client
           .from('guest_profiles')
@@ -359,6 +369,7 @@ class SupabaseGuestRepository implements GuestRepository {
       normalizedName: input.normalizedName,
       phoneE164: input.phoneE164,
       emailLower: input.emailLower,
+      instagramHandle: input.instagramHandle,
     );
     final updated = await client
         .from('event_guests')
@@ -404,21 +415,34 @@ class SupabaseGuestRepository implements GuestRepository {
             userId: userId,
             emailLower: input.emailLower!,
           );
+    final instagramProfile = input.instagramHandle == null
+        ? null
+        : await _findProfileByInstagram(
+            userId: userId,
+            instagramHandle: input.instagramHandle!,
+          );
 
-    if (phoneProfile != null &&
-        emailProfile != null &&
-        phoneProfile.id != emailProfile.id) {
+    final matchedProfiles = [
+      phoneProfile,
+      emailProfile,
+      instagramProfile,
+    ].nonNulls.toList(growable: false);
+    final matchedProfileIds = {
+      for (final profile in matchedProfiles) profile.id,
+    };
+    if (matchedProfileIds.length > 1) {
       throw StateError(
-        'Phone and email match different guest profiles. Review the guest details before saving.',
+        'Phone, email, and Instagram match different guest profiles. Review the guest details before saving.',
       );
     }
 
-    final matchedProfile = phoneProfile ?? emailProfile;
+    final matchedProfile = phoneProfile ?? emailProfile ?? instagramProfile;
     if (matchedProfile != null) {
       return _fillBlankProfileFields(
         profile: matchedProfile,
         phoneE164: input.phoneE164,
         emailLower: input.emailLower,
+        instagramHandle: input.instagramHandle,
       );
     }
 
@@ -430,6 +454,7 @@ class SupabaseGuestRepository implements GuestRepository {
           'normalized_name': input.normalizedName,
           'phone_e164': input.phoneE164,
           'email_lower': input.emailLower,
+          'instagram_handle': input.instagramHandle,
         })
         .select()
         .single();
@@ -480,10 +505,25 @@ class SupabaseGuestRepository implements GuestRepository {
     return castRow == null ? null : GuestProfileRecord.fromJson(castRow);
   }
 
+  Future<GuestProfileRecord?> _findProfileByInstagram({
+    required String userId,
+    required String instagramHandle,
+  }) async {
+    final row = await client
+        .from('guest_profiles')
+        .select()
+        .eq('owner_user_id', userId)
+        .eq('instagram_handle', instagramHandle)
+        .maybeSingle();
+    final castRow = _castRow(row);
+    return castRow == null ? null : GuestProfileRecord.fromJson(castRow);
+  }
+
   Future<GuestProfileRecord> _fillBlankProfileFields({
     required GuestProfileRecord profile,
     required String? phoneE164,
     required String? emailLower,
+    required String? instagramHandle,
   }) async {
     final updates = <String, dynamic>{};
     if (profile.phoneE164 == null && phoneE164 != null) {
@@ -491,6 +531,9 @@ class SupabaseGuestRepository implements GuestRepository {
     }
     if (profile.emailLower == null && emailLower != null) {
       updates['email_lower'] = emailLower;
+    }
+    if (profile.instagramHandle == null && instagramHandle != null) {
+      updates['instagram_handle'] = instagramHandle;
     }
 
     if (updates.isEmpty) {
@@ -512,6 +555,7 @@ class SupabaseGuestRepository implements GuestRepository {
     required String normalizedName,
     required String? phoneE164,
     required String? emailLower,
+    required String? instagramHandle,
   }) async {
     final userId = _currentUserId();
     if (userId == null) {
@@ -524,6 +568,12 @@ class SupabaseGuestRepository implements GuestRepository {
     final emailProfile = emailLower == null
         ? null
         : await _findProfileByEmail(userId: userId, emailLower: emailLower);
+    final instagramProfile = instagramHandle == null
+        ? null
+        : await _findProfileByInstagram(
+            userId: userId,
+            instagramHandle: instagramHandle,
+          );
 
     if (phoneProfile != null && phoneProfile.id != guestProfileId) {
       throw StateError('Phone is already used by another guest profile.');
@@ -531,12 +581,16 @@ class SupabaseGuestRepository implements GuestRepository {
     if (emailProfile != null && emailProfile.id != guestProfileId) {
       throw StateError('Email is already used by another guest profile.');
     }
+    if (instagramProfile != null && instagramProfile.id != guestProfileId) {
+      throw StateError('Instagram is already used by another guest profile.');
+    }
 
     await client.from('guest_profiles').update({
       'display_name': displayName,
       'normalized_name': normalizedName,
       'phone_e164': phoneE164,
       'email_lower': emailLower,
+      'instagram_handle': instagramHandle,
     }).eq('id', guestProfileId);
   }
 

@@ -8,6 +8,7 @@ class GuestFormDraft {
     required this.displayName,
     this.phoneE164 = '',
     this.email = '',
+    this.instagramHandle = '',
     this.note = '',
     this.coverAmountCents = 0,
     this.coverStatus = CoverStatus.unpaid,
@@ -16,6 +17,7 @@ class GuestFormDraft {
   final String displayName;
   final String phoneE164;
   final String email;
+  final String instagramHandle;
   final String note;
   final int coverAmountCents;
   final CoverStatus coverStatus;
@@ -53,6 +55,20 @@ class GuestFormDraft {
   String? emailLowerValue() {
     final trimmed = email.trim();
     return trimmed.isEmpty ? null : trimmed.toLowerCase();
+  }
+
+  String? get instagramHandleError {
+    if (instagramHandle.trim().isEmpty) {
+      return null;
+    }
+
+    return instagramHandleValue() == null
+        ? 'Use letters, numbers, periods, or underscores, up to 30 characters.'
+        : null;
+  }
+
+  String? instagramHandleValue() {
+    return normalizeInstagramHandle(instagramHandle);
   }
 
   String normalizedDisplayName() {
@@ -98,6 +114,7 @@ class GuestFormDraft {
   bool get isValid =>
       displayNameError == null &&
       phoneError == null &&
+      instagramHandleError == null &&
       coverAmountError == null;
 
   CreateGuestInput toCreateInput({required String eventId}) {
@@ -108,6 +125,7 @@ class GuestFormDraft {
       normalizedName: normalizedName,
       phoneE164: phoneE164Value(),
       emailLower: emailLowerValue(),
+      instagramHandle: instagramHandleValue(),
       coverStatus: coverStatus,
       coverAmountCents: coverAmountCents,
       isComped: coverStatus == CoverStatus.comped,
@@ -127,6 +145,7 @@ class GuestFormDraft {
       normalizedName: normalizedName,
       phoneE164: phoneE164Value(),
       emailLower: emailLowerValue(),
+      instagramHandle: instagramHandleValue(),
       coverStatus: coverStatus,
       coverAmountCents: coverAmountCents,
       isComped: coverStatus == CoverStatus.comped,
