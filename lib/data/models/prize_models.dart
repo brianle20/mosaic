@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:meta/meta.dart';
 
 enum PrizePlanMode {
@@ -12,12 +10,6 @@ enum PrizePlanStatus {
   draft,
   validated,
   locked,
-}
-
-enum PrizeAwardStatus {
-  planned,
-  paid,
-  voided,
 }
 
 @immutable
@@ -35,12 +27,20 @@ class PrizeTierDraftInput {
   final int? fixedAmountCents;
 
   Map<String, dynamic> toJson() {
-    return {
+    final json = <String, dynamic>{
       'place': place,
-      'label': label,
-      'percentage_bps': percentageBps,
-      'fixed_amount_cents': fixedAmountCents,
     };
+    if (label != null) {
+      json['label'] = label;
+    }
+    if (percentageBps != null) {
+      json['percentage_bps'] = percentageBps;
+    }
+    if (fixedAmountCents != null) {
+      json['fixed_amount_cents'] = fixedAmountCents;
+    }
+
+    return json;
   }
 }
 
@@ -48,19 +48,13 @@ class PrizeTierDraftInput {
 class UpsertPrizePlanInput {
   const UpsertPrizePlanInput({
     required this.eventId,
-    required this.prizeBudgetCents,
     required this.mode,
-    required this.reserveFixedCents,
-    required this.reservePercentageBps,
     required this.tiers,
     this.note,
   });
 
   final String eventId;
-  final int prizeBudgetCents;
   final PrizePlanMode mode;
-  final int reserveFixedCents;
-  final int reservePercentageBps;
   final String? note;
   final List<PrizeTierDraftInput> tiers;
 
@@ -68,8 +62,8 @@ class UpsertPrizePlanInput {
     return {
       'target_event_id': eventId,
       'target_mode': mode.name,
-      'target_reserve_fixed_cents': reserveFixedCents,
-      'target_reserve_percentage_bps': reservePercentageBps,
+      'target_reserve_fixed_cents': 0,
+      'target_reserve_percentage_bps': 0,
       'target_note': note,
       'target_tiers':
           tiers.map((tier) => tier.toJson()).toList(growable: false),
@@ -84,23 +78,18 @@ class PrizePlanRecord {
     required this.eventId,
     required this.mode,
     required this.status,
-    required this.prizeBudgetCents,
     required this.reserveFixedCents,
     required this.reservePercentageBps,
     this.note,
     this.rowVersion = 1,
   });
 
-  factory PrizePlanRecord.fromJson(
-    Map<String, dynamic> json, {
-    required int prizeBudgetCents,
-  }) {
+  factory PrizePlanRecord.fromJson(Map<String, dynamic> json) {
     return PrizePlanRecord(
       id: _requiredString(json, 'id'),
       eventId: _requiredString(json, 'event_id'),
       mode: _prizePlanModeFromJson(_requiredString(json, 'mode')),
       status: _prizePlanStatusFromJson(_requiredString(json, 'status')),
-      prizeBudgetCents: prizeBudgetCents,
       reserveFixedCents: _requiredInt(json, 'reserve_fixed_cents'),
       reservePercentageBps: _requiredInt(json, 'reserve_percentage_bps'),
       note: _optionalString(json, 'note'),
@@ -112,22 +101,10 @@ class PrizePlanRecord {
   final String eventId;
   final PrizePlanMode mode;
   final PrizePlanStatus status;
-  final int prizeBudgetCents;
   final int reserveFixedCents;
   final int reservePercentageBps;
   final String? note;
   final int rowVersion;
-
-  int get reservePercentageCents {
-    return (prizeBudgetCents * reservePercentageBps) ~/ 10000;
-  }
-
-  int get distributableBudgetCents {
-    return math.max(
-      0,
-      prizeBudgetCents - reserveFixedCents - reservePercentageCents,
-    );
-  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -135,7 +112,6 @@ class PrizePlanRecord {
       'event_id': eventId,
       'mode': mode.name,
       'status': status.name,
-      'prize_budget_cents': prizeBudgetCents,
       'reserve_fixed_cents': reserveFixedCents,
       'reserve_percentage_bps': reservePercentageBps,
       'note': note,
@@ -151,15 +127,11 @@ class PrizePlanDetail {
     required this.tiers,
   });
 
-  factory PrizePlanDetail.fromJson(
-    Map<String, dynamic> json, {
-    required int prizeBudgetCents,
-  }) {
+  factory PrizePlanDetail.fromJson(Map<String, dynamic> json) {
     final tiersJson = (json['tiers'] as List<dynamic>? ?? const <dynamic>[]);
     return PrizePlanDetail(
       plan: PrizePlanRecord.fromJson(
         (json['plan'] as Map).cast<String, dynamic>(),
-        prizeBudgetCents: prizeBudgetCents,
       ),
       tiers: tiersJson
           .map((tier) =>
@@ -231,11 +203,7 @@ class PrizeAwardRecord {
     required this.rankEnd,
     required this.displayRank,
     required this.awardAmountCents,
-    required this.status,
     this.displayName,
-    this.paidMethod,
-    this.paidAt,
-    this.paidNote,
   });
 
   factory PrizeAwardRecord.fromJson(Map<String, dynamic> json) {
@@ -248,10 +216,6 @@ class PrizeAwardRecord {
       rankEnd: _requiredInt(json, 'rank_end'),
       displayRank: _requiredString(json, 'display_rank'),
       awardAmountCents: _requiredInt(json, 'award_amount_cents'),
-      status: _prizeAwardStatusFromJson(_requiredString(json, 'status')),
-      paidMethod: _optionalString(json, 'paid_method'),
-      paidAt: _optionalString(json, 'paid_at'),
-      paidNote: _optionalString(json, 'paid_note'),
     );
   }
 
@@ -263,10 +227,6 @@ class PrizeAwardRecord {
   final int rankEnd;
   final String displayRank;
   final int awardAmountCents;
-  final PrizeAwardStatus status;
-  final String? paidMethod;
-  final String? paidAt;
-  final String? paidNote;
 
   Map<String, dynamic> toJson() {
     return {
@@ -278,14 +238,6 @@ class PrizeAwardRecord {
       'rank_end': rankEnd,
       'display_rank': displayRank,
       'award_amount_cents': awardAmountCents,
-      'status': switch (status) {
-        PrizeAwardStatus.planned => 'planned',
-        PrizeAwardStatus.paid => 'paid',
-        PrizeAwardStatus.voided => 'void',
-      },
-      'paid_method': paidMethod,
-      'paid_at': paidAt,
-      'paid_note': paidNote,
     };
   }
 }
@@ -415,14 +367,5 @@ PrizePlanStatus _prizePlanStatusFromJson(String value) {
     'validated' => PrizePlanStatus.validated,
     'locked' => PrizePlanStatus.locked,
     _ => throw FormatException('Unknown prize plan status: $value'),
-  };
-}
-
-PrizeAwardStatus _prizeAwardStatusFromJson(String value) {
-  return switch (value) {
-    'planned' => PrizeAwardStatus.planned,
-    'paid' => PrizeAwardStatus.paid,
-    'void' => PrizeAwardStatus.voided,
-    _ => throw FormatException('Unknown prize award status: $value'),
   };
 }

@@ -2,86 +2,92 @@ import 'package:mosaic/data/models/prize_models.dart';
 
 class PrizePlanDraft {
   const PrizePlanDraft({
-    required this.prizeBudgetCents,
     required this.mode,
-    required this.reserveFixedCents,
-    required this.reservePercentageBps,
     required this.tiers,
     this.note,
   });
 
-  final int prizeBudgetCents;
   final PrizePlanMode mode;
-  final int reserveFixedCents;
-  final int reservePercentageBps;
   final String? note;
   final List<PrizeTierDraftInput> tiers;
 
+  static List<PrizeTierDraftInput> defaultTiers({int count = 3}) {
+    return List<PrizeTierDraftInput>.generate(
+      count,
+      (index) => PrizeTierDraftInput(
+        place: index + 1,
+        label: _ordinalLabel(index + 1),
+        fixedAmountCents: 0,
+      ),
+      growable: false,
+    );
+  }
+
   PrizePlanDraft copyWith({
-    int? prizeBudgetCents,
     PrizePlanMode? mode,
-    int? reserveFixedCents,
-    int? reservePercentageBps,
     String? note,
     List<PrizeTierDraftInput>? tiers,
   }) {
     return PrizePlanDraft(
-      prizeBudgetCents: prizeBudgetCents ?? this.prizeBudgetCents,
       mode: mode ?? this.mode,
-      reserveFixedCents: reserveFixedCents ?? this.reserveFixedCents,
-      reservePercentageBps: reservePercentageBps ?? this.reservePercentageBps,
       note: note ?? this.note,
       tiers: tiers ?? this.tiers,
     );
   }
 
   factory PrizePlanDraft.fromDetail(PrizePlanDetail detail) {
+    final loadedTiers = detail.tiers
+        .map(
+          (tier) => PrizeTierDraftInput(
+            place: tier.place,
+            label: _ordinalLabel(tier.place),
+            percentageBps: tier.percentageBps,
+            fixedAmountCents: tier.fixedAmountCents ?? 0,
+          ),
+        )
+        .toList();
+    while (loadedTiers.length < 3) {
+      final place = loadedTiers.length + 1;
+      loadedTiers.add(
+        PrizeTierDraftInput(
+          place: place,
+          label: _ordinalLabel(place),
+          fixedAmountCents: 0,
+        ),
+      );
+    }
+
     return PrizePlanDraft(
-      prizeBudgetCents: detail.plan.prizeBudgetCents,
-      mode: detail.plan.mode,
-      reserveFixedCents: detail.plan.reserveFixedCents,
-      reservePercentageBps: detail.plan.reservePercentageBps,
+      mode: detail.plan.mode == PrizePlanMode.none
+          ? PrizePlanMode.fixed
+          : detail.plan.mode,
       note: detail.plan.note,
-      tiers: detail.tiers
-          .map(
-            (tier) => PrizeTierDraftInput(
-              place: tier.place,
-              label: tier.label,
-              percentageBps: tier.percentageBps,
-              fixedAmountCents: tier.fixedAmountCents,
-            ),
-          )
-          .toList(growable: false),
+      tiers: loadedTiers,
     );
   }
 
-  String? get reserveFixedError {
-    if (reserveFixedCents < 0) {
-      return 'Reserve must be zero or more.';
-    }
-
-    return null;
-  }
-
-  String? get reservePercentageError {
-    if (reservePercentageBps < 0 || reservePercentageBps > 10000) {
-      return 'Reserve percentage must be between 0 and 10000.';
-    }
-
-    return null;
-  }
+  int get totalPrizeCents => tiers.fold(
+        0,
+        (total, tier) =>
+            total +
+            ((tier.fixedAmountCents ?? 0) > 0 ? tier.fixedAmountCents! : 0),
+      );
 
   String? get generalError {
     if (mode == PrizePlanMode.none) {
       return tiers.isEmpty ? null : 'None mode cannot include prize tiers.';
     }
 
-    if (tiers.isEmpty) {
-      return 'Prize tiers are required.';
+    if (mode == PrizePlanMode.percentage) {
+      return 'Percentage prizes are not supported for MVP.';
+    }
+
+    if (_positiveTiers.isEmpty) {
+      return 'Enter at least one prize amount.';
     }
 
     final seenPlaces = <int>{};
-    for (final tier in tiers) {
+    for (final tier in _positiveTiers) {
       if (!seenPlaces.add(tier.place)) {
         return 'Prize tier places must be unique.';
       }
@@ -94,22 +100,8 @@ class PrizePlanDraft {
     final errors = <int, String?>{};
     for (final tier in tiers) {
       if (mode == PrizePlanMode.fixed) {
-        if (tier.fixedAmountCents == null) {
-          errors[tier.place] = 'Each fixed tier needs a fixed amount.';
-          continue;
-        }
-
-        if (tier.fixedAmountCents! < 0) {
+        if ((tier.fixedAmountCents ?? 0) < 0) {
           errors[tier.place] = 'Fixed amounts must be zero or more.';
-        }
-      } else if (mode == PrizePlanMode.percentage) {
-        if (tier.percentageBps == null) {
-          errors[tier.place] = 'Each percentage tier needs a percentage.';
-          continue;
-        }
-
-        if (tier.percentageBps! < 0 || tier.percentageBps! > 10000) {
-          errors[tier.place] = 'Percentages must be between 0 and 10000.';
         }
       }
     }
@@ -118,9 +110,7 @@ class PrizePlanDraft {
   }
 
   bool get isValid {
-    return reserveFixedError == null &&
-        reservePercentageError == null &&
-        generalError == null &&
+    return generalError == null &&
         tierErrors.values.every((error) => error == null);
   }
 
@@ -129,13 +119,41 @@ class PrizePlanDraft {
   }) {
     return UpsertPrizePlanInput(
       eventId: eventId,
-      prizeBudgetCents: prizeBudgetCents,
       mode: mode,
-      reserveFixedCents: reserveFixedCents,
-      reservePercentageBps: reservePercentageBps,
       note: note,
-      tiers: List<PrizeTierDraftInput>.from(tiers)
-        ..sort((left, right) => left.place.compareTo(right.place)),
+      tiers: _renumberedPositiveTiers,
     );
   }
+
+  List<PrizeTierDraftInput> get _positiveTiers =>
+      tiers.where((tier) => (tier.fixedAmountCents ?? 0) > 0).toList();
+
+  List<PrizeTierDraftInput> get _renumberedPositiveTiers {
+    final sorted = List<PrizeTierDraftInput>.from(_positiveTiers)
+      ..sort((left, right) => left.place.compareTo(right.place));
+
+    return [
+      for (var index = 0; index < sorted.length; index++)
+        PrizeTierDraftInput(
+          place: index + 1,
+          label: _ordinalLabel(index + 1),
+          percentageBps: sorted[index].percentageBps,
+          fixedAmountCents: sorted[index].fixedAmountCents,
+        ),
+    ];
+  }
+}
+
+String _ordinalLabel(int place) {
+  final mod100 = place % 100;
+  if (mod100 >= 11 && mod100 <= 13) {
+    return '${place}th';
+  }
+
+  return switch (place % 10) {
+    1 => '${place}st',
+    2 => '${place}nd',
+    3 => '${place}rd',
+    _ => '${place}th',
+  };
 }

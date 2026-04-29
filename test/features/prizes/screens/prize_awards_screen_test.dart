@@ -8,58 +8,10 @@ class _AwardsRepository implements PrizeRepository {
   _AwardsRepository(this.awards);
 
   List<PrizeAwardRecord> awards;
-  int markPaidCount = 0;
-  int voidCount = 0;
 
   @override
   Future<List<PrizeAwardRecord>> loadPrizeAwards(String eventId) async =>
       awards;
-
-  @override
-  Future<PrizeAwardRecord> markPrizeAwardPaid({
-    required String awardId,
-    String? paidMethod,
-    String? paidNote,
-  }) async {
-    markPaidCount += 1;
-    final updated = PrizeAwardRecord(
-      id: awardId,
-      eventId: 'evt_01',
-      eventGuestId: 'gst_01',
-      displayName: 'Alice Wong',
-      rankStart: 1,
-      rankEnd: 1,
-      displayRank: '1',
-      awardAmountCents: 15000,
-      status: PrizeAwardStatus.paid,
-      paidMethod: paidMethod,
-      paidNote: paidNote,
-    );
-    awards = [updated, ...awards.where((award) => award.id != awardId)];
-    return updated;
-  }
-
-  @override
-  Future<PrizeAwardRecord> voidPrizeAward({
-    required String awardId,
-    String? paidNote,
-  }) async {
-    voidCount += 1;
-    final updated = PrizeAwardRecord(
-      id: awardId,
-      eventId: 'evt_01',
-      eventGuestId: 'gst_02',
-      displayName: 'Bob Lee',
-      rankStart: 2,
-      rankEnd: 2,
-      displayRank: '2',
-      awardAmountCents: 10000,
-      status: PrizeAwardStatus.voided,
-      paidNote: paidNote,
-    );
-    awards = [awards.first, updated];
-    return updated;
-  }
 
   @override
   Future<List<PrizeAwardRecord>> readCachedPrizeAwards(String eventId) async =>
@@ -68,7 +20,6 @@ class _AwardsRepository implements PrizeRepository {
   @override
   Future<PrizePlanDetail?> loadPrizePlan({
     required String eventId,
-    required int prizeBudgetCents,
   }) {
     throw UnimplementedError();
   }
@@ -122,7 +73,7 @@ void main() {
     );
   });
 
-  testWidgets('renders locked awards and updates statuses', (tester) async {
+  testWidgets('renders locked awards without payment actions', (tester) async {
     final repository = _AwardsRepository(
       const [
         PrizeAwardRecord(
@@ -134,7 +85,6 @@ void main() {
           rankEnd: 1,
           displayRank: '1',
           awardAmountCents: 15000,
-          status: PrizeAwardStatus.planned,
         ),
         PrizeAwardRecord(
           id: 'award_02',
@@ -145,7 +95,6 @@ void main() {
           rankEnd: 2,
           displayRank: '2',
           awardAmountCents: 10000,
-          status: PrizeAwardStatus.planned,
         ),
       ],
     );
@@ -164,35 +113,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Official Payout Checklist'), findsOneWidget);
+    expect(find.text('Official Prize Awards'), findsOneWidget);
     expect(find.text('Alice Wong'), findsOneWidget);
-    expect(find.text('Ready to Pay'), findsNWidgets(2));
-    expect(
-      find.descendant(
-        of: find.ancestor(
-            of: find.text('Alice Wong'), matching: find.byType(Card)),
-        matching: find.text('Mark Paid'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: find.ancestor(
-            of: find.text('Alice Wong'), matching: find.byType(Card)),
-        matching: find.text('Void'),
-      ),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.text('Mark Paid').first);
-    await tester.pumpAndSettle();
-    expect(repository.markPaidCount, 1);
-    expect(find.text('Paid Out'), findsOneWidget);
-
-    await tester.tap(find.text('Void').first);
-    await tester.pumpAndSettle();
-    expect(repository.voidCount, 1);
-    expect(find.text('Void Award'), findsOneWidget);
+    expect(find.text(r'$150.00'), findsOneWidget);
+    expect(find.text(r'$100.00'), findsOneWidget);
+    expect(find.text('Ready to Pay'), findsNothing);
+    expect(find.text('Paid Out'), findsNothing);
+    expect(find.text('Void Award'), findsNothing);
+    expect(find.text('Mark Paid'), findsNothing);
+    expect(find.text('Void'), findsNothing);
   });
 
   testWidgets('uses award display names when no fallback name map is provided',
@@ -208,7 +137,6 @@ void main() {
           rankEnd: 1,
           displayRank: '1',
           awardAmountCents: 15000,
-          status: PrizeAwardStatus.planned,
         ),
       ],
     );

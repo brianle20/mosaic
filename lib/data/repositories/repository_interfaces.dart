@@ -151,7 +151,6 @@ abstract interface class PrizeRepository {
 
   Future<PrizePlanDetail?> loadPrizePlan({
     required String eventId,
-    required int prizeBudgetCents,
   });
 
   Future<PrizePlanDetail> upsertPrizePlan(UpsertPrizePlanInput input);
@@ -165,17 +164,6 @@ abstract interface class PrizeRepository {
   Future<List<PrizeAwardRecord>> loadPrizeAwards(String eventId);
 
   Future<List<PrizeAwardRecord>> lockPrizeAwards(String eventId);
-
-  Future<PrizeAwardRecord> markPrizeAwardPaid({
-    required String awardId,
-    String? paidMethod,
-    String? paidNote,
-  });
-
-  Future<PrizeAwardRecord> voidPrizeAward({
-    required String awardId,
-    String? paidNote,
-  });
 }
 
 abstract interface class LeaderboardRepository {

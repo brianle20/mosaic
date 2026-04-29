@@ -8,12 +8,14 @@ class MoneyTextFormField extends StatelessWidget {
     required this.controller,
     required this.labelText,
     this.validator,
+    this.onChanged,
   });
 
   final Key? fieldKey;
   final TextEditingController controller;
   final String labelText;
   final String? Function(String value)? validator;
+  final void Function(String value)? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +24,7 @@ class MoneyTextFormField extends StatelessWidget {
       controller: controller,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: const [MoneyCentsInputFormatter()],
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: labelText,
         prefixText: r'$',

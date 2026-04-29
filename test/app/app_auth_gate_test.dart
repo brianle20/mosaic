@@ -296,7 +296,6 @@ class _FakePrizeRepository implements PrizeRepository {
   @override
   Future<PrizePlanDetail?> loadPrizePlan({
     required String eventId,
-    required int prizeBudgetCents,
   }) async =>
       null;
 
@@ -307,15 +306,6 @@ class _FakePrizeRepository implements PrizeRepository {
   @override
   Future<List<PrizeAwardRecord>> lockPrizeAwards(String eventId) async =>
       const [];
-
-  @override
-  Future<PrizeAwardRecord> markPrizeAwardPaid({
-    required String awardId,
-    String? paidMethod,
-    String? paidNote,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<List<PrizeAwardRecord>> readCachedPrizeAwards(String eventId) async =>
@@ -332,14 +322,6 @@ class _FakePrizeRepository implements PrizeRepository {
 
   @override
   Future<PrizePlanDetail> upsertPrizePlan(UpsertPrizePlanInput input) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<PrizeAwardRecord> voidPrizeAward({
-    required String awardId,
-    String? paidNote,
-  }) {
     throw UnimplementedError();
   }
 }
@@ -443,7 +425,6 @@ void main() {
               'checkin_open': false,
               'scoring_open': false,
               'cover_charge_cents': 2000,
-              'prize_budget_cents': 50000,
               'default_ruleset_id': 'HK_STANDARD_V1',
               'prevailing_wind': 'east',
             }),
@@ -488,7 +469,6 @@ void main() {
               'checkin_open': false,
               'scoring_open': false,
               'cover_charge_cents': 2000,
-              'prize_budget_cents': 50000,
               'default_ruleset_id': 'HK_STANDARD_V1',
               'prevailing_wind': 'east',
             }),

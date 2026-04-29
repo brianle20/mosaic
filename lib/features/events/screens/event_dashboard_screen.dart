@@ -4,6 +4,7 @@ import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
+import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 class EventDashboardScreen extends StatefulWidget {
@@ -13,12 +14,14 @@ class EventDashboardScreen extends StatefulWidget {
     required this.eventRepository,
     required this.guestRepository,
     required this.leaderboardRepository,
+    this.prizeRepository,
   });
 
   final EventDashboardArgs args;
   final EventRepository eventRepository;
   final GuestRepository guestRepository;
   final LeaderboardRepository leaderboardRepository;
+  final PrizeRepository? prizeRepository;
 
   @override
   State<EventDashboardScreen> createState() => _EventDashboardScreenState();
@@ -33,6 +36,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     _controller = EventDashboardController(
       eventRepository: widget.eventRepository,
       guestRepository: widget.guestRepository,
+      prizeRepository: widget.prizeRepository,
     )
       ..addListener(_handleUpdate)
       ..load(widget.args.eventId);
@@ -95,19 +99,24 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     );
   }
 
-  void _openPrizes() {
+  Future<void> _openPrizes() async {
     final event = _controller.event;
     if (event == null) {
       return;
     }
 
-    Navigator.of(context).pushNamed(
+    await Navigator.of(context).pushNamed(
       AppRouter.prizePlanRoute,
       arguments: PrizePlanArgs(
         eventId: event.id,
-        prizeBudgetCents: event.prizeBudgetCents,
       ),
     );
+
+    if (!mounted) {
+      return;
+    }
+
+    await _controller.load(event.id);
   }
 
   void _openActivity() {
@@ -264,6 +273,14 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return message;
   }
 
+  String _formatPrizePool(int? prizePoolCents) {
+    if (prizePoolCents == null) {
+      return 'Prize Pool: Not set';
+    }
+
+    return 'Prize Pool: \$${formatMoneyCents(prizePoolCents)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final event = _controller.event;
@@ -297,6 +314,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             ),
             const SizedBox(height: 8),
             Text('Guests: ${_controller.guestCount}'),
+            const SizedBox(height: 4),
+            Text(_formatPrizePool(_controller.prizePoolCents)),
             if (_controller.lifecycleError case final lifecycleError?)
               Padding(
                 padding: const EdgeInsets.only(top: 16),

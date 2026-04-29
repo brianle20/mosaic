@@ -245,16 +245,27 @@ class _ActivityRepository implements ActivityRepository {
 }
 
 class _PrizeRepository implements PrizeRepository {
+  _PrizeRepository({
+    PrizePlanDetail? loadedPlan,
+    List<PrizePlanDetail?> loadedPlans = const [],
+  })  : _loadedPlan = loadedPlan,
+        _loadedPlans = List.of(loadedPlans);
+
+  PrizePlanDetail? _loadedPlan;
+  final List<PrizePlanDetail?> _loadedPlans;
+
   @override
   Future<List<PrizeAwardRecord>> loadPrizeAwards(String eventId) async =>
       const [];
 
   @override
-  Future<PrizePlanDetail?> loadPrizePlan({
-    required String eventId,
-    required int prizeBudgetCents,
-  }) async =>
-      null;
+  Future<PrizePlanDetail?> loadPrizePlan({required String eventId}) async {
+    if (_loadedPlans.isNotEmpty) {
+      _loadedPlan = _loadedPlans.removeAt(0);
+    }
+
+    return _loadedPlan;
+  }
 
   @override
   Future<List<PrizeAwardPreviewRow>> loadPrizePreview(String eventId) async =>
@@ -265,20 +276,12 @@ class _PrizeRepository implements PrizeRepository {
       const [];
 
   @override
-  Future<PrizeAwardRecord> markPrizeAwardPaid({
-    required String awardId,
-    String? paidMethod,
-    String? paidNote,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<List<PrizeAwardRecord>> readCachedPrizeAwards(String eventId) async =>
       const [];
 
   @override
-  Future<PrizePlanDetail?> readCachedPrizePlan(String eventId) async => null;
+  Future<PrizePlanDetail?> readCachedPrizePlan(String eventId) async =>
+      _loadedPlan;
 
   @override
   Future<List<PrizeAwardPreviewRow>> readCachedPrizePreview(
@@ -288,14 +291,6 @@ class _PrizeRepository implements PrizeRepository {
 
   @override
   Future<PrizePlanDetail> upsertPrizePlan(UpsertPrizePlanInput input) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<PrizeAwardRecord> voidPrizeAward({
-    required String awardId,
-    String? paidNote,
-  }) {
     throw UnimplementedError();
   }
 }
@@ -417,6 +412,30 @@ class _RecordingNavigatorObserver extends NavigatorObserver {
   }
 }
 
+PrizePlanDetail _fixedPrizePlan(List<int> fixedAmountCents) {
+  return PrizePlanDetail(
+    plan: PrizePlanRecord.fromJson(
+      const {
+        'id': 'pp_01',
+        'event_id': 'evt_01',
+        'mode': 'fixed',
+        'status': 'draft',
+        'reserve_fixed_cents': 0,
+        'reserve_percentage_bps': 0,
+      },
+    ),
+    tiers: List.generate(
+      fixedAmountCents.length,
+      (index) => PrizeTierRecord(
+        id: 'tier_${index + 1}',
+        prizePlanId: 'pp_01',
+        place: index + 1,
+        fixedAmountCents: fixedAmountCents[index],
+      ),
+    ),
+  );
+}
+
 void main() {
   final draftEvent = EventRecord.fromJson(const {
     'id': 'evt_00',
@@ -428,7 +447,6 @@ void main() {
     'checkin_open': false,
     'scoring_open': false,
     'cover_charge_cents': 2000,
-    'prize_budget_cents': 50000,
     'default_ruleset_id': 'HK_STANDARD_V1',
     'prevailing_wind': 'east',
   });
@@ -442,7 +460,6 @@ void main() {
     'checkin_open': true,
     'scoring_open': true,
     'cover_charge_cents': 2000,
-    'prize_budget_cents': 50000,
     'default_ruleset_id': 'HK_STANDARD_V1',
     'prevailing_wind': 'east',
   });
@@ -456,7 +473,6 @@ void main() {
     'checkin_open': true,
     'scoring_open': false,
     'cover_charge_cents': 2000,
-    'prize_budget_cents': 50000,
     'default_ruleset_id': 'HK_STANDARD_V1',
     'prevailing_wind': 'east',
   });
@@ -470,7 +486,6 @@ void main() {
     'checkin_open': false,
     'scoring_open': false,
     'cover_charge_cents': 2000,
-    'prize_budget_cents': 50000,
     'default_ruleset_id': 'HK_STANDARD_V1',
     'prevailing_wind': 'east',
   });
@@ -485,7 +500,6 @@ void main() {
     'checkin_open': true,
     'scoring_open': false,
     'cover_charge_cents': 2000,
-    'prize_budget_cents': 50000,
     'default_ruleset_id': 'HK_STANDARD_V1',
     'prevailing_wind': 'east',
   });
@@ -522,6 +536,73 @@ void main() {
     expect(find.text('Activity'), findsOneWidget);
   });
 
+  testWidgets('dashboard summarizes configured prize pool', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          prizeRepository: _PrizeRepository(
+            loadedPlan: _fixedPrizePlan([15000, 10000, 0]),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prize Pool: \$250.00'), findsOneWidget);
+  });
+
+  testWidgets('prizes action refreshes the dashboard prize pool on return', (
+    tester,
+  ) async {
+    final prizeRepository = _PrizeRepository(
+      loadedPlan: _fixedPrizePlan([10000]),
+      loadedPlans: [
+        _fixedPrizePlan([10000]),
+        _fixedPrizePlan([15000, 10000]),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          prizeRepository: prizeRepository,
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.prizePlanRoute) {
+            return MaterialPageRoute<void>(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Done editing prizes'),
+                ),
+              ),
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prize Pool: \$100.00'), findsOneWidget);
+
+    await tester.tap(find.text('Prizes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done editing prizes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prize Pool: \$250.00'), findsOneWidget);
+  });
+
   testWidgets('prizes action routes into the prize plan screen', (
     tester,
   ) async {
@@ -553,8 +634,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(PrizePlanScreen), findsOneWidget);
-    expect(find.text('Prize Budget'), findsOneWidget);
-    expect(find.text('50000 cents'), findsOneWidget);
+    expect(find.text('Total Prizes'), findsOneWidget);
+    expect(find.text(r'$0.00'), findsOneWidget);
   });
 
   testWidgets('activity action routes into the activity screen',

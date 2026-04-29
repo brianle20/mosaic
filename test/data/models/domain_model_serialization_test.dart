@@ -9,6 +9,22 @@ import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 
 void main() {
+  group('CreateEventInput', () {
+    test('serializes event wall time as a UTC instant for its timezone', () {
+      final input = CreateEventInput(
+        title: 'Friday Night Mahjong',
+        timezone: 'America/Los_Angeles',
+        startsAt: DateTime(2026, 4, 29, 22),
+        coverChargeCents: 2000,
+      );
+
+      expect(
+        input.toInsertJson(ownerUserId: 'usr_01')['starts_at'],
+        '2026-04-30T05:00:00.000Z',
+      );
+    });
+  });
+
   group('EventRecord', () {
     test('round-trips lifecycle status from JSON', () {
       final record = EventRecord.fromJson(const {
@@ -21,7 +37,6 @@ void main() {
         'checkin_open': false,
         'scoring_open': false,
         'cover_charge_cents': 2000,
-        'prize_budget_cents': 50000,
         'default_ruleset_id': 'HK_STANDARD_V1',
         'prevailing_wind': 'east',
       });
@@ -342,17 +357,18 @@ void main() {
   });
 
   group('PrizePlanRecord', () {
-    test('computes distributable budget with reserve clamp', () {
+    test('parses a fixed prize plan row', () {
       final record = PrizePlanRecord.fromJson(const {
         'id': 'pp_01',
         'event_id': 'evt_01',
         'mode': 'fixed',
         'status': 'draft',
-        'reserve_fixed_cents': 7000,
-        'reserve_percentage_bps': 2500,
-      }, prizeBudgetCents: 20000);
+        'reserve_fixed_cents': 0,
+        'reserve_percentage_bps': 0,
+      });
 
-      expect(record.distributableBudgetCents, 8000);
+      expect(record.mode, PrizePlanMode.fixed);
+      expect(record.status, PrizePlanStatus.draft);
     });
   });
 
@@ -374,8 +390,21 @@ void main() {
     });
   });
 
+  group('PrizeTierDraftInput', () {
+    test('omits unused prize amount fields from fixed tier JSON', () {
+      final tier = PrizeTierDraftInput(
+        place: 1,
+        label: '1st',
+        fixedAmountCents: 15000,
+      ).toJson();
+
+      expect(tier['fixed_amount_cents'], 15000);
+      expect(tier.containsKey('percentage_bps'), isFalse);
+    });
+  });
+
   group('PrizeAwardRecord', () {
-    test('parses a locked prize award row', () {
+    test('parses a locked prize result row without payment status', () {
       final award = PrizeAwardRecord.fromJson(const {
         'id': 'award_01',
         'event_id': 'evt_01',
@@ -385,18 +414,15 @@ void main() {
         'rank_end': 1,
         'display_rank': '1',
         'award_amount_cents': 15000,
-        'status': 'planned',
-        'paid_method': null,
-        'paid_at': null,
-        'paid_note': null,
       });
 
       expect(award.rankStart, 1);
       expect(award.displayRank, '1');
       expect(award.displayName, 'Alice Wong');
       expect(award.awardAmountCents, 15000);
-      expect(award.status, PrizeAwardStatus.planned);
       expect(award.toJson()['display_name'], 'Alice Wong');
+      expect(award.toJson().containsKey('status'), isFalse);
+      expect(award.toJson().containsKey('paid_method'), isFalse);
     });
   });
 

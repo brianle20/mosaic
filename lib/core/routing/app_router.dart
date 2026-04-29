@@ -78,6 +78,7 @@ class AppRouter {
             eventRepository: eventRepository,
             guestRepository: guestRepository,
             leaderboardRepository: leaderboardRepository,
+            prizeRepository: prizeRepository,
           ),
           settings: settings,
         );
@@ -184,7 +185,6 @@ class AppRouter {
         return MaterialPageRoute<void>(
           builder: (_) => PrizePlanScreen(
             eventId: args.eventId,
-            prizeBudgetCents: args.prizeBudgetCents,
             prizeRepository: prizeRepository,
           ),
           settings: settings,
@@ -313,11 +313,9 @@ class LeaderboardArgs {
 class PrizePlanArgs {
   const PrizePlanArgs({
     required this.eventId,
-    required this.prizeBudgetCents,
   });
 
   final String eventId;
-  final int prizeBudgetCents;
 }
 
 class PrizeAwardsArgs {

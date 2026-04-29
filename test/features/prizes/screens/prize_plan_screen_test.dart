@@ -18,6 +18,7 @@ class _RecordingPrizeRepository implements PrizeRepository {
   final PrizePlanDetail? upsertedPlan;
   final List<PrizeAwardPreviewRow> previewRows;
   final List<PrizeAwardRecord> lockedAwards;
+  UpsertPrizePlanInput? capturedInput;
   int previewCount = 0;
   int lockCount = 0;
 
@@ -28,7 +29,6 @@ class _RecordingPrizeRepository implements PrizeRepository {
   @override
   Future<PrizePlanDetail?> loadPrizePlan({
     required String eventId,
-    required int prizeBudgetCents,
   }) async =>
       loadedPlan;
 
@@ -42,15 +42,6 @@ class _RecordingPrizeRepository implements PrizeRepository {
   Future<List<PrizeAwardRecord>> lockPrizeAwards(String eventId) async {
     lockCount += 1;
     return lockedAwards;
-  }
-
-  @override
-  Future<PrizeAwardRecord> markPrizeAwardPaid({
-    required String awardId,
-    String? paidMethod,
-    String? paidNote,
-  }) {
-    throw UnimplementedError();
   }
 
   @override
@@ -69,51 +60,44 @@ class _RecordingPrizeRepository implements PrizeRepository {
 
   @override
   Future<PrizePlanDetail> upsertPrizePlan(UpsertPrizePlanInput input) async {
+    capturedInput = input;
     return upsertedPlan ?? loadedPlan!;
-  }
-
-  @override
-  Future<PrizeAwardRecord> voidPrizeAward({
-    required String awardId,
-    String? paidNote,
-  }) {
-    throw UnimplementedError();
   }
 }
 
 void main() {
-  testWidgets('renders budget and prize mode controls', (tester) async {
+  testWidgets('renders derived total and fixed prize controls', (tester) async {
     final repository = _RecordingPrizeRepository();
 
     await tester.pumpWidget(
       MaterialApp(
         home: PrizePlanScreen(
           eventId: 'evt_01',
-          prizeBudgetCents: 50000,
           prizeRepository: repository,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Prize Budget'), findsOneWidget);
-    expect(find.text('50000 cents'), findsOneWidget);
-    expect(find.text('None'), findsOneWidget);
-    expect(find.text('Fixed'), findsOneWidget);
-    expect(find.text('Percentage'), findsOneWidget);
+    expect(find.text('Prize Budget'), findsNothing);
+    expect(find.text('Total Prizes'), findsOneWidget);
+    expect(find.text(r'$0.00'), findsOneWidget);
+    expect(find.text('Paid Places'), findsOneWidget);
+    expect(find.text('None'), findsNothing);
+    expect(find.text('Fixed'), findsNothing);
+    expect(find.text('Percentage'), findsNothing);
     expect(
       find.text('Preview awards before locking the official payout list.'),
       findsOneWidget,
     );
     expect(
-      find.text(
-          'Choose a prize mode and tiers when you are ready to preview payouts.'),
+      find.text('Enter prize amounts when you are ready to preview payouts.'),
       findsOneWidget,
     );
   });
 
   testWidgets(
-      'shows validation and blocks preview when fixed mode has no tiers',
+      'shows validation and blocks preview when no positive prizes exist',
       (tester) async {
     final repository = _RecordingPrizeRepository();
 
@@ -121,16 +105,13 @@ void main() {
       MaterialApp(
         home: PrizePlanScreen(
           eventId: 'evt_01',
-          prizeBudgetCents: 50000,
           prizeRepository: repository,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Fixed'));
-    await tester.pumpAndSettle();
-    final previewButton = find.text('Preview Awards');
+    final previewButton = find.text('Preview Payouts');
     await tester.scrollUntilVisible(
       previewButton,
       200,
@@ -139,8 +120,141 @@ void main() {
     await tester.tap(previewButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Prize tiers are required.'), findsNWidgets(2));
+    expect(find.text('Enter at least one prize amount.'), findsOneWidget);
     expect(repository.previewCount, 0);
+  });
+
+  testWidgets('updates total in dollars and ignores zero prize placeholders',
+      (tester) async {
+    final loadedPlan = PrizePlanDetail(
+      plan: PrizePlanRecord.fromJson(
+        const {
+          'id': 'pp_01',
+          'event_id': 'evt_01',
+          'mode': 'fixed',
+          'status': 'draft',
+          'reserve_fixed_cents': 0,
+          'reserve_percentage_bps': 0,
+          'row_version': 1,
+        },
+      ),
+      tiers: const [
+        PrizeTierRecord(
+          id: 'tier_01',
+          prizePlanId: 'pp_01',
+          place: 1,
+          label: '1st',
+          fixedAmountCents: 15000,
+        ),
+        PrizeTierRecord(
+          id: 'tier_02',
+          prizePlanId: 'pp_01',
+          place: 2,
+          label: '2nd',
+          fixedAmountCents: 10000,
+        ),
+      ],
+    );
+    final repository = _RecordingPrizeRepository(upsertedPlan: loadedPlan);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PrizePlanScreen(
+          eventId: 'evt_01',
+          prizeRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final amountFields = find.widgetWithText(TextFormField, 'Amount');
+    expect(amountFields, findsNWidgets(3));
+
+    await tester.enterText(amountFields.at(0), '15000');
+    await tester.enterText(amountFields.at(1), '0');
+    await tester.enterText(amountFields.at(2), '10000');
+    await tester.pumpAndSettle();
+
+    expect(find.text(r'$250.00'), findsOneWidget);
+
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('Preview Payouts'),
+      200,
+      scrollable: scrollable,
+    );
+    await tester.tap(find.text('Preview Payouts'));
+    await tester.pumpAndSettle();
+
+    expect(repository.previewCount, 1);
+    expect(
+      repository.capturedInput!.tiers.map((tier) => tier.place).toList(),
+      [1, 2],
+    );
+    expect(
+      repository.capturedInput!.tiers.map((tier) => tier.fixedAmountCents),
+      [15000, 10000],
+    );
+  });
+
+  testWidgets('shows an explicit empty result when no payouts can be previewed',
+      (tester) async {
+    final loadedPlan = PrizePlanDetail(
+      plan: PrizePlanRecord.fromJson(
+        const {
+          'id': 'pp_01',
+          'event_id': 'evt_01',
+          'mode': 'fixed',
+          'status': 'draft',
+          'reserve_fixed_cents': 0,
+          'reserve_percentage_bps': 0,
+          'row_version': 1,
+        },
+      ),
+      tiers: const [
+        PrizeTierRecord(
+          id: 'tier_01',
+          prizePlanId: 'pp_01',
+          place: 1,
+          label: '1st',
+          fixedAmountCents: 15000,
+        ),
+      ],
+    );
+    final repository = _RecordingPrizeRepository(upsertedPlan: loadedPlan);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PrizePlanScreen(
+          eventId: 'evt_01',
+          prizeRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Amount').first,
+      '15000',
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('Preview Payouts'),
+      200,
+      scrollable: scrollable,
+    );
+    await tester.tap(find.text('Preview Payouts'));
+    await tester.pumpAndSettle();
+
+    expect(repository.previewCount, 1);
+    expect(find.text('No scored players yet'), findsOneWidget);
+    expect(
+      find.text('Add scores before previewing payouts.'),
+      findsOneWidget,
+    );
+    expect(find.text('Lock Prize Awards'), findsNothing);
   });
 
   testWidgets('shows preview rows and allows locking valid awards',
@@ -157,7 +271,6 @@ void main() {
           'note': 'Top two',
           'row_version': 1,
         },
-        prizeBudgetCents: 50000,
       ),
       tiers: const [
         PrizeTierRecord(
@@ -191,7 +304,6 @@ void main() {
           rankEnd: 1,
           displayRank: '1',
           awardAmountCents: 15000,
-          status: PrizeAwardStatus.planned,
         ),
       ],
     );
@@ -200,22 +312,19 @@ void main() {
       MaterialApp(
         home: PrizePlanScreen(
           eventId: 'evt_01',
-          prizeBudgetCents: 50000,
           prizeRepository: repository,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Fixed'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Add Tier'));
-    await tester.pumpAndSettle();
     await tester.enterText(
-        find.widgetWithText(TextFormField, 'Amount'), '15000');
+      find.widgetWithText(TextFormField, 'Amount').first,
+      '15000',
+    );
     await tester.pumpAndSettle();
 
-    final previewButton = find.text('Preview Awards');
+    final previewButton = find.text('Preview Payouts');
     final scrollable = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(
       previewButton,
@@ -226,7 +335,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.previewCount, 1);
-    expect(find.text('Preview Awards'), findsWidgets);
+    expect(find.text('Preview Payouts'), findsWidgets);
     expect(
       find.text(
           'Lock awards only when this preview matches the standings you want to pay out.'),
@@ -238,7 +347,7 @@ void main() {
       scrollable: scrollable,
     );
     expect(find.text('Alice Wong'), findsOneWidget);
-    expect(find.text('15000 cents'), findsWidgets);
+    expect(find.text(r'$150.00'), findsWidgets);
 
     final lockButton = find.text('Lock Prize Awards');
     await tester.scrollUntilVisible(
@@ -267,7 +376,6 @@ void main() {
           'note': 'Locked plan',
           'row_version': 1,
         },
-        prizeBudgetCents: 50000,
       ),
       tiers: const [
         PrizeTierRecord(
@@ -291,7 +399,6 @@ void main() {
           rankEnd: 1,
           displayRank: '1',
           awardAmountCents: 15000,
-          status: PrizeAwardStatus.planned,
         ),
       ],
     );
@@ -300,7 +407,6 @@ void main() {
       MaterialApp(
         home: PrizePlanScreen(
           eventId: 'evt_01',
-          prizeBudgetCents: 50000,
           prizeRepository: repository,
         ),
       ),

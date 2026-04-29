@@ -803,8 +803,7 @@ begin
     rank_start,
     rank_end,
     display_rank,
-    award_amount_cents,
-    status
+    award_amount_cents
   )
   select
     target_event_id,
@@ -812,8 +811,7 @@ begin
     preview.rank_start,
     preview.rank_end,
     preview.display_rank,
-    preview.award_amount_cents,
-    'planned'
+    preview.award_amount_cents
   from public.preview_prize_awards(target_event_id) as preview;
 
   update public.prize_plans

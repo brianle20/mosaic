@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
-import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/features/prizes/controllers/prize_awards_controller.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
-import 'package:mosaic/widgets/status_chip.dart';
 
 class PrizeAwardsScreen extends StatefulWidget {
   const PrizeAwardsScreen({
@@ -62,12 +61,12 @@ class _PrizeAwardsScreenState extends State<PrizeAwardsScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             const Text(
-              'Official Payout Checklist',
+              'Official Prize Awards',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             const Text(
-              'Use this locked list to track which awards are still payable, paid out, or void.',
+              'Use this locked list as the official prize result for the event.',
             ),
             const SizedBox(height: 16),
             if (_controller.awards.isEmpty) ...[
@@ -94,31 +93,9 @@ class _PrizeAwardsScreenState extends State<PrizeAwardsScreen> {
                               award.eventGuestId,
                         ),
                         subtitle: Text(award.displayRank),
-                        trailing: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text('${award.awardAmountCents} cents'),
-                            StatusChip(
-                              label: _statusLabel(award.status),
-                              tone: _statusTone(award.status),
-                            ),
-                          ],
-                        ),
+                        trailing:
+                            Text(_formatMoneyDisplay(award.awardAmountCents)),
                       ),
-                      if (award.status == PrizeAwardStatus.planned)
-                        Row(
-                          children: [
-                            TextButton(
-                              onPressed: () => _controller.markPaid(award.id),
-                              child: const Text('Mark Paid'),
-                            ),
-                            TextButton(
-                              onPressed: () => _controller.voidAward(award.id),
-                              child: const Text('Void'),
-                            ),
-                          ],
-                        ),
                     ],
                   ),
                 ),
@@ -128,20 +105,6 @@ class _PrizeAwardsScreenState extends State<PrizeAwardsScreen> {
       ),
     );
   }
-
-  String _statusLabel(PrizeAwardStatus status) {
-    return switch (status) {
-      PrizeAwardStatus.planned => 'Ready to Pay',
-      PrizeAwardStatus.paid => 'Paid Out',
-      PrizeAwardStatus.voided => 'Void Award',
-    };
-  }
-
-  StatusChipTone _statusTone(PrizeAwardStatus status) {
-    return switch (status) {
-      PrizeAwardStatus.planned => StatusChipTone.warning,
-      PrizeAwardStatus.paid => StatusChipTone.success,
-      PrizeAwardStatus.voided => StatusChipTone.neutral,
-    };
-  }
 }
+
+String _formatMoneyDisplay(int cents) => '\$${formatMoneyCents(cents)}';

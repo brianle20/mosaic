@@ -6,18 +6,13 @@ import 'package:mosaic/features/prizes/models/prize_plan_draft.dart';
 class PrizePlanController extends ChangeNotifier {
   PrizePlanController({
     required this.eventId,
-    required this.prizeBudgetCents,
     required this.prizeRepository,
   }) : draft = PrizePlanDraft(
-          prizeBudgetCents: prizeBudgetCents,
-          mode: PrizePlanMode.none,
-          reserveFixedCents: 0,
-          reservePercentageBps: 0,
-          tiers: const [],
+          mode: PrizePlanMode.fixed,
+          tiers: PrizePlanDraft.defaultTiers(),
         );
 
   final String eventId;
-  final int prizeBudgetCents;
   final PrizeRepository prizeRepository;
 
   bool isLoading = false;
@@ -26,12 +21,14 @@ class PrizePlanController extends ChangeNotifier {
   PrizePlanDraft draft;
   List<PrizeAwardPreviewRow> previewRows = const [];
   List<PrizeAwardRecord> lockedAwards = const [];
+  bool hasPreviewedPayouts = false;
 
   Future<void> load() async {
     final cachedPlan = await prizeRepository.readCachedPrizePlan(eventId);
     if (cachedPlan != null) {
       draft = PrizePlanDraft.fromDetail(cachedPlan);
       previewRows = await prizeRepository.readCachedPrizePreview(eventId);
+      hasPreviewedPayouts = previewRows.isNotEmpty;
       lockedAwards = cachedPlan.plan.status == PrizePlanStatus.locked
           ? await prizeRepository.readCachedPrizeAwards(eventId)
           : const [];
@@ -44,7 +41,6 @@ class PrizePlanController extends ChangeNotifier {
     try {
       final loaded = await prizeRepository.loadPrizePlan(
         eventId: eventId,
-        prizeBudgetCents: prizeBudgetCents,
       );
       if (loaded != null) {
         draft = PrizePlanDraft.fromDetail(loaded);
@@ -71,17 +67,38 @@ class PrizePlanController extends ChangeNotifier {
     error = null;
     if (mode == PrizePlanMode.none) {
       previewRows = const [];
+      hasPreviewedPayouts = false;
     }
     notifyListeners();
   }
 
-  void setReserveFixed(int value) {
-    draft = draft.copyWith(reserveFixedCents: value);
-    notifyListeners();
-  }
+  void setPaidPlaces(int count) {
+    if (count < 1) {
+      return;
+    }
 
-  void setReservePercentage(int value) {
-    draft = draft.copyWith(reservePercentageBps: value);
+    final tiers = List<PrizeTierDraftInput>.from(draft.tiers);
+    if (count < tiers.length) {
+      tiers.removeRange(count, tiers.length);
+    } else {
+      for (var place = tiers.length + 1; place <= count; place++) {
+        tiers.add(
+          PrizeTierDraftInput(
+            place: place,
+            label: _ordinalLabel(place),
+            fixedAmountCents: 0,
+          ),
+        );
+      }
+    }
+
+    draft = draft.copyWith(
+      mode: PrizePlanMode.fixed,
+      tiers: tiers,
+    );
+    error = null;
+    previewRows = const [];
+    hasPreviewedPayouts = false;
     notifyListeners();
   }
 
@@ -100,7 +117,11 @@ class PrizePlanController extends ChangeNotifier {
     draft = draft.copyWith(
       tiers: [
         ...draft.tiers,
-        PrizeTierDraftInput(place: nextPlace),
+        PrizeTierDraftInput(
+          place: nextPlace,
+          label: _ordinalLabel(nextPlace),
+          fixedAmountCents: 0,
+        ),
       ],
     );
     notifyListeners();
@@ -122,6 +143,8 @@ class PrizePlanController extends ChangeNotifier {
       fixedAmountCents: fixedAmountCents ?? current.fixedAmountCents,
     );
     draft = draft.copyWith(tiers: tiers);
+    previewRows = const [];
+    hasPreviewedPayouts = false;
     notifyListeners();
   }
 
@@ -142,8 +165,10 @@ class PrizePlanController extends ChangeNotifier {
       );
       draft = PrizePlanDraft.fromDetail(saved);
       previewRows = await prizeRepository.loadPrizePreview(eventId);
+      hasPreviewedPayouts = true;
     } catch (err) {
       error = err.toString();
+      hasPreviewedPayouts = false;
     } finally {
       isSubmitting = false;
       notifyListeners();
@@ -173,8 +198,20 @@ class PrizePlanController extends ChangeNotifier {
 
   String _validationError() {
     return draft.generalError ??
-        draft.reserveFixedError ??
-        draft.reservePercentageError ??
         draft.tierErrors.values.whereType<String>().first;
   }
+}
+
+String _ordinalLabel(int place) {
+  final mod100 = place % 100;
+  if (mod100 >= 11 && mod100 <= 13) {
+    return '${place}th';
+  }
+
+  return switch (place % 10) {
+    1 => '${place}st',
+    2 => '${place}nd',
+    3 => '${place}rd',
+    _ => '${place}th',
+  };
 }

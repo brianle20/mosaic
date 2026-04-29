@@ -217,10 +217,7 @@ class LocalCache {
     }
 
     final decoded = jsonDecode(raw) as Map<String, dynamic>;
-    final planJson = (decoded['plan'] as Map).cast<String, dynamic>();
-    final prizeBudgetCents = (planJson['prize_budget_cents'] as num).toInt();
-    return PrizePlanDetail.fromJson(decoded,
-        prizeBudgetCents: prizeBudgetCents);
+    return PrizePlanDetail.fromJson(decoded);
   }
 
   Future<void> savePrizePreview(

@@ -79,8 +79,6 @@ create table public.events (
   checkin_open boolean not null default false,
   scoring_open boolean not null default false,
   cover_charge_cents integer not null default 0 check (cover_charge_cents >= 0),
-  prize_budget_cents integer not null default 0 check (prize_budget_cents >= 0),
-  prize_budget_note text,
   default_ruleset_id text not null default 'HK_STANDARD_V1'
     references public.rulesets(id),
   prevailing_wind text not null default 'east'
@@ -348,10 +346,6 @@ create table public.prize_awards (
   rank_end integer not null check (rank_end >= rank_start),
   display_rank text not null,
   award_amount_cents integer not null check (award_amount_cents >= 0),
-  status text not null check (status in ('planned', 'paid', 'void')),
-  paid_method text,
-  paid_at timestamptz,
-  paid_note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

@@ -33,16 +33,5 @@ void main() {
 
       expect(draft.coverChargeError, 'Cover charge must be zero or more.');
     });
-
-    test('rejects a negative prize budget', () {
-      final draft = EventFormDraft(
-        title: 'Friday Night Mahjong',
-        timezone: 'America/Los_Angeles',
-        startsAt: DateTime(2026, 4, 24, 19),
-        prizeBudgetCents: -1,
-      );
-
-      expect(draft.prizeBudgetError, 'Prize budget must be zero or more.');
-    });
   });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:mosaic/core/time/event_timezones.dart';
 
 enum MoneyInputError { invalid, negative, tooManyDecimalPlaces }
 
@@ -118,4 +119,35 @@ String formatEventStart(DateTime startsAt) {
   final meridiem = hour < 12 ? 'AM' : 'PM';
 
   return '$weekday, $month ${localStartsAt.day} at $displayHour:$minute $meridiem';
+}
+
+String formatEventTileStart(
+  DateTime startsAt, {
+  required String timezone,
+}) {
+  return _formatMonthDayTime(eventInstantInTimezone(startsAt, timezone));
+}
+
+String _formatMonthDayTime(DateTime dateTime) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  final month = months[dateTime.month - 1];
+  final hour = dateTime.hour;
+  final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+  final minute = dateTime.minute.toString().padLeft(2, '0');
+  final meridiem = hour < 12 ? 'AM' : 'PM';
+
+  return '$month ${dateTime.day}, $displayHour:$minute $meridiem';
 }

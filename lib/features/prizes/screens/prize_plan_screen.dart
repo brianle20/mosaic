@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/features/prizes/controllers/prize_plan_controller.dart';
+import 'package:mosaic/widgets/empty_state_card.dart';
+import 'package:mosaic/widgets/money_text_form_field.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 class PrizePlanScreen extends StatefulWidget {
   const PrizePlanScreen({
     super.key,
     required this.eventId,
-    required this.prizeBudgetCents,
     required this.prizeRepository,
   });
 
   final String eventId;
-  final int prizeBudgetCents;
   final PrizeRepository prizeRepository;
 
   @override
@@ -23,13 +24,14 @@ class PrizePlanScreen extends StatefulWidget {
 
 class _PrizePlanScreenState extends State<PrizePlanScreen> {
   late final PrizePlanController _controller;
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _previewResultKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _controller = PrizePlanController(
       eventId: widget.eventId,
-      prizeBudgetCents: widget.prizeBudgetCents,
       prizeRepository: widget.prizeRepository,
     )
       ..addListener(_handleUpdate)
@@ -41,6 +43,7 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
     _controller
       ..removeListener(_handleUpdate)
       ..dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -66,6 +69,31 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
     );
   }
 
+  Future<void> _previewPayouts() async {
+    await _controller.preview();
+    if (!mounted ||
+        (!_controller.hasPreviewedPayouts && _controller.error == null)) {
+      return;
+    }
+
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
+
+    final previewContext = _previewResultKey.currentContext;
+    if (previewContext != null) {
+      if (!previewContext.mounted) {
+        return;
+      }
+      await Scrollable.ensureVisible(
+        previewContext,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final draft = _controller.draft;
@@ -73,136 +101,104 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Prize Plan')),
       body: ListView(
+        controller: _scrollController,
         padding: const EdgeInsets.all(16),
         children: [
-          const Text(
-            'Prize Budget',
+          Text(
+            'Total Prizes',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          Text('${widget.prizeBudgetCents} cents'),
+          Text(
+            _formatMoneyDisplay(draft.totalPrizeCents),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 12),
           const Text('Preview awards before locking the official payout list.'),
           if (_controller.previewRows.isEmpty &&
               _controller.lockedAwards.isEmpty) ...[
             const SizedBox(height: 8),
             Text(
-              'Choose a prize mode and tiers when you are ready to preview payouts.',
+              'Enter prize amounts when you are ready to preview payouts.',
             ),
           ],
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
+          Row(
             children: [
-              ChoiceChip(
-                label: const Text('None'),
-                selected: draft.mode == PrizePlanMode.none,
-                onSelected: (_) => _controller.setMode(PrizePlanMode.none),
+              const Expanded(
+                child: Text(
+                  'Paid Places',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
-              ChoiceChip(
-                label: const Text('Fixed'),
-                selected: draft.mode == PrizePlanMode.fixed,
-                onSelected: (_) => _controller.setMode(PrizePlanMode.fixed),
+              IconButton(
+                tooltip: 'Remove paid place',
+                onPressed: draft.tiers.length > 1
+                    ? () => _controller.setPaidPlaces(draft.tiers.length - 1)
+                    : null,
+                icon: const Icon(Icons.remove),
               ),
-              ChoiceChip(
-                label: const Text('Percentage'),
-                selected: draft.mode == PrizePlanMode.percentage,
-                onSelected: (_) =>
-                    _controller.setMode(PrizePlanMode.percentage),
+              SizedBox(
+                width: 28,
+                child: Center(child: Text(draft.tiers.length.toString())),
+              ),
+              IconButton(
+                tooltip: 'Add paid place',
+                onPressed: () => _controller.setPaidPlaces(
+                  draft.tiers.length + 1,
+                ),
+                icon: const Icon(Icons.add),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          TextFormField(
-            initialValue: draft.reserveFixedCents.toString(),
-            decoration:
-                const InputDecoration(labelText: 'Reserve Fixed (cents)'),
-            keyboardType: TextInputType.number,
-            onChanged: (value) =>
-                _controller.setReserveFixed(int.tryParse(value) ?? -1),
-          ),
-          if (draft.reserveFixedError != null) ...[
-            const SizedBox(height: 6),
-            Text(draft.reserveFixedError!),
-          ],
-          const SizedBox(height: 16),
-          TextFormField(
-            initialValue: draft.reservePercentageBps.toString(),
-            decoration:
-                const InputDecoration(labelText: 'Reserve Percentage (bps)'),
-            keyboardType: TextInputType.number,
-            onChanged: (value) =>
-                _controller.setReservePercentage(int.tryParse(value) ?? -1),
-          ),
-          if (draft.reservePercentageError != null) ...[
-            const SizedBox(height: 6),
-            Text(draft.reservePercentageError!),
-          ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          for (var index = 0; index < draft.tiers.length; index++)
+            _TierEditor(
+              key: ValueKey('tier-$index'),
+              tierIndex: index,
+              tier: draft.tiers[index],
+              error: draft.tierErrors[draft.tiers[index].place],
+              onChanged: ({int? fixedAmountCents}) {
+                _controller.updateTier(
+                  index,
+                  fixedAmountCents: fixedAmountCents,
+                );
+              },
+            ),
+          const SizedBox(height: 8),
           TextFormField(
             initialValue: draft.note ?? '',
             decoration: const InputDecoration(labelText: 'Note'),
             onChanged: _controller.setNote,
           ),
-          const SizedBox(height: 16),
-          if (draft.mode != PrizePlanMode.none) ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Tiers',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                TextButton(
-                  onPressed: _controller.addTier,
-                  child: const Text('Add Tier'),
-                ),
-              ],
-            ),
-            for (var index = 0; index < draft.tiers.length; index++)
-              _TierEditor(
-                key: ValueKey('tier-$index'),
-                tierIndex: index,
-                tier: draft.tiers[index],
-                mode: draft.mode,
-                error: draft.tierErrors[draft.tiers[index].place],
-                onChanged: ({
-                  int? place,
-                  String? label,
-                  int? percentageBps,
-                  int? fixedAmountCents,
-                }) {
-                  _controller.updateTier(
-                    index,
-                    place: place,
-                    label: label,
-                    percentageBps: percentageBps,
-                    fixedAmountCents: fixedAmountCents,
-                  );
-                },
-              ),
-          ],
-          if (draft.generalError != null) ...[
-            const SizedBox(height: 8),
-            Text(draft.generalError!),
-          ],
           if (_controller.error != null) ...[
             const SizedBox(height: 8),
             Text(_controller.error!),
           ],
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: _controller.isSubmitting ? null : _controller.preview,
-            child: const Text('Preview Awards'),
+            onPressed: _controller.isSubmitting ? null : _previewPayouts,
+            child: const Text('Preview Payouts'),
           ),
           const SizedBox(height: 12),
+          if (_controller.hasPreviewedPayouts &&
+              _controller.previewRows.isEmpty) ...[
+            EmptyStateCard(
+              key: _previewResultKey,
+              icon: Icons.leaderboard,
+              title: 'No scored players yet',
+              message: 'Add scores before previewing payouts.',
+            ),
+            const SizedBox(height: 12),
+          ],
           if (_controller.previewRows.isNotEmpty) ...[
-            const Text(
+            Text(
+              key: _previewResultKey,
               'Lock awards only when this preview matches the standings you want to pay out.',
             ),
             const SizedBox(height: 12),
             const Text(
-              'Preview Awards',
+              'Preview Payouts',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -211,7 +207,7 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
                 contentPadding: EdgeInsets.zero,
                 title: Text(row.displayName),
                 subtitle: Text(row.displayRank),
-                trailing: Text('${row.awardAmountCents} cents'),
+                trailing: Text(_formatMoneyDisplay(row.awardAmountCents)),
               ),
             const SizedBox(height: 12),
             FilledButton(
@@ -238,74 +234,92 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
   }
 }
 
-class _TierEditor extends StatelessWidget {
+String _formatMoneyDisplay(int cents) => '\$${formatMoneyCents(cents)}';
+
+class _TierEditor extends StatefulWidget {
   const _TierEditor({
     super.key,
     required this.tierIndex,
     required this.tier,
-    required this.mode,
     required this.onChanged,
     this.error,
   });
 
   final int tierIndex;
   final PrizeTierDraftInput tier;
-  final PrizePlanMode mode;
   final String? error;
-  final void Function({
-    int? place,
-    String? label,
-    int? percentageBps,
-    int? fixedAmountCents,
-  }) onChanged;
+  final void Function({int? fixedAmountCents}) onChanged;
+
+  @override
+  State<_TierEditor> createState() => _TierEditorState();
+}
+
+class _TierEditorState extends State<_TierEditor> {
+  late final TextEditingController _amountController;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController = TextEditingController(
+      text: formatMoneyCents(widget.tier.fixedAmountCents ?? 0),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _TierEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final cents = widget.tier.fixedAmountCents ?? 0;
+    if (parseMoneyAmount(_amountController.text).cents != cents) {
+      _amountController.text = formatMoneyCents(cents);
+    }
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Column(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextFormField(
-              key: ValueKey('tier-$tierIndex-place'),
-              initialValue: tier.place.toString(),
-              decoration: const InputDecoration(labelText: 'Place'),
-              keyboardType: TextInputType.number,
-              onChanged: (value) =>
-                  onChanged(place: int.tryParse(value) ?? tier.place),
-            ),
-            const SizedBox(height: 8),
-            TextFormField(
-              key: ValueKey('tier-$tierIndex-label'),
-              initialValue: tier.label ?? '',
-              decoration: const InputDecoration(labelText: 'Label'),
-              onChanged: (value) => onChanged(label: value),
-            ),
-            const SizedBox(height: 8),
-            if (mode == PrizePlanMode.fixed)
-              TextFormField(
-                key: ValueKey('tier-$tierIndex-amount'),
-                initialValue: tier.fixedAmountCents?.toString() ?? '',
-                decoration: const InputDecoration(labelText: 'Amount'),
-                keyboardType: TextInputType.number,
-                onChanged: (value) => onChanged(
-                  fixedAmountCents: int.tryParse(value),
+            SizedBox(
+              width: 56,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(
+                  widget.tier.label ?? widget.tier.place.toString(),
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-            if (mode == PrizePlanMode.percentage)
-              TextFormField(
-                key: ValueKey('tier-$tierIndex-percentage'),
-                initialValue: tier.percentageBps?.toString() ?? '',
-                decoration: const InputDecoration(labelText: 'Percent (bps)'),
-                keyboardType: TextInputType.number,
-                onChanged: (value) => onChanged(
-                  percentageBps: int.tryParse(value),
-                ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                children: [
+                  MoneyTextFormField(
+                    fieldKey: ValueKey('tier-${widget.tierIndex}-amount'),
+                    controller: _amountController,
+                    labelText: 'Amount',
+                    onChanged: (value) {
+                      final parsed = parseMoneyAmount(value);
+                      if (parsed.isValid) {
+                        widget.onChanged(fixedAmountCents: parsed.cents);
+                      }
+                    },
+                  ),
+                  if (widget.error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(widget.error!),
+                  ],
+                ],
               ),
-            if (error != null) ...[
-              const SizedBox(height: 8),
-              Text(error!),
-            ],
+            ),
           ],
         ),
       ),

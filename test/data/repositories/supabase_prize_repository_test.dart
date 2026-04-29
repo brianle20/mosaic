@@ -50,7 +50,6 @@ void main() {
 
       final detail = await repository.loadPrizePlan(
         eventId: 'evt_01',
-        prizeBudgetCents: 30000,
       );
 
       expect(detail, isNotNull);
@@ -74,11 +73,11 @@ void main() {
             'plan': {
               'id': 'pp_01',
               'event_id': 'evt_01',
-              'mode': 'percentage',
+              'mode': 'fixed',
               'status': 'draft',
               'reserve_fixed_cents': 0,
-              'reserve_percentage_bps': 1000,
-              'note': 'Percent split',
+              'reserve_percentage_bps': 0,
+              'note': 'Fixed split',
               'row_version': 3,
             },
             'tiers': [
@@ -87,8 +86,8 @@ void main() {
                 'prize_plan_id': 'pp_01',
                 'place': 1,
                 'label': '1st',
-                'fixed_amount_cents': null,
-                'percentage_bps': 5000,
+                'fixed_amount_cents': 15000,
+                'percentage_bps': null,
               },
             ],
           };
@@ -98,19 +97,20 @@ void main() {
       final detail = await repository.upsertPrizePlan(
         UpsertPrizePlanInput(
           eventId: 'evt_01',
-          prizeBudgetCents: 50000,
-          mode: PrizePlanMode.percentage,
-          reserveFixedCents: 0,
-          reservePercentageBps: 1000,
-          note: 'Percent split',
+          mode: PrizePlanMode.fixed,
+          note: 'Fixed split',
           tiers: const [
-            PrizeTierDraftInput(place: 1, label: '1st', percentageBps: 5000),
+            PrizeTierDraftInput(
+              place: 1,
+              label: '1st',
+              fixedAmountCents: 15000,
+            ),
           ],
         ),
       );
 
-      expect(detail.plan.mode, PrizePlanMode.percentage);
-      expect(detail.tiers.single.percentageBps, 5000);
+      expect(detail.plan.mode, PrizePlanMode.fixed);
+      expect(detail.tiers.single.fixedAmountCents, 15000);
     });
 
     test('loads preview rows and refreshes cached preview', () async {
@@ -163,10 +163,6 @@ void main() {
             'rank_end': 1,
             'display_rank': '1',
             'award_amount_cents': 15000,
-            'status': 'planned',
-            'paid_method': null,
-            'paid_at': null,
-            'paid_note': null,
           },
         ],
         prizeMutationRunner: (functionName, params) async {
@@ -181,10 +177,6 @@ void main() {
                 'rank_end': 1,
                 'display_rank': '1',
                 'award_amount_cents': 15000,
-                'status': 'planned',
-                'paid_method': null,
-                'paid_at': null,
-                'paid_note': null,
               },
             ],
           };
@@ -194,100 +186,11 @@ void main() {
       final awards = await repository.lockPrizeAwards('evt_01');
 
       expect(awards, hasLength(1));
-      expect(awards.single.status, PrizeAwardStatus.planned);
+      expect(awards.single.toJson().containsKey('status'), isFalse);
 
       final cached = await repository.readCachedPrizeAwards('evt_01');
       expect(cached, hasLength(1));
       expect(cached.single.awardAmountCents, 15000);
-    });
-
-    test('maps paid and void prize award mutations', () async {
-      final cache = await LocalCache.create();
-      await cache.savePrizeAwards('evt_01', [
-        PrizeAwardRecord.fromJson(const {
-          'id': 'award_01',
-          'event_id': 'evt_01',
-          'event_guest_id': 'gst_01',
-          'rank_start': 1,
-          'rank_end': 1,
-          'display_rank': '1',
-          'award_amount_cents': 15000,
-          'status': 'planned',
-          'paid_method': null,
-          'paid_at': null,
-          'paid_note': null,
-        }),
-        PrizeAwardRecord.fromJson(const {
-          'id': 'award_02',
-          'event_id': 'evt_01',
-          'event_guest_id': 'gst_02',
-          'rank_start': 2,
-          'rank_end': 2,
-          'display_rank': '2',
-          'award_amount_cents': 10000,
-          'status': 'planned',
-          'paid_method': null,
-          'paid_at': null,
-          'paid_note': null,
-        }),
-      ]);
-      final repository = SupabasePrizeRepository(
-        client: SupabaseClient('https://example.com', 'publishable-key'),
-        cache: cache,
-        prizeMutationRunner: (functionName, params) async {
-          if (functionName == 'mark_prize_award_paid') {
-            return {
-              'id': 'award_01',
-              'event_id': 'evt_01',
-              'event_guest_id': 'gst_01',
-              'rank_start': 1,
-              'rank_end': 1,
-              'display_rank': '1',
-              'award_amount_cents': 15000,
-              'status': 'paid',
-              'paid_method': 'cash',
-              'paid_at': '2026-04-12T03:00:00Z',
-              'paid_note': 'Paid at venue',
-            };
-          }
-
-          return {
-            'id': 'award_02',
-            'event_id': 'evt_01',
-            'event_guest_id': 'gst_02',
-            'rank_start': 2,
-            'rank_end': 2,
-            'display_rank': '2',
-            'award_amount_cents': 10000,
-            'status': 'void',
-            'paid_method': null,
-            'paid_at': null,
-            'paid_note': 'Left early',
-          };
-        },
-      );
-
-      final paid = await repository.markPrizeAwardPaid(
-        awardId: 'award_01',
-        paidMethod: 'cash',
-        paidNote: 'Paid at venue',
-      );
-      final voided = await repository.voidPrizeAward(
-        awardId: 'award_02',
-        paidNote: 'Left early',
-      );
-
-      expect(paid.status, PrizeAwardStatus.paid);
-      expect(paid.paidMethod, 'cash');
-      expect(voided.status, PrizeAwardStatus.voided);
-      expect(voided.paidNote, 'Left early');
-
-      final cached = await repository.readCachedPrizeAwards('evt_01');
-      expect(cached, hasLength(2));
-      expect(cached.first.status, PrizeAwardStatus.paid);
-      expect(cached.first.paidMethod, 'cash');
-      expect(cached.last.status, PrizeAwardStatus.voided);
-      expect(cached.last.paidNote, 'Left early');
     });
   });
 }

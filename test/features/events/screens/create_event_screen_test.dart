@@ -21,13 +21,11 @@ class _RecordingEventRepository implements EventRepository {
       'checkin_open': false,
       'scoring_open': false,
       'cover_charge_cents': input.coverChargeCents,
-      'prize_budget_cents': input.prizeBudgetCents,
       'default_ruleset_id': input.defaultRulesetId,
       'prevailing_wind': 'east',
       'venue_name': input.venueName,
       'venue_address': input.venueAddress,
       'description': input.description,
-      'prize_budget_note': input.prizeBudgetNote,
     });
   }
 
@@ -96,7 +94,7 @@ void main() {
     expect(find.text('Venue Name'), findsOneWidget);
     expect(find.text('Venue Address'), findsOneWidget);
     expect(find.text('Cover Charge'), findsOneWidget);
-    expect(find.text('Prize Budget'), findsOneWidget);
+    expect(find.text('Prize Budget'), findsNothing);
 
     expect(find.text('Timezone'), findsNothing);
     expect(find.text('Cover Charge (cents)'), findsNothing);
@@ -113,7 +111,7 @@ void main() {
       ),
     );
 
-    expect(find.text(r'$'), findsNWidgets(2));
+    expect(find.text(r'$'), findsOneWidget);
   });
 
   testWidgets('formats money fields as cents while typing', (tester) async {
@@ -191,7 +189,6 @@ void main() {
       '123 Bamboo Ave',
     );
     await tester.enterText(find.byKey(createEventCoverChargeFieldKey), '1500');
-    await tester.enterText(find.byKey(createEventPrizeBudgetFieldKey), '5025');
     await tester.ensureVisible(find.text('Save Event'));
     await tester.tap(find.text('Save Event'));
     await tester.pumpAndSettle();
@@ -201,7 +198,6 @@ void main() {
     expect(repository.capturedInput!.venueName, 'Club 88');
     expect(repository.capturedInput!.venueAddress, '123 Bamboo Ave');
     expect(repository.capturedInput!.coverChargeCents, 1500);
-    expect(repository.capturedInput!.prizeBudgetCents, 5025);
     expect(repository.capturedInput!.timezone, 'America/Los_Angeles');
     expect(repository.capturedInput!.startsAt.second, 0);
     expect(repository.capturedInput!.startsAt.millisecond, 0);
@@ -223,14 +219,12 @@ void main() {
 
     await tester.enterText(find.byKey(createEventTitleFieldKey), 'Open Play');
     await tester.enterText(find.byKey(createEventCoverChargeFieldKey), '');
-    await tester.enterText(find.byKey(createEventPrizeBudgetFieldKey), '');
     await tester.ensureVisible(find.text('Save Event'));
     await tester.tap(find.text('Save Event'));
     await tester.pumpAndSettle();
 
     expect(repository.capturedInput, isNotNull);
     expect(repository.capturedInput!.coverChargeCents, 0);
-    expect(repository.capturedInput!.prizeBudgetCents, 0);
   });
 
   testWidgets('invalid money fields show friendly validation messages',
@@ -247,13 +241,11 @@ void main() {
 
     await tester.enterText(find.byKey(createEventTitleFieldKey), 'Open Play');
     await tester.enterText(find.byKey(createEventCoverChargeFieldKey), '-1');
-    await tester.enterText(find.byKey(createEventPrizeBudgetFieldKey), 'abc');
     await tester.ensureVisible(find.text('Save Event'));
     await tester.tap(find.text('Save Event'));
     await tester.pump();
 
     expect(find.text('Amount must be zero or more.'), findsOneWidget);
-    expect(find.text('Enter a valid amount.'), findsOneWidget);
     expect(repository.capturedInput, isNull);
   });
 

@@ -14,7 +14,6 @@ class _FakePrizeRepository implements PrizeRepository {
   final List<PrizeAwardRecord> cachedAwards;
   final Future<PrizePlanDetail?> Function({
     required String eventId,
-    required int prizeBudgetCents,
   })? remotePlanLoader;
 
   @override
@@ -33,11 +32,10 @@ class _FakePrizeRepository implements PrizeRepository {
   @override
   Future<PrizePlanDetail?> loadPrizePlan({
     required String eventId,
-    required int prizeBudgetCents,
   }) async {
     final loader = remotePlanLoader;
     if (loader != null) {
-      return loader(eventId: eventId, prizeBudgetCents: prizeBudgetCents);
+      return loader(eventId: eventId);
     }
     return cachedPlan;
   }
@@ -56,24 +54,7 @@ class _FakePrizeRepository implements PrizeRepository {
   }
 
   @override
-  Future<PrizeAwardRecord> markPrizeAwardPaid({
-    required String awardId,
-    String? paidMethod,
-    String? paidNote,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<PrizePlanDetail> upsertPrizePlan(UpsertPrizePlanInput input) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<PrizeAwardRecord> voidPrizeAward({
-    required String awardId,
-    String? paidNote,
-  }) {
     throw UnimplementedError();
   }
 }
@@ -92,7 +73,6 @@ void main() {
           'reserve_percentage_bps': 0,
           'note': 'Locked plan',
         },
-        prizeBudgetCents: 50000,
       ),
       tiers: const [
         PrizeTierRecord(
@@ -114,19 +94,16 @@ void main() {
         rankEnd: 1,
         displayRank: '1',
         awardAmountCents: 15000,
-        status: PrizeAwardStatus.planned,
       ),
     ];
 
     final controller = PrizePlanController(
       eventId: 'evt_01',
-      prizeBudgetCents: 50000,
       prizeRepository: _FakePrizeRepository(
         cachedPlan: cachedPlan,
         cachedAwards: cachedAwards,
         remotePlanLoader: ({
           required String eventId,
-          required int prizeBudgetCents,
         }) async =>
             throw Exception('temporary prize-plan failure'),
       ),

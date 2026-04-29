@@ -7,12 +7,10 @@ class _FakePrizeRepository implements PrizeRepository {
   _FakePrizeRepository({
     required this.cachedAwards,
     this.loadAwards,
-    this.markPaidHandler,
   });
 
   final List<PrizeAwardRecord> cachedAwards;
   final Future<List<PrizeAwardRecord>> Function(String eventId)? loadAwards;
-  final Future<PrizeAwardRecord> Function(String awardId)? markPaidHandler;
 
   @override
   Future<List<PrizeAwardRecord>> readCachedPrizeAwards(String eventId) async =>
@@ -28,22 +26,8 @@ class _FakePrizeRepository implements PrizeRepository {
   }
 
   @override
-  Future<PrizeAwardRecord> markPrizeAwardPaid({
-    required String awardId,
-    String? paidMethod,
-    String? paidNote,
-  }) async {
-    final handler = markPaidHandler;
-    if (handler != null) {
-      return handler(awardId);
-    }
-    throw UnimplementedError();
-  }
-
-  @override
   Future<PrizePlanDetail?> loadPrizePlan({
     required String eventId,
-    required int prizeBudgetCents,
   }) {
     throw UnimplementedError();
   }
@@ -72,14 +56,6 @@ class _FakePrizeRepository implements PrizeRepository {
   Future<PrizePlanDetail> upsertPrizePlan(UpsertPrizePlanInput input) {
     throw UnimplementedError();
   }
-
-  @override
-  Future<PrizeAwardRecord> voidPrizeAward({
-    required String awardId,
-    String? paidNote,
-  }) {
-    throw UnimplementedError();
-  }
 }
 
 void main() {
@@ -94,7 +70,6 @@ void main() {
         rankEnd: 1,
         displayRank: '1',
         awardAmountCents: 15000,
-        status: PrizeAwardStatus.planned,
       ),
     ];
 
@@ -110,55 +85,5 @@ void main() {
 
     expect(controller.awards.map((award) => award.id), ['award_01']);
     expect(controller.error, isNull);
-  });
-
-  test('markPaid preserves prize rank ordering', () async {
-    final controller = PrizeAwardsController(
-      eventId: 'evt_01',
-      prizeRepository: _FakePrizeRepository(
-        cachedAwards: const [],
-        markPaidHandler: (_) async => const PrizeAwardRecord(
-          id: 'award_02',
-          eventId: 'evt_01',
-          eventGuestId: 'gst_02',
-          displayName: 'Bob Lee',
-          rankStart: 2,
-          rankEnd: 2,
-          displayRank: '2',
-          awardAmountCents: 10000,
-          status: PrizeAwardStatus.paid,
-        ),
-      ),
-    );
-    controller.awards = const [
-      PrizeAwardRecord(
-        id: 'award_01',
-        eventId: 'evt_01',
-        eventGuestId: 'gst_01',
-        displayName: 'Alice Wong',
-        rankStart: 1,
-        rankEnd: 1,
-        displayRank: '1',
-        awardAmountCents: 15000,
-        status: PrizeAwardStatus.planned,
-      ),
-      PrizeAwardRecord(
-        id: 'award_02',
-        eventId: 'evt_01',
-        eventGuestId: 'gst_02',
-        displayName: 'Bob Lee',
-        rankStart: 2,
-        rankEnd: 2,
-        displayRank: '2',
-        awardAmountCents: 10000,
-        status: PrizeAwardStatus.planned,
-      ),
-    ];
-
-    await controller.markPaid('award_02');
-
-    expect(
-        controller.awards.map((award) => award.id), ['award_01', 'award_02']);
-    expect(controller.awards.last.status, PrizeAwardStatus.paid);
   });
 }

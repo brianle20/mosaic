@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:mosaic/core/time/event_timezones.dart';
 
 enum EventLifecycleStatus {
   draft,
@@ -22,11 +23,9 @@ class CreateEventInput {
     required this.startsAt,
     required this.timezone,
     required this.coverChargeCents,
-    required this.prizeBudgetCents,
     this.description,
     this.venueName,
     this.venueAddress,
-    this.prizeBudgetNote,
     this.defaultRulesetId = 'HK_STANDARD_V1',
   });
 
@@ -37,8 +36,6 @@ class CreateEventInput {
   final String timezone;
   final DateTime startsAt;
   final int coverChargeCents;
-  final int prizeBudgetCents;
-  final String? prizeBudgetNote;
   final String defaultRulesetId;
 
   Map<String, dynamic> toInsertJson({required String ownerUserId}) {
@@ -49,13 +46,11 @@ class CreateEventInput {
       'venue_name': venueName,
       'venue_address': venueAddress,
       'timezone': timezone,
-      'starts_at': startsAt.toIso8601String(),
+      'starts_at': eventWallTimeToUtc(startsAt, timezone).toIso8601String(),
       'lifecycle_status': 'draft',
       'checkin_open': false,
       'scoring_open': false,
       'cover_charge_cents': coverChargeCents,
-      'prize_budget_cents': prizeBudgetCents,
-      'prize_budget_note': prizeBudgetNote,
       'default_ruleset_id': defaultRulesetId,
       'prevailing_wind': 'east',
     };
@@ -75,14 +70,12 @@ class EventRecord {
     required this.checkinOpen,
     required this.scoringOpen,
     required this.coverChargeCents,
-    required this.prizeBudgetCents,
     required this.defaultRulesetId,
     required this.prevailingWind,
     this.description,
     this.venueName,
     this.venueAddress,
     this.endsAt,
-    this.prizeBudgetNote,
     this.rowVersion = 1,
   });
 
@@ -105,8 +98,6 @@ class EventRecord {
       checkinOpen: _requiredBool(json, 'checkin_open'),
       scoringOpen: _requiredBool(json, 'scoring_open'),
       coverChargeCents: _requiredInt(json, 'cover_charge_cents'),
-      prizeBudgetCents: _requiredInt(json, 'prize_budget_cents'),
-      prizeBudgetNote: _optionalString(json, 'prize_budget_note'),
       defaultRulesetId: _requiredString(json, 'default_ruleset_id'),
       prevailingWind: _prevailingWindFromJson(
         _requiredString(json, 'prevailing_wind'),
@@ -129,8 +120,6 @@ class EventRecord {
   final bool checkinOpen;
   final bool scoringOpen;
   final int coverChargeCents;
-  final int prizeBudgetCents;
-  final String? prizeBudgetNote;
   final String defaultRulesetId;
   final PrevailingWind prevailingWind;
   final int rowVersion;
@@ -151,8 +140,6 @@ class EventRecord {
       'checkin_open': checkinOpen,
       'scoring_open': scoringOpen,
       'cover_charge_cents': coverChargeCents,
-      'prize_budget_cents': prizeBudgetCents,
-      'prize_budget_note': prizeBudgetNote,
       'default_ruleset_id': defaultRulesetId,
       'prevailing_wind': prevailingWind.name,
       'row_version': rowVersion,

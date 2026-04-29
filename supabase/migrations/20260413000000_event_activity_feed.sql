@@ -106,10 +106,6 @@ as $$
           'Updated prize plan'
         when log.entity_type = 'prize_award' and log.action = 'lock' then
           'Locked prize awards'
-        when log.entity_type = 'prize_award' and log.action = 'mark_paid' then
-          'Marked prize award paid'
-        when log.entity_type = 'prize_award' and log.action = 'void' then
-          'Voided prize award'
         when log.entity_type = 'event' and log.action = 'start' then
           'Started event'
         when log.entity_type = 'event' and log.action = 'set_operational_flags' then

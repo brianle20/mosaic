@@ -32,26 +32,4 @@ class PrizeAwardsController extends ChangeNotifier {
       notifyListeners();
     }
   }
-
-  Future<void> markPaid(String awardId) async {
-    final updated = await prizeRepository.markPrizeAwardPaid(
-      awardId: awardId,
-      paidMethod: 'cash',
-    );
-    awards = [
-      ...awards.where((award) => award.id != awardId),
-      updated,
-    ];
-    awards.sort((left, right) => left.rankStart.compareTo(right.rankStart));
-    notifyListeners();
-  }
-
-  Future<void> voidAward(String awardId) async {
-    final updated = await prizeRepository.voidPrizeAward(awardId: awardId);
-    awards = [
-      ...awards.where((award) => award.id != awardId),
-      updated,
-    ]..sort((left, right) => left.rankStart.compareTo(right.rankStart));
-    notifyListeners();
-  }
 }

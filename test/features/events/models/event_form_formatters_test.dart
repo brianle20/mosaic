@@ -84,4 +84,36 @@ void main() {
       );
     });
   });
+
+  group('formatEventTileStart', () {
+    test('formats UTC instants in the event timezone', () {
+      expect(
+        formatEventTileStart(
+          DateTime.utc(2026, 4, 30, 5),
+          timezone: 'America/Los_Angeles',
+        ),
+        'Apr 29, 10:00 PM',
+      );
+    });
+
+    test('keeps UTC event times in UTC', () {
+      expect(
+        formatEventTileStart(
+          DateTime.utc(2026, 4, 30, 5),
+          timezone: 'UTC',
+        ),
+        'Apr 30, 5:00 AM',
+      );
+    });
+
+    test('uses Pacific standard time outside daylight saving time', () {
+      expect(
+        formatEventTileStart(
+          DateTime.utc(2026, 1, 2, 4),
+          timezone: 'America/Los_Angeles',
+        ),
+        'Jan 1, 8:00 PM',
+      );
+    });
+  });
 }

@@ -11,7 +11,6 @@ class EventFormDraft {
     this.venueAddress = '',
     this.description = '',
     this.coverChargeCents = 0,
-    this.prizeBudgetCents = 0,
   });
 
   final String title;
@@ -21,7 +20,6 @@ class EventFormDraft {
   final String venueAddress;
   final String description;
   final int coverChargeCents;
-  final int prizeBudgetCents;
 
   String? get titleError {
     if (title.trim().isEmpty) {
@@ -47,19 +45,10 @@ class EventFormDraft {
     return null;
   }
 
-  String? get prizeBudgetError {
-    if (prizeBudgetCents < 0) {
-      return 'Prize budget must be zero or more.';
-    }
-
-    return null;
-  }
-
   bool get isValid {
     return titleError == null &&
         timezoneError == null &&
-        coverChargeError == null &&
-        prizeBudgetError == null;
+        coverChargeError == null;
   }
 
   CreateEventInput toCreateInput() {
@@ -71,7 +60,6 @@ class EventFormDraft {
       venueAddress: venueAddress.trim().isEmpty ? null : venueAddress.trim(),
       description: description.trim().isEmpty ? null : description.trim(),
       coverChargeCents: coverChargeCents,
-      prizeBudgetCents: prizeBudgetCents,
     );
   }
 }

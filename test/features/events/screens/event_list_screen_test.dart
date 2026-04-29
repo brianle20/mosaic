@@ -81,6 +81,7 @@ void main() {
     required String startsAt,
     required String lifecycleStatus,
     required String createdAt,
+    String timezone = 'America/Los_Angeles',
     String? venueName,
     String? venueAddress,
   }) {
@@ -90,13 +91,12 @@ void main() {
       'title': title,
       'venue_name': venueName,
       'venue_address': venueAddress,
-      'timezone': 'America/Los_Angeles',
+      'timezone': timezone,
       'starts_at': startsAt,
       'lifecycle_status': lifecycleStatus,
       'checkin_open': false,
       'scoring_open': false,
       'cover_charge_cents': 2000,
-      'prize_budget_cents': 50000,
       'default_ruleset_id': 'HK_STANDARD_V1',
       'prevailing_wind': 'east',
       'created_at': createdAt,
@@ -136,7 +136,6 @@ void main() {
         'checkin_open': false,
         'scoring_open': false,
         'cover_charge_cents': 2000,
-        'prize_budget_cents': 50000,
         'default_ruleset_id': 'HK_STANDARD_V1',
         'prevailing_wind': 'east',
       }),
@@ -206,6 +205,29 @@ void main() {
     expect(find.text('America/Los_Angeles • cancelled'), findsNothing);
   });
 
+  testWidgets('formats event starts in the event timezone', (tester) async {
+    final repository = _FakeEventRepository([
+      eventRecord(
+        id: 'evt_02',
+        title: 'Pacific Event',
+        startsAt: '2026-04-30T05:00:00Z',
+        timezone: 'UTC',
+        lifecycleStatus: 'draft',
+        createdAt: '2026-04-29T14:40:00-07:00',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(eventRepository: repository),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ready to Start • Apr 30, 5:00 AM'), findsOneWidget);
+    expect(find.text('Ready to Start • Apr 29, 10:00 PM'), findsNothing);
+  });
+
   testWidgets('event tile content has balanced vertical padding',
       (tester) async {
     final repository = _FakeEventRepository([
@@ -258,7 +280,6 @@ void main() {
         'checkin_open': false,
         'scoring_open': false,
         'cover_charge_cents': 2000,
-        'prize_budget_cents': 50000,
         'default_ruleset_id': 'HK_STANDARD_V1',
         'prevailing_wind': 'east',
       }),
@@ -310,7 +331,6 @@ void main() {
         'checkin_open': false,
         'scoring_open': false,
         'cover_charge_cents': 2000,
-        'prize_budget_cents': 50000,
         'default_ruleset_id': 'HK_STANDARD_V1',
         'prevailing_wind': 'east',
       }),
@@ -336,7 +356,6 @@ void main() {
                         'checkin_open': false,
                         'scoring_open': false,
                         'cover_charge_cents': 2500,
-                        'prize_budget_cents': 50000,
                         'default_ruleset_id': 'HK_STANDARD_V1',
                         'prevailing_wind': 'east',
                       }),

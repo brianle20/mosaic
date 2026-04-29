@@ -14,7 +14,6 @@ const createEventVenueAddressFieldKey = Key(
   'create-event-venue-address-field',
 );
 const createEventCoverChargeFieldKey = Key('create-event-cover-charge-field');
-const createEventPrizeBudgetFieldKey = Key('create-event-prize-budget-field');
 
 class CreateEventScreen extends StatefulWidget {
   const CreateEventScreen({
@@ -36,7 +35,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final _venueNameController = TextEditingController();
   final _venueAddressController = TextEditingController();
   final _coverChargeController = TextEditingController(text: '0.00');
-  final _prizeBudgetController = TextEditingController(text: '0.00');
   late final EventFormController _controller;
 
   final String _timezone = 'America/Los_Angeles';
@@ -56,7 +54,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     _venueNameController.dispose();
     _venueAddressController.dispose();
     _coverChargeController.dispose();
-    _prizeBudgetController.dispose();
     _controller
       ..removeListener(_handleUpdate)
       ..dispose();
@@ -71,7 +68,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   EventFormDraft _buildDraft() {
     final coverCharge = parseMoneyAmount(_coverChargeController.text);
-    final prizeBudget = parseMoneyAmount(_prizeBudgetController.text);
 
     return EventFormDraft(
       title: _titleController.text,
@@ -79,7 +75,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       venueName: _venueNameController.text,
       venueAddress: _venueAddressController.text,
       coverChargeCents: coverCharge.cents ?? -1,
-      prizeBudgetCents: prizeBudget.cents ?? -1,
       startsAt: _startsAt,
     );
   }
@@ -197,13 +192,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               fieldKey: createEventCoverChargeFieldKey,
               controller: _coverChargeController,
               labelText: 'Cover Charge',
-              validator: _moneyFieldError,
-            ),
-            const SizedBox(height: 12),
-            MoneyTextFormField(
-              fieldKey: createEventPrizeBudgetFieldKey,
-              controller: _prizeBudgetController,
-              labelText: 'Prize Budget',
               validator: _moneyFieldError,
             ),
             if (_controller.submitError != null) ...[

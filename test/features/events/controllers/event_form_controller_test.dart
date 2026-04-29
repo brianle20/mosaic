@@ -129,7 +129,6 @@ final _validDraft = EventFormDraft(
   timezone: 'America/Los_Angeles',
   startsAt: DateTime(2026, 5, 1, 19),
   coverChargeCents: 1500,
-  prizeBudgetCents: 5000,
 );
 
 EventRecord _eventRecordFromInput(CreateEventInput input) {
@@ -143,13 +142,11 @@ EventRecord _eventRecordFromInput(CreateEventInput input) {
     'checkin_open': false,
     'scoring_open': false,
     'cover_charge_cents': input.coverChargeCents,
-    'prize_budget_cents': input.prizeBudgetCents,
     'default_ruleset_id': input.defaultRulesetId,
     'prevailing_wind': 'east',
     'venue_name': input.venueName,
     'venue_address': input.venueAddress,
     'description': input.description,
-    'prize_budget_note': input.prizeBudgetNote,
   });
 }
 

@@ -201,7 +201,6 @@ void main() {
       'checkin_open': true,
       'scoring_open': false,
       'cover_charge_cents': 2000,
-      'prize_budget_cents': 50000,
       'default_ruleset_id': 'HK_STANDARD_V1',
       'prevailing_wind': 'east',
     });
@@ -246,7 +245,6 @@ void main() {
       'checkin_open': true,
       'scoring_open': true,
       'cover_charge_cents': 2000,
-      'prize_budget_cents': 50000,
       'default_ruleset_id': 'HK_STANDARD_V1',
       'prevailing_wind': 'east',
     });
@@ -285,7 +283,6 @@ void main() {
       'checkin_open': false,
       'scoring_open': false,
       'cover_charge_cents': 2000,
-      'prize_budget_cents': 50000,
       'default_ruleset_id': 'HK_STANDARD_V1',
       'prevailing_wind': 'east',
     });
@@ -319,7 +316,6 @@ void main() {
       'checkin_open': true,
       'scoring_open': true,
       'cover_charge_cents': 2000,
-      'prize_budget_cents': 50000,
       'default_ruleset_id': 'HK_STANDARD_V1',
       'prevailing_wind': 'east',
     });

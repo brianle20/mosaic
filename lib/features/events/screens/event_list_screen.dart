@@ -4,6 +4,7 @@ import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_list_controller.dart';
+import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
 
 class EventListScreen extends StatefulWidget {
@@ -80,31 +81,6 @@ class _EventListScreenState extends State<EventListScreen> {
     };
   }
 
-  String _formatTileStart(DateTime startsAt) {
-    final localStartsAt = startsAt.toLocal();
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final month = months[localStartsAt.month - 1];
-    final hour = localStartsAt.hour;
-    final displayHour = hour % 12 == 0 ? 12 : hour % 12;
-    final minute = localStartsAt.minute.toString().padLeft(2, '0');
-    final meridiem = hour < 12 ? 'AM' : 'PM';
-
-    return '$month ${localStartsAt.day}, $displayHour:$minute $meridiem';
-  }
-
   String? _eventLocation(EventRecord event) {
     final venueName = event.venueName?.trim();
     if (venueName != null && venueName.isNotEmpty) {
@@ -140,7 +116,10 @@ class _EventListScreenState extends State<EventListScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                '${_eventPhaseLabel(event.lifecycleStatus)} • ${_formatTileStart(event.startsAt)}',
+                '${_eventPhaseLabel(event.lifecycleStatus)} • ${formatEventTileStart(
+                  event.startsAt,
+                  timezone: event.timezone,
+                )}',
                 style: textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
