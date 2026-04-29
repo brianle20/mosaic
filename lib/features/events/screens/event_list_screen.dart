@@ -6,6 +6,7 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_list_controller.dart';
 import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class EventListScreen extends StatefulWidget {
   const EventListScreen({
@@ -83,6 +84,17 @@ class _EventListScreenState extends State<EventListScreen> {
     };
   }
 
+  StatusChipTone _eventPhaseTone(EventRecord event) {
+    return switch (event.lifecycleStatus) {
+      EventLifecycleStatus.draft => StatusChipTone.warning,
+      EventLifecycleStatus.active when event.scoringOpen => StatusChipTone.info,
+      EventLifecycleStatus.active => StatusChipTone.success,
+      EventLifecycleStatus.completed => StatusChipTone.warning,
+      EventLifecycleStatus.finalized => StatusChipTone.neutral,
+      EventLifecycleStatus.cancelled => StatusChipTone.danger,
+    };
+  }
+
   String? _eventLocation(EventRecord event) {
     final venueName = event.venueName?.trim();
     if (venueName != null && venueName.isNotEmpty) {
@@ -117,14 +129,25 @@ class _EventListScreenState extends State<EventListScreen> {
                 style: textTheme.titleMedium,
               ),
               const SizedBox(height: 2),
-              Text(
-                '${_eventPhaseLabel(event)} • ${formatEventTileStart(
-                  event.startsAt,
-                  timezone: event.timezone,
-                )}',
-                style: textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  StatusChip(
+                    label: _eventPhaseLabel(event),
+                    tone: _eventPhaseTone(event),
+                  ),
+                  Text(
+                    formatEventTileStart(
+                      event.startsAt,
+                      timezone: event.timezone,
+                    ),
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
               if (location != null) ...[
                 const SizedBox(height: 2),

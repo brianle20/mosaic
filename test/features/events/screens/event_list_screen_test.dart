@@ -4,6 +4,7 @@ import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class _FakeEventRepository implements EventRepository {
   _FakeEventRepository(this.events);
@@ -197,14 +198,26 @@ void main() {
       tester.getTopLeft(find.text('Test Event 2')).dy,
       lessThan(tester.getTopLeft(find.text('Test Event 1')).dy),
     );
-    expect(
-      find.text('Setup • Apr 30, 12:30 AM'),
-      findsOneWidget,
-    );
+    expect(find.widgetWithText(StatusChip, 'Setup'), findsOneWidget);
+    expect(find.text('Apr 30, 12:30 AM'), findsOneWidget);
     expect(find.text('Green Room'), findsOneWidget);
-    expect(find.text('Cancelled • Apr 24, 7:00 PM'), findsOneWidget);
+    expect(find.widgetWithText(StatusChip, 'Cancelled'), findsOneWidget);
+    expect(find.text('Apr 24, 7:00 PM'), findsOneWidget);
     expect(find.text('America/Los_Angeles • draft'), findsNothing);
     expect(find.text('America/Los_Angeles • cancelled'), findsNothing);
+    expect(find.textContaining('Setup •'), findsNothing);
+    expect(find.textContaining('Cancelled •'), findsNothing);
+
+    expect(
+      tester.widget<StatusChip>(find.widgetWithText(StatusChip, 'Setup')).tone,
+      StatusChipTone.warning,
+    );
+    expect(
+      tester
+          .widget<StatusChip>(find.widgetWithText(StatusChip, 'Cancelled'))
+          .tone,
+      StatusChipTone.danger,
+    );
   });
 
   testWidgets('formats event starts in the event timezone', (tester) async {
@@ -226,8 +239,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Setup • Apr 30, 5:00 AM'), findsOneWidget);
-    expect(find.text('Setup • Apr 29, 10:00 PM'), findsNothing);
+    expect(find.widgetWithText(StatusChip, 'Setup'), findsOneWidget);
+    expect(find.text('Apr 30, 5:00 AM'), findsOneWidget);
+    expect(find.text('Apr 29, 10:00 PM'), findsNothing);
   });
 
   testWidgets('event tiles describe active operational state', (tester) async {
@@ -258,9 +272,24 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Check-In Open • Apr 29, 10:00 PM'), findsOneWidget);
-    expect(find.text('Scoring Open • Apr 29, 10:00 PM'), findsOneWidget);
+    expect(find.widgetWithText(StatusChip, 'Check-In Open'), findsOneWidget);
+    expect(find.widgetWithText(StatusChip, 'Scoring Open'), findsOneWidget);
+    expect(find.text('Apr 29, 10:00 PM'), findsNWidgets(2));
     expect(find.textContaining('In Progress'), findsNothing);
+    expect(find.textContaining('Check-In Open •'), findsNothing);
+    expect(find.textContaining('Scoring Open •'), findsNothing);
+    expect(
+      tester
+          .widget<StatusChip>(find.widgetWithText(StatusChip, 'Check-In Open'))
+          .tone,
+      StatusChipTone.success,
+    );
+    expect(
+      tester
+          .widget<StatusChip>(find.widgetWithText(StatusChip, 'Scoring Open'))
+          .tone,
+      StatusChipTone.info,
+    );
   });
 
   testWidgets('event tile content has balanced vertical padding',

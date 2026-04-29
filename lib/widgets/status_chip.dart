@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 enum StatusChipTone {
   neutral,
+  info,
   success,
   warning,
   danger,
@@ -24,6 +25,10 @@ class StatusChip extends StatelessWidget {
       StatusChipTone.neutral => (
           background: colorScheme.surfaceContainerHighest,
           foreground: colorScheme.onSurfaceVariant,
+        ),
+      StatusChipTone.info => (
+          background: colorScheme.primaryContainer,
+          foreground: colorScheme.onPrimaryContainer,
         ),
       StatusChipTone.success => (
           background: colorScheme.secondaryContainer,

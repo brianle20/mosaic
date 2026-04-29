@@ -111,7 +111,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final previewButton = find.text('Preview Payouts');
+    final previewButton = find.text('Save & Preview Payouts');
     await tester.scrollUntilVisible(
       previewButton,
       200,
@@ -179,11 +179,11 @@ void main() {
 
     final scrollable = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(
-      find.text('Preview Payouts'),
+      find.text('Save & Preview Payouts'),
       200,
       scrollable: scrollable,
     );
-    await tester.tap(find.text('Preview Payouts'));
+    await tester.tap(find.text('Save & Preview Payouts'));
     await tester.pumpAndSettle();
 
     expect(repository.previewCount, 1);
@@ -241,11 +241,11 @@ void main() {
 
     final scrollable = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(
-      find.text('Preview Payouts'),
+      find.text('Save & Preview Payouts'),
       200,
       scrollable: scrollable,
     );
-    await tester.tap(find.text('Preview Payouts'));
+    await tester.tap(find.text('Save & Preview Payouts'));
     await tester.pumpAndSettle();
 
     expect(repository.previewCount, 1);
@@ -324,7 +324,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final previewButton = find.text('Preview Payouts');
+    final previewButton = find.text('Save & Preview Payouts');
     final scrollable = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(
       previewButton,
@@ -335,7 +335,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.previewCount, 1);
-    expect(find.text('Preview Payouts'), findsWidgets);
+    expect(find.text('Save & Preview Payouts'), findsWidgets);
     expect(
       find.text(
           'Lock awards only when this preview matches the standings you want to pay out.'),

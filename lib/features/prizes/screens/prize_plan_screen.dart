@@ -178,7 +178,7 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _controller.isSubmitting ? null : _previewPayouts,
-            child: const Text('Preview Payouts'),
+            child: const Text('Save & Preview Payouts'),
           ),
           const SizedBox(height: 12),
           if (_controller.hasPreviewedPayouts &&
