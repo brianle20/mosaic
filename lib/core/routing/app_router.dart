@@ -129,6 +129,7 @@ class AppRouter {
             scoringOpen: args.scoringOpen,
             tableRepository: tableRepository,
             sessionRepository: sessionRepository,
+            guestRepository: guestRepository,
           ),
           settings: settings,
         );
