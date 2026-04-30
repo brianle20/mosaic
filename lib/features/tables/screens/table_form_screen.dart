@@ -62,18 +62,28 @@ class _TableFormScreenState extends State<TableFormScreen> {
   }
 
   Future<void> _submit() async {
-    final draft = _buildDraft();
-    setState(() {});
-    if (!_formKey.currentState!.validate()) {
-      return;
+    final EventTableRecord? savedTable;
+    if (widget.initialTable == null) {
+      savedTable = await _controller.createScannedTable(
+        eventId: widget.eventId,
+        nfcService: widget.nfcService,
+        context: context,
+      );
+    } else {
+      final draft = _buildDraft();
+      setState(() {});
+      if (!_formKey.currentState!.validate()) {
+        return;
+      }
+
+      savedTable = await _controller.submit(
+        eventId: widget.eventId,
+        draft: draft,
+        displayOrder: widget.initialTable!.displayOrder,
+        existingTable: widget.initialTable,
+      );
     }
 
-    final savedTable = await _controller.submit(
-      eventId: widget.eventId,
-      draft: draft,
-      displayOrder: widget.initialTable?.displayOrder ?? 1,
-      existingTable: widget.initialTable,
-    );
     if (!mounted || savedTable == null) {
       return;
     }
@@ -87,6 +97,7 @@ class _TableFormScreenState extends State<TableFormScreen> {
   @override
   Widget build(BuildContext context) {
     final currentTable = _controller.latestTable ?? widget.initialTable;
+    final isEditing = widget.initialTable != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -96,7 +107,11 @@ class _TableFormScreenState extends State<TableFormScreen> {
         minimum: const EdgeInsets.all(16),
         child: FilledButton(
           onPressed: _controller.isSubmitting ? null : _submit,
-          child: Text(_controller.isSubmitting ? 'Saving...' : 'Save Table'),
+          child: Text(
+            _controller.isSubmitting
+                ? (isEditing ? 'Saving...' : 'Scanning...')
+                : (isEditing ? 'Save Table' : 'Scan Table Tag'),
+          ),
         ),
       ),
       body: Form(
@@ -104,16 +119,18 @@ class _TableFormScreenState extends State<TableFormScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            TextFormField(
-              controller: _labelController,
-              decoration: const InputDecoration(labelText: 'Label'),
-              validator: (_) => _buildDraft().labelError,
-            ),
-            const SizedBox(height: 12),
+            if (isEditing) ...[
+              TextFormField(
+                controller: _labelController,
+                decoration: const InputDecoration(labelText: 'Label'),
+                validator: (_) => _buildDraft().labelError,
+              ),
+              const SizedBox(height: 12),
+            ],
             const ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text('Ruleset'),
-              subtitle: Text('HK_STANDARD_V1'),
+              subtitle: Text('Hong Kong Standard'),
             ),
             const ListTile(
               contentPadding: EdgeInsets.zero,

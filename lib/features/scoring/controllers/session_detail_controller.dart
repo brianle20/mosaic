@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 
 class SessionDetailController extends ChangeNotifier {
@@ -17,6 +18,8 @@ class SessionDetailController extends ChangeNotifier {
   String? actionError;
   SessionDetailRecord? detail;
   Map<String, String> guestNamesById = const {};
+  Map<String, GuestTagAssignmentSummary> activeTagAssignmentsByGuestId =
+      const {};
 
   Future<void> load({
     required String eventId,
@@ -33,6 +36,12 @@ class SessionDetailController extends ChangeNotifier {
       guestNamesById = {
         for (final guest in guests) guest.id: guest.displayName,
       };
+      try {
+        activeTagAssignmentsByGuestId =
+            await guestRepository.listActiveTagAssignments(eventId);
+      } catch (_) {
+        activeTagAssignmentsByGuestId = const {};
+      }
       detail = loadedDetail;
     } catch (err) {
       error = err.toString();

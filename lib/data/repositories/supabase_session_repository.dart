@@ -1,4 +1,5 @@
 import 'package:mosaic/data/local/local_cache.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -17,6 +18,9 @@ typedef SessionRpcSingleRunner = Future<Map<String, dynamic>> Function(
 typedef SessionDetailLoader = Future<Map<String, dynamic>> Function(
   String sessionId,
 );
+typedef SessionTableLabelLoader = Future<String?> Function(String tableId);
+typedef SessionEventHandLedgerLoader = Future<List<Map<String, dynamic>>>
+    Function(String eventId);
 
 class SupabaseSessionRepository implements SessionRepository {
   SupabaseSessionRepository({
@@ -26,10 +30,14 @@ class SupabaseSessionRepository implements SessionRepository {
     SessionSeatsLoader? sessionSeatsLoader,
     SessionRpcSingleRunner? rpcSingleRunner,
     SessionDetailLoader? sessionDetailLoader,
+    SessionTableLabelLoader? sessionTableLabelLoader,
+    SessionEventHandLedgerLoader? eventHandLedgerLoader,
   })  : _sessionListLoader = sessionListLoader,
         _sessionSeatsLoader = sessionSeatsLoader,
         _rpcSingleRunner = rpcSingleRunner,
-        _sessionDetailLoader = sessionDetailLoader;
+        _sessionDetailLoader = sessionDetailLoader,
+        _sessionTableLabelLoader = sessionTableLabelLoader,
+        _eventHandLedgerLoader = eventHandLedgerLoader;
 
   final SupabaseClient client;
   final LocalCache cache;
@@ -37,6 +45,8 @@ class SupabaseSessionRepository implements SessionRepository {
   final SessionSeatsLoader? _sessionSeatsLoader;
   final SessionRpcSingleRunner? _rpcSingleRunner;
   final SessionDetailLoader? _sessionDetailLoader;
+  final SessionTableLabelLoader? _sessionTableLabelLoader;
+  final SessionEventHandLedgerLoader? _eventHandLedgerLoader;
 
   @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async {
@@ -72,6 +82,27 @@ class SupabaseSessionRepository implements SessionRepository {
     await cache.saveSessionDetail(detail);
     await _mergeSessionIntoCache(detail.session);
     return detail;
+  }
+
+  @override
+  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
+    String eventId,
+  ) async {
+    return cache.readEventHandLedger(eventId);
+  }
+
+  @override
+  Future<List<EventHandLedgerEntry>> loadEventHandLedger(String eventId) async {
+    final loader = _eventHandLedgerLoader;
+    final rows = loader != null
+        ? await loader(eventId)
+        : await _loadEventHandLedgerRows(eventId);
+
+    final entries = rows
+        .map((row) => EventHandLedgerEntry.fromJson(row))
+        .toList(growable: false);
+    await cache.saveEventHandLedger(eventId, entries);
+    return entries;
   }
 
   @override
@@ -178,7 +209,19 @@ class SupabaseSessionRepository implements SessionRepository {
   Future<SessionDetailRecord> _loadSessionDetail(String sessionId) async {
     final loader = _sessionDetailLoader;
     if (loader != null) {
-      return SessionDetailRecord.fromJson(await loader(sessionId));
+      final detailJson = await loader(sessionId);
+      final sessionJson =
+          (detailJson['session'] as Map).cast<String, dynamic>();
+      final session = TableSessionRecord.fromJson(sessionJson);
+      final tableLabel = _normalizeTableLabel(detailJson['table_label']) ??
+          (_sessionTableLabelLoader == null
+              ? null
+              : await _loadTableLabel(session.eventTableId));
+
+      return SessionDetailRecord.fromJson({
+        ...detailJson,
+        'table_label': tableLabel,
+      });
     }
 
     final sessionRow = await client
@@ -186,6 +229,9 @@ class SupabaseSessionRepository implements SessionRepository {
         .select()
         .eq('id', sessionId)
         .single();
+    final sessionJson = sessionRow.cast<String, dynamic>();
+    final session = TableSessionRecord.fromJson(sessionJson);
+    final tableLabel = await _loadTableLabel(session.eventTableId);
     final seatsRows = await _loadSessionSeats(sessionId);
     final handsRows = await client
         .from('hand_results')
@@ -207,11 +253,53 @@ class SupabaseSessionRepository implements SessionRepository {
             .toList(growable: false);
 
     return SessionDetailRecord.fromJson({
-      'session': sessionRow,
+      'table_label': tableLabel,
+      'session': sessionJson,
       'seats': seatsRows,
       'hands': handsRows,
       'settlements': settlementsRows,
     });
+  }
+
+  Future<String?> _loadTableLabel(String tableId) async {
+    final loader = _sessionTableLabelLoader;
+    if (loader != null) {
+      return loader(tableId);
+    }
+
+    final row = await client
+        .from('event_tables')
+        .select('label')
+        .eq('id', tableId)
+        .maybeSingle();
+    return _normalizeTableLabel(row?['label']);
+  }
+
+  Future<List<Map<String, dynamic>>> _loadEventHandLedgerRows(
+    String eventId,
+  ) async {
+    final response = await client.rpc(
+      'list_event_hand_ledger',
+      params: {'target_event_id': eventId},
+    );
+    if (response is List) {
+      return response
+          .map((row) => (row as Map).cast<String, dynamic>())
+          .toList(growable: false);
+    }
+
+    throw StateError(
+      'Expected a row list from list_event_hand_ledger but received ${response.runtimeType}.',
+    );
+  }
+
+  String? _normalizeTableLabel(Object? value) {
+    if (value is! String) {
+      return null;
+    }
+
+    final label = value.trim();
+    return label.isEmpty ? null : label;
   }
 
   Future<Map<String, dynamic>> _runRpcSingle(

@@ -22,18 +22,25 @@ Future<void> bootAndSignIn(WidgetTester tester) async {
     tester,
     <Finder>[
       find.text('Host Sign In'),
+      find.widgetWithText(FilledButton, 'Create Event'),
       find.text('Events'),
       find.textContaining('SUPABASE_'),
     ],
   );
 
-  if (find.text('Sign out').evaluate().isNotEmpty) {
-    await tester.tap(find.text('Sign out'));
-    await tester.pump();
-    await pumpUntilVisible(tester, find.text('Host Sign In'));
+  if (find.widgetWithText(FilledButton, 'Create Event').evaluate().isNotEmpty) {
+    return;
   }
 
-  expect(find.text('Host Sign In'), findsOneWidget);
+  if (find.text('Events').evaluate().isNotEmpty) {
+    await pumpUntilVisible(
+      tester,
+      find.widgetWithText(FilledButton, 'Create Event'),
+    );
+    return;
+  }
+
+  await pumpUntilVisible(tester, find.text('Host Sign In'));
 
   await tester.enterText(find.byType(TextFormField).at(0), liveHostEmail);
   await tester.enterText(find.byType(TextFormField).at(1), liveHostPassword);
@@ -82,8 +89,25 @@ Future<void> pumpUntilAny(
   );
 }
 
+Future<void> pumpUntilAbsent(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 30),
+}) async {
+  final end = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(end)) {
+    await tester.pump(const Duration(milliseconds: 200));
+    if (finder.evaluate().isEmpty) {
+      return;
+    }
+  }
+
+  fail(
+      'Timed out waiting for ${finder.describeMatch(Plurality.many)} to disappear');
+}
+
 Future<void> tapBack(WidgetTester tester) async {
-  final backButton = find.byTooltip('Back').hitTestable().first;
+  final backButton = find.byTooltip('Back').hitTestable();
   await pumpUntilVisible(tester, backButton);
-  await tester.tap(backButton);
+  await tester.tap(backButton.first);
 }

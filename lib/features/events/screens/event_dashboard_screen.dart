@@ -97,6 +97,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventId: event.id,
         eventTitle: event.title,
         scoringOpen: event.scoringOpen,
+        readOnly: event.lifecycleStatus != EventLifecycleStatus.draft &&
+            event.lifecycleStatus != EventLifecycleStatus.active,
       ),
     );
   }
@@ -126,6 +128,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
           arguments: SessionDetailArgs(
             eventId: widget.args.eventId,
             sessionId: sessionId,
+            scoringOpen: _controller.event?.scoringOpen ?? false,
           ),
         );
       case DashboardTableScanStartSession(
@@ -184,6 +187,18 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     Navigator.of(context).pushNamed(
       AppRouter.activityRoute,
       arguments: ActivityArgs(eventId: event.id),
+    );
+  }
+
+  void _openHandLedger() {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    Navigator.of(context).pushNamed(
+      AppRouter.eventHandLedgerRoute,
+      arguments: EventHandLedgerArgs(eventId: event.id),
     );
   }
 
@@ -576,7 +591,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                                   ),
                           child: Text(
                             event.scoringOpen
-                                ? 'Close Scoring'
+                                ? 'Pause Scoring'
                                 : 'Open Scoring',
                           ),
                         ),
@@ -719,6 +734,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 const SizedBox(height: 18),
               ],
               if (lifecycleStatus != EventLifecycleStatus.active) ...[
+                const SizedBox(height: 12),
                 InfoPanel(
                   message: _formatLifecycleMessage(lifecycleStatus),
                 ),
@@ -728,6 +744,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 lifecycleStatus: lifecycleStatus,
                 isSubmitting: _controller.isSubmittingLifecycle,
                 onActivity: _openActivity,
+                onHandLedger: _openHandLedger,
                 onDelete: _confirmDeleteEvent,
                 onComplete: () => _controller.completeEvent(),
                 onFinalize: () => _controller.finalizeEvent(),
@@ -955,7 +972,7 @@ class _LiveOperationsStrip extends StatelessWidget {
           if (scoringOpen)
             OutlinedButton(
               onPressed: isSubmitting ? null : onToggleScoring,
-              child: const Text('Close Scoring'),
+              child: const Text('Pause Scoring'),
             ),
         ],
       ),
@@ -968,6 +985,7 @@ class _EventOptionsSection extends StatelessWidget {
     required this.lifecycleStatus,
     required this.isSubmitting,
     required this.onActivity,
+    required this.onHandLedger,
     required this.onDelete,
     required this.onComplete,
     required this.onFinalize,
@@ -978,6 +996,7 @@ class _EventOptionsSection extends StatelessWidget {
   final EventLifecycleStatus lifecycleStatus;
   final bool isSubmitting;
   final VoidCallback onActivity;
+  final VoidCallback onHandLedger;
   final VoidCallback onDelete;
   final VoidCallback onComplete;
   final VoidCallback onFinalize;
@@ -1002,6 +1021,10 @@ class _EventOptionsSection extends StatelessWidget {
           runSpacing: 10,
           children: [
             UtilityActionButton(label: 'Activity', onPressed: onActivity),
+            UtilityActionButton(
+              label: 'Hand Ledger',
+              onPressed: onHandLedger,
+            ),
             if (lifecycleStatus == EventLifecycleStatus.draft)
               UtilityActionButton(
                 label: 'Delete Event',

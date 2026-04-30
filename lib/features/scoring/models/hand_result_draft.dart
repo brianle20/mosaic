@@ -1,6 +1,8 @@
 import 'package:meta/meta.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 
+const int minimumWinningFan = 3;
+
 @immutable
 class HandResultDraft {
   const HandResultDraft({
@@ -29,8 +31,8 @@ class HandResultDraft {
 
   String? get fanCountError {
     if (resultType == HandResultType.win &&
-        (fanCount == null || fanCount! < 0)) {
-      return 'Enter a non-negative fan count.';
+        (fanCount == null || fanCount! < minimumWinningFan)) {
+      return 'Enter at least $minimumWinningFan fan.';
     }
 
     return null;

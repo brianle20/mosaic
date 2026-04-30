@@ -152,7 +152,8 @@ void main() {
       find.byType(TextFormField).first,
       'host@example.test',
     );
-    await tester.enterText(find.byType(TextFormField).last, 'correct-horse-test!');
+    await tester.enterText(
+        find.byType(TextFormField).last, 'correct-horse-test!');
     await tester.tap(find.text('Sign In'));
     await tester.pumpAndSettle();
 

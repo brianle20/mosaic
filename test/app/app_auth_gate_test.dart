@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/app/app.dart';
 import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/auth_models.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -230,6 +231,12 @@ class _FakeTableRepository implements TableRepository {
 
 class _FakeSessionRepository implements SessionRepository {
   @override
+  Future<List<EventHandLedgerEntry>> loadEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
   Future<SessionDetailRecord> endSession({
     required String sessionId,
     required String reason,
@@ -260,6 +267,12 @@ class _FakeSessionRepository implements SessionRepository {
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
 
   @override
   Future<SessionDetailRecord?> readCachedSessionDetail(
@@ -433,7 +446,7 @@ void main() {
               'checkin_open': false,
               'scoring_open': false,
               'cover_charge_cents': 2000,
-              'default_ruleset_id': 'HK_STANDARD_V1',
+              'default_ruleset_id': 'HK_STANDARD',
               'prevailing_wind': 'east',
             }),
           ]),
@@ -477,7 +490,7 @@ void main() {
               'checkin_open': false,
               'scoring_open': false,
               'cover_charge_cents': 2000,
-              'default_ruleset_id': 'HK_STANDARD_V1',
+              'default_ruleset_id': 'HK_STANDARD',
               'prevailing_wind': 'east',
             }),
           ]),

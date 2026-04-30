@@ -129,9 +129,39 @@ class EventDashboardController extends ChangeNotifier {
   }
 
   String _formatLeader(List<LeaderboardEntry>? entries) {
-    final leader = entries?.where((entry) => entry.rank == 1).firstOrNull ??
-        entries?.firstOrNull;
+    if (entries == null || entries.isEmpty) {
+      return 'No scores';
+    }
+
+    final minimumHands = _minimumHandsForPrize(entries);
+    final qualifiedEntries = minimumHands <= 0
+        ? entries
+        : entries
+            .where((entry) => entry.handsPlayed >= minimumHands)
+            .toList(growable: false);
+    final leaderEntries = qualifiedEntries.isEmpty ? entries : qualifiedEntries;
+    final leader =
+        leaderEntries.where((entry) => entry.rank == 1).firstOrNull ??
+            leaderEntries.firstOrNull;
     return leader == null ? 'No scores' : leader.displayName;
+  }
+
+  int _minimumHandsForPrize(List<LeaderboardEntry> entries) {
+    final scoredHands = entries
+        .map((entry) => entry.handsPlayed)
+        .where((handsPlayed) => handsPlayed > 0)
+        .toList()
+      ..sort();
+    if (scoredHands.isEmpty) {
+      return 0;
+    }
+
+    final midpoint = scoredHands.length ~/ 2;
+    final medianHands = scoredHands.length.isOdd
+        ? scoredHands[midpoint].toDouble()
+        : (scoredHands[midpoint - 1] + scoredHands[midpoint]) / 2;
+    final minimumHands = (medianHands * 0.5).ceil();
+    return minimumHands < 1 ? 1 : minimumHands;
   }
 
   int? _totalPrizeCents(PrizePlanDetail? detail) {

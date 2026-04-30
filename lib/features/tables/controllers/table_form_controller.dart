@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/models/table_form_draft.dart';
@@ -14,6 +15,73 @@ class TableFormController extends ChangeNotifier {
   bool isBindingTag = false;
   String? submitError;
   EventTableRecord? latestTable;
+
+  Future<EventTableRecord?> createScannedTable({
+    required String eventId,
+    required NfcService nfcService,
+    required BuildContext context,
+  }) async {
+    isSubmitting = true;
+    submitError = null;
+    notifyListeners();
+
+    try {
+      final scanResult = await nfcService.scanTableTag(context);
+      if (scanResult == null) {
+        isSubmitting = false;
+        notifyListeners();
+        return null;
+      }
+
+      try {
+        final existingTable = await _tableRepository.resolveTableByTag(
+          eventId: eventId,
+          scannedUid: scanResult.normalizedUid,
+        );
+        submitError =
+            'That table tag is already bound to ${existingTable.label}.';
+        isSubmitting = false;
+        notifyListeners();
+        return null;
+      } on TableTagResolutionException catch (exception) {
+        if (exception.failure == TableTagResolutionFailure.nonTableTag) {
+          submitError = exception.message;
+          isSubmitting = false;
+          notifyListeners();
+          return null;
+        }
+      }
+
+      final existingTables = await _tableRepository.listTables(eventId);
+      final nextDisplayOrder = existingTables.fold<int>(
+            0,
+            (current, table) =>
+                table.displayOrder > current ? table.displayOrder : current,
+          ) +
+          1;
+      final createdTable = await _tableRepository.createTable(
+        CreateEventTableInput(
+          eventId: eventId,
+          label: 'Table $nextDisplayOrder',
+          displayOrder: nextDisplayOrder,
+        ),
+      );
+      final boundTable = await _tableRepository.bindTableTag(
+        tableId: createdTable.id,
+        scannedUid: scanResult.normalizedUid,
+      );
+
+      latestTable = boundTable;
+      isSubmitting = false;
+      notifyListeners();
+      return boundTable;
+    } catch (exception) {
+      submitError = exception.toString();
+      isSubmitting = false;
+      notifyListeners();
+      return null;
+    }
+  }
 
   Future<EventTableRecord?> submit({
     required String eventId,

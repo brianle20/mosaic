@@ -37,7 +37,7 @@ void main() {
         'checkin_open': false,
         'scoring_open': false,
         'cover_charge_cents': 2000,
-        'default_ruleset_id': 'HK_STANDARD_V1',
+        'default_ruleset_id': 'HK_STANDARD',
         'prevailing_wind': 'east',
       });
 
@@ -172,8 +172,7 @@ void main() {
         'event_id': 'evt_01',
         'event_table_id': 'tbl_01',
         'session_number_for_table': 1,
-        'ruleset_id': 'HK_STANDARD_V1',
-        'ruleset_version': 1,
+        'ruleset_id': 'HK_STANDARD',
         'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'rotation_policy_config_json': {},
         'status': 'active',
@@ -186,7 +185,7 @@ void main() {
         'started_by_user_id': 'usr_01',
       });
 
-      expect(record.rulesetId, 'HK_STANDARD_V1');
+      expect(record.rulesetId, 'HK_STANDARD');
       expect(
         record.rotationPolicyType,
         RotationPolicyType.dealerCycleReturnToInitialEast,
@@ -201,8 +200,7 @@ void main() {
           'event_id': 'evt_01',
           'event_table_id': 'tbl_01',
           'session_number_for_table': 1,
-          'ruleset_id': 'HK_STANDARD_V1',
-          'ruleset_version': 1,
+          'ruleset_id': 'HK_STANDARD',
           'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
           'rotation_policy_config_json': {},
           'status': 'active',
@@ -246,7 +244,7 @@ void main() {
         ],
       );
 
-      expect(startedSession.session.rulesetId, 'HK_STANDARD_V1');
+      expect(startedSession.session.rulesetId, 'HK_STANDARD');
       expect(
         startedSession.session.rotationPolicyType,
         RotationPolicyType.dealerCycleReturnToInitialEast,
@@ -254,6 +252,62 @@ void main() {
       expect(startedSession.seats, hasLength(4));
       expect(startedSession.seats.first.initialWind, SeatWind.east);
       expect(startedSession.seats.last.initialWind, SeatWind.north);
+    });
+
+    test('session detail preserves table label context', () {
+      final detail = SessionDetailRecord.fromJson(const {
+        'table_label': 'Table 1',
+        'session': {
+          'id': 'ses_01',
+          'event_id': 'evt_01',
+          'event_table_id': 'tbl_01',
+          'session_number_for_table': 1,
+          'ruleset_id': 'HK_STANDARD',
+          'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+          'rotation_policy_config_json': {},
+          'status': 'active',
+          'initial_east_seat_index': 0,
+          'current_dealer_seat_index': 0,
+          'dealer_pass_count': 0,
+          'completed_games_count': 0,
+          'hand_count': 0,
+          'started_at': '2026-04-24T19:00:00-07:00',
+          'started_by_user_id': 'usr_01',
+        },
+        'seats': [],
+        'hands': [],
+        'settlements': [],
+      });
+
+      expect(detail.tableLabel, 'Table 1');
+      expect(detail.toJson()['table_label'], 'Table 1');
+    });
+
+    test('session detail allows missing table label context', () {
+      final detail = SessionDetailRecord.fromJson(const {
+        'session': {
+          'id': 'ses_01',
+          'event_id': 'evt_01',
+          'event_table_id': 'tbl_01',
+          'session_number_for_table': 1,
+          'ruleset_id': 'HK_STANDARD',
+          'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+          'rotation_policy_config_json': {},
+          'status': 'active',
+          'initial_east_seat_index': 0,
+          'current_dealer_seat_index': 0,
+          'dealer_pass_count': 0,
+          'completed_games_count': 0,
+          'hand_count': 0,
+          'started_at': '2026-04-24T19:00:00-07:00',
+          'started_by_user_id': 'usr_01',
+        },
+        'seats': [],
+        'hands': [],
+        'settlements': [],
+      });
+
+      expect(detail.tableLabel, isNull);
     });
   });
 
@@ -265,12 +319,12 @@ void main() {
         'label': 'Table 1',
         'display_order': 1,
         'nfc_tag_id': 'tag_table_01',
-        'default_ruleset_id': 'HK_STANDARD_V1',
+        'default_ruleset_id': 'HK_STANDARD',
         'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'default_rotation_policy_config_json': {},
       });
 
-      expect(table.defaultRulesetId, 'HK_STANDARD_V1');
+      expect(table.defaultRulesetId, 'HK_STANDARD');
       expect(
         table.defaultRotationPolicyType,
         RotationPolicyType.dealerCycleReturnToInitialEast,
@@ -341,6 +395,7 @@ void main() {
         'event_guest_id': 'gst_01',
         'display_name': 'Alice Wong',
         'total_points': 48,
+        'hands_played': 7,
         'hands_won': 3,
         'self_draw_wins': 1,
         'discard_wins': 2,
@@ -349,6 +404,7 @@ void main() {
 
       expect(entry.displayName, 'Alice Wong');
       expect(entry.totalPoints, 48);
+      expect(entry.handsPlayed, 7);
       expect(entry.handsWon, 3);
       expect(entry.selfDrawWins, 1);
       expect(entry.rank, 1);

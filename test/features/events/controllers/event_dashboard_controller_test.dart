@@ -2,6 +2,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
@@ -189,6 +190,24 @@ class _FakeGuestRepository implements GuestRepository {
   }
 }
 
+class _FakeLeaderboardRepository implements LeaderboardRepository {
+  const _FakeLeaderboardRepository({
+    required this.cachedEntries,
+    required this.remoteEntries,
+  });
+
+  final List<LeaderboardEntry> cachedEntries;
+  final List<LeaderboardEntry> remoteEntries;
+
+  @override
+  Future<List<LeaderboardEntry>> loadLeaderboard(String eventId) async =>
+      remoteEntries;
+
+  @override
+  Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId) async =>
+      cachedEntries;
+}
+
 void main() {
   test('loads cached dashboard data when remote fetches fail', () async {
     final cachedEvent = EventRecord.fromJson(const {
@@ -201,7 +220,7 @@ void main() {
       'checkin_open': true,
       'scoring_open': false,
       'cover_charge_cents': 2000,
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'prevailing_wind': 'east',
     });
     final cachedGuest = EventGuestRecord.fromJson(const {
@@ -234,6 +253,65 @@ void main() {
     expect(controller.error, isNull);
   });
 
+  test('leader label uses the top qualified leaderboard player', () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+    });
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(cachedEvents: [event]),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      leaderboardRepository: const _FakeLeaderboardRepository(
+        cachedEntries: [],
+        remoteEntries: [
+          LeaderboardEntry(
+            eventGuestId: 'gst_spike',
+            displayName: 'One Hand Spike',
+            totalPoints: 50,
+            handsPlayed: 1,
+            handsWon: 1,
+            selfDrawWins: 0,
+            discardWins: 1,
+            rank: 1,
+          ),
+          LeaderboardEntry(
+            eventGuestId: 'gst_brian',
+            displayName: 'Brian Le',
+            totalPoints: 40,
+            handsPlayed: 8,
+            handsWon: 1,
+            selfDrawWins: 0,
+            discardWins: 1,
+            rank: 2,
+          ),
+          LeaderboardEntry(
+            eventGuestId: 'gst_grinder',
+            displayName: 'Late Grinder',
+            totalPoints: 10,
+            handsPlayed: 30,
+            handsWon: 3,
+            selfDrawWins: 2,
+            discardWins: 1,
+            rank: 3,
+          ),
+        ],
+      ),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.leaderLabel, 'Brian Le');
+  });
+
   test('cancelEvent updates the event to cancelled', () async {
     final activeEvent = EventRecord.fromJson(const {
       'id': 'evt_01',
@@ -245,7 +323,7 @@ void main() {
       'checkin_open': true,
       'scoring_open': true,
       'cover_charge_cents': 2000,
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'prevailing_wind': 'east',
     });
     final repository = _FakeEventRepository(cachedEvents: [activeEvent]);
@@ -283,7 +361,7 @@ void main() {
       'checkin_open': false,
       'scoring_open': false,
       'cover_charge_cents': 2000,
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'prevailing_wind': 'east',
     });
     var deletedEventId = '';
@@ -316,7 +394,7 @@ void main() {
       'checkin_open': true,
       'scoring_open': true,
       'cover_charge_cents': 2000,
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'prevailing_wind': 'east',
     });
     final repository = _FakeEventRepository(cachedEvents: [activeEvent]);

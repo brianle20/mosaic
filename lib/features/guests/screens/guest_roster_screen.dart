@@ -71,6 +71,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         defaultCoverAmountCents: widget.eventCoverChargeCents,
       ),
     );
+    if (!mounted) {
+      return;
+    }
     await _controller.load(widget.eventId);
   }
 
@@ -82,6 +85,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         guestId: guest.id,
       ),
     );
+    if (!mounted) {
+      return;
+    }
     await _controller.load(widget.eventId);
   }
 

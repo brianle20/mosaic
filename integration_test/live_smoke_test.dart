@@ -46,18 +46,14 @@ void main() {
         venueName,
       );
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Cover Charge (cents)'),
+        find.widgetWithText(TextFormField, 'Cover Charge'),
         '2000',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Prize Budget (cents)'),
-        '5000',
       );
       await tester.tap(find.widgetWithText(FilledButton, 'Save Event'));
       await tester.pump();
 
       await pumpUntilVisible(tester, find.text(eventTitle));
-      await pumpUntilVisible(tester, find.text('Guests: 0'));
+      await pumpUntilVisible(tester, find.text('Guests'));
 
       final eventRow = await Supabase.instance.client
           .from('events')
@@ -106,7 +102,7 @@ void main() {
       await tester.pumpAndSettle();
       await pumpUntilVisible(tester, find.text('Record Cover Entry'));
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Amount (cents)'),
+        find.widgetWithText(TextFormField, 'Amount'),
         '2000',
       );
       await tester.tap(find.widgetWithText(OutlinedButton, 'Cash'));
@@ -124,7 +120,8 @@ void main() {
           .from('guest_cover_entries')
           .select('event_guest_id, amount_cents, method, note')
           .eq('event_id', eventId)
-          .order('recorded_at', ascending: false);
+          .order('transaction_on', ascending: false)
+          .order('created_at', ascending: false);
       expect(coverEntryRows, hasLength(1));
       expect(coverEntryRows.first['event_guest_id'], firstGuestId);
       expect(coverEntryRows.first['amount_cents'], 2000);
@@ -136,12 +133,21 @@ void main() {
 
       await tapBack(tester);
       await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Start Event'));
+      await pumpUntilAny(tester, [
+        find.text('Open Check-In'),
+        find.text('Start Event'),
+      ]);
 
-      await tester.tap(find.text('Start Event'));
+      final startAction = find.text('Open Check-In').evaluate().isNotEmpty
+          ? find.text('Open Check-In')
+          : find.text('Start Event');
+      await tester.tap(startAction);
       await tester.pumpAndSettle();
       await pumpUntilVisible(tester, find.text('Check-In Open'));
-      await pumpUntilVisible(tester, find.text('Scoring Closed'));
+      await pumpUntilAny(tester, [
+        find.text('Scoring Not Open'),
+        find.text('Scoring Closed'),
+      ]);
 
       await tester.tap(find.text('Activity'));
       await tester.pumpAndSettle();
@@ -206,92 +212,32 @@ void main() {
       await tapBack(tester);
       await tester.pumpAndSettle();
       await pumpUntilVisible(tester, find.text('Check-In Open'));
-      await pumpUntilVisible(tester, find.text('Scoring Closed'));
+      await pumpUntilAny(tester, [
+        find.text('Scoring Not Open'),
+        find.text('Scoring Closed'),
+      ]);
       await pumpUntilVisible(tester, find.text('Open Scoring'));
 
       await tester.tap(find.text('Open Scoring'));
       await tester.pumpAndSettle();
       await pumpUntilVisible(tester, find.text('Scoring Open'));
-      await pumpUntilVisible(tester, find.text('Tables'));
 
-      await tester.tap(find.text('Tables'));
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Add Table'));
-
-      await tester.tap(find.text('Add Table'));
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Add Table'));
-
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Label'),
-        tableLabel,
-      );
-      await tester.tap(find.text('Save Table'));
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text(tableLabel));
-
-      final tableRows = await Supabase.instance.client
-          .from('event_tables')
-          .select('id, label, nfc_tag_id')
-          .eq('event_id', eventId)
-          .eq('label', tableLabel);
-      expect(tableRows, isNotEmpty);
-      tableId = tableRows.first['id'] as String;
-
-      await tester.tap(find.text('Bind Table Tag').first);
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Edit Table'));
-
-      await tester.tap(find.text('Bind Table Tag'));
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Scan Table Tag'));
-      final tableTagField = find.byType(TextField).hitTestable();
-      await pumpUntilVisible(tester, tableTagField);
-      await tester.enterText(tableTagField, tableTagUid);
-      await tester.tap(find.text('Use Tag'));
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Table Tag Bound'));
-
-      await tapBack(tester);
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text(tableLabel));
-      await pumpUntilVisible(tester, find.text('Tag Bound'));
-
-      await tester.tap(find.text('Start Session').first);
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Scan Table Tag'));
-
-      await scanSessionStepViaUi(tester, tableTagUid, 'Scan Table Tag');
-      await scanSessionStepViaUi(
+      await openDashboardSection(tester, 'Tables');
+      tableId = await createTableViaUi(
         tester,
-        playerTagUids[0],
-        'Scan East Player Tag',
+        eventId: eventId,
+        tableLabel: tableLabel,
+        tableTagUid: tableTagUid,
       );
-      await scanSessionStepViaUi(
+      await startSessionViaUi(
         tester,
-        playerTagUids[1],
-        'Scan South Player Tag',
+        eventId: eventId,
+        tableId: tableId,
+        tableTagUid: tableTagUid,
+        playerTagUids: playerTagUids,
       );
-      await scanSessionStepViaUi(
-        tester,
-        playerTagUids[2],
-        'Scan West Player Tag',
-      );
-      await scanSessionStepViaUi(
-        tester,
-        playerTagUids[3],
-        'Scan North Player Tag',
-      );
-
-      await pumpUntilVisible(tester, find.text('Review Session'));
-      for (final guestName in guestNames) {
-        await pumpUntilVisible(tester, find.text(guestName));
-      }
-
-      await tester.tap(find.text('Confirm Start Session'));
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Session Detail'));
-      await pumpUntilVisible(tester, find.text('Pause Session'));
+      await pumpUntilVisible(tester, find.text('Session Progress'));
+      await pumpUntilVisible(tester, find.text('Pause'));
 
       final sessionRows = await Supabase.instance.client
           .from('table_sessions')
@@ -313,11 +259,11 @@ void main() {
         ['east', 'south', 'west', 'north'],
       );
 
-      await tester.tap(find.text('Pause Session'));
+      await tester.tap(find.text('Pause'));
       await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Resume Session'));
+      await pumpUntilVisible(tester, find.text('Resume'));
 
-      await tester.tap(find.text('Resume Session'));
+      await tester.tap(find.text('Resume'));
       await tester.pumpAndSettle();
       await pumpUntilVisible(
         tester,
@@ -328,12 +274,12 @@ void main() {
         tester,
         winnerLabel: '${guestNames[2]} (West)',
         discarderLabel: '${guestNames[0]} (East)',
-        fanCount: '2',
+        fanCount: '3',
       );
       await recordSelfDrawHandViaUi(
         tester,
         winnerLabel: '${guestNames[1]} (South)',
-        fanCount: '1',
+        fanCount: '3',
       );
       await recordWashoutHandViaUi(tester);
 
@@ -349,53 +295,55 @@ void main() {
         params: {'target_event_id': eventId},
       ) as List<dynamic>;
       expect(leaderboardBeforeVoid.first['display_name'], guestNames[1]);
-      expect(leaderboardBeforeVoid.first['total_points'], 20);
+      expect(leaderboardBeforeVoid.first['total_points'], 48);
       expect(leaderboardBeforeVoid[1]['display_name'], guestNames[2]);
       expect(leaderboardBeforeVoid[1]['total_points'], 16);
 
       await pumpUntilVisible(tester, find.text('Hand 2'));
-      await tester.tap(find.text('Hand 2'));
+      await tester.scrollUntilVisible(
+        find.text('Hand 2'),
+        160,
+        scrollable: find.byType(Scrollable).first,
+      );
+      final handTwoFinder = find.text('Hand 2').hitTestable();
+      await pumpUntilVisible(tester, handTwoFinder);
+      await tester.tap(handTwoFinder.first);
       await tester.pumpAndSettle();
       await pumpUntilVisible(tester, find.text('Void Hand'));
       await tester.tap(find.text('Void Hand'));
       await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Session Detail'));
+      await pumpUntilVisible(tester, find.text('Session Progress'));
 
       final leaderboardAfterVoid = await Supabase.instance.client.rpc(
         'get_event_leaderboard',
         params: {'target_event_id': eventId},
       ) as List<dynamic>;
       expect(leaderboardAfterVoid.first['display_name'], guestNames[2]);
-      expect(leaderboardAfterVoid.first['total_points'], 24);
-      final tiedEntries = leaderboardAfterVoid
-          .where((entry) => entry['total_points'] == -4)
-          .map((entry) => entry['display_name'] as String)
-          .toSet();
-      expect(tiedEntries, containsAll(<String>[guestNames[1], guestNames[3]]));
+      expect(leaderboardAfterVoid.first['total_points'], 32);
+      final voidedHands = await Supabase.instance.client
+          .from('hand_results')
+          .select('status')
+          .eq('table_session_id', sessionId)
+          .eq('hand_number', 2);
+      expect(voidedHands.single['status'], 'voided');
 
       await endSessionEarlyViaUi(tester, 'Smoke test wrap-up');
       await pumpUntilVisible(
         tester,
-        find.text('Session ended early: Smoke test wrap-up'),
+        find.text('Ended early: Smoke test wrap-up'),
       );
 
       await tapBack(tester);
       await tester.pumpAndSettle();
-      await tapBack(tester);
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Leaderboard'));
 
-      await tester.tap(find.text('Leaderboard'));
-      await tester.pumpAndSettle();
+      await openDashboardSection(tester, 'Leaderboard');
       await pumpUntilVisible(tester, find.text(guestNames[2]));
-      await pumpUntilVisible(tester, find.text('24 pts'));
+      await pumpUntilVisible(tester, find.text('32 pts'));
 
       await tapBack(tester);
       await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Prizes'));
 
-      await tester.tap(find.text('Prizes'));
-      await tester.pumpAndSettle();
+      await openDashboardSection(tester, 'Prizes');
       await pumpUntilVisible(tester, find.text('Prize Plan'));
 
       await Supabase.instance.client.rpc(
@@ -405,7 +353,7 @@ void main() {
           'target_mode': 'fixed',
           'target_reserve_fixed_cents': 0,
           'target_reserve_percentage_bps': 0,
-          'target_note': 'Smoke test payout',
+          'target_note': 'Smoke test locked awards',
           'target_tiers': [
             {
               'place': 1,
@@ -419,31 +367,14 @@ void main() {
         'lock_prize_awards',
         params: {'target_event_id': eventId},
       );
-      final prizeAwardsBeforeMarkPaid = await Supabase.instance.client
-          .from('prize_awards')
-          .select('id, display_rank, award_amount_cents, status')
-          .eq('event_id', eventId)
-          .order('rank_start', ascending: true);
-      expect(prizeAwardsBeforeMarkPaid, hasLength(1));
-      expect(prizeAwardsBeforeMarkPaid.first['award_amount_cents'], 5000);
-      expect(prizeAwardsBeforeMarkPaid.first['status'], 'planned');
-
-      await Supabase.instance.client.rpc(
-        'mark_prize_award_paid',
-        params: {
-          'target_prize_award_id': prizeAwardsBeforeMarkPaid.first['id'],
-          'target_paid_method': 'cash',
-          'target_paid_note': 'Live smoke payout',
-        },
-      );
-
       final prizeAwards = await Supabase.instance.client
           .from('prize_awards')
-          .select('display_rank, award_amount_cents, status, paid_method')
+          .select('id, display_rank, award_amount_cents')
           .eq('event_id', eventId)
           .order('rank_start', ascending: true);
-      expect(prizeAwards.first['status'], 'paid');
-      expect(prizeAwards.first['paid_method'], 'cash');
+      expect(prizeAwards, hasLength(1));
+      expect(prizeAwards.first['display_rank'], '1st');
+      expect(prizeAwards.first['award_amount_cents'], 5000);
 
       await tapBack(tester);
       await tester.pumpAndSettle();

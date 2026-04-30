@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mosaic/features/checkin/models/manual_tag_scan_draft.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
-class ManualEntryNfcService implements NfcService {
+class ManualEntryNfcService implements NfcService, PassiveNfcService {
   const ManualEntryNfcService();
+
+  @override
+  Stream<TagScanResult> get playerTagScans => const Stream.empty();
 
   @override
   Future<TagScanResult?> scanPlayerTagForAssignment(

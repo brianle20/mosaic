@@ -29,7 +29,7 @@ void main() {
             'checkin_open': true,
             'scoring_open': false,
             'cover_charge_cents': 2000,
-            'default_ruleset_id': 'HK_STANDARD_V1',
+            'default_ruleset_id': 'HK_STANDARD',
             'prevailing_wind': 'east',
             'row_version': 2,
           };
@@ -66,7 +66,7 @@ void main() {
           'checkin_open': true,
           'scoring_open': false,
           'cover_charge_cents': 2000,
-          'default_ruleset_id': 'HK_STANDARD_V1',
+          'default_ruleset_id': 'HK_STANDARD',
           'prevailing_wind': 'east',
           'row_version': 2,
         }),
@@ -89,7 +89,7 @@ void main() {
             'checkin_open': false,
             'scoring_open': true,
             'cover_charge_cents': 2000,
-            'default_ruleset_id': 'HK_STANDARD_V1',
+            'default_ruleset_id': 'HK_STANDARD',
             'prevailing_wind': 'east',
             'row_version': 3,
           };

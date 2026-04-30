@@ -11,6 +11,19 @@ class GuestFormController extends ChangeNotifier {
 
   bool isSubmitting = false;
   String? submitError;
+  bool _isDisposed = false;
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+
+  void _notifyIfActive() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+  }
 
   Future<EventGuestRecord?> submit({
     required String eventId,
@@ -19,13 +32,13 @@ class GuestFormController extends ChangeNotifier {
     EventGuestRecord? existingGuest,
   }) async {
     if (!draft.isValid) {
-      notifyListeners();
+      _notifyIfActive();
       return null;
     }
 
     isSubmitting = true;
     submitError = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final savedGuest = existingGuest == null
@@ -43,12 +56,12 @@ class GuestFormController extends ChangeNotifier {
             );
 
       isSubmitting = false;
-      notifyListeners();
+      _notifyIfActive();
       return savedGuest;
     } catch (exception) {
       submitError = exception.toString();
       isSubmitting = false;
-      notifyListeners();
+      _notifyIfActive();
       return null;
     }
   }

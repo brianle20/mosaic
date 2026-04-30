@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/leaderboard/controllers/leaderboard_controller.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
@@ -56,17 +57,33 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            for (final entry in _controller.entries)
-              Card(
-                child: ListTile(
-                  leading: Text('${entry.rank}'),
-                  title: Text(entry.displayName),
-                  subtitle: Text(
-                    'Hands ${entry.handsWon} • Self-draw ${entry.selfDrawWins}',
-                  ),
-                  trailing: Text('${entry.totalPoints} pts'),
-                ),
+            if (_controller.entries.isNotEmpty) ...[
+              Text(
+                'Minimum hands to qualify: ${_controller.minimumHandsForPrize}',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
+              const SizedBox(height: 12),
+              if (_controller.prizePlacementRows.isNotEmpty) ...[
+                const _SectionLabel('Prize Placements'),
+                const SizedBox(height: 8),
+                for (final row in _controller.prizePlacementRows)
+                  _LeaderboardCard(
+                    entry: row.entry,
+                    displayRank: row.placement,
+                  ),
+              ],
+              if (_controller.notPrizeEligibleEntries.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const _SectionLabel('Not Prize Eligible'),
+                const SizedBox(height: 8),
+                for (final entry in _controller.notPrizeEligibleEntries)
+                  _LeaderboardCard(
+                    entry: entry,
+                  ),
+              ],
+            ],
             if (_controller.entries.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 24),
@@ -79,6 +96,47 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+    );
+  }
+}
+
+class _LeaderboardCard extends StatelessWidget {
+  const _LeaderboardCard({
+    required this.entry,
+    this.displayRank,
+  });
+
+  final LeaderboardEntry entry;
+  final int? displayRank;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: displayRank == null ? null : Text('$displayRank'),
+        title: Text(entry.displayName),
+        subtitle: Text(
+          'Hands played ${entry.handsPlayed} • Wins ${entry.handsWon}',
+        ),
+        trailing: Text('${entry.totalPoints} pts'),
       ),
     );
   }

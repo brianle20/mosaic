@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -114,6 +116,12 @@ class _FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<EventHandLedgerEntry>> loadEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async =>
       const [];
 
@@ -138,6 +146,12 @@ class _FakeSessionRepository implements SessionRepository {
       null;
 
   @override
+  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
       const [];
 
@@ -156,8 +170,7 @@ class _FakeSessionRepository implements SessionRepository {
         'event_id': 'evt_01',
         'event_table_id': 'tbl_01',
         'session_number_for_table': 1,
-        'ruleset_id': 'HK_STANDARD_V1',
-        'ruleset_version': 1,
+        'ruleset_id': 'HK_STANDARD',
         'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'rotation_policy_config_json': {},
         'status': 'active',
@@ -351,6 +364,7 @@ void main() {
   testWidgets('walks table then east south west north into review and confirm',
       (tester) async {
     final sessionRepository = _FakeSessionRepository();
+    SessionDetailArgs? openedArgs;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -362,7 +376,7 @@ void main() {
             'label': 'Table 1',
             'mode': 'points',
             'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD_V1',
+            'default_ruleset_id': 'HK_STANDARD',
             'default_rotation_policy_type':
                 'dealer_cycle_return_to_initial_east',
             'default_rotation_policy_config_json': {},
@@ -401,6 +415,18 @@ void main() {
             ),
           ]),
         ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            openedArgs = settings.arguments! as SessionDetailArgs;
+            return MaterialPageRoute<void>(
+              builder: (context) => const Scaffold(
+                body: Text('Opened Session Detail'),
+              ),
+            );
+          }
+
+          return null;
+        },
       ),
     );
     await tester.pumpAndSettle();
@@ -432,6 +458,9 @@ void main() {
     expect(sessionRepository.startedInput, isNotNull);
     expect(sessionRepository.startedInput!.scannedTableUid, 'TABLE-001');
     expect(sessionRepository.startedInput!.eastPlayerUid, 'PLAYER-EAST');
+    expect(openedArgs?.eventId, 'evt_01');
+    expect(openedArgs?.sessionId, 'ses_01');
+    expect(find.text('Opened Session Detail'), findsOneWidget);
   });
 
   testWidgets(
@@ -450,7 +479,7 @@ void main() {
               'mode': 'points',
               'display_order': 1,
               'nfc_tag_id': 'tag_table_01',
-              'default_ruleset_id': 'HK_STANDARD_V1',
+              'default_ruleset_id': 'HK_STANDARD',
               'default_rotation_policy_type':
                   'dealer_cycle_return_to_initial_east',
               'default_rotation_policy_config_json': {},
@@ -485,6 +514,17 @@ void main() {
               ),
             ]),
           ),
+          onGenerateRoute: (settings) {
+            if (settings.name == AppRouter.sessionDetailRoute) {
+              return MaterialPageRoute<void>(
+                builder: (context) => const Scaffold(
+                  body: Text('Opened Session Detail'),
+                ),
+              );
+            }
+
+            return null;
+          },
         ),
       );
       await tester.pumpAndSettle();
@@ -522,7 +562,7 @@ void main() {
             'label': 'Table 1',
             'mode': 'points',
             'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD_V1',
+            'default_ruleset_id': 'HK_STANDARD',
             'default_rotation_policy_type':
                 'dealer_cycle_return_to_initial_east',
             'default_rotation_policy_config_json': {},

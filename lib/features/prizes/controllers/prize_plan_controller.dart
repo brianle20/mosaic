@@ -27,8 +27,8 @@ class PrizePlanController extends ChangeNotifier {
     final cachedPlan = await prizeRepository.readCachedPrizePlan(eventId);
     if (cachedPlan != null) {
       draft = PrizePlanDraft.fromDetail(cachedPlan);
-      previewRows = await prizeRepository.readCachedPrizePreview(eventId);
-      hasPreviewedPayouts = previewRows.isNotEmpty;
+      previewRows = const [];
+      hasPreviewedPayouts = false;
       lockedAwards = cachedPlan.plan.status == PrizePlanStatus.locked
           ? await prizeRepository.readCachedPrizeAwards(eventId)
           : const [];

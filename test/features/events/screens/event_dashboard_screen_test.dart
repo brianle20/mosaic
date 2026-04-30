@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/activity_models.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -15,8 +16,11 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/activity/screens/activity_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
+import 'package:mosaic/features/scoring/screens/event_hand_ledger_screen.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/widgets/app_actions.dart';
+import 'package:mosaic/widgets/app_surfaces.dart';
 
 class _EventRepository implements EventRepository {
   _EventRepository(
@@ -378,6 +382,12 @@ class _SessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<EventHandLedgerEntry>> loadEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async =>
       sessions;
 
@@ -418,6 +428,7 @@ class _SessionRepository implements SessionRepository {
       ],
       hands: const [],
       settlements: const [],
+      tableLabel: 'Table 1',
     );
   }
 
@@ -436,6 +447,12 @@ class _SessionRepository implements SessionRepository {
     String sessionId,
   ) async =>
       null;
+
+  @override
+  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
 
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
@@ -527,7 +544,7 @@ EventTableRecord _table({
     'label': label,
     'display_order': 1,
     'nfc_tag_id': 'tag_table_01',
-    'default_ruleset_id': 'HK_STANDARD_V1',
+    'default_ruleset_id': 'HK_STANDARD',
     'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
     'default_rotation_policy_config_json': const {},
   });
@@ -537,12 +554,14 @@ LeaderboardEntry _leaderboardEntry({
   String eventGuestId = 'gst_01',
   String displayName = 'Alice Wong',
   int totalPoints = 125,
+  int handsPlayed = 3,
   int rank = 1,
 }) {
   return LeaderboardEntry(
     eventGuestId: eventGuestId,
     displayName: displayName,
     totalPoints: totalPoints,
+    handsPlayed: handsPlayed,
     handsWon: 2,
     selfDrawWins: 1,
     discardWins: 1,
@@ -561,8 +580,7 @@ TableSessionRecord _session({
     eventId: eventId,
     eventTableId: tableId,
     sessionNumberForTable: 1,
-    rulesetId: 'HK_STANDARD_V1',
-    rulesetVersion: 1,
+    rulesetId: 'HK_STANDARD',
     rotationPolicyType: RotationPolicyType.dealerCycleReturnToInitialEast,
     rotationPolicyConfig: const {},
     status: status,
@@ -622,7 +640,7 @@ void main() {
     'checkin_open': false,
     'scoring_open': false,
     'cover_charge_cents': 2000,
-    'default_ruleset_id': 'HK_STANDARD_V1',
+    'default_ruleset_id': 'HK_STANDARD',
     'prevailing_wind': 'east',
   });
   final activeEvent = EventRecord.fromJson(const {
@@ -635,7 +653,7 @@ void main() {
     'checkin_open': true,
     'scoring_open': true,
     'cover_charge_cents': 2000,
-    'default_ruleset_id': 'HK_STANDARD_V1',
+    'default_ruleset_id': 'HK_STANDARD',
     'prevailing_wind': 'east',
   });
   final completedEvent = EventRecord.fromJson(const {
@@ -648,7 +666,7 @@ void main() {
     'checkin_open': true,
     'scoring_open': false,
     'cover_charge_cents': 2000,
-    'default_ruleset_id': 'HK_STANDARD_V1',
+    'default_ruleset_id': 'HK_STANDARD',
     'prevailing_wind': 'east',
   });
   final finalizedEvent = EventRecord.fromJson(const {
@@ -661,7 +679,7 @@ void main() {
     'checkin_open': false,
     'scoring_open': false,
     'cover_charge_cents': 2000,
-    'default_ruleset_id': 'HK_STANDARD_V1',
+    'default_ruleset_id': 'HK_STANDARD',
     'prevailing_wind': 'east',
   });
 
@@ -675,7 +693,7 @@ void main() {
     'checkin_open': true,
     'scoring_open': false,
     'cover_charge_cents': 2000,
-    'default_ruleset_id': 'HK_STANDARD_V1',
+    'default_ruleset_id': 'HK_STANDARD',
     'prevailing_wind': 'east',
   });
 
@@ -891,7 +909,42 @@ void main() {
     expect(openedArgs?.eventId, 'evt_01');
     expect(openedArgs?.eventTitle, activeEvent.title);
     expect(openedArgs?.scoringOpen, activeEvent.scoringOpen);
+    expect(openedArgs?.readOnly, isFalse);
     expect(find.text('Opened Tables'), findsOneWidget);
+  });
+
+  testWidgets('finalized event opens tables read-only', (tester) async {
+    TablesOverviewArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_03'),
+          eventRepository: _EventRepository(finalizedEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(tables: [_table()]),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedArgs = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(
+                body: Text('Opened Tables'),
+              ),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tables'));
+    await tester.pumpAndSettle();
+
+    expect(openedArgs?.eventId, 'evt_03');
+    expect(openedArgs?.readOnly, isTrue);
   });
 
   testWidgets('leader summary card routes into leaderboard', (tester) async {
@@ -928,6 +981,43 @@ void main() {
     expect(find.text('Opened Leaderboard'), findsOneWidget);
   });
 
+  testWidgets('leader summary card shows the top qualified player',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      event: activeEvent,
+      leaderboardRepository: _LeaderboardRepository(
+        entries: [
+          _leaderboardEntry(
+            eventGuestId: 'gst_giang',
+            displayName: 'Giang Pham',
+            totalPoints: 50,
+            handsPlayed: 1,
+            rank: 1,
+          ),
+          _leaderboardEntry(
+            eventGuestId: 'gst_brian',
+            displayName: 'Brian Le',
+            totalPoints: 40,
+            handsPlayed: 8,
+            rank: 2,
+          ),
+          _leaderboardEntry(
+            eventGuestId: 'gst_grinder',
+            displayName: 'Late Grinder',
+            totalPoints: 10,
+            handsPlayed: 30,
+            rank: 3,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Leader'), findsOneWidget);
+    expect(find.text('Brian Le'), findsOneWidget);
+    expect(find.text('Giang Pham'), findsNothing);
+  });
+
   testWidgets('activity action routes into the activity screen',
       (tester) async {
     final router = AppRouter(
@@ -960,6 +1050,41 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(ActivityScreen), findsOneWidget);
+  });
+
+  testWidgets('hand ledger action routes into the event hand ledger screen',
+      (tester) async {
+    final router = AppRouter(
+      eventRepository: _EventRepository(activeEvent),
+      guestRepository: _GuestRepository(),
+      tableRepository: _TableRepository(),
+      sessionRepository: _SessionRepository(),
+      leaderboardRepository: _LeaderboardRepository(),
+      activityRepository: _ActivityRepository(),
+      prizeRepository: _PrizeRepository(),
+      nfcService: const _NfcService(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+        onGenerateRoute: router.onGenerateRoute,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Hand Ledger'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hand Ledger'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(EventHandLedgerScreen), findsOneWidget);
+    expect(find.text('No hands recorded yet.'), findsOneWidget);
   });
 
   testWidgets('scan table routes to active table session', (tester) async {
@@ -997,7 +1122,51 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(SessionDetailScreen), findsOneWidget);
-    expect(find.text('Session Detail'), findsOneWidget);
+    expect(find.text('Table 1'), findsOneWidget);
+  });
+
+  testWidgets(
+      'scan table opens active sessions read-only when scoring is paused',
+      (tester) async {
+    final table = _table();
+    final activeSession = _session(id: 'sess_active');
+    final sessionRepository = _SessionRepository(sessions: [activeSession]);
+    final router = AppRouter(
+      eventRepository: _EventRepository(activeCheckinOnlyEvent),
+      guestRepository: _GuestRepository(),
+      tableRepository: _TableRepository(resolvedTable: table),
+      sessionRepository: sessionRepository,
+      leaderboardRepository: _LeaderboardRepository(),
+      activityRepository: _ActivityRepository(),
+      prizeRepository: _PrizeRepository(),
+      nfcService: _NfcService(tableScanResult: _tableScanResult()),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_04'),
+          eventRepository: _EventRepository(activeCheckinOnlyEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(resolvedTable: table),
+          sessionRepository: sessionRepository,
+          nfcService: _NfcService(tableScanResult: _tableScanResult()),
+        ),
+        onGenerateRoute: router.onGenerateRoute,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan Table'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SessionDetailScreen), findsOneWidget);
+    expect(
+      find.text('Hand entry is unavailable while scoring is paused.'),
+      findsOneWidget,
+    );
+    expect(find.text('Record Hand'), findsNothing);
   });
 
   testWidgets('scan table routes to paused table session', (tester) async {
@@ -1038,7 +1207,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(SessionDetailScreen), findsOneWidget);
-    expect(find.text('Resume Session'), findsOneWidget);
+    expect(find.text('Resume'), findsOneWidget);
   });
 
   testWidgets('scan table starts preverified table flow at east player prompt',
@@ -1179,7 +1348,7 @@ void main() {
     expect(find.text('Leaderboard'), findsNothing);
     expect(find.text('Activity'), findsOneWidget);
     expect(find.text('Live Operations'), findsOneWidget);
-    expect(find.text('Close Scoring'), findsOneWidget);
+    expect(find.text('Pause Scoring'), findsOneWidget);
     expect(find.text('Event options'), findsOneWidget);
 
     final tablesTop = tester.getTopLeft(find.text('Tables')).dy;
@@ -1254,6 +1423,22 @@ void main() {
     expect(find.text('Scoring Not Open'), findsOneWidget);
     expect(find.text('Finalize Event'), findsOneWidget);
     expect(find.text('Event options'), findsOneWidget);
+  });
+
+  testWidgets('completed event separates primary action from info panel',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      event: completedEvent,
+      prizeRepository: _PrizeRepository(
+        loadedPlan: _fixedPrizePlan([17500]),
+      ),
+    );
+
+    final actionBottom = tester.getBottomLeft(find.byType(HeroActionButton)).dy;
+    final panelTop = tester.getTopLeft(find.byType(InfoPanel)).dy;
+
+    expect(panelTop - actionBottom, greaterThanOrEqualTo(12));
   });
 
   testWidgets('check-in open scoring closed does not make scan table the hero',
@@ -1535,7 +1720,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Scoring Open'), findsOneWidget);
-    expect(find.text('Close Scoring'), findsOneWidget);
+    expect(find.text('Pause Scoring'), findsOneWidget);
   });
 
   testWidgets('completed event shows Finalize Event action', (tester) async {

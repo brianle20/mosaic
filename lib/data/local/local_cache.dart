@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:mosaic/data/models/activity_models.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -26,6 +27,7 @@ class LocalCache {
   static const _tableListKeyPrefix = 'tables:';
   static const _sessionListKeyPrefix = 'sessions:';
   static const _sessionDetailKeyPrefix = 'session-detail:';
+  static const _eventHandLedgerKeyPrefix = 'event-hand-ledger:';
   static const _leaderboardKeyPrefix = 'leaderboard:';
   static const _prizePlanKeyPrefix = 'prize-plan:';
   static const _prizePreviewKeyPrefix = 'prize-preview:';
@@ -179,6 +181,29 @@ class LocalCache {
         jsonDecode(raw) as Map<String, dynamic>);
   }
 
+  Future<void> saveEventHandLedger(
+    String eventId,
+    List<EventHandLedgerEntry> entries,
+  ) async {
+    await _preferences.setString(
+      '$_eventHandLedgerKeyPrefix$eventId',
+      jsonEncode(entries.map((entry) => entry.toJson()).toList()),
+    );
+  }
+
+  List<EventHandLedgerEntry> readEventHandLedger(String eventId) {
+    final raw = _preferences.getString('$_eventHandLedgerKeyPrefix$eventId');
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map((entry) => EventHandLedgerEntry.fromJson(
+            (entry as Map).cast<String, dynamic>()))
+        .toList(growable: false);
+  }
+
   Future<void> saveLeaderboard(
     String eventId,
     List<LeaderboardEntry> entries,
@@ -195,12 +220,18 @@ class LocalCache {
       return const [];
     }
 
-    final decoded = jsonDecode(raw) as List<dynamic>;
-    return decoded
-        .map(
-          (entry) => LeaderboardEntry.fromJson(entry as Map<String, dynamic>),
-        )
-        .toList(growable: false);
+    try {
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      return decoded
+          .map(
+            (entry) => LeaderboardEntry.fromJson(entry as Map<String, dynamic>),
+          )
+          .toList(growable: false);
+    } on FormatException {
+      return const [];
+    } on TypeError {
+      return const [];
+    }
   }
 
   Future<void> savePrizePlan(String eventId, PrizePlanDetail detail) async {

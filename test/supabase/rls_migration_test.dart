@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('every public table created by migrations enables row-level security', () {
+  test('every public table created by migrations enables row-level security',
+      () {
     final migrationsDirectory = Directory('supabase/migrations');
     final migrationFiles = migrationsDirectory
         .listSync()

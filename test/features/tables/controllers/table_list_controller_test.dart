@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -89,6 +90,12 @@ class _FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<EventHandLedgerEntry>> loadEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async {
     final loader = sessionLoader;
     if (loader != null) {
@@ -121,6 +128,12 @@ class _FakeSessionRepository implements SessionRepository {
     String sessionId,
   ) async =>
       cachedDetails[sessionId];
+
+  @override
+  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
 
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
@@ -238,7 +251,7 @@ void main() {
       'label': 'Table 1',
       'mode': 'points',
       'display_order': 1,
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'default_rotation_policy_config_json': {},
       'status': 'active',
@@ -248,8 +261,7 @@ void main() {
       'event_id': 'evt_01',
       'event_table_id': 'tbl_01',
       'session_number_for_table': 1,
-      'ruleset_id': 'HK_STANDARD_V1',
-      'ruleset_version': 1,
+      'ruleset_id': 'HK_STANDARD',
       'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'rotation_policy_config_json': {},
       'status': 'active',
@@ -288,7 +300,7 @@ void main() {
       'label': 'Table 1',
       'display_order': 1,
       'nfc_tag_id': 'tag_01',
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'default_rotation_policy_config_json': {},
     });
@@ -312,7 +324,7 @@ void main() {
           handNumber: 1,
           winnerSeatIndex: 0,
           winType: 'discard',
-          fanCount: 1,
+          fanCount: 3,
           eastSeatIndex: 2,
         ),
         _hand(
@@ -320,7 +332,7 @@ void main() {
           handNumber: 2,
           winnerSeatIndex: 3,
           winType: 'self_draw',
-          fanCount: 2,
+          fanCount: 4,
           eastSeatIndex: 2,
         ),
         _hand(
@@ -328,7 +340,7 @@ void main() {
           handNumber: 3,
           winnerSeatIndex: 1,
           winType: 'self_draw',
-          fanCount: 3,
+          fanCount: 5,
           eastSeatIndex: 2,
         ),
       ],
@@ -359,7 +371,7 @@ void main() {
     expect(liveSummary.lastHand.title, 'Ben Wong self-draw');
     expect(
       liveSummary.lastHand.detail,
-      '3 fan recorded. Ready for the next hand.',
+      '5 fan recorded. Ready for the next hand.',
     );
     expect(liveSummary.seats.map((seat) => seat.guestName), [
       'Alice Chen',
@@ -380,7 +392,7 @@ void main() {
       'label': 'Table 1',
       'display_order': 1,
       'nfc_tag_id': 'tag_01',
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'default_rotation_policy_config_json': {},
     });
@@ -434,6 +446,55 @@ void main() {
     expect(liveSummary.progressLabel, 'Hand 1');
   });
 
+  test('keeps table session history sorted newest first', () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_01',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final oldSession = _session(
+      id: 'ses_01',
+      tableId: 'tbl_01',
+      status: 'completed',
+      sessionNumberForTable: 1,
+      startedAt: '2026-04-24T18:00:00-07:00',
+    );
+    final currentSession = _session(
+      id: 'ses_02',
+      tableId: 'tbl_01',
+      sessionNumberForTable: 2,
+      startedAt: '2026-04-24T19:00:00-07:00',
+    );
+    final otherTableSession = _session(
+      id: 'ses_03',
+      tableId: 'tbl_02',
+      sessionNumberForTable: 1,
+      startedAt: '2026-04-24T20:00:00-07:00',
+    );
+
+    final controller = TableListController(
+      tableRepository: _FakeTableRepository(cachedTables: [table]),
+      sessionRepository: _FakeSessionRepository(
+        cachedSessions: [oldSession, currentSession, otherTableSession],
+        cachedDetails: {'ses_02': _detail(currentSession)},
+        loadedDetails: {'ses_02': _detail(currentSession)},
+      ),
+      guestRepository: _FakeGuestRepository(const []),
+    );
+
+    await controller.load('evt_01');
+
+    expect(
+      controller.sessionsForTable('tbl_01').map((session) => session.id),
+      ['ses_02', 'ses_01'],
+    );
+  });
+
   test('loads live session details concurrently', () async {
     final firstTable = EventTableRecord.fromJson(const {
       'id': 'tbl_01',
@@ -441,7 +502,7 @@ void main() {
       'label': 'Table 1',
       'display_order': 1,
       'nfc_tag_id': 'tag_01',
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'default_rotation_policy_config_json': {},
     });
@@ -451,7 +512,7 @@ void main() {
       'label': 'Table 2',
       'display_order': 2,
       'nfc_tag_id': 'tag_02',
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'default_rotation_policy_config_json': {},
     });
@@ -513,16 +574,17 @@ TableSessionRecord _session({
   required String id,
   required String tableId,
   String status = 'active',
+  int sessionNumberForTable = 1,
   int currentDealerSeatIndex = 0,
   int handCount = 0,
+  String startedAt = '2026-04-24T19:00:00-07:00',
 }) {
   return TableSessionRecord.fromJson({
     'id': id,
     'event_id': 'evt_01',
     'event_table_id': tableId,
-    'session_number_for_table': 1,
-    'ruleset_id': 'HK_STANDARD_V1',
-    'ruleset_version': 1,
+    'session_number_for_table': sessionNumberForTable,
+    'ruleset_id': 'HK_STANDARD',
     'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
     'rotation_policy_config_json': const {},
     'status': status,
@@ -531,7 +593,7 @@ TableSessionRecord _session({
     'dealer_pass_count': 0,
     'completed_games_count': 0,
     'hand_count': handCount,
-    'started_at': '2026-04-24T19:00:00-07:00',
+    'started_at': startedAt,
     'started_by_user_id': 'usr_01',
   });
 }

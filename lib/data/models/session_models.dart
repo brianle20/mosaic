@@ -28,7 +28,6 @@ class TableSessionRecord {
     required this.eventTableId,
     required this.sessionNumberForTable,
     required this.rulesetId,
-    required this.rulesetVersion,
     required this.rotationPolicyType,
     required this.rotationPolicyConfig,
     required this.status,
@@ -52,7 +51,6 @@ class TableSessionRecord {
       eventTableId: _requiredString(json, 'event_table_id'),
       sessionNumberForTable: _requiredInt(json, 'session_number_for_table'),
       rulesetId: _requiredString(json, 'ruleset_id'),
-      rulesetVersion: _requiredInt(json, 'ruleset_version'),
       rotationPolicyType: _rotationPolicyTypeFromJson(
         _requiredString(json, 'rotation_policy_type'),
       ),
@@ -77,7 +75,6 @@ class TableSessionRecord {
   final String eventTableId;
   final int sessionNumberForTable;
   final String rulesetId;
-  final int rulesetVersion;
   final RotationPolicyType rotationPolicyType;
   final Map<String, dynamic> rotationPolicyConfig;
   final SessionStatus status;
@@ -100,7 +97,6 @@ class TableSessionRecord {
       'event_table_id': eventTableId,
       'session_number_for_table': sessionNumberForTable,
       'ruleset_id': rulesetId,
-      'ruleset_version': rulesetVersion,
       'rotation_policy_type': _rotationPolicyTypeToJson(rotationPolicyType),
       'rotation_policy_config_json': rotationPolicyConfig,
       'status': _sessionStatusToJson(status),
@@ -190,6 +186,7 @@ class SessionDetailRecord {
     required this.seats,
     required this.hands,
     required this.settlements,
+    this.tableLabel,
   });
 
   factory SessionDetailRecord.fromJson(Map<String, dynamic> json) {
@@ -220,6 +217,7 @@ class SessionDetailRecord {
       seats: seats,
       hands: hands,
       settlements: settlements,
+      tableLabel: _optionalString(json, 'table_label'),
     );
   }
 
@@ -227,9 +225,11 @@ class SessionDetailRecord {
   final List<TableSessionSeatRecord> seats;
   final List<HandResultRecord> hands;
   final List<HandSettlementRecord> settlements;
+  final String? tableLabel;
 
   Map<String, dynamic> toJson() {
     return {
+      'table_label': tableLabel,
       'session': session.toJson(),
       'seats': seats.map((seat) => seat.toJson()).toList(growable: false),
       'hands': hands.map((hand) => hand.toJson()).toList(growable: false),

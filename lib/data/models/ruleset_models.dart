@@ -10,7 +10,6 @@ class RulesetRecord {
   const RulesetRecord({
     required this.id,
     required this.name,
-    required this.version,
     required this.status,
     required this.definitionJson,
   });
@@ -19,7 +18,6 @@ class RulesetRecord {
     return RulesetRecord(
       id: _requiredString(json, 'id'),
       name: _requiredString(json, 'name'),
-      version: _requiredInt(json, 'version'),
       status: _rulesetStatusFromJson(_requiredString(json, 'status')),
       definitionJson: _jsonObject(json, 'definition_json'),
     );
@@ -27,7 +25,6 @@ class RulesetRecord {
 
   final String id;
   final String name;
-  final int version;
   final RulesetStatus status;
   final Map<String, dynamic> definitionJson;
 
@@ -35,7 +32,6 @@ class RulesetRecord {
     return {
       'id': id,
       'name': name,
-      'version': version,
       'status': status.name,
       'definition_json': definitionJson,
     };
@@ -49,19 +45,6 @@ String _requiredString(Map<String, dynamic> json, String key) {
   }
 
   throw FormatException('Expected non-empty string for $key.');
-}
-
-int _requiredInt(Map<String, dynamic> json, String key) {
-  final value = json[key];
-  if (value is int) {
-    return value;
-  }
-
-  if (value is num) {
-    return value.toInt();
-  }
-
-  throw FormatException('Expected int for $key.');
 }
 
 Map<String, dynamic> _jsonObject(Map<String, dynamic> json, String key) {

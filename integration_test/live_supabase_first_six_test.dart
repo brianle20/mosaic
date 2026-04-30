@@ -45,9 +45,6 @@ void main() {
         tester,
         eventId: state.eventId!,
         tableLabel: data.tableLabel,
-      );
-      await bindTableTagViaUi(
-        tester,
         tableTagUid: data.tableTagUid,
       );
       final sessionId = await startSessionViaUi(
@@ -62,12 +59,12 @@ void main() {
         tester,
         winnerLabel: '${data.guestNames[2]} (West)',
         discarderLabel: '${data.guestNames[0]} (East)',
-        fanCount: '2',
+        fanCount: '3',
       );
       await recordSelfDrawHandViaUi(
         tester,
         winnerLabel: '${data.guestNames[1]} (South)',
-        fanCount: '1',
+        fanCount: '3',
       );
 
       final before = await loadLeaderboard(state.eventId!);
@@ -85,11 +82,14 @@ void main() {
       await pumpUntilVisible(tester, find.text('Scoring Preview'));
       await tester.tap(find.text('Save Hand'));
       await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Session Detail'));
+      await pumpUntilVisible(tester, find.text('Session Progress'));
 
       final after = await loadLeaderboard(state.eventId!);
       expect(after, isNotEmpty);
-      expect(after.first['total_points'], isNot(before.first['total_points']));
+      expect(
+        _leaderboardPointsFor(before, data.guestNames[2]),
+        isNot(_leaderboardPointsFor(after, data.guestNames[2])),
+      );
 
       final hands = await Supabase.instance.client
           .from('hand_results')
@@ -134,41 +134,10 @@ void main() {
         tester,
         eventId: state.eventId!,
         tableLabel: data.tableLabel,
-      );
-      await bindTableTagViaUi(
-        tester,
         tableTagUid: data.tableTagUid,
       );
 
-      await tester.tap(find.text('Start Session').first);
-      await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Scan Table Tag'));
-
-      await scanSessionStepViaUi(tester, data.tableTagUid, 'Scan Table Tag');
-      await scanSessionStepViaUi(
-        tester,
-        data.playerTagUids[0],
-        'Scan East Player Tag',
-      );
-      await scanSessionStepViaUi(
-        tester,
-        data.playerTagUids[1],
-        'Scan South Player Tag',
-      );
-      await scanSessionStepViaUi(
-        tester,
-        data.playerTagUids[2],
-        'Scan West Player Tag',
-      );
-      await scanSessionStepViaUi(
-        tester,
-        data.playerTagUids[3],
-        'Scan North Player Tag',
-      );
-
-      await pumpUntilVisible(tester, find.text('Review Session'));
-      await tester.tap(find.text('Confirm Start Session'));
-      await tester.pumpAndSettle();
+      expect(find.text('Start Session'), findsNothing);
 
       final sessions = await Supabase.instance.client
           .from('table_sessions')
@@ -213,8 +182,8 @@ void main() {
         tester,
         eventId: state.eventId!,
         tableLabel: data.tableLabel,
+        tableTagUid: data.tableTagUid,
       );
-      await bindTableTagViaUi(tester, tableTagUid: data.tableTagUid);
       await startSessionViaUi(
         tester,
         eventId: state.eventId!,
@@ -223,8 +192,6 @@ void main() {
         playerTagUids: data.playerTagUids,
       );
 
-      await tapBack(tester);
-      await tester.pumpAndSettle();
       await tapBack(tester);
       await tester.pumpAndSettle();
       await pumpUntilVisible(tester, find.text('Complete Event'));
@@ -325,8 +292,8 @@ void main() {
         tester,
         eventId: state.eventId!,
         tableLabel: data.tableLabel,
+        tableTagUid: data.tableTagUid,
       );
-      await bindTableTagViaUi(tester, tableTagUid: data.tableTagUid);
       final sessionId = await startSessionViaUi(
         tester,
         eventId: state.eventId!,
@@ -335,26 +302,24 @@ void main() {
         playerTagUids: data.playerTagUids,
       );
 
-      await pumpUntilVisible(tester, find.text('Pause Session'));
-      await tester.tap(find.text('Pause Session'));
+      await pumpUntilVisible(tester, find.text('Pause'));
+      await tester.tap(find.text('Pause'));
       await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Resume Session'));
+      await pumpUntilVisible(tester, find.text('Resume'));
 
-      await tapBack(tester);
-      await tester.pumpAndSettle();
       await tapBack(tester);
       await tester.pumpAndSettle();
 
       await _closeScoring(tester);
       await openDashboardSection(tester, 'Tables');
-      await pumpUntilVisible(tester, find.text('Live Session'));
-      await tester.tap(find.text('Live Session').first);
+      await pumpUntilVisible(tester, find.text('Paused'));
+      await tester.tap(find.text('View Session'));
       await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Resume Session'));
+      await pumpUntilVisible(tester, find.text('Resume'));
 
-      await tester.tap(find.text('Resume Session'));
+      await tester.tap(find.text('Resume'));
       await tester.pumpAndSettle();
-      await pumpUntilVisible(tester, find.text('Resume Session'));
+      await pumpUntilVisible(tester, find.text('Resume'));
 
       final sessionRow = await Supabase.instance.client
           .from('table_sessions')
@@ -491,8 +456,8 @@ void main() {
         tester,
         eventId: state.eventId!,
         tableLabel: data.tableLabel,
+        tableTagUid: data.tableTagUid,
       );
-      await bindTableTagViaUi(tester, tableTagUid: data.tableTagUid);
       await registerPlayerTagViaRpc(
         data.untaggedPlayerUid,
         displayLabel: 'Unassigned blocker tag',
@@ -568,8 +533,8 @@ void main() {
         tester,
         eventId: state.eventId!,
         tableLabel: data.tableLabel,
+        tableTagUid: data.tableTagUid,
       );
-      await bindTableTagViaUi(tester, tableTagUid: data.tableTagUid);
       await startSessionViaUi(
         tester,
         eventId: state.eventId!,
@@ -580,19 +545,28 @@ void main() {
 
       await tapBack(tester);
       await tester.pumpAndSettle();
+      await openDashboardSection(tester, 'Tables');
       final secondTableId = await createTableViaUi(
         tester,
         eventId: state.eventId!,
         tableLabel: data.secondTableLabel,
+        tableTagUid: data.secondTableTagUid,
       );
-      await bindTableTagViaUi(tester, tableTagUid: data.secondTableTagUid);
 
-      await tester.tap(find.text('Start Session').last);
+      await tapBack(tester);
+      await tester.pumpAndSettle();
+      await pumpUntilVisible(tester, find.text('Scan Table'));
+      final scanTableAction = find.byIcon(Icons.nfc).hitTestable();
+      await pumpUntilVisible(tester, scanTableAction);
+      await tester.tap(scanTableAction.first);
       await tester.pumpAndSettle();
       await pumpUntilVisible(tester, find.text('Scan Table Tag'));
-
-      await scanSessionStepViaUi(
-          tester, data.secondTableTagUid, 'Scan Table Tag');
+      final tableTagField = find.byType(TextField).hitTestable();
+      await pumpUntilVisible(tester, tableTagField);
+      await tester.enterText(tableTagField, data.secondTableTagUid);
+      await tester.tap(find.text('Use Tag'));
+      await tester.pumpAndSettle();
+      await pumpUntilVisible(tester, find.text('Start Session'));
       await scanSessionStepViaUi(
         tester,
         data.playerTagUids[0],
@@ -664,8 +638,8 @@ void main() {
         tester,
         eventId: state.eventId!,
         tableLabel: data.tableLabel,
+        tableTagUid: data.tableTagUid,
       );
-      await bindTableTagViaUi(tester, tableTagUid: data.tableTagUid);
       await startSessionViaUi(
         tester,
         eventId: state.eventId!,
@@ -681,8 +655,6 @@ void main() {
         fanCount: '3',
       );
 
-      await tapBack(tester);
-      await tester.pumpAndSettle();
       await tapBack(tester);
       await tester.pumpAndSettle();
 
@@ -729,7 +701,6 @@ void main() {
       await pumpUntilVisible(tester, find.text('Prize Awards'));
 
       expect(find.text(data.guestNames[0]), findsWidgets);
-      expect(find.text('Mark Paid'), findsWidgets);
 
       await tapBack(tester);
       await tester.pumpAndSettle();
@@ -752,7 +723,6 @@ void main() {
       await pumpUntilVisible(tester, find.text('Prize Awards'));
 
       expect(find.text(data.guestNames[0]), findsWidgets);
-      expect(find.text('Mark Paid'), findsWidgets);
       expect(find.textContaining(data.guestNames[0]), findsWidgets);
     } finally {
       await cleanupLiveFixture(state);
@@ -779,7 +749,7 @@ void main() {
         'timezone': 'America/Los_Angeles',
         'starts_at': DateTime.now().toUtc().toIso8601String(),
         'lifecycle_status': 'draft',
-        'default_ruleset_id': 'HK_STANDARD_V1',
+        'default_ruleset_id': 'HK_STANDARD',
       });
 
       await expectLater(forbiddenInsert, throwsA(isA<Object>()));
@@ -872,8 +842,14 @@ Future<void> _addGuests(WidgetTester tester, _ScenarioData data) async {
 }
 
 Future<void> _startEventIfNeeded(WidgetTester tester) async {
-  await pumpUntilVisible(tester, find.text('Start Event'));
-  await tester.tap(find.text('Start Event'));
+  await pumpUntilAny(tester, [
+    find.text('Open Check-In'),
+    find.text('Start Event'),
+  ]);
+  final startAction = find.text('Open Check-In').evaluate().isNotEmpty
+      ? find.text('Open Check-In')
+      : find.text('Start Event');
+  await tester.tap(startAction);
   await tester.pumpAndSettle();
   await pumpUntilVisible(tester, find.text('Check-In Open'));
 }
@@ -886,10 +862,26 @@ Future<void> _openScoring(WidgetTester tester) async {
 }
 
 Future<void> _closeScoring(WidgetTester tester) async {
-  await pumpUntilVisible(tester, find.text('Close Scoring'));
-  await tester.tap(find.text('Close Scoring'));
+  await pumpUntilAny(tester, [
+    find.text('Pause Scoring'),
+    find.text('Close Scoring'),
+  ]);
+  final closeAction = find.text('Pause Scoring').evaluate().isNotEmpty
+      ? find.text('Pause Scoring')
+      : find.text('Close Scoring');
+  await tester.tap(closeAction);
   await tester.pumpAndSettle();
-  await pumpUntilVisible(tester, find.text('Scoring Closed'));
+  await pumpUntilAny(tester, [
+    find.text('Scoring Not Open'),
+    find.text('Scoring Closed'),
+  ]);
+}
+
+int _leaderboardPointsFor(List<dynamic> rows, String displayName) {
+  final row = rows.cast<Map<String, dynamic>>().firstWhere(
+        (row) => row['display_name'] == displayName,
+      );
+  return row['total_points'] as int;
 }
 
 Future<void> _checkInAndTagGuests(

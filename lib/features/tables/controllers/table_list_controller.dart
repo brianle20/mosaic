@@ -23,6 +23,7 @@ class TableListController extends ChangeNotifier {
   String? error;
   List<EventTableRecord> tables = const [];
   Map<String, TableSessionRecord> activeSessionsByTableId = const {};
+  Map<String, List<TableSessionRecord>> sessionsByTableId = const {};
   Map<String, SessionDetailRecord> sessionDetailsBySessionId = const {};
   Map<String, String> guestNamesById = const {};
   List<TableOverviewCardData> cards = const [];
@@ -36,6 +37,7 @@ class TableListController extends ChangeNotifier {
     error = null;
     tables = cachedTables;
     activeSessionsByTableId = _activeSessionsByTable(cachedSessions);
+    sessionsByTableId = _sessionsByTable(cachedSessions);
     guestNamesById = _guestNamesById(cachedGuests);
     sessionDetailsBySessionId =
         await _readCachedDetails(activeSessionsByTableId.values);
@@ -60,6 +62,7 @@ class TableListController extends ChangeNotifier {
     try {
       final sessions = await _sessionRepository.listSessions(eventId);
       activeSessionsByTableId = _activeSessionsByTable(sessions);
+      sessionsByTableId = _sessionsByTable(sessions);
       sessionDetailsBySessionId =
           await _loadDetails(activeSessionsByTableId.values);
     } catch (exception) {
@@ -73,6 +76,10 @@ class TableListController extends ChangeNotifier {
     notifyListeners();
   }
 
+  List<TableSessionRecord> sessionsForTable(String tableId) {
+    return sessionsByTableId[tableId] ?? const [];
+  }
+
   Map<String, TableSessionRecord> _activeSessionsByTable(
     List<TableSessionRecord> sessions,
   ) {
@@ -82,6 +89,23 @@ class TableListController extends ChangeNotifier {
             session.status == SessionStatus.paused)
           session.eventTableId: session,
     };
+  }
+
+  Map<String, List<TableSessionRecord>> _sessionsByTable(
+    List<TableSessionRecord> sessions,
+  ) {
+    final grouped = <String, List<TableSessionRecord>>{};
+    for (final session in sessions) {
+      grouped.putIfAbsent(session.eventTableId, () => []).add(session);
+    }
+
+    for (final tableSessions in grouped.values) {
+      tableSessions.sort(
+        (left, right) => right.startedAt.compareTo(left.startedAt),
+      );
+    }
+
+    return grouped;
   }
 
   Map<String, String> _guestNamesById(List<EventGuestRecord> guests) {

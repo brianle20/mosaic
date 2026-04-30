@@ -10,7 +10,6 @@ Future<String> createEventViaUi(
   required String eventTitle,
   required String venueName,
   String coverChargeCents = '2000',
-  String prizeBudgetCents = '5000',
 }) async {
   await tester.tap(find.widgetWithText(FilledButton, 'Create Event'));
   await tester.pump();
@@ -22,18 +21,14 @@ Future<String> createEventViaUi(
     venueName,
   );
   await tester.enterText(
-    find.widgetWithText(TextFormField, 'Cover Charge (cents)'),
+    find.widgetWithText(TextFormField, 'Cover Charge'),
     coverChargeCents,
-  );
-  await tester.enterText(
-    find.widgetWithText(TextFormField, 'Prize Budget (cents)'),
-    prizeBudgetCents,
   );
   await tester.tap(find.widgetWithText(FilledButton, 'Save Event'));
   await tester.pump();
 
   await pumpUntilVisible(tester, find.text(eventTitle));
-  await pumpUntilVisible(tester, find.text('Guests: 0'));
+  await pumpUntilVisible(tester, find.text('Guests'));
   return lookupEventIdByTitle(eventTitle);
 }
 
@@ -41,8 +36,23 @@ Future<void> openDashboardSection(
   WidgetTester tester,
   String label,
 ) async {
-  await pumpUntilVisible(tester, find.text(label));
-  await tester.tap(find.text(label));
+  final sectionFinders = label == 'Prizes'
+      ? [
+          find.text('Prizes'),
+          find.text('Prize Pool'),
+        ]
+      : label == 'Leaderboard'
+          ? [
+              find.text('Leaderboard'),
+              find.text('Leader'),
+            ]
+          : [find.text(label)];
+  await pumpUntilAny(tester, sectionFinders);
+  final sectionFinder = sectionFinders.firstWhere(
+    (finder) => finder.evaluate().isNotEmpty,
+  );
+  await tester.ensureVisible(sectionFinder.first);
+  await tester.tap(sectionFinder.first);
   await tester.pumpAndSettle();
 }
 
@@ -57,7 +67,7 @@ Future<void> recordCoverEntryViaUi(
   await tester.pumpAndSettle();
   await pumpUntilVisible(tester, find.text('Record Cover Entry'));
   await tester.enterText(
-    find.widgetWithText(TextFormField, 'Amount (cents)'),
+    find.widgetWithText(TextFormField, 'Amount'),
     amountCents,
   );
   await tester.tap(find.widgetWithText(OutlinedButton, methodLabel));
@@ -104,25 +114,41 @@ Future<String> createTableViaUi(
   WidgetTester tester, {
   required String eventId,
   required String tableLabel,
+  required String tableTagUid,
 }) async {
+  final normalizedTableTagUid =
+      tableTagUid.replaceAll(RegExp(r'[^0-9A-Za-z]+'), '').toUpperCase();
   await pumpUntilVisible(tester, find.text('Add Table'));
   await tester.tap(find.text('Add Table'));
   await tester.pumpAndSettle();
   await pumpUntilVisible(tester, find.text('Add Table'));
 
-  await tester.enterText(
-    find.widgetWithText(TextFormField, 'Label'),
-    tableLabel,
-  );
-  await tester.tap(find.text('Save Table'));
+  await pumpUntilVisible(tester, find.text('Scan Table Tag'));
+  await tester.tap(find.text('Scan Table Tag'));
   await tester.pumpAndSettle();
-  await pumpUntilVisible(tester, find.text(tableLabel));
+  await pumpUntilVisible(tester, find.text('Scan Table Tag'));
+  final tableTagField = find.byType(TextField).hitTestable();
+  await pumpUntilVisible(tester, tableTagField);
+  await tester.enterText(tableTagField, tableTagUid);
+  await tester.tap(find.text('Use Tag'));
+  await tester.pumpAndSettle();
+
+  await pumpUntilAny(tester, [
+    find.text(tableLabel),
+    find.text('Ready'),
+  ]);
+
+  final tagRows = await Supabase.instance.client
+      .from('nfc_tags')
+      .select('id')
+      .eq('uid_hex', normalizedTableTagUid);
+  expect(tagRows, isNotEmpty);
 
   final tableRows = await Supabase.instance.client
       .from('event_tables')
       .select('id')
       .eq('event_id', eventId)
-      .eq('label', tableLabel);
+      .eq('nfc_tag_id', tagRows.first['id'] as String);
   expect(tableRows, isNotEmpty);
   return tableRows.first['id'] as String;
 }
@@ -131,7 +157,9 @@ Future<void> bindTableTagViaUi(
   WidgetTester tester, {
   required String tableTagUid,
 }) async {
-  await tester.tap(find.text('Bind Table Tag').first);
+  final overviewBindAction = find.text('Bind Tag').hitTestable();
+  await pumpUntilVisible(tester, overviewBindAction);
+  await tester.tap(overviewBindAction.first);
   await tester.pumpAndSettle();
   await pumpUntilVisible(tester, find.text('Edit Table'));
 
@@ -147,7 +175,10 @@ Future<void> bindTableTagViaUi(
 
   await tapBack(tester);
   await tester.pumpAndSettle();
-  await pumpUntilVisible(tester, find.text('Tag Bound'));
+  await pumpUntilAny(tester, [
+    find.text('Ready'),
+    find.text('Tag Bound'),
+  ]);
 }
 
 Future<String> startSessionViaUi(
@@ -157,11 +188,21 @@ Future<String> startSessionViaUi(
   required String tableTagUid,
   required List<String> playerTagUids,
 }) async {
-  await tester.tap(find.text('Start Session').first);
+  await tapBack(tester);
+  await tester.pumpAndSettle();
+  await pumpUntilVisible(tester, find.text('Scan Table'));
+  final scanTableAction = find.byIcon(Icons.nfc).hitTestable();
+  await pumpUntilVisible(tester, scanTableAction);
+  await tester.tap(scanTableAction.first);
   await tester.pumpAndSettle();
   await pumpUntilVisible(tester, find.text('Scan Table Tag'));
+  final tableTagField = find.byType(TextField).hitTestable();
+  await pumpUntilVisible(tester, tableTagField);
+  await tester.enterText(tableTagField, tableTagUid);
+  await tester.tap(find.text('Use Tag'));
+  await tester.pumpAndSettle();
+  await pumpUntilVisible(tester, find.text('Start Session'));
 
-  await scanSessionStepViaUi(tester, tableTagUid, 'Scan Table Tag');
   await scanSessionStepViaUi(tester, playerTagUids[0], 'Scan East Player Tag');
   await scanSessionStepViaUi(tester, playerTagUids[1], 'Scan South Player Tag');
   await scanSessionStepViaUi(tester, playerTagUids[2], 'Scan West Player Tag');
@@ -170,7 +211,7 @@ Future<String> startSessionViaUi(
   await pumpUntilVisible(tester, find.text('Review Session'));
   await tester.tap(find.text('Confirm Start Session'));
   await tester.pumpAndSettle();
-  await pumpUntilVisible(tester, find.text('Session Detail'));
+  await pumpUntilVisible(tester, find.text('Session Progress'));
 
   return lookupSessionId(eventId, tableId);
 }
@@ -195,25 +236,28 @@ Future<void> addGuestViaUi(
   String coverStatus = 'paid',
   String coverAmountCents = '2000',
 }) async {
-  final addGuestButton =
-      find.widgetWithText(FilledButton, 'Add Guest').hitTestable();
+  final phoneDigits = suffix.replaceAll(RegExp(r'\D'), '');
+  final paddedPhoneDigits = phoneDigits.padLeft(7, '0');
+  final phoneNumber =
+      '415${paddedPhoneDigits.substring(paddedPhoneDigits.length - 7)}';
+  final addGuestButton = find.byIcon(Icons.person_add).hitTestable();
   await pumpUntilVisible(tester, addGuestButton);
-  await tester.ensureVisible(addGuestButton);
-  await tester.tap(addGuestButton);
+  await tester.ensureVisible(addGuestButton.first);
+  await tester.tap(addGuestButton.first);
   await tester.pumpAndSettle();
-  await pumpUntilVisible(tester, find.text('Add Guest'));
+  await pumpUntilVisible(tester, find.widgetWithText(TextFormField, 'Name'));
 
   await tester.enterText(find.widgetWithText(TextFormField, 'Name'), guestName);
   await tester.enterText(
     find.widgetWithText(TextFormField, 'Phone'),
-    '+1415555${suffix.replaceAll('-', '').padLeft(5, '0').substring(0, 5)}',
+    phoneNumber,
   );
   await tester.enterText(
     find.widgetWithText(TextFormField, 'Email'),
     'smoke+$suffix@example.com',
   );
   await tester.enterText(
-    find.widgetWithText(TextFormField, 'Cover Amount (cents)'),
+    find.widgetWithText(TextFormField, 'Cover Amount'),
     coverAmountCents,
   );
   if (coverStatus != 'unpaid') {
@@ -230,8 +274,14 @@ Future<void> addGuestViaUi(
     find.widgetWithText(TextFormField, 'Note'),
     'Live smoke test guest',
   );
-  await tester.tap(find.widgetWithText(FilledButton, 'Save Guest'));
-  await tester.pumpAndSettle();
+  final saveGuestButton =
+      find.widgetWithText(FilledButton, 'Save Guest').hitTestable();
+  await pumpUntilVisible(tester, saveGuestButton);
+  await tester.ensureVisible(saveGuestButton.first);
+  await tester.tap(saveGuestButton.first);
+  await tester.pump();
+  await pumpUntilAbsent(tester, find.widgetWithText(TextFormField, 'Name'));
+  await pumpUntilVisible(tester, find.text(guestName));
 }
 
 Future<void> checkInGuestViaRpc(String guestId) async {
@@ -302,8 +352,8 @@ Future<void> scanSessionStepViaUi(
 }
 
 Future<void> endSessionEarlyViaUi(WidgetTester tester, String reason) async {
-  await pumpUntilVisible(tester, find.text('End Early'));
-  await tester.tap(find.text('End Early'));
+  await pumpUntilVisible(tester, find.text('End'));
+  await tester.tap(find.text('End'));
   await tester.pumpAndSettle();
   await pumpUntilVisible(tester, find.text('End Session Early'));
   await tester.enterText(find.byType(TextFormField).last, reason);
@@ -346,7 +396,7 @@ Future<void> recordDiscardHandViaUi(
 
   await tester.tap(find.text('Save Hand'));
   await tester.pumpAndSettle();
-  await pumpUntilVisible(tester, find.text('Session Detail'));
+  await pumpUntilVisible(tester, find.text('Session Progress'));
   await pumpUntilVisible(tester, recordHandButton);
 }
 
@@ -376,7 +426,7 @@ Future<void> recordSelfDrawHandViaUi(
 
   await tester.tap(find.text('Save Hand'));
   await tester.pumpAndSettle();
-  await pumpUntilVisible(tester, find.text('Session Detail'));
+  await pumpUntilVisible(tester, find.text('Session Progress'));
   await pumpUntilVisible(tester, recordHandButton);
 }
 
@@ -394,6 +444,6 @@ Future<void> recordWashoutHandViaUi(WidgetTester tester) async {
 
   await tester.tap(find.text('Save Hand'));
   await tester.pumpAndSettle();
-  await pumpUntilVisible(tester, find.text('Session Detail'));
+  await pumpUntilVisible(tester, find.text('Session Progress'));
   await pumpUntilVisible(tester, recordHandButton);
 }

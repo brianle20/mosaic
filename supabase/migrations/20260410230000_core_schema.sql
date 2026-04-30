@@ -17,7 +17,7 @@
 --   [x] prize_tiers
 --   [x] prize_awards
 --   [x] audit_logs
---   [x] HK_STANDARD_V1 seed
+--   [x] HK_STANDARD seed
 
 create extension if not exists pgcrypto with schema extensions;
 
@@ -58,7 +58,6 @@ create table public.users (
 create table public.rulesets (
   id text primary key,
   name text not null,
-  version integer not null check (version > 0),
   status text not null check (status in ('active', 'retired')),
   definition_json jsonb not null,
   created_at timestamptz not null default now()
@@ -79,7 +78,7 @@ create table public.events (
   checkin_open boolean not null default false,
   scoring_open boolean not null default false,
   cover_charge_cents integer not null default 0 check (cover_charge_cents >= 0),
-  default_ruleset_id text not null default 'HK_STANDARD_V1'
+  default_ruleset_id text not null default 'HK_STANDARD'
     references public.rulesets(id),
   prevailing_wind text not null default 'east'
     check (prevailing_wind in ('east', 'south', 'west', 'north')),
@@ -176,7 +175,7 @@ create table public.event_tables (
   label text not null,
   display_order integer not null default 0,
   nfc_tag_id uuid references public.nfc_tags(id) on delete set null,
-  default_ruleset_id text not null default 'HK_STANDARD_V1'
+  default_ruleset_id text not null default 'HK_STANDARD'
     references public.rulesets(id),
   default_rotation_policy_type text not null default 'dealer_cycle_return_to_initial_east',
   default_rotation_policy_config_json jsonb not null default '{}'::jsonb,
@@ -194,7 +193,6 @@ create table public.table_sessions (
   event_table_id uuid not null references public.event_tables(id) on delete cascade,
   session_number_for_table integer not null check (session_number_for_table > 0),
   ruleset_id text not null references public.rulesets(id),
-  ruleset_version integer not null check (ruleset_version > 0),
   rotation_policy_type text not null,
   rotation_policy_config_json jsonb not null default '{}'::jsonb,
   status text not null
@@ -241,7 +239,7 @@ create table public.hand_results (
   winner_seat_index integer check (winner_seat_index between 0 and 3),
   win_type text check (win_type in ('discard', 'self_draw')),
   discarder_seat_index integer check (discarder_seat_index between 0 and 3),
-  fan_count integer check (fan_count >= 0),
+  fan_count integer check (fan_count is null or fan_count >= 0),
   base_points integer check (base_points > 0),
   east_seat_index_before_hand integer not null check (east_seat_index_before_hand between 0 and 3),
   east_seat_index_after_hand integer not null check (east_seat_index_after_hand between 0 and 3),
@@ -270,6 +268,7 @@ create table public.hand_results (
       result_type = 'win'
       and winner_seat_index is not null
       and fan_count is not null
+      and fan_count >= 3
       and win_type is not null
       and (
         (win_type = 'discard' and discarder_seat_index is not null and discarder_seat_index <> winner_seat_index)
@@ -299,6 +298,7 @@ create table public.event_score_totals (
   event_id uuid not null references public.events(id) on delete cascade,
   event_guest_id uuid not null references public.event_guests(id) on delete cascade,
   total_points integer not null default 0,
+  hands_played integer not null default 0 check (hands_played >= 0),
   hands_won integer not null default 0 check (hands_won >= 0),
   self_draw_wins integer not null default 0 check (self_draw_wins >= 0),
   discard_wins integer not null default 0 check (discard_wins >= 0),
@@ -412,19 +412,24 @@ for each row execute function app_private.touch_updated_at();
 insert into public.rulesets (
   id,
   name,
-  version,
   status,
   definition_json
 ) values (
-  'HK_STANDARD_V1',
+  'HK_STANDARD',
   'Hong Kong Standard',
-  1,
   'active',
   '{
-    "id": "HK_STANDARD_V1",
+    "id": "HK_STANDARD",
     "name": "Hong Kong Standard",
-    "version": 1,
+    "minimumWinningFan": 3,
     "winTypes": ["discard", "self_draw"],
+    "fanBuckets": [
+      { "min": 3, "max": 3, "basePoints": 8 },
+      { "min": 4, "max": 6, "basePoints": 16 },
+      { "min": 7, "max": 9, "basePoints": 32 },
+      { "min": 10, "max": 12, "basePoints": 64 },
+      { "min": 13, "basePoints": 128 }
+    ],
     "washoutDealerBehavior": "retain_current_east",
     "rotationPolicyDefaults": ["dealer_cycle_return_to_initial_east"]
   }'::jsonb
@@ -432,6 +437,5 @@ insert into public.rulesets (
 on conflict (id) do update
 set
   name = excluded.name,
-  version = excluded.version,
   status = excluded.status,
   definition_json = excluded.definition_json;

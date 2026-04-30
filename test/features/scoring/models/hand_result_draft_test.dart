@@ -8,9 +8,29 @@ void main() {
       const draft = HandResultDraft(resultType: HandResultType.win);
 
       expect(draft.winnerSeatError, 'Select a winner.');
-      expect(draft.fanCountError, 'Enter a non-negative fan count.');
+      expect(draft.fanCountError, 'Enter at least 3 fan.');
       expect(draft.winTypeError, 'Select how the hand was won.');
       expect(draft.isValid, isFalse);
+    });
+
+    test('win requires at least three fan', () {
+      const twoFanDraft = HandResultDraft(
+        resultType: HandResultType.win,
+        winnerSeatIndex: 0,
+        fanCount: 2,
+        winType: HandWinType.selfDraw,
+      );
+      const threeFanDraft = HandResultDraft(
+        resultType: HandResultType.win,
+        winnerSeatIndex: 0,
+        fanCount: 3,
+        winType: HandWinType.selfDraw,
+      );
+
+      expect(twoFanDraft.fanCountError, 'Enter at least 3 fan.');
+      expect(twoFanDraft.isValid, isFalse);
+      expect(threeFanDraft.fanCountError, isNull);
+      expect(threeFanDraft.isValid, isTrue);
     });
 
     test('discard requires a different discarder seat', () {
@@ -60,7 +80,7 @@ void main() {
       const validDraft = HandResultDraft(
         resultType: HandResultType.win,
         winnerSeatIndex: 0,
-        fanCount: 1,
+        fanCount: 3,
         winType: HandWinType.selfDraw,
       );
 

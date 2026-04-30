@@ -11,6 +11,7 @@ import 'package:mosaic/features/prizes/screens/prize_awards_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
+import 'package:mosaic/features/scoring/screens/event_hand_ledger_screen.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 import 'package:mosaic/features/tables/screens/table_form_screen.dart';
 import 'package:mosaic/features/tables/screens/start_session_screen.dart';
@@ -51,6 +52,7 @@ class AppRouter {
   static const sessionDetailRoute = '/sessions/detail';
   static const leaderboardRoute = '/leaderboard';
   static const activityRoute = '/activity';
+  static const eventHandLedgerRoute = '/events/hand-ledger';
   static const prizePlanRoute = '/prizes/plan';
   static const prizeAwardsRoute = '/prizes/awards';
 
@@ -127,6 +129,7 @@ class AppRouter {
             eventId: args.eventId,
             eventTitle: args.eventTitle,
             scoringOpen: args.scoringOpen,
+            readOnly: args.readOnly,
             tableRepository: tableRepository,
             sessionRepository: sessionRepository,
             guestRepository: guestRepository,
@@ -163,8 +166,10 @@ class AppRouter {
           builder: (_) => SessionDetailScreen(
             eventId: args.eventId,
             sessionId: args.sessionId,
+            scoringOpen: args.scoringOpen,
             guestRepository: guestRepository,
             sessionRepository: sessionRepository,
+            nfcService: nfcService,
           ),
           settings: settings,
         );
@@ -183,6 +188,15 @@ class AppRouter {
           builder: (_) => ActivityScreen(
             eventId: args.eventId,
             activityRepository: activityRepository,
+          ),
+          settings: settings,
+        );
+      case eventHandLedgerRoute:
+        final args = settings.arguments as EventHandLedgerArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => EventHandLedgerScreen(
+            eventId: args.eventId,
+            sessionRepository: sessionRepository,
           ),
           settings: settings,
         );
@@ -236,6 +250,14 @@ class GuestRosterArgs {
   final int eventCoverChargeCents;
 }
 
+class EventHandLedgerArgs {
+  const EventHandLedgerArgs({
+    required this.eventId,
+  });
+
+  final String eventId;
+}
+
 class GuestFormArgs {
   const GuestFormArgs({
     required this.eventId,
@@ -265,11 +287,13 @@ class TablesOverviewArgs {
     required this.eventId,
     required this.eventTitle,
     required this.scoringOpen,
+    this.readOnly = false,
   });
 
   final String eventId;
   final String eventTitle;
   final bool scoringOpen;
+  final bool readOnly;
 }
 
 class ActivityArgs {
@@ -306,10 +330,12 @@ class SessionDetailArgs {
   const SessionDetailArgs({
     required this.eventId,
     required this.sessionId,
+    this.scoringOpen = true,
   });
 
   final String eventId;
   final String sessionId;
+  final bool scoringOpen;
 }
 
 class LeaderboardArgs {

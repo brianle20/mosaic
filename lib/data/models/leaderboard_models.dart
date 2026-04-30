@@ -7,6 +7,7 @@ class EventScoreTotalRecord {
     required this.eventId,
     required this.eventGuestId,
     required this.totalPoints,
+    required this.handsPlayed,
     required this.handsWon,
     required this.selfDrawWins,
     required this.discardWins,
@@ -20,6 +21,7 @@ class EventScoreTotalRecord {
       eventId: _requiredString(json, 'event_id'),
       eventGuestId: _requiredString(json, 'event_guest_id'),
       totalPoints: _requiredInt(json, 'total_points'),
+      handsPlayed: _requiredInt(json, 'hands_played'),
       handsWon: _requiredInt(json, 'hands_won'),
       selfDrawWins: _requiredInt(json, 'self_draw_wins'),
       discardWins: _requiredInt(json, 'discard_wins'),
@@ -32,6 +34,7 @@ class EventScoreTotalRecord {
   final String eventId;
   final String eventGuestId;
   final int totalPoints;
+  final int handsPlayed;
   final int handsWon;
   final int selfDrawWins;
   final int discardWins;
@@ -44,6 +47,7 @@ class EventScoreTotalRecord {
       'event_id': eventId,
       'event_guest_id': eventGuestId,
       'total_points': totalPoints,
+      'hands_played': handsPlayed,
       'hands_won': handsWon,
       'self_draw_wins': selfDrawWins,
       'discard_wins': discardWins,
@@ -59,6 +63,7 @@ class LeaderboardEntry {
     required this.eventGuestId,
     required this.displayName,
     required this.totalPoints,
+    required this.handsPlayed,
     required this.handsWon,
     required this.selfDrawWins,
     required this.discardWins,
@@ -70,6 +75,7 @@ class LeaderboardEntry {
       eventGuestId: _requiredString(json, 'event_guest_id'),
       displayName: _requiredString(json, 'display_name'),
       totalPoints: _requiredInt(json, 'total_points'),
+      handsPlayed: _requiredInt(json, 'hands_played'),
       handsWon: _requiredInt(json, 'hands_won'),
       selfDrawWins: _requiredInt(json, 'self_draw_wins'),
       discardWins: _requiredInt(json, 'discard_wins'),
@@ -80,6 +86,7 @@ class LeaderboardEntry {
   final String eventGuestId;
   final String displayName;
   final int totalPoints;
+  final int handsPlayed;
   final int handsWon;
   final int selfDrawWins;
   final int discardWins;
@@ -90,6 +97,7 @@ class LeaderboardEntry {
       'event_guest_id': eventGuestId,
       'display_name': displayName,
       'total_points': totalPoints,
+      'hands_played': handsPlayed,
       'hands_won': handsWon,
       'self_draw_wins': selfDrawWins,
       'discard_wins': discardWins,

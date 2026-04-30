@@ -62,7 +62,7 @@ class CreateEventTableInput {
     required this.eventId,
     required this.label,
     required this.displayOrder,
-    this.defaultRulesetId = 'HK_STANDARD_V1',
+    this.defaultRulesetId = 'HK_STANDARD',
     this.defaultRotationPolicyType =
         RotationPolicyType.dealerCycleReturnToInitialEast,
     this.defaultRotationPolicyConfig = const {},

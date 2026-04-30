@@ -29,7 +29,7 @@ void main() {
             'event_id': 'evt_01',
             'label': 'Table 1',
             'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD_V1',
+            'default_ruleset_id': 'HK_STANDARD',
             'default_rotation_policy_type':
                 'dealer_cycle_return_to_initial_east',
             'default_rotation_policy_config_json': {},
@@ -67,7 +67,7 @@ void main() {
             'event_id': 'evt_01',
             'label': 'Table A',
             'display_order': 2,
-            'default_ruleset_id': 'HK_STANDARD_V1',
+            'default_ruleset_id': 'HK_STANDARD',
             'default_rotation_policy_type':
                 'dealer_cycle_return_to_initial_east',
             'default_rotation_policy_config_json': {},
@@ -103,7 +103,7 @@ void main() {
             'mode': 'points',
             'display_order': 1,
             'nfc_tag_id': 'tag_table_01',
-            'default_ruleset_id': 'HK_STANDARD_V1',
+            'default_ruleset_id': 'HK_STANDARD',
             'default_rotation_policy_type':
                 'dealer_cycle_return_to_initial_east',
             'default_rotation_policy_config_json': {},
@@ -143,7 +143,7 @@ void main() {
             'label': 'Table 1',
             'display_order': 1,
             'nfc_tag_id': 'tag_table_01',
-            'default_ruleset_id': 'HK_STANDARD_V1',
+            'default_ruleset_id': 'HK_STANDARD',
             'default_rotation_policy_type':
                 'dealer_cycle_return_to_initial_east',
             'default_rotation_policy_config_json': {},

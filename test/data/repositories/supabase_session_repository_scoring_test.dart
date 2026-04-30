@@ -23,8 +23,7 @@ void main() {
             'event_id': 'evt_01',
             'event_table_id': 'tbl_01',
             'session_number_for_table': 1,
-            'ruleset_id': 'HK_STANDARD_V1',
-            'ruleset_version': 1,
+            'ruleset_id': 'HK_STANDARD',
             'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
             'rotation_policy_config_json': {},
             'status': 'active',
@@ -61,8 +60,8 @@ void main() {
               'winner_seat_index': 2,
               'win_type': 'discard',
               'discarder_seat_index': 0,
-              'fan_count': 2,
-              'base_points': 4,
+              'fan_count': 3,
+              'base_points': 8,
               'east_seat_index_before_hand': 0,
               'east_seat_index_after_hand': 1,
               'dealer_rotated': true,
@@ -89,7 +88,7 @@ void main() {
 
       expect(detail.session.id, 'ses_01');
       expect(detail.seats.first.initialWind, SeatWind.east);
-      expect(detail.hands.single.basePoints, 4);
+      expect(detail.hands.single.basePoints, 8);
       expect(detail.settlements.single.amountPoints, 16);
     });
 
@@ -127,8 +126,7 @@ void main() {
             'event_id': 'evt_01',
             'event_table_id': 'tbl_01',
             'session_number_for_table': 1,
-            'ruleset_id': 'HK_STANDARD_V1',
-            'ruleset_version': 1,
+            'ruleset_id': 'HK_STANDARD',
             'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
             'rotation_policy_config_json': {},
             'status': 'active',
@@ -213,8 +211,7 @@ void main() {
             'event_id': 'evt_01',
             'event_table_id': 'tbl_01',
             'session_number_for_table': 1,
-            'ruleset_id': 'HK_STANDARD_V1',
-            'ruleset_version': 1,
+            'ruleset_id': 'HK_STANDARD',
             'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
             'rotation_policy_config_json': {},
             'status': 'active',

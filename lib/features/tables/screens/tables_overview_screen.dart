@@ -16,6 +16,7 @@ class TablesOverviewScreen extends StatefulWidget {
     required this.eventId,
     required this.eventTitle,
     required this.scoringOpen,
+    this.readOnly = false,
     required this.tableRepository,
     required this.sessionRepository,
     required this.guestRepository,
@@ -24,6 +25,7 @@ class TablesOverviewScreen extends StatefulWidget {
   final String eventId;
   final String eventTitle;
   final bool scoringOpen;
+  final bool readOnly;
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
   final GuestRepository guestRepository;
@@ -86,9 +88,75 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       arguments: SessionDetailArgs(
         eventId: widget.eventId,
         sessionId: sessionId,
+        scoringOpen: widget.scoringOpen,
       ),
     );
     await _controller.load(widget.eventId);
+  }
+
+  Future<void> _openSessionHistory(EventTableRecord table) async {
+    final sessions = _controller.sessionsForTable(table.id);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.72,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Session History',
+                    style: Theme.of(sheetContext).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    table.label,
+                    style: Theme.of(sheetContext).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  if (sessions.isEmpty)
+                    const EmptyStateCard(
+                      icon: Icons.history,
+                      title: 'No sessions yet',
+                      message: 'Completed sessions will appear here.',
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: sessions.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final session = sessions[index];
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              'Session ${session.sessionNumberForTable}',
+                            ),
+                            subtitle: Text(_sessionHistorySubtitle(session)),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () async {
+                              Navigator.of(sheetContext).pop();
+                              await _openSessionDetail(session.id);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -102,25 +170,36 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            FilledButton.icon(
-              onPressed: _openAddTable,
-              icon: const Icon(Icons.table_restaurant),
-              label: const Text('Add Table'),
-            ),
-            const SizedBox(height: 16),
+            if (!widget.readOnly) ...[
+              FilledButton.icon(
+                onPressed: _openAddTable,
+                icon: const Icon(Icons.table_restaurant),
+                label: const Text('Add Table'),
+              ),
+              const SizedBox(height: 16),
+            ],
             Text(
               widget.eventTitle,
               style: Theme.of(context).textTheme.titleMedium,
             ),
+            if (widget.readOnly) ...[
+              const SizedBox(height: 12),
+              const InfoPanel(
+                message:
+                    'This event is locked. Tables and tag bindings can no longer be changed.',
+              ),
+            ],
             const SizedBox(height: 16),
             for (final cardData in _controller.cards) _buildTableCard(cardData),
             if (_controller.tables.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 24),
+              Padding(
+                padding: const EdgeInsets.only(top: 24),
                 child: EmptyStateCard(
                   icon: Icons.table_restaurant,
                   title: 'No tables yet',
-                  message: 'Add a table before starting live seating.',
+                  message: widget.readOnly
+                      ? 'No tables were created before this event was locked.'
+                      : 'Add a table before starting live seating.',
                 ),
               ),
           ],
@@ -141,6 +220,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     EventTableRecord table,
     LiveTableSummary summary,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: AppListSurface(
@@ -150,20 +230,37 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Text(
-                    table.label,
-                    style: Theme.of(context).textTheme.titleMedium,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        table.label,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        summary.progressLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(width: 12),
                 StatusChip(
                   label: _liveStatusLabel(summary.status),
                   tone: _liveStatusTone(summary.status),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -172,37 +269,14 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 crossAxisCount: 2,
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
-                mainAxisExtent: 58,
+                mainAxisExtent: 64,
               ),
               itemBuilder: (context, index) => _buildSeatCell(
                 summary.seats[index],
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMetric(
-                    label: 'Progress',
-                    value: summary.progressLabel,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildMetric(
-                    label: 'Last Result',
-                    value: summary.lastHand.title,
-                  ),
-                ),
-              ],
-            ),
-            if (summary.lastHand.detail case final detail?) ...[
-              const SizedBox(height: 10),
-              Text(
-                detail,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+            _buildLastResultSummary(summary.lastHand),
             const SizedBox(height: 14),
             Row(
               children: [
@@ -221,16 +295,30 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                         table.nfcTagId == null ? 'Tag missing' : 'Tag bound',
                       ),
                     ),
+                    if (!widget.readOnly) ...[
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Text('Edit table'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'bind',
+                        child: Text('Bind table tag'),
+                      ),
+                    ],
                     const PopupMenuItem(
-                      value: 'edit',
-                      child: Text('Edit table'),
-                    ),
-                    const PopupMenuItem(
-                      value: 'bind',
-                      child: Text('Bind table tag'),
+                      value: 'history',
+                      child: Text('Session history'),
                     ),
                   ],
-                  onSelected: (_) => _openEditTable(table),
+                  onSelected: (value) {
+                    if (value == 'history') {
+                      _openSessionHistory(table);
+                      return;
+                    }
+                    if (!widget.readOnly) {
+                      _openEditTable(table);
+                    }
+                  },
                 ),
               ],
             ),
@@ -242,7 +330,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
 
   Widget _buildSeatCell(SeatSummary seat) {
     final colorScheme = Theme.of(context).colorScheme;
-    final label = seat.isDealer ? '${seat.windLabel} · Dealer' : seat.windLabel;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: seat.isDealer
@@ -261,14 +348,24 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    seat.windLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0,
+                        ),
                   ),
+                ),
+                if (seat.isDealer) ...[
+                  const SizedBox(width: 6),
+                  _buildDealerBadge(colorScheme),
+                ],
+              ],
             ),
             const SizedBox(height: 3),
             Text(
@@ -286,39 +383,77 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     );
   }
 
-  Widget _buildMetric({
-    required String label,
-    required String value,
-  }) {
+  Widget _buildLastResultSummary(LastHandSummary lastHand) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      key: const ValueKey('live-last-result-summary'),
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: colorScheme.outlineVariant),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Last Result',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                lastHand.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                    ),
+              ),
+              if (lastHand.detail case final detail?) ...[
+                const SizedBox(height: 6),
+                Text(
+                  detail,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDealerBadge(ColorScheme colorScheme) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+        color: colorScheme.secondary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: colorScheme.secondary.withValues(alpha: 0.28),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0,
-                  ),
-            ),
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+        child: Text(
+          'Dealer',
+          maxLines: 1,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colorScheme.secondary,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0,
+              ),
         ),
       ),
     );
@@ -326,6 +461,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
 
   Widget _buildReadyTableCard(EventTableRecord table) {
     final hasTag = table.nfcTagId != null;
+    final hasSessionHistory = _controller.sessionsForTable(table.id).isNotEmpty;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: AppListSurface(
@@ -343,34 +479,53 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                   ),
                 ),
                 StatusChip(
-                  label: hasTag ? 'Ready' : 'Needs Tag',
-                  tone:
-                      hasTag ? StatusChipTone.success : StatusChipTone.warning,
+                  label: widget.readOnly
+                      ? 'Locked'
+                      : hasTag
+                          ? 'Ready'
+                          : 'Needs Tag',
+                  tone: widget.readOnly
+                      ? StatusChipTone.neutral
+                      : hasTag
+                          ? StatusChipTone.success
+                          : StatusChipTone.warning,
                 ),
               ],
             ),
             const SizedBox(height: 10),
             Text(
-              hasTag
-                  ? 'Scan this table from the event dashboard to start seating.'
-                  : 'Bind this table tag before live seating.',
+              widget.readOnly
+                  ? 'This table is locked with the finalized event.'
+                  : hasTag
+                      ? 'Scan this table from the event dashboard to start seating.'
+                      : 'Bind this table tag before live seating.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                OutlinedButton(
-                  onPressed: () => _openEditTable(table),
-                  child: const Text('Edit'),
-                ),
-                OutlinedButton(
-                  onPressed: () => _openEditTable(table),
-                  child: const Text('Bind Tag'),
-                ),
-              ],
-            ),
+            if (!widget.readOnly || hasSessionHistory) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  if (!widget.readOnly) ...[
+                    OutlinedButton(
+                      onPressed: () => _openEditTable(table),
+                      child: const Text('Edit'),
+                    ),
+                    OutlinedButton(
+                      onPressed: () => _openEditTable(table),
+                      child: const Text('Bind Tag'),
+                    ),
+                  ],
+                  if (hasSessionHistory)
+                    OutlinedButton.icon(
+                      onPressed: () => _openSessionHistory(table),
+                      icon: const Icon(Icons.history),
+                      label: const Text('History'),
+                    ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -382,6 +537,25 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       SessionStatus.paused => 'Paused',
       _ => 'Active',
     };
+  }
+
+  String _sessionHistorySubtitle(TableSessionRecord session) {
+    return '${_sessionStatusLabel(session.status)} · '
+        '${_sessionHandLabel(session.handCount)}';
+  }
+
+  String _sessionStatusLabel(SessionStatus status) {
+    return switch (status) {
+      SessionStatus.active => 'Active',
+      SessionStatus.paused => 'Paused',
+      SessionStatus.completed => 'Completed',
+      SessionStatus.endedEarly => 'Ended Early',
+      SessionStatus.aborted => 'Aborted',
+    };
+  }
+
+  String _sessionHandLabel(int handCount) {
+    return handCount == 0 ? 'No hands recorded' : 'Hand $handCount';
   }
 
   StatusChipTone _liveStatusTone(SessionStatus status) {

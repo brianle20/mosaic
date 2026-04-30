@@ -26,7 +26,7 @@ class CreateEventInput {
     this.description,
     this.venueName,
     this.venueAddress,
-    this.defaultRulesetId = 'HK_STANDARD_V1',
+    this.defaultRulesetId = 'HK_STANDARD',
   });
 
   final String title;

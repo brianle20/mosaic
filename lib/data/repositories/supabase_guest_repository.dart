@@ -280,29 +280,12 @@ class SupabaseGuestRepository implements GuestRepository {
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) async {
-    late Map<String, dynamic> row;
-    try {
-      row = await _runRpcSingle(
-        'check_in_guest',
-        {
-          'target_event_guest_id': guestId,
-        },
-      );
-    } catch (exception) {
-      if (!_shouldUseFallback(exception, 'check_in_guest')) {
-        rethrow;
-      }
-
-      row = await client
-          .from('event_guests')
-          .update({
-            'attendance_status': 'checked_in',
-            'checked_in_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', guestId)
-          .select()
-          .single();
-    }
+    final row = await _runRpcSingle(
+      'check_in_guest',
+      {
+        'target_event_guest_id': guestId,
+      },
+    );
     final guest = EventGuestRecord.fromJson(row);
     await _saveMergedGuestList(guest.eventId, guest);
     final assignmentRow = await _loadActiveAssignment(guestId);
@@ -320,26 +303,14 @@ class SupabaseGuestRepository implements GuestRepository {
     required String scannedUid,
     String? displayLabel,
   }) async {
-    try {
-      await _runRpcSingle(
-        'assign_guest_tag',
-        {
-          'target_event_guest_id': guestId,
-          'scanned_uid': scannedUid,
-          'scanned_display_label': displayLabel,
-        },
-      );
-    } catch (exception) {
-      if (!_shouldUseFallback(exception, 'assign_guest_tag')) {
-        rethrow;
-      }
-
-      await _assignGuestTagFallback(
-        guestId: guestId,
-        scannedUid: scannedUid,
-        displayLabel: displayLabel,
-      );
-    }
+    await _runRpcSingle(
+      'assign_guest_tag',
+      {
+        'target_event_guest_id': guestId,
+        'scanned_uid': scannedUid,
+        'scanned_display_label': displayLabel,
+      },
+    );
     final detail = await getGuestDetail(guestId);
     if (detail == null) {
       throw StateError('Assigned guest could not be reloaded.');
@@ -354,26 +325,14 @@ class SupabaseGuestRepository implements GuestRepository {
     required String scannedUid,
     String? displayLabel,
   }) async {
-    try {
-      await _runRpcSingle(
-        'replace_guest_tag',
-        {
-          'target_event_guest_id': guestId,
-          'scanned_uid': scannedUid,
-          'scanned_display_label': displayLabel,
-        },
-      );
-    } catch (exception) {
-      if (!_shouldUseFallback(exception, 'replace_guest_tag')) {
-        rethrow;
-      }
-
-      await _replaceGuestTagFallback(
-        guestId: guestId,
-        scannedUid: scannedUid,
-        displayLabel: displayLabel,
-      );
-    }
+    await _runRpcSingle(
+      'replace_guest_tag',
+      {
+        'target_event_guest_id': guestId,
+        'scanned_uid': scannedUid,
+        'scanned_display_label': displayLabel,
+      },
+    );
     final detail = await getGuestDetail(guestId);
     if (detail == null) {
       throw StateError('Replaced guest could not be reloaded.');
@@ -828,126 +787,5 @@ class SupabaseGuestRepository implements GuestRepository {
     return '${value.year.toString().padLeft(4, '0')}-'
         '${value.month.toString().padLeft(2, '0')}-'
         '${value.day.toString().padLeft(2, '0')}';
-  }
-
-  Future<void> _assignGuestTagFallback({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) async {
-    final detail = await getGuestDetail(guestId);
-    if (detail == null) {
-      throw StateError('Guest not found.');
-    }
-    if (!detail.guest.isEligibleForPlayerTagAssignment) {
-      throw StateError(
-        'Guest must be paid or comped before receiving a player tag.',
-      );
-    }
-    if (!detail.guest.isCheckedIn) {
-      throw StateError(
-        'Guest must be checked in before receiving a player tag.',
-      );
-    }
-    if (detail.activeTagAssignment != null) {
-      throw StateError('This guest already has an active player tag.');
-    }
-
-    final hostId = client.auth.currentUser?.id;
-    if (hostId == null || hostId.isEmpty) {
-      throw StateError('A signed-in host is required to assign a player tag.');
-    }
-
-    final normalizedUid =
-        scannedUid.replaceAll(RegExp(r'[^0-9A-Za-z]+'), '').toUpperCase();
-    if (normalizedUid.isEmpty) {
-      throw StateError('Tag UID is required.');
-    }
-
-    final existingTag = await client
-        .from('nfc_tags')
-        .select()
-        .eq('uid_hex', normalizedUid)
-        .maybeSingle();
-
-    late final Map<String, dynamic> tagRow;
-    if (existingTag == null) {
-      tagRow = await client
-          .from('nfc_tags')
-          .insert({
-            'uid_hex': normalizedUid,
-            'uid_fingerprint': normalizedUid,
-            'default_tag_type': 'player',
-            'display_label': displayLabel,
-            'status': 'active',
-            'first_seen_at': DateTime.now().toUtc().toIso8601String(),
-            'last_seen_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .select()
-          .single();
-    } else {
-      final castExistingTag = _castRow(existingTag)!;
-      if (castExistingTag['default_tag_type'] == 'table') {
-        throw StateError('Only player tags can be assigned to guests.');
-      }
-      tagRow = await client
-          .from('nfc_tags')
-          .update({
-            'default_tag_type': 'player',
-            'display_label': displayLabel ?? castExistingTag['display_label'],
-            'last_seen_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', castExistingTag['id'])
-          .select()
-          .single();
-    }
-
-    final conflictingAssignment = await client
-        .from('event_guest_tag_assignments')
-        .select('id')
-        .eq('event_id', detail.guest.eventId)
-        .eq('nfc_tag_id', tagRow['id'])
-        .eq('status', 'assigned')
-        .maybeSingle();
-    if (conflictingAssignment != null) {
-      throw StateError(
-          'This tag is already assigned to another guest in this event.');
-    }
-
-    await client.from('event_guest_tag_assignments').insert({
-      'event_id': detail.guest.eventId,
-      'event_guest_id': detail.guest.id,
-      'nfc_tag_id': tagRow['id'],
-      'status': 'assigned',
-      'assigned_at': DateTime.now().toUtc().toIso8601String(),
-      'assigned_by_user_id': hostId,
-    });
-  }
-
-  Future<void> _replaceGuestTagFallback({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) async {
-    final detail = await getGuestDetail(guestId);
-    final currentAssignment = detail?.activeTagAssignment;
-    if (detail == null) {
-      throw StateError('Guest not found.');
-    }
-    if (currentAssignment == null) {
-      throw StateError('Guest does not have an active tag to replace.');
-    }
-
-    await client.from('event_guest_tag_assignments').update({
-      'status': 'replaced',
-      'released_at': DateTime.now().toUtc().toIso8601String(),
-      'release_reason': 'replacement',
-    }).eq('id', currentAssignment.assignmentId);
-
-    await _assignGuestTagFallback(
-      guestId: guestId,
-      scannedUid: scannedUid,
-      displayLabel: displayLabel,
-    );
   }
 }

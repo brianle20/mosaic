@@ -110,7 +110,7 @@ create or replace function public.create_event_table(
   target_event_id uuid,
   table_label text,
   table_display_order integer default 0,
-  target_default_ruleset_id text default 'HK_STANDARD_V1',
+  target_default_ruleset_id text default 'HK_STANDARD',
   target_default_rotation_policy_type text default 'dealer_cycle_return_to_initial_east',
   target_default_rotation_policy_config_json jsonb default '{}'::jsonb
 )
@@ -409,7 +409,6 @@ begin
     event_table_id,
     session_number_for_table,
     ruleset_id,
-    ruleset_version,
     rotation_policy_type,
     rotation_policy_config_json,
     status,
@@ -426,7 +425,6 @@ begin
     table_row.id,
     next_session_number,
     table_row.default_ruleset_id,
-    ruleset_row.version,
     table_row.default_rotation_policy_type,
     table_row.default_rotation_policy_config_json,
     'active',

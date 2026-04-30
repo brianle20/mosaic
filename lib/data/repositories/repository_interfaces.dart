@@ -1,5 +1,6 @@
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/activity_models.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -132,6 +133,10 @@ abstract interface class SessionRepository {
   Future<SessionDetailRecord?> readCachedSessionDetail(String sessionId);
 
   Future<SessionDetailRecord> loadSessionDetail(String sessionId);
+
+  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(String eventId);
+
+  Future<List<EventHandLedgerEntry>> loadEventHandLedger(String eventId);
 
   Future<StartedTableSessionRecord> startSession(StartTableSessionInput input);
 

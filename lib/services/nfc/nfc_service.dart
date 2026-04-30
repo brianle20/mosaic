@@ -23,3 +23,7 @@ abstract interface class NfcService {
     required String seatLabel,
   });
 }
+
+abstract interface class PassiveNfcService {
+  Stream<TagScanResult> get playerTagScans;
+}

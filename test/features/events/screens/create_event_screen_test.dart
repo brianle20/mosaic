@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/features/events/screens/create_event_screen.dart';
 
 class _RecordingEventRepository implements EventRepository {
@@ -253,7 +254,7 @@ void main() {
       'tapping Starts opens date and time pickers then updates startsAt',
       (tester) async {
     final repository = _RecordingEventRepository();
-    final targetDate = DateTime.now();
+    final targetDate = defaultEventStartAt(DateTime.now());
 
     await tester.pumpWidget(
       MaterialApp(

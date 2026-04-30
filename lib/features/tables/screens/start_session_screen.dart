@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -88,7 +89,14 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
       return;
     }
 
-    Navigator.of(context).pop(started);
+    Navigator.of(context).pushReplacementNamed(
+      AppRouter.sessionDetailRoute,
+      arguments: SessionDetailArgs(
+        eventId: widget.eventId,
+        sessionId: started.session.id,
+        scoringOpen: true,
+      ),
+    );
   }
 
   @override

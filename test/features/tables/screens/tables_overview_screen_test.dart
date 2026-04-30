@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -72,6 +73,12 @@ class _FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<EventHandLedgerEntry>> loadEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async =>
       sessions;
 
@@ -94,6 +101,12 @@ class _FakeSessionRepository implements SessionRepository {
     String sessionId,
   ) async =>
       details[sessionId];
+
+  @override
+  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
 
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
@@ -236,7 +249,7 @@ void main() {
         'label': 'Table 1',
         'display_order': 1,
         'nfc_tag_id': 'tag_01',
-        'default_ruleset_id': 'HK_STANDARD_V1',
+        'default_ruleset_id': 'HK_STANDARD',
         'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'default_rotation_policy_config_json': {},
       }),
@@ -267,6 +280,54 @@ void main() {
     expect(find.text('Start Session'), findsNothing);
   });
 
+  testWidgets('read-only table overview hides table mutation actions',
+      (tester) async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_01',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final session = _session(
+      id: 'ses_01',
+      tableId: 'tbl_01',
+      status: 'completed',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: false,
+          readOnly: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(
+            sessions: [session],
+            details: {'ses_01': _detail(session)},
+          ),
+          guestRepository: _FakeGuestRepository(const []),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add Table'), findsNothing);
+    expect(find.text('Edit'), findsNothing);
+    expect(find.text('Bind Tag'), findsNothing);
+    expect(find.text('History'), findsOneWidget);
+    expect(
+      find.text(
+        'This event is locked. Tables and tag bindings can no longer be changed.',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('renders table cards and statuses', (tester) async {
     final tableRepository = _FakeTableRepository([
       EventTableRecord.fromJson(const {
@@ -275,7 +336,7 @@ void main() {
         'label': 'Table 1',
         'display_order': 1,
         'nfc_tag_id': 'tag_01',
-        'default_ruleset_id': 'HK_STANDARD_V1',
+        'default_ruleset_id': 'HK_STANDARD',
         'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'default_rotation_policy_config_json': {},
       }),
@@ -284,7 +345,7 @@ void main() {
         'event_id': 'evt_01',
         'label': 'Table 2',
         'display_order': 2,
-        'default_ruleset_id': 'HK_STANDARD_V1',
+        'default_ruleset_id': 'HK_STANDARD',
         'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'default_rotation_policy_config_json': {},
       }),
@@ -334,7 +395,7 @@ void main() {
       'label': 'Table 1',
       'display_order': 1,
       'nfc_tag_id': 'tag_01',
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'default_rotation_policy_config_json': {},
     });
@@ -352,7 +413,7 @@ void main() {
           handNumber: 1,
           winnerSeatIndex: 0,
           winType: 'discard',
-          fanCount: 1,
+          fanCount: 3,
           eastSeatIndex: 0,
         ),
         _hand(
@@ -360,7 +421,7 @@ void main() {
           handNumber: 2,
           winnerSeatIndex: 3,
           winType: 'self_draw',
-          fanCount: 2,
+          fanCount: 4,
           eastSeatIndex: 0,
         ),
         _hand(
@@ -368,7 +429,7 @@ void main() {
           handNumber: 3,
           winnerSeatIndex: 1,
           winType: 'self_draw',
-          fanCount: 3,
+          fanCount: 5,
           eastSeatIndex: 0,
         ),
       ],
@@ -398,7 +459,9 @@ void main() {
 
     expect(find.byKey(const ValueKey('table-card-tbl_points')), findsOneWidget);
     expect(find.text('Active'), findsOneWidget);
-    expect(find.text('East · Dealer'), findsOneWidget);
+    expect(find.text('East · Dealer'), findsNothing);
+    expect(find.text('East'), findsOneWidget);
+    expect(find.text('Dealer'), findsOneWidget);
     expect(find.text('Alice Chen'), findsOneWidget);
     expect(find.text('South'), findsOneWidget);
     expect(find.text('Ben Wong'), findsOneWidget);
@@ -406,12 +469,12 @@ void main() {
     expect(find.text('Chris Lee'), findsOneWidget);
     expect(find.text('North'), findsOneWidget);
     expect(find.text('Dana Park'), findsOneWidget);
-    expect(find.text('Progress'), findsOneWidget);
+    expect(find.text('Progress'), findsNothing);
     expect(find.text('Hand 3'), findsOneWidget);
     expect(find.text('Last Result'), findsOneWidget);
     expect(find.text('Ben Wong self-draw'), findsOneWidget);
     expect(
-        find.text('3 fan recorded. Ready for the next hand.'), findsOneWidget);
+        find.text('5 fan recorded. Ready for the next hand.'), findsOneWidget);
     expect(find.text('Tag Bound'), findsNothing);
     expect(find.text('Live Session'), findsNothing);
     expect(find.text('Start Session'), findsNothing);
@@ -426,7 +489,7 @@ void main() {
       'label': 'Table 1',
       'display_order': 1,
       'nfc_tag_id': 'tag_01',
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'default_rotation_policy_config_json': {},
     });
@@ -465,7 +528,7 @@ void main() {
       'event_id': 'evt_01',
       'label': 'Table 1',
       'display_order': 1,
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'default_rotation_policy_config_json': {},
     });
@@ -508,7 +571,7 @@ void main() {
       'label': 'Table 1',
       'display_order': 1,
       'nfc_tag_id': 'tag_01',
-      'default_ruleset_id': 'HK_STANDARD_V1',
+      'default_ruleset_id': 'HK_STANDARD',
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'default_rotation_policy_config_json': {},
     });
@@ -539,6 +602,84 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('last result spans the live card width and can wrap',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_points',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final session = _session(id: 'ses_01', tableId: 'tbl_points');
+    final lastResultTitle = 'Alexandria Very Long Mahjong Name wins by discard';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(
+            sessions: [session],
+            details: {
+              'ses_01': _detail(
+                session,
+                hands: [
+                  _hand(
+                    id: 'hand_01',
+                    handNumber: 1,
+                    winnerSeatIndex: 0,
+                    winType: 'discard',
+                  ),
+                ],
+              ),
+            },
+          ),
+          guestRepository: _FakeGuestRepository([
+            _guest('guest_east', 'Alexandria Very Long Mahjong Name'),
+            _guest('guest_south', 'Ben Wong'),
+            _guest('guest_west', 'Chris Lee'),
+            _guest('guest_north', 'Dana Park'),
+          ]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final titleWidget = tester.widget<Text>(find.text(lastResultTitle));
+    expect(titleWidget.maxLines, 2);
+    expect(titleWidget.overflow, TextOverflow.ellipsis);
+    expect(find.text('Progress'), findsNothing);
+    expect(
+      (tester.getTopLeft(find.text('Hand 1')).dx -
+              tester.getTopLeft(find.text('Table 1')).dx)
+          .abs(),
+      lessThan(2),
+    );
+    expect(
+      tester.getTopLeft(find.text('Hand 1')).dy,
+      greaterThan(tester.getBottomLeft(find.text('Table 1')).dy),
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('live-last-result-summary')))
+          .width,
+      greaterThan(320),
+    );
+    expect(tester.getSize(find.text(lastResultTitle)).width, greaterThan(280));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('active table session can be opened from tables view',
       (tester) async {
     final tableRepository = _FakeTableRepository([
@@ -548,7 +689,7 @@ void main() {
         'label': 'Table 1',
         'display_order': 1,
         'nfc_tag_id': 'tag_01',
-        'default_ruleset_id': 'HK_STANDARD_V1',
+        'default_ruleset_id': 'HK_STANDARD',
         'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'default_rotation_policy_config_json': {},
       }),
@@ -595,6 +736,84 @@ void main() {
     expect(openedArgs?.sessionId, 'ses_01');
     expect(find.text('Opened Session Detail'), findsOneWidget);
   });
+
+  testWidgets('table options can open previous session history',
+      (tester) async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_points',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final currentSession = _session(
+      id: 'ses_02',
+      tableId: 'tbl_points',
+      sessionNumberForTable: 2,
+      handCount: 1,
+      startedAt: '2026-04-24T20:00:00-07:00',
+    );
+    final previousSession = _session(
+      id: 'ses_01',
+      tableId: 'tbl_points',
+      status: 'completed',
+      sessionNumberForTable: 1,
+      handCount: 4,
+      startedAt: '2026-04-24T19:00:00-07:00',
+    );
+    SessionDetailArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(
+            sessions: [previousSession, currentSession],
+            details: {'ses_02': _detail(currentSession)},
+          ),
+          guestRepository: _FakeGuestRepository(const []),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            openedArgs = settings.arguments! as SessionDetailArgs;
+            return MaterialPageRoute<void>(
+              builder: (context) => const Scaffold(
+                body: Text('Opened Session Detail'),
+              ),
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Table options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Session history'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Session History'), findsOneWidget);
+    expect(find.text('Table 1'), findsWidgets);
+    expect(find.text('Session 2'), findsOneWidget);
+    expect(find.text('Active · Hand 1'), findsOneWidget);
+    expect(find.text('Session 1'), findsOneWidget);
+    expect(find.text('Completed · Hand 4'), findsOneWidget);
+
+    await tester.tap(find.text('Session 1'));
+    await tester.pumpAndSettle();
+
+    expect(openedArgs?.eventId, 'evt_01');
+    expect(openedArgs?.sessionId, 'ses_01');
+    expect(find.text('Opened Session Detail'), findsOneWidget);
+  });
 }
 
 EventGuestRecord _guest(String id, String name) {
@@ -615,16 +834,17 @@ TableSessionRecord _session({
   required String id,
   required String tableId,
   String status = 'active',
+  int sessionNumberForTable = 1,
   int currentDealerSeatIndex = 0,
   int handCount = 0,
+  String startedAt = '2026-04-24T19:00:00-07:00',
 }) {
   return TableSessionRecord.fromJson({
     'id': id,
     'event_id': 'evt_01',
     'event_table_id': tableId,
-    'session_number_for_table': 1,
-    'ruleset_id': 'HK_STANDARD_V1',
-    'ruleset_version': 1,
+    'session_number_for_table': sessionNumberForTable,
+    'ruleset_id': 'HK_STANDARD',
     'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
     'rotation_policy_config_json': const {},
     'status': status,
@@ -633,7 +853,7 @@ TableSessionRecord _session({
     'dealer_pass_count': 0,
     'completed_games_count': 0,
     'hand_count': handCount,
-    'started_at': '2026-04-24T19:00:00-07:00',
+    'started_at': startedAt,
     'started_by_user_id': 'usr_01',
   });
 }

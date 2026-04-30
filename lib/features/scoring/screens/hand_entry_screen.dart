@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/hand_entry_controller.dart';
 import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
+import 'package:mosaic/services/nfc/nfc_service.dart';
+
+enum _PlayerScanTarget { winner, discarder }
 
 class HandEntryScreen extends StatefulWidget {
   const HandEntryScreen({
@@ -11,12 +17,16 @@ class HandEntryScreen extends StatefulWidget {
     required this.sessionDetail,
     required this.guestNamesById,
     required this.sessionRepository,
+    this.guestTagAssignmentsByGuestId = const {},
+    this.nfcService,
     this.initialHand,
   });
 
   final SessionDetailRecord sessionDetail;
   final Map<String, String> guestNamesById;
+  final Map<String, GuestTagAssignmentSummary> guestTagAssignmentsByGuestId;
   final SessionRepository sessionRepository;
+  final NfcService? nfcService;
   final HandResultRecord? initialHand;
 
   @override
@@ -29,7 +39,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   HandWinType? _winType;
   int? _winnerSeatIndex;
   int? _discarderSeatIndex;
+  _PlayerScanTarget _playerScanTarget = _PlayerScanTarget.winner;
   late final TextEditingController _fanCountController;
+  StreamSubscription<TagScanResult>? _playerTagSubscription;
 
   @override
   void initState() {
@@ -45,10 +57,16 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     _fanCountController = TextEditingController(
       text: initialHand?.fanCount?.toString() ?? '',
     );
+    if (widget.nfcService case final PassiveNfcService passiveNfcService) {
+      _playerTagSubscription = passiveNfcService.playerTagScans.listen(
+        _handlePlayerTagScan,
+      );
+    }
   }
 
   @override
   void dispose() {
+    _playerTagSubscription?.cancel();
     _controller
       ..removeListener(_handleUpdate)
       ..dispose();
@@ -60,6 +78,51 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  void _handlePlayerTagScan(TagScanResult scanResult) {
+    if (_resultType != HandResultType.win) {
+      return;
+    }
+
+    final scannedSeatIndex = _seatIndexForPlayerTag(scanResult.normalizedUid);
+    if (scannedSeatIndex == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _winType ??= HandWinType.selfDraw;
+      final scanSetsDiscarder = _winType == HandWinType.discard &&
+          _playerScanTarget == _PlayerScanTarget.discarder;
+      if (scanSetsDiscarder) {
+        if (_winnerSeatIndex != scannedSeatIndex) {
+          _discarderSeatIndex = scannedSeatIndex;
+        }
+      } else {
+        _winnerSeatIndex = scannedSeatIndex;
+        if (_discarderSeatIndex == scannedSeatIndex) {
+          _discarderSeatIndex = null;
+        }
+        if (_winType == HandWinType.discard) {
+          _playerScanTarget = _PlayerScanTarget.discarder;
+        }
+      }
+    });
+  }
+
+  int? _seatIndexForPlayerTag(String normalizedUid) {
+    final scannedUid = normalizedUid.toUpperCase();
+    for (final seat in widget.sessionDetail.seats) {
+      final assignment = widget.guestTagAssignmentsByGuestId[seat.eventGuestId];
+      if (assignment == null) {
+        continue;
+      }
+
+      if (assignment.tag.uidHex.toUpperCase() == scannedUid) {
+        return seat.seatIndex;
+      }
+    }
+    return null;
   }
 
   HandResultDraft get _draft => HandResultDraft(
@@ -121,15 +184,35 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     return '$guestName ($wind)';
   }
 
+  List<DropdownMenuItem<int>> _seatItems({int? excludingSeatIndex}) {
+    return [
+      for (var index = 0; index < widget.sessionDetail.seats.length; index++)
+        if (index != excludingSeatIndex)
+          DropdownMenuItem<int>(
+            value: index,
+            child: Text(_seatLabel(index)),
+          ),
+    ];
+  }
+
+  bool get _canScanPlayers =>
+      widget.nfcService is PassiveNfcService &&
+      widget.guestTagAssignmentsByGuestId.isNotEmpty;
+
+  String get _playerScanHelpText {
+    if (_winType == HandWinType.discard &&
+        _playerScanTarget == _PlayerScanTarget.discarder) {
+      return 'Next scan sets discarder.';
+    }
+    return _winType == HandWinType.discard
+        ? 'Next scan sets winner.'
+        : 'Scan a player tag to set winner.';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final winnerItems = List.generate(
-      widget.sessionDetail.seats.length,
-      (index) => DropdownMenuItem<int>(
-        value: index,
-        child: Text(_seatLabel(index)),
-      ),
-    );
+    final winnerItems = _seatItems();
+    final discarderItems = _seatItems(excludingSeatIndex: _winnerSeatIndex);
 
     return Scaffold(
       appBar: AppBar(
@@ -164,6 +247,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                   _winnerSeatIndex = null;
                   _discarderSeatIndex = null;
                   _winType = null;
+                  _playerScanTarget = _PlayerScanTarget.winner;
                 } else {
                   _winType ??= HandWinType.selfDraw;
                 }
@@ -179,12 +263,25 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
               onChanged: (value) {
                 setState(() {
                   _winnerSeatIndex = value;
+                  if (_discarderSeatIndex == value) {
+                    _discarderSeatIndex = null;
+                  }
+                  if (_winType == HandWinType.discard && value != null) {
+                    _playerScanTarget = _PlayerScanTarget.discarder;
+                  }
                 });
               },
             ),
             if (_draft.winnerSeatError != null) ...[
               const SizedBox(height: 6),
               Text(_draft.winnerSeatError!),
+            ],
+            if (_canScanPlayers) ...[
+              const SizedBox(height: 6),
+              Text(
+                _playerScanHelpText,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ],
             const SizedBox(height: 16),
             Wrap(
@@ -197,6 +294,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                     setState(() {
                       _winType = HandWinType.selfDraw;
                       _discarderSeatIndex = null;
+                      _playerScanTarget = _PlayerScanTarget.winner;
                     });
                   },
                 ),
@@ -206,6 +304,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                   onSelected: (_) {
                     setState(() {
                       _winType = HandWinType.discard;
+                      _playerScanTarget = _winnerSeatIndex == null
+                          ? _PlayerScanTarget.winner
+                          : _PlayerScanTarget.discarder;
                     });
                   },
                 ),
@@ -214,6 +315,32 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
             if (_draft.winTypeError != null) ...[
               const SizedBox(height: 6),
               Text(_draft.winTypeError!),
+            ],
+            if (_canScanPlayers && _winType == HandWinType.discard) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Scan Target',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<_PlayerScanTarget>(
+                segments: const [
+                  ButtonSegment(
+                    value: _PlayerScanTarget.winner,
+                    label: Text('Winner scan'),
+                  ),
+                  ButtonSegment(
+                    value: _PlayerScanTarget.discarder,
+                    label: Text('Discarder scan'),
+                  ),
+                ],
+                selected: {_playerScanTarget},
+                onSelectionChanged: (selection) {
+                  setState(() {
+                    _playerScanTarget = selection.first;
+                  });
+                },
+              ),
             ],
             const SizedBox(height: 16),
             TextFormField(
@@ -231,7 +358,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
               DropdownButtonFormField<int>(
                 initialValue: _discarderSeatIndex,
                 decoration: const InputDecoration(labelText: 'Discarder'),
-                items: winnerItems,
+                items: discarderItems,
                 onChanged: (value) {
                   setState(() {
                     _discarderSeatIndex = value;
