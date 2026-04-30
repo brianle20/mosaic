@@ -291,6 +291,11 @@ class EventDashboardController extends ChangeNotifier {
     return message;
   }
 
+  void recordTableScanError(Object exception) {
+    tableScanError = _formatLifecycleError(exception);
+    notifyListeners();
+  }
+
   Future<void> startEvent() async {
     final currentEvent = event;
     if (currentEvent == null || isSubmittingLifecycle) {

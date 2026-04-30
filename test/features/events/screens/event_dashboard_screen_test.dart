@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
@@ -18,6 +20,7 @@ import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 import 'package:mosaic/features/scoring/screens/event_hand_ledger_screen.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
+import 'package:mosaic/services/nfc/native_nfc_reader.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/app_actions.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
@@ -477,9 +480,11 @@ class _SessionRepository implements SessionRepository {
 class _NfcService implements NfcService {
   const _NfcService({
     this.tableScanResult,
+    this.tableScanError,
   });
 
   final TagScanResult? tableScanResult;
+  final Object? tableScanError;
 
   @override
   Future<TagScanResult?> scanPlayerTagForAssignment(
@@ -495,8 +500,39 @@ class _NfcService implements NfcService {
       null;
 
   @override
-  Future<TagScanResult?> scanTableTag(BuildContext context) async =>
-      tableScanResult;
+  Future<TagScanResult?> scanTableTag(BuildContext context) async {
+    final tableScanError = this.tableScanError;
+    if (tableScanError != null) {
+      throw tableScanError;
+    }
+    return tableScanResult;
+  }
+}
+
+class _CompletingTableScanNfcService implements NfcService {
+  _CompletingTableScanNfcService(this.tableScanCompleter);
+
+  final Completer<TagScanResult?> tableScanCompleter;
+  int tableScanCallCount = 0;
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForAssignment(
+    BuildContext context,
+  ) async =>
+      null;
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForSessionSeat(
+    BuildContext context, {
+    required String seatLabel,
+  }) async =>
+      null;
+
+  @override
+  Future<TagScanResult?> scanTableTag(BuildContext context) {
+    tableScanCallCount += 1;
+    return tableScanCompleter.future;
+  }
 }
 
 class _RecordingNavigatorObserver extends NavigatorObserver {
@@ -1123,6 +1159,62 @@ void main() {
 
     expect(find.byType(SessionDetailScreen), findsOneWidget);
     expect(find.text('Table 1'), findsOneWidget);
+  });
+
+  testWidgets('table scan surfaces native NFC errors inline', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(resolvedTable: _table()),
+          sessionRepository: const _SessionRepository(),
+          nfcService: const _NfcService(
+            tableScanError: NfcScanException(
+              'NFC is not available on this device.',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan Table'));
+    await tester.pump();
+
+    expect(find.text('NFC is not available on this device.'), findsOneWidget);
+  });
+
+  testWidgets('prevents overlapping table scans on dashboard', (tester) async {
+    final tableScanCompleter = Completer<TagScanResult?>();
+    final nfcService = _CompletingTableScanNfcService(tableScanCompleter);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(resolvedTable: _table()),
+          sessionRepository: const _SessionRepository(),
+          nfcService: nfcService,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan Table'));
+    await tester.tap(find.text('Scan Table'));
+
+    expect(nfcService.tableScanCallCount, 1);
+
+    tableScanCompleter.complete(null);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

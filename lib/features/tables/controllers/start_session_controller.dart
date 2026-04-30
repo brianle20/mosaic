@@ -108,6 +108,11 @@ class StartSessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void recordScanError(Object exception) {
+    actionError = exception.toString();
+    notifyListeners();
+  }
+
   Future<StartedTableSessionRecord?> confirmStart() async {
     if (!state.canReview) {
       return null;

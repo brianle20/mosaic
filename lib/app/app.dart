@@ -15,7 +15,7 @@ import 'package:mosaic/data/repositories/supabase_table_repository.dart';
 import 'package:mosaic/features/auth/controllers/auth_controller.dart';
 import 'package:mosaic/features/auth/screens/host_sign_in_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
-import 'package:mosaic/services/nfc/manual_entry_nfc_service.dart';
+import 'package:mosaic/services/nfc/nfc_service_factory.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -168,7 +168,7 @@ class MosaicApp extends StatelessWidget {
         client: client,
         cache: cache,
       ),
-      nfcService: const ManualEntryNfcService(),
+      nfcService: createDefaultNfcService(),
     );
   }
 }

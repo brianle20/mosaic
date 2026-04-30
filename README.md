@@ -54,6 +54,12 @@ flutter run
 
 For iOS NFC work, use a real device with the project’s iOS bundle/NFC entitlements configured.
 
+## NFC Tags
+
+Mosaic reads the factory UID from blank NFC tags. Tags do not need to be written or formatted for the MVP. Use common phone-readable tags such as NTAG213, NTAG215, or NTAG216.
+
+Manual UID entry is still available in tests and development overrides, but production app startup uses the native NFC reader.
+
 ## Database
 
 Database behavior is source-controlled in `supabase/migrations/`. Apply migrations with the Supabase CLI for the linked project:

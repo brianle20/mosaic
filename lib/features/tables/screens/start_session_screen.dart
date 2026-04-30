@@ -31,6 +31,7 @@ class StartSessionScreen extends StatefulWidget {
 
 class _StartSessionScreenState extends State<StartSessionScreen> {
   late final StartSessionController _controller;
+  bool _isScanningTag = false;
 
   @override
   void initState() {
@@ -60,26 +61,52 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
   }
 
   Future<void> _scanNext() async {
-    switch (_controller.state.currentStep) {
-      case StartSessionScanStep.scanTable:
-        final result = await widget.nfcService.scanTableTag(context);
-        if (result != null) {
-          _controller.recordTableScan(result.normalizedUid);
-        }
-      case StartSessionScanStep.scanEast:
-      case StartSessionScanStep.scanSouth:
-      case StartSessionScanStep.scanWest:
-      case StartSessionScanStep.scanNorth:
-        final seatLabel = _controller.state.currentSeatLabel!;
-        final result = await widget.nfcService.scanPlayerTagForSessionSeat(
-          context,
-          seatLabel: seatLabel,
-        );
-        if (result != null) {
-          _controller.recordPlayerScan(result.normalizedUid);
-        }
-      case StartSessionScanStep.review:
-        return;
+    if (_isScanningTag) {
+      return;
+    }
+
+    setState(() {
+      _isScanningTag = true;
+    });
+
+    try {
+      switch (_controller.state.currentStep) {
+        case StartSessionScanStep.scanTable:
+          final result = await widget.nfcService.scanTableTag(context);
+          if (!mounted) {
+            return;
+          }
+          if (result != null) {
+            _controller.recordTableScan(result.normalizedUid);
+          }
+        case StartSessionScanStep.scanEast:
+        case StartSessionScanStep.scanSouth:
+        case StartSessionScanStep.scanWest:
+        case StartSessionScanStep.scanNorth:
+          final seatLabel = _controller.state.currentSeatLabel!;
+          final result = await widget.nfcService.scanPlayerTagForSessionSeat(
+            context,
+            seatLabel: seatLabel,
+          );
+          if (!mounted) {
+            return;
+          }
+          if (result != null) {
+            _controller.recordPlayerScan(result.normalizedUid);
+          }
+        case StartSessionScanStep.review:
+          return;
+      }
+    } catch (exception) {
+      if (mounted) {
+        _controller.recordScanError(exception);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isScanningTag = false;
+        });
+      }
     }
   }
 
@@ -130,8 +157,8 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
             const SizedBox(height: 20),
             if (_controller.state.currentStep != StartSessionScanStep.review)
               FilledButton(
-                onPressed: _scanNext,
-                child: const Text('Scan Next Tag'),
+                onPressed: _isScanningTag ? null : _scanNext,
+                child: Text(_isScanningTag ? 'Scanning...' : 'Scan Next Tag'),
               ),
             if (_controller.state.currentStep == StartSessionScanStep.review)
               FilledButton(

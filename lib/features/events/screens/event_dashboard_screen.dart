@@ -39,6 +39,10 @@ class EventDashboardScreen extends StatefulWidget {
 
 class _EventDashboardScreenState extends State<EventDashboardScreen> {
   late final EventDashboardController _controller;
+  bool _isScanningTableTag = false;
+
+  bool get _isTableScanInProgress =>
+      _isScanningTableTag || _controller.isScanningTable;
 
   @override
   void initState() {
@@ -105,11 +109,30 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
   Future<void> _scanTable() async {
     final nfcService = widget.nfcService;
-    if (nfcService == null || _controller.isScanningTable) {
+    if (nfcService == null || _isTableScanInProgress) {
       return;
     }
 
-    final scanResult = await nfcService.scanTableTag(context);
+    final TagScanResult? scanResult;
+    setState(() {
+      _isScanningTableTag = true;
+    });
+
+    try {
+      scanResult = await nfcService.scanTableTag(context);
+    } catch (exception) {
+      if (mounted) {
+        _controller.recordTableScanError(exception);
+      }
+      return;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isScanningTableTag = false;
+        });
+      }
+    }
+
     if (!mounted || scanResult == null) {
       return;
     }
@@ -470,11 +493,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   ),
                 if (showTableScanAction)
                   FilledButton(
-                    onPressed: _controller.isScanningTable ? null : _scanTable,
+                    onPressed: _isTableScanInProgress ? null : _scanTable,
                     child: Text(
-                      _controller.isScanningTable
-                          ? 'Scanning...'
-                          : 'Scan Table',
+                      _isTableScanInProgress ? 'Scanning...' : 'Scan Table',
                     ),
                   ),
                 FilledButton(
@@ -704,9 +725,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 const SizedBox(height: 10),
                 WideSecondaryButton(
                   icon: Icons.nfc,
-                  label:
-                      _controller.isScanningTable ? 'Scanning' : 'Scan Table',
-                  onPressed: _controller.isScanningTable ? null : _scanTable,
+                  label: _isTableScanInProgress ? 'Scanning' : 'Scan Table',
+                  onPressed: _isTableScanInProgress ? null : _scanTable,
                 ),
               ],
               if (_controller.tableScanError case final tableScanError?) ...[
@@ -788,7 +808,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.draft => true,
       EventLifecycleStatus.active when event.scoringOpen =>
-        canScanTables && !_controller.isScanningTable,
+        canScanTables && !_isTableScanInProgress,
       EventLifecycleStatus.active => true,
       EventLifecycleStatus.completed => true,
       EventLifecycleStatus.finalized => true,
@@ -799,7 +819,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
   bool _primaryActionIsBusy(EventRecord event) {
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.active when event.scoringOpen =>
-        _controller.isScanningTable,
+        _isTableScanInProgress,
       _ => _controller.isSubmittingLifecycle,
     };
   }
