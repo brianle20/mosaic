@@ -6,6 +6,7 @@ import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/table_list_controller.dart';
 import 'package:mosaic/features/tables/models/table_overview_card_data.dart';
+import 'package:mosaic/widgets/app_surfaces.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
@@ -140,9 +141,10 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     EventTableRecord table,
     LiveTableSummary summary,
   ) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AppListSurface(
+        key: ValueKey('table-card-${table.id}'),
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,9 +326,10 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
 
   Widget _buildReadyTableCard(EventTableRecord table) {
     final hasTag = table.nfcTagId != null;
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      child: Padding(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AppListSurface(
+        key: ValueKey('table-card-${table.id}'),
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

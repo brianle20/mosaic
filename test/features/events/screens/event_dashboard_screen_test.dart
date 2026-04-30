@@ -221,13 +221,17 @@ class _GuestRepository implements GuestRepository {
 }
 
 class _LeaderboardRepository implements LeaderboardRepository {
+  const _LeaderboardRepository({this.entries = const []});
+
+  final List<LeaderboardEntry> entries;
+
   @override
   Future<List<LeaderboardEntry>> loadLeaderboard(String eventId) async =>
-      const [];
+      entries;
 
   @override
   Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId) async =>
-      const [];
+      entries;
 }
 
 class _ActivityRepository implements ActivityRepository {
@@ -299,10 +303,12 @@ class _PrizeRepository implements PrizeRepository {
 
 class _TableRepository implements TableRepository {
   const _TableRepository({
+    this.tables = const [],
     this.resolvedTable,
     this.resolveError,
   });
 
+  final List<EventTableRecord> tables;
   final EventTableRecord? resolvedTable;
   final Object? resolveError;
 
@@ -321,11 +327,11 @@ class _TableRepository implements TableRepository {
   }
 
   @override
-  Future<List<EventTableRecord>> listTables(String eventId) async => const [];
+  Future<List<EventTableRecord>> listTables(String eventId) async => tables;
 
   @override
   Future<List<EventTableRecord>> readCachedTables(String eventId) async =>
-      const [];
+      tables;
 
   @override
   Future<EventTableRecord> resolveTableByTag({
@@ -527,6 +533,23 @@ EventTableRecord _table({
   });
 }
 
+LeaderboardEntry _leaderboardEntry({
+  String eventGuestId = 'gst_01',
+  String displayName = 'Alice Wong',
+  int totalPoints = 125,
+  int rank = 1,
+}) {
+  return LeaderboardEntry(
+    eventGuestId: eventGuestId,
+    displayName: displayName,
+    totalPoints: totalPoints,
+    handsWon: 2,
+    selfDrawWins: 1,
+    discardWins: 1,
+    rank: rank,
+  );
+}
+
 TableSessionRecord _session({
   required String id,
   String eventId = 'evt_01',
@@ -564,6 +587,7 @@ TagScanResult _tableScanResult([String uid = 'TABLE-001']) {
 Future<void> _pumpDashboard(
   WidgetTester tester, {
   required EventRecord event,
+  LeaderboardRepository? leaderboardRepository,
   PrizeRepository? prizeRepository,
   TableRepository? tableRepository,
   SessionRepository? sessionRepository,
@@ -575,7 +599,8 @@ Future<void> _pumpDashboard(
         args: EventDashboardArgs(eventId: event.id),
         eventRepository: _EventRepository(event),
         guestRepository: _GuestRepository(),
-        leaderboardRepository: _LeaderboardRepository(),
+        leaderboardRepository:
+            leaderboardRepository ?? _LeaderboardRepository(),
         prizeRepository: prizeRepository,
         tableRepository: tableRepository,
         sessionRepository: sessionRepository,
@@ -654,7 +679,7 @@ void main() {
     'prevailing_wind': 'east',
   });
 
-  testWidgets('dashboard exposes a prizes action', (tester) async {
+  testWidgets('dashboard exposes a prize pool action', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: EventDashboardScreen(
@@ -667,7 +692,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Prizes'), findsOneWidget);
+    expect(find.text('Prize Pool'), findsOneWidget);
   });
 
   testWidgets('dashboard exposes an activity action', (tester) async {
@@ -746,9 +771,9 @@ void main() {
 
     expect(find.text('\$100.00'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Prizes'));
+    await tester.ensureVisible(find.text('Prize Pool'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Prizes'));
+    await tester.tap(find.text('Prize Pool'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Done editing prizes'));
     await tester.pumpAndSettle();
@@ -783,14 +808,124 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Prizes'));
+    await tester.ensureVisible(find.text('Prize Pool'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Prizes'));
+    await tester.tap(find.text('Prize Pool'));
     await tester.pumpAndSettle();
 
     expect(find.byType(PrizePlanScreen), findsOneWidget);
     expect(find.text('Total Prizes'), findsOneWidget);
     expect(find.text(r'$0.00'), findsOneWidget);
+  });
+
+  testWidgets('guests summary card routes into guest roster', (tester) async {
+    GuestRosterArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.guestRosterRoute) {
+            openedArgs = settings.arguments! as GuestRosterArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(
+                body: Text('Opened Guests'),
+              ),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Guests'));
+    await tester.pumpAndSettle();
+
+    expect(openedArgs?.eventId, 'evt_01');
+    expect(openedArgs?.eventTitle, activeEvent.title);
+    expect(openedArgs?.eventCoverChargeCents, activeEvent.coverChargeCents);
+    expect(find.text('Opened Guests'), findsOneWidget);
+  });
+
+  testWidgets('tables summary card routes into tables overview',
+      (tester) async {
+    TablesOverviewArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository:
+              _TableRepository(tables: [_table(), _table(id: 'tbl_02')]),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedArgs = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(
+                body: Text('Opened Tables'),
+              ),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tables'), findsOneWidget);
+    expect(find.text('2'), findsOneWidget);
+
+    await tester.tap(find.text('Tables'));
+    await tester.pumpAndSettle();
+
+    expect(openedArgs?.eventId, 'evt_01');
+    expect(openedArgs?.eventTitle, activeEvent.title);
+    expect(openedArgs?.scoringOpen, activeEvent.scoringOpen);
+    expect(find.text('Opened Tables'), findsOneWidget);
+  });
+
+  testWidgets('leader summary card routes into leaderboard', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(
+            entries: [_leaderboardEntry(displayName: 'Brian Le')],
+          ),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.leaderboardRoute) {
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(
+                body: Text('Opened Leaderboard'),
+              ),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Leader'), findsOneWidget);
+    expect(find.text('Brian Le'), findsOneWidget);
+
+    await tester.tap(find.text('Leader'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Opened Leaderboard'), findsOneWidget);
   });
 
   testWidgets('activity action routes into the activity screen',
@@ -1010,10 +1145,16 @@ void main() {
     await _pumpDashboard(
       tester,
       event: activeEvent,
+      leaderboardRepository: _LeaderboardRepository(
+        entries: [_leaderboardEntry(displayName: 'Brian Le')],
+      ),
       prizeRepository: _PrizeRepository(
         loadedPlan: _fixedPrizePlan([17500]),
       ),
-      tableRepository: _TableRepository(resolvedTable: _table()),
+      tableRepository: _TableRepository(
+        tables: [_table(), _table(id: 'tbl_02', label: 'Table 2')],
+        resolvedTable: _table(),
+      ),
       sessionRepository: const _SessionRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
@@ -1024,25 +1165,31 @@ void main() {
       find.text(
         'Use the live operations controls to open or close check-in and scoring during the event.',
       ),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.text('Scoring Open'), findsOneWidget);
     expect(find.text('Check-In Open'), findsOneWidget);
-    expect(find.text('Guests'), findsWidgets);
-    expect(find.text('Prize Pool'), findsOneWidget);
-    expect(find.text('Scan Table'), findsOneWidget);
+    expect(find.text('Guests'), findsOneWidget);
     expect(find.text('Tables'), findsOneWidget);
-    expect(find.text('Leaderboard'), findsOneWidget);
+    expect(find.text('Prize Pool'), findsOneWidget);
+    expect(find.text('Leader'), findsOneWidget);
+    expect(find.text('Brian Le'), findsOneWidget);
+    expect(find.text('Prizes'), findsNothing);
+    expect(find.text('Scan Table'), findsOneWidget);
+    expect(find.text('Leaderboard'), findsNothing);
+    expect(find.text('Activity'), findsOneWidget);
     expect(find.text('Live Operations'), findsOneWidget);
     expect(find.text('Close Scoring'), findsOneWidget);
     expect(find.text('Event options'), findsOneWidget);
 
+    final tablesTop = tester.getTopLeft(find.text('Tables')).dy;
     final scanTop = tester.getTopLeft(find.text('Scan Table')).dy;
-    final guestsTop = tester.getTopLeft(find.text('Guests').last).dy;
+    final operationsTop = tester.getTopLeft(find.text('Live Operations')).dy;
     final optionsTop = tester.getTopLeft(find.text('Event options')).dy;
 
-    expect(scanTop, lessThan(guestsTop));
-    expect(guestsTop, lessThan(optionsTop));
+    expect(tablesTop, lessThan(scanTop));
+    expect(scanTop, lessThan(operationsTop));
+    expect(operationsTop, lessThan(optionsTop));
   });
 
   testWidgets('live console renders event title once', (tester) async {
@@ -1435,7 +1582,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Guests'), findsOneWidget);
-    expect(find.text('Tables'), findsNothing);
+    expect(find.text('Tables'), findsOneWidget);
     expect(find.text('Add Guest'), findsNothing);
     expect(find.text('Complete Event'), findsNothing);
     expect(find.text('Finalize Event'), findsNothing);

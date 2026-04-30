@@ -159,9 +159,9 @@ void main() {
     expect(find.text('Events'), findsOneWidget);
     expect(find.text('Friday Night Mahjong'), findsOneWidget);
     expect(find.text('Create Event'), findsOneWidget);
-    expect(find.text('Sign out'), findsOneWidget);
+    expect(find.text('Sign out'), findsNothing);
 
-    await tester.tap(find.text('Sign out'));
+    await tester.tap(find.byKey(const ValueKey('eventsSignOutAction')));
     await tester.pumpAndSettle();
 
     expect(signOutTapped, isTrue);
@@ -215,10 +215,15 @@ void main() {
 
     final signOutAction = find.byKey(const ValueKey('eventsSignOutAction'));
     expect(signOutAction, findsOneWidget);
-    expect(find.text('Sign out'), findsOneWidget);
+    expect(find.byIcon(Icons.logout), findsOneWidget);
+    expect(find.text('Sign out'), findsNothing);
 
     final size = tester.getSize(signOutAction);
     expect(size.height, 40);
+
+    await tester.longPress(signOutAction);
+    await tester.pumpAndSettle();
+    expect(find.text('Sign out'), findsOneWidget);
 
     await tester.tap(signOutAction);
     await tester.pumpAndSettle();

@@ -1,6 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -31,17 +32,20 @@ class EventDashboardController extends ChangeNotifier {
   EventDashboardController({
     required EventRepository eventRepository,
     required GuestRepository guestRepository,
+    LeaderboardRepository? leaderboardRepository,
     PrizeRepository? prizeRepository,
     TableRepository? tableRepository,
     SessionRepository? sessionRepository,
   })  : _eventRepository = eventRepository,
         _guestRepository = guestRepository,
+        _leaderboardRepository = leaderboardRepository,
         _prizeRepository = prizeRepository,
         _tableRepository = tableRepository,
         _sessionRepository = sessionRepository;
 
   final EventRepository _eventRepository;
   final GuestRepository _guestRepository;
+  final LeaderboardRepository? _leaderboardRepository;
   final PrizeRepository? _prizeRepository;
   final TableRepository? _tableRepository;
   final SessionRepository? _sessionRepository;
@@ -54,13 +58,18 @@ class EventDashboardController extends ChangeNotifier {
   String? tableScanError;
   EventRecord? event;
   int guestCount = 0;
+  int tableCount = 0;
   int? prizePoolCents;
+  String leaderLabel = 'No scores';
 
   Future<void> load(String eventId) async {
     final cachedEvent = (await _eventRepository.readCachedEvents())
         .where((record) => record.id == eventId)
         .firstOrNull;
     final cachedGuests = await _guestRepository.readCachedGuests(eventId);
+    final cachedTables = await _tableRepository?.readCachedTables(eventId);
+    final cachedLeaderboard =
+        await _leaderboardRepository?.readCachedLeaderboard(eventId);
     final cachedPrizePlan = await _prizeRepository?.readCachedPrizePlan(
       eventId,
     );
@@ -71,6 +80,8 @@ class EventDashboardController extends ChangeNotifier {
     tableScanError = null;
     event = cachedEvent;
     guestCount = cachedGuests.length;
+    tableCount = cachedTables?.length ?? 0;
+    leaderLabel = _formatLeader(cachedLeaderboard);
     prizePoolCents = _totalPrizeCents(cachedPrizePlan);
     notifyListeners();
 
@@ -92,6 +103,20 @@ class EventDashboardController extends ChangeNotifier {
     }
 
     try {
+      tableCount = (await _tableRepository?.listTables(eventId))?.length ?? 0;
+    } catch (_) {
+      // Table count is a dashboard shortcut only; keep event loading usable.
+    }
+
+    try {
+      leaderLabel = _formatLeader(
+        await _leaderboardRepository?.loadLeaderboard(eventId),
+      );
+    } catch (_) {
+      // Leaderboard is a dashboard shortcut only; keep event loading usable.
+    }
+
+    try {
       prizePoolCents = _totalPrizeCents(
         await _prizeRepository?.loadPrizePlan(eventId: eventId),
       );
@@ -101,6 +126,12 @@ class EventDashboardController extends ChangeNotifier {
 
     isLoading = false;
     notifyListeners();
+  }
+
+  String _formatLeader(List<LeaderboardEntry>? entries) {
+    final leader = entries?.where((entry) => entry.rank == 1).firstOrNull ??
+        entries?.firstOrNull;
+    return leader == null ? 'No scores' : leader.displayName;
   }
 
   int? _totalPrizeCents(PrizePlanDetail? detail) {

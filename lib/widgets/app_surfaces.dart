@@ -5,21 +5,19 @@ class MetricTile extends StatelessWidget {
     super.key,
     required this.label,
     required this.value,
+    this.onTap,
   });
 
   final String label;
   final String value;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return Container(
+    final borderRadius = BorderRadius.circular(8);
+    final content = Padding(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -41,6 +39,26 @@ class MetricTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    final child = onTap == null
+        ? content
+        : Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: borderRadius,
+              child: content,
+            ),
+          );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.9),
+        borderRadius: borderRadius,
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: child,
     );
   }
 }

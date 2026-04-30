@@ -493,7 +493,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Sign out'));
+    await tester.tap(find.byKey(const ValueKey('eventsSignOutAction')));
     await tester.pumpAndSettle();
 
     expect(find.text('Host Sign In'), findsOneWidget);

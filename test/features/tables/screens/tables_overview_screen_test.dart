@@ -256,6 +256,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('table-card-tbl_01')), findsOneWidget);
     expect(
       find.text(
         'Scan this table from the event dashboard to start seating.',
@@ -395,6 +396,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('table-card-tbl_points')), findsOneWidget);
     expect(find.text('Active'), findsOneWidget);
     expect(find.text('East · Dealer'), findsOneWidget);
     expect(find.text('Alice Chen'), findsOneWidget);

@@ -174,9 +174,10 @@ class _EventListScreenState extends State<EventListScreen> {
       title: 'Events',
       actions: [
         if (widget.onSignOut != null)
-          UtilityActionButton(
-            key: const ValueKey('eventsSignOutAction'),
-            label: 'Sign out',
+          GlassCircleButton(
+            visualKey: const ValueKey('eventsSignOutAction'),
+            icon: Icons.logout,
+            tooltip: 'Sign out',
             onPressed: _signOut,
           ),
       ],

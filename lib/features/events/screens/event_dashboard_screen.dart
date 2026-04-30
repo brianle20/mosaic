@@ -46,6 +46,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     _controller = EventDashboardController(
       eventRepository: widget.eventRepository,
       guestRepository: widget.guestRepository,
+      leaderboardRepository: widget.leaderboardRepository,
       prizeRepository: widget.prizeRepository,
       tableRepository: widget.tableRepository,
       sessionRepository: widget.sessionRepository,
@@ -654,7 +655,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         child: SafeArea(
           bottom: false,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, kToolbarHeight + 12, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, kToolbarHeight - 8, 16, 24),
             children: [
               _LiveStatusRow(
                 phaseLabel: _eventPhaseLabel(event),
@@ -666,9 +667,15 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               const SizedBox(height: 14),
               _LiveMetricsRow(
                 guestCount: _controller.guestCount,
+                tableCount: _controller.tableCount,
                 prizePoolLabel: _formatPrizePoolValue(
                   _controller.prizePoolCents,
                 ),
+                leaderLabel: _controller.leaderLabel,
+                onGuests: _openGuests,
+                onTables: _openTables,
+                onPrizes: _openPrizes,
+                onLeaderboard: _openLeaderboard,
               ),
               const SizedBox(height: 16),
               HeroActionButton(
@@ -697,15 +704,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   message: _formatLifecycleError(lifecycleError),
                 ),
               ],
-              const SizedBox(height: 14),
-              if (showLiveNavigation) ...[
-                _SecondaryLiveNavigation(
-                  onGuests: _openGuests,
-                  onTables: _openTables,
-                  onLeaderboard: _openLeaderboard,
-                ),
-                const SizedBox(height: 16),
-              ],
+              if (showLiveNavigation) const SizedBox(height: 14),
               if (lifecycleStatus == EventLifecycleStatus.active) ...[
                 _LiveOperationsStrip(
                   isSubmitting: _controller.isSubmittingLifecycle,
@@ -719,15 +718,16 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 ),
                 const SizedBox(height: 18),
               ],
-              InfoPanel(
-                message: _formatLifecycleMessage(lifecycleStatus),
-              ),
-              const SizedBox(height: 18),
+              if (lifecycleStatus != EventLifecycleStatus.active) ...[
+                InfoPanel(
+                  message: _formatLifecycleMessage(lifecycleStatus),
+                ),
+                const SizedBox(height: 18),
+              ],
               _EventOptionsSection(
                 lifecycleStatus: lifecycleStatus,
                 isSubmitting: _controller.isSubmittingLifecycle,
                 onActivity: _openActivity,
-                onPrizes: _openPrizes,
                 onDelete: _confirmDeleteEvent,
                 onComplete: () => _controller.completeEvent(),
                 onFinalize: () => _controller.finalizeEvent(),
@@ -840,90 +840,68 @@ class _LiveStatusRow extends StatelessWidget {
 class _LiveMetricsRow extends StatelessWidget {
   const _LiveMetricsRow({
     required this.guestCount,
+    required this.tableCount,
     required this.prizePoolLabel,
-  });
-
-  final int guestCount;
-  final String prizePoolLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: MetricTile(
-            label: 'Guests',
-            value: guestCount.toString(),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: MetricTile(
-            label: 'Prize Pool',
-            value: prizePoolLabel,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SecondaryLiveNavigation extends StatelessWidget {
-  const _SecondaryLiveNavigation({
+    required this.leaderLabel,
     required this.onGuests,
     required this.onTables,
+    required this.onPrizes,
     required this.onLeaderboard,
   });
 
+  final int guestCount;
+  final int tableCount;
+  final String prizePoolLabel;
+  final String leaderLabel;
   final VoidCallback onGuests;
   final VoidCallback onTables;
+  final VoidCallback onPrizes;
   final VoidCallback onLeaderboard;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _LiveNavButton(label: 'Guests', onPressed: onGuests),
+        Row(
+          children: [
+            Expanded(
+              child: MetricTile(
+                label: 'Guests',
+                value: guestCount.toString(),
+                onTap: onGuests,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: MetricTile(
+                label: 'Tables',
+                value: tableCount.toString(),
+                onTap: onTables,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _LiveNavButton(label: 'Tables', onPressed: onTables),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _LiveNavButton(
-            label: 'Leaderboard',
-            onPressed: onLeaderboard,
-          ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: MetricTile(
+                label: 'Prize Pool',
+                value: prizePoolLabel,
+                onTap: onPrizes,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: MetricTile(
+                label: 'Leader',
+                value: leaderLabel,
+                onTap: onLeaderboard,
+              ),
+            ),
+          ],
         ),
       ],
-    );
-  }
-}
-
-class _LiveNavButton extends StatelessWidget {
-  const _LiveNavButton({
-    required this.label,
-    required this.onPressed,
-  });
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 46,
-      child: OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-        child: FittedBox(child: Text(label)),
-      ),
     );
   }
 }
@@ -990,7 +968,6 @@ class _EventOptionsSection extends StatelessWidget {
     required this.lifecycleStatus,
     required this.isSubmitting,
     required this.onActivity,
-    required this.onPrizes,
     required this.onDelete,
     required this.onComplete,
     required this.onFinalize,
@@ -1001,7 +978,6 @@ class _EventOptionsSection extends StatelessWidget {
   final EventLifecycleStatus lifecycleStatus;
   final bool isSubmitting;
   final VoidCallback onActivity;
-  final VoidCallback onPrizes;
   final VoidCallback onDelete;
   final VoidCallback onComplete;
   final VoidCallback onFinalize;
@@ -1026,7 +1002,6 @@ class _EventOptionsSection extends StatelessWidget {
           runSpacing: 10,
           children: [
             UtilityActionButton(label: 'Activity', onPressed: onActivity),
-            UtilityActionButton(label: 'Prizes', onPressed: onPrizes),
             if (lifecycleStatus == EventLifecycleStatus.draft)
               UtilityActionButton(
                 label: 'Delete Event',
