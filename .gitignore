@@ -19,6 +19,8 @@ coverage/
 # Secrets
 .env
 
+# Local planning/artifact output
+.superpowers/
+
 # Local Supabase state
 supabase/.temp/
-
