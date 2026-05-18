@@ -309,11 +309,11 @@ class _PrizeRepository implements PrizeRepository {
 }
 
 class _TableRepository implements TableRepository {
-  const _TableRepository({
-    this.tables = const [],
+  _TableRepository({
+    List<EventTableRecord> tables = const [],
     this.resolvedTable,
     this.resolveError,
-  });
+  }) : tables = List<EventTableRecord>.from(tables);
 
   final List<EventTableRecord> tables;
   final EventTableRecord? resolvedTable;
@@ -910,6 +910,7 @@ void main() {
   testWidgets('tables summary card routes into tables overview',
       (tester) async {
     TablesOverviewArgs? openedArgs;
+    final tableRepository = _TableRepository(tables: [_table()]);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -918,15 +919,20 @@ void main() {
           eventRepository: _EventRepository(activeEvent),
           guestRepository: _GuestRepository(),
           leaderboardRepository: _LeaderboardRepository(),
-          tableRepository:
-              _TableRepository(tables: [_table(), _table(id: 'tbl_02')]),
+          tableRepository: tableRepository,
         ),
         onGenerateRoute: (settings) {
           if (settings.name == AppRouter.tablesOverviewRoute) {
             openedArgs = settings.arguments! as TablesOverviewArgs;
             return MaterialPageRoute<void>(
-              builder: (_) => const Scaffold(
-                body: Text('Opened Tables'),
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () {
+                    tableRepository.tables.add(_table(id: 'tbl_02'));
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Close Tables'),
+                ),
               ),
             );
           }
@@ -937,7 +943,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tables'), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
+    expect(find.text('1'), findsOneWidget);
 
     await tester.tap(find.text('Tables'));
     await tester.pumpAndSettle();
@@ -946,7 +952,12 @@ void main() {
     expect(openedArgs?.eventTitle, activeEvent.title);
     expect(openedArgs?.scoringOpen, activeEvent.scoringOpen);
     expect(openedArgs?.readOnly, isFalse);
-    expect(find.text('Opened Tables'), findsOneWidget);
+    expect(find.text('Close Tables'), findsOneWidget);
+
+    await tester.tap(find.text('Close Tables'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2'), findsOneWidget);
   });
 
   testWidgets('finalized event opens tables read-only', (tester) async {
@@ -1379,7 +1390,7 @@ void main() {
           eventRepository: _EventRepository(activeEvent),
           guestRepository: _GuestRepository(),
           leaderboardRepository: _LeaderboardRepository(),
-          tableRepository: const _TableRepository(
+          tableRepository: _TableRepository(
             resolveError: TableTagResolutionException(
               TableTagResolutionFailure.unknownTag,
             ),

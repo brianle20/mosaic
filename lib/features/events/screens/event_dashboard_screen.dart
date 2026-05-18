@@ -73,13 +73,21 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     }
   }
 
-  void _openGuests() {
+  Future<void> _reloadDashboardAfterReturn(String eventId) async {
+    if (!mounted) {
+      return;
+    }
+
+    await _controller.load(eventId);
+  }
+
+  Future<void> _openGuests() async {
     final event = _controller.event;
     if (event == null) {
       return;
     }
 
-    Navigator.of(context).pushNamed(
+    await Navigator.of(context).pushNamed(
       AppRouter.guestRosterRoute,
       arguments: GuestRosterArgs(
         eventId: event.id,
@@ -87,15 +95,16 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventCoverChargeCents: event.coverChargeCents,
       ),
     );
+    await _reloadDashboardAfterReturn(event.id);
   }
 
-  void _openTables() {
+  Future<void> _openTables() async {
     final event = _controller.event;
     if (event == null) {
       return;
     }
 
-    Navigator.of(context).pushNamed(
+    await Navigator.of(context).pushNamed(
       AppRouter.tablesOverviewRoute,
       arguments: TablesOverviewArgs(
         eventId: event.id,
@@ -105,6 +114,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             event.lifecycleStatus != EventLifecycleStatus.active,
       ),
     );
+    await _reloadDashboardAfterReturn(event.id);
   }
 
   Future<void> _scanTable() async {
@@ -146,7 +156,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
     switch (result) {
       case DashboardTableScanOpenSession(:final sessionId):
-        Navigator.of(context).pushNamed(
+        await Navigator.of(context).pushNamed(
           AppRouter.sessionDetailRoute,
           arguments: SessionDetailArgs(
             eventId: widget.args.eventId,
@@ -154,11 +164,12 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             scoringOpen: _controller.event?.scoringOpen ?? false,
           ),
         );
+        await _reloadDashboardAfterReturn(widget.args.eventId);
       case DashboardTableScanStartSession(
           :final table,
           :final preverifiedTableTagUid,
         ):
-        Navigator.of(context).pushNamed(
+        await Navigator.of(context).pushNamed(
           AppRouter.startSessionRoute,
           arguments: StartSessionArgs(
             eventId: widget.args.eventId,
@@ -166,19 +177,21 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             preverifiedTableTagUid: preverifiedTableTagUid,
           ),
         );
+        await _reloadDashboardAfterReturn(widget.args.eventId);
     }
   }
 
-  void _openLeaderboard() {
+  Future<void> _openLeaderboard() async {
     final event = _controller.event;
     if (event == null) {
       return;
     }
 
-    Navigator.of(context).pushNamed(
+    await Navigator.of(context).pushNamed(
       AppRouter.leaderboardRoute,
       arguments: LeaderboardArgs(eventId: event.id),
     );
+    await _reloadDashboardAfterReturn(event.id);
   }
 
   Future<void> _openPrizes() async {
@@ -194,35 +207,33 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       ),
     );
 
-    if (!mounted) {
-      return;
-    }
-
-    await _controller.load(event.id);
+    await _reloadDashboardAfterReturn(event.id);
   }
 
-  void _openActivity() {
+  Future<void> _openActivity() async {
     final event = _controller.event;
     if (event == null) {
       return;
     }
 
-    Navigator.of(context).pushNamed(
+    await Navigator.of(context).pushNamed(
       AppRouter.activityRoute,
       arguments: ActivityArgs(eventId: event.id),
     );
+    await _reloadDashboardAfterReturn(event.id);
   }
 
-  void _openHandLedger() {
+  Future<void> _openHandLedger() async {
     final event = _controller.event;
     if (event == null) {
       return;
     }
 
-    Navigator.of(context).pushNamed(
+    await Navigator.of(context).pushNamed(
       AppRouter.eventHandLedgerRoute,
       arguments: EventHandLedgerArgs(eventId: event.id),
     );
+    await _reloadDashboardAfterReturn(event.id);
   }
 
   Future<void> _confirmDeleteEvent() async {
