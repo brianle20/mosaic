@@ -46,11 +46,13 @@ class GuestRosterScreen extends StatefulWidget {
 
 class _GuestRosterScreenState extends State<GuestRosterScreen> {
   late final GuestRosterController _controller;
+  final _searchController = TextEditingController();
   _GuestRosterCheckInFilter _checkInFilter = _GuestRosterCheckInFilter.all;
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(_handleSearchChanged);
     _controller = GuestRosterController(guestRepository: widget.guestRepository)
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
@@ -58,6 +60,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
 
   @override
   void dispose() {
+    _searchController
+      ..removeListener(_handleSearchChanged)
+      ..dispose();
     _controller
       ..removeListener(_handleUpdate)
       ..dispose();
@@ -65,6 +70,12 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   void _handleUpdate() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _handleSearchChanged() {
     if (mounted) {
       setState(() {});
     }
@@ -208,8 +219,11 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredGuests =
-        _controller.guests.where(_matchesCheckInFilter).toList(growable: false);
+    final searchQuery = _searchController.text.trim().toLowerCase();
+    final filteredGuests = _controller.guests
+        .where((guest) => _matchesSearch(guest, searchQuery))
+        .where(_matchesCheckInFilter)
+        .toList(growable: false);
     final notCheckedInGuests = filteredGuests
         .where((guest) => !guest.isCheckedIn)
         .toList(growable: false);
@@ -236,6 +250,8 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
             if (_controller.guests.isNotEmpty) ...[
+              _buildSearchField(),
+              const SizedBox(height: 12),
               _buildCheckInFilter(),
               const SizedBox(height: 16),
               ..._buildGuestSection(
@@ -248,6 +264,15 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                 title: 'Checked In',
                 guests: checkedInGuests,
               ),
+              if (filteredGuests.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 24),
+                  child: EmptyStateCard(
+                    icon: Icons.search_off,
+                    title: 'No matching guests',
+                    message: 'Try a different search or filter.',
+                  ),
+                ),
             ],
             if (_controller.guests.isEmpty)
               const Padding(
@@ -261,6 +286,24 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return TextField(
+      controller: _searchController,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        labelText: 'Search guests',
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: _searchController.text.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear search',
+                onPressed: _searchController.clear,
+                icon: const Icon(Icons.clear),
+              ),
       ),
     );
   }
@@ -297,6 +340,24 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       _GuestRosterCheckInFilter.notCheckedIn => !guest.isCheckedIn,
       _GuestRosterCheckInFilter.checkedIn => guest.isCheckedIn,
     };
+  }
+
+  bool _matchesSearch(EventGuestRecord guest, String searchQuery) {
+    if (searchQuery.isEmpty) {
+      return true;
+    }
+
+    final searchableValues = [
+      guest.displayName,
+      guest.normalizedName,
+      guest.phoneE164,
+      guest.emailLower,
+      guest.instagramHandle,
+    ];
+
+    return searchableValues.whereType<String>().any(
+          (value) => value.toLowerCase().contains(searchQuery),
+        );
   }
 
   List<Widget> _buildGuestSection(

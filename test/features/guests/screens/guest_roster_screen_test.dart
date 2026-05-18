@@ -549,6 +549,119 @@ void main() {
     expect(find.text('Checked In Guest'), findsOneWidget);
   });
 
+  testWidgets('searches guests by name and contact fields', (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_alice',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+      EventGuestRecord.fromJson(const {
+        'id': 'gst_brian',
+        'event_id': 'evt_01',
+        'display_name': 'Brian Le',
+        'normalized_name': 'brian le',
+        'email_lower': 'brian@example.com',
+        'instagram_handle': 'brian_mahjong',
+        'attendance_status': 'checked_in',
+        'cover_status': 'paid',
+        'cover_amount_cents': 2000,
+        'is_comped': false,
+        'has_scored_play': false,
+      }),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Search guests'), 'ali');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice Wong'), findsOneWidget);
+    expect(find.text('Brian Le'), findsNothing);
+    expect(find.text('Pending (1)'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search guests'),
+      'mahjong',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Brian Le'), findsOneWidget);
+    expect(find.text('Alice Wong'), findsNothing);
+    expect(find.text('Checked In (1)'), findsOneWidget);
+  });
+
+  testWidgets('combines guest search with check-in filter', (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_alice_pending',
+        name: 'Alice Pending',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+      _guest(
+        id: 'gst_alice_checked',
+        name: 'Alice Checked',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search guests'),
+      'alice',
+    );
+    await tester.tap(find.text('Pending'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice Pending'), findsOneWidget);
+    expect(find.text('Alice Checked'), findsNothing);
+    expect(find.text('Pending (1)'), findsOneWidget);
+
+    await tester.tap(find.text('Checked In'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice Checked'), findsOneWidget);
+    expect(find.text('Alice Pending'), findsNothing);
+    expect(find.text('Checked In (1)'), findsOneWidget);
+  });
+
+  testWidgets('clears guest search and shows no-match state', (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_alice',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search guests'),
+      'missing',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No matching guests'), findsOneWidget);
+    expect(find.text('Try a different search or filter.'), findsOneWidget);
+    expect(find.text('Alice Wong'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.clear));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice Wong'), findsOneWidget);
+    expect(find.text('No matching guests'), findsNothing);
+  });
+
   testWidgets('keeps check-in filter labels stable on phone width',
       (tester) async {
     tester.view.physicalSize = const Size(390, 844);
