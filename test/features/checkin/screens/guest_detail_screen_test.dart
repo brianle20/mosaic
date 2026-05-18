@@ -436,7 +436,55 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Replace Tag'), findsOneWidget);
-    expect(find.text('Player 7'), findsOneWidget);
+    expect(find.text('Tag: Player 7 - UID 04AABB'), findsOneWidget);
+  });
+
+  testWidgets('shows current tag uid when assigned tag has no label',
+      (tester) async {
+    final repository = _FakeGuestRepository(
+      GuestDetailRecord(
+        guest: EventGuestRecord.fromJson(const {
+          'id': 'gst_03',
+          'event_id': 'evt_01',
+          'display_name': 'Carol Ng',
+          'normalized_name': 'carol ng',
+          'attendance_status': 'checked_in',
+          'cover_status': 'paid',
+          'cover_amount_cents': 2000,
+          'is_comped': false,
+          'has_scored_play': false,
+        }),
+        activeTagAssignment: GuestTagAssignmentSummary.fromJson(const {
+          'assignment_id': 'asg_01',
+          'event_id': 'evt_01',
+          'event_guest_id': 'gst_03',
+          'status': 'assigned',
+          'assigned_at': '2026-04-24T19:15:00-07:00',
+          'nfc_tag': {
+            'id': 'tag_01',
+            'uid_hex': '04CCDDEE',
+            'uid_fingerprint': '04CCDDEE',
+            'default_tag_type': 'player',
+            'status': 'active',
+          },
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestDetailScreen(
+          guestId: 'gst_03',
+          eventId: 'evt_01',
+          guestRepository: repository,
+          nfcService: const _FakeNfcService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tag Assigned'), findsOneWidget);
+    expect(find.text('UID: 04CCDDEE'), findsOneWidget);
   });
 
   testWidgets('assigns a tag for an already checked-in eligible guest',

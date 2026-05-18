@@ -402,6 +402,10 @@ void main() {
     expect(find.text('Assign Tag'), findsOneWidget);
     expect(find.text('Add Cover Entry'), findsAtLeastNWidgets(3));
     expect(
+      find.text('Ready to Play - UID FASTDONE', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(
       find.ancestor(
         of: find.text('Add Cover Entry').first,
         matching: find.byType(FilledButton),
@@ -577,6 +581,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tag Assigned'), findsOneWidget);
+    expect(find.text('Ready to Play - UID FASTTAG01'), findsOneWidget);
     expect(find.text('Player tag assigned to Alice Wong.'), findsOneWidget);
   });
 

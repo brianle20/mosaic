@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
 import 'package:mosaic/features/checkin/screens/add_cover_entry_screen.dart';
@@ -445,9 +446,11 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   String _rowSummary(EventGuestRecord guest) {
-    final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
-    if (guest.isCheckedIn && guest.isEligibleForPlayerTagAssignment && hasTag) {
-      return 'Ready to Play';
+    final assignment = _controller.activeTagAssignments[guest.id];
+    if (guest.isCheckedIn &&
+        guest.isEligibleForPlayerTagAssignment &&
+        assignment != null) {
+      return 'Ready to Play - ${_tagSummary(assignment)}';
     }
     if (!guest.isEligibleForPlayerTagAssignment) {
       return 'Needs payment or comp before tag assignment';
@@ -455,10 +458,26 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     if (!guest.isCheckedIn) {
       return 'Ready for check-in';
     }
-    if (!hasTag) {
+    if (assignment == null) {
       return 'Needs player tag';
     }
     return 'Operational status available';
+  }
+
+  String _tagSummary(GuestTagAssignmentSummary assignment) {
+    final label = assignment.tag.displayLabel?.trim();
+    if (label != null && label.isNotEmpty) {
+      return 'Tag $label';
+    }
+    return 'UID ${_shortUid(assignment.tag.uidHex)}';
+  }
+
+  String _shortUid(String uid) {
+    final normalizedUid = uid.trim();
+    if (normalizedUid.length <= 12) {
+      return normalizedUid;
+    }
+    return '${normalizedUid.substring(0, 12)}...';
   }
 
   String _formatActionError(Object exception) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/controllers/guest_check_in_controller.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
@@ -175,9 +176,9 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                   ? StatusChipTone.warning
                   : StatusChipTone.success,
             ),
-            if (assignment?.tag.displayLabel != null) ...[
+            if (assignment != null) ...[
               const SizedBox(height: 8),
-              Text(assignment!.tag.displayLabel!),
+              Text(_tagDetailText(assignment)),
             ],
             const SizedBox(height: 24),
             Row(
@@ -305,6 +306,14 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
     };
     return '$methodLabel \$${_formatMoneyCents(entry.amountCents)} - '
         '${_formatDate(entry.transactionOn)}';
+  }
+
+  String _tagDetailText(GuestTagAssignmentSummary assignment) {
+    final label = assignment.tag.displayLabel?.trim();
+    if (label != null && label.isNotEmpty) {
+      return 'Tag: $label - UID ${assignment.tag.uidHex}';
+    }
+    return 'UID: ${assignment.tag.uidHex}';
   }
 
   String _formatMoneyCents(int cents) {
