@@ -16,6 +16,12 @@ enum _GuestRosterOverflowAction {
   markPaidManually,
 }
 
+enum _GuestRosterCheckInFilter {
+  all,
+  notCheckedIn,
+  checkedIn,
+}
+
 const _guestCardSectionGap = 10.0;
 
 class GuestRosterScreen extends StatefulWidget {
@@ -40,6 +46,7 @@ class GuestRosterScreen extends StatefulWidget {
 
 class _GuestRosterScreenState extends State<GuestRosterScreen> {
   late final GuestRosterController _controller;
+  _GuestRosterCheckInFilter _checkInFilter = _GuestRosterCheckInFilter.all;
 
   @override
   void initState() {
@@ -201,6 +208,15 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final filteredGuests =
+        _controller.guests.where(_matchesCheckInFilter).toList(growable: false);
+    final notCheckedInGuests = filteredGuests
+        .where((guest) => !guest.isCheckedIn)
+        .toList(growable: false);
+    final checkedInGuests = filteredGuests
+        .where((guest) => guest.isCheckedIn)
+        .toList(growable: false);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Guests')),
       body: AsyncBody(
@@ -219,75 +235,20 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
             Text(widget.eventTitle,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
-            for (final guest in _controller.guests)
-              Card(
-                child: InkWell(
-                  key: ValueKey('guest-row-${guest.id}'),
-                  onTap: () => _openGuestDetail(guest),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                guest.displayName,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
-                                    ?.copyWith(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                            ),
-                            if (!guest.isEligibleForPlayerTagAssignment)
-                              _buildOverflowMenu(guest),
-                          ],
-                        ),
-                        const SizedBox(height: _guestCardSectionGap),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            StatusChip(
-                              label: _coverStatusLabel(guest.coverStatus),
-                              tone: _coverStatusTone(guest.coverStatus),
-                            ),
-                            StatusChip(
-                              label: _attendanceLabel(guest.attendanceStatus),
-                              tone: guest.isCheckedIn
-                                  ? StatusChipTone.success
-                                  : StatusChipTone.neutral,
-                            ),
-                            StatusChip(
-                              label: _controller.activeTagAssignments
-                                      .containsKey(guest.id)
-                                  ? 'Tag Assigned'
-                                  : 'Tag Unassigned',
-                              tone: _controller.activeTagAssignments
-                                      .containsKey(guest.id)
-                                  ? StatusChipTone.success
-                                  : StatusChipTone.warning,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: _guestCardSectionGap),
-                        Text(
-                          _rowSummary(guest),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: _guestCardSectionGap),
-                        _buildQuickActionsForGuest(guest),
-                      ],
-                    ),
-                  ),
-                ),
+            if (_controller.guests.isNotEmpty) ...[
+              _buildCheckInFilter(),
+              const SizedBox(height: 16),
+              ..._buildGuestSection(
+                context,
+                title: 'Pending',
+                guests: notCheckedInGuests,
               ),
+              ..._buildGuestSection(
+                context,
+                title: 'Checked In',
+                guests: checkedInGuests,
+              ),
+            ],
             if (_controller.guests.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 24),
@@ -299,6 +260,128 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCheckInFilter() {
+    return SegmentedButton<_GuestRosterCheckInFilter>(
+      segments: const [
+        ButtonSegment(
+          value: _GuestRosterCheckInFilter.all,
+          label: Text('All'),
+        ),
+        ButtonSegment(
+          value: _GuestRosterCheckInFilter.notCheckedIn,
+          label: Text('Pending'),
+        ),
+        ButtonSegment(
+          value: _GuestRosterCheckInFilter.checkedIn,
+          label: Text('Checked In'),
+        ),
+      ],
+      selected: {_checkInFilter},
+      showSelectedIcon: false,
+      onSelectionChanged: (selection) {
+        setState(() {
+          _checkInFilter = selection.single;
+        });
+      },
+    );
+  }
+
+  bool _matchesCheckInFilter(EventGuestRecord guest) {
+    return switch (_checkInFilter) {
+      _GuestRosterCheckInFilter.all => true,
+      _GuestRosterCheckInFilter.notCheckedIn => !guest.isCheckedIn,
+      _GuestRosterCheckInFilter.checkedIn => guest.isCheckedIn,
+    };
+  }
+
+  List<Widget> _buildGuestSection(
+    BuildContext context, {
+    required String title,
+    required List<EventGuestRecord> guests,
+  }) {
+    if (guests.isEmpty) {
+      return const [];
+    }
+
+    return [
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          '$title (${guests.length})',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+      ),
+      for (final guest in guests) _buildGuestCard(context, guest),
+      const SizedBox(height: 8),
+    ];
+  }
+
+  Widget _buildGuestCard(BuildContext context, EventGuestRecord guest) {
+    final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
+
+    return Card(
+      child: InkWell(
+        key: ValueKey('guest-row-${guest.id}'),
+        onTap: () => _openGuestDetail(guest),
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      guest.displayName,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  if (!guest.isEligibleForPlayerTagAssignment)
+                    _buildOverflowMenu(guest),
+                ],
+              ),
+              const SizedBox(height: _guestCardSectionGap),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  StatusChip(
+                    label: _coverStatusLabel(guest.coverStatus),
+                    tone: _coverStatusTone(guest.coverStatus),
+                  ),
+                  StatusChip(
+                    label: _attendanceLabel(guest.attendanceStatus),
+                    tone: guest.isCheckedIn
+                        ? StatusChipTone.success
+                        : StatusChipTone.neutral,
+                  ),
+                  StatusChip(
+                    label: hasTag ? 'Tag Assigned' : 'Tag Unassigned',
+                    tone: hasTag
+                        ? StatusChipTone.success
+                        : StatusChipTone.warning,
+                  ),
+                ],
+              ),
+              const SizedBox(height: _guestCardSectionGap),
+              Text(
+                _rowSummary(guest),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: _guestCardSectionGap),
+              _buildQuickActionsForGuest(guest),
+            ],
+          ),
         ),
       ),
     );

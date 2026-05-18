@@ -345,6 +345,11 @@ void main() {
   });
 
   testWidgets('renders guests and row-specific quick actions', (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final repository = _FakeGuestRepository(
       [
         _guest(
@@ -446,6 +451,142 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mark Paid Manually'), findsOneWidget);
+  });
+
+  testWidgets('groups guests by check-in status', (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_checked_in',
+        name: 'Checked In Guest',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+      ),
+      _guest(
+        id: 'gst_expected',
+        name: 'Expected Guest',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+      _guest(
+        id: 'gst_no_show',
+        name: 'No Show Guest',
+        attendanceStatus: AttendanceStatus.noShow,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pending (2)'), findsOneWidget);
+    expect(find.text('Checked In (1)'), findsOneWidget);
+
+    final notCheckedInTop = tester.getTopLeft(
+      find.text('Pending (2)'),
+    );
+    final expectedTop = tester.getTopLeft(find.text('Expected Guest'));
+    final noShowTop = tester.getTopLeft(find.text('No Show Guest'));
+    final checkedInHeaderTop = tester.getTopLeft(find.text('Checked In (1)'));
+    final checkedInGuestTop = tester.getTopLeft(find.text('Checked In Guest'));
+
+    expect(notCheckedInTop.dy, lessThan(expectedTop.dy));
+    expect(expectedTop.dy, lessThan(noShowTop.dy));
+    expect(noShowTop.dy, lessThan(checkedInHeaderTop.dy));
+    expect(checkedInHeaderTop.dy, lessThan(checkedInGuestTop.dy));
+  });
+
+  testWidgets('filters guests by check-in status', (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_checked_in',
+        name: 'Checked In Guest',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+      ),
+      _guest(
+        id: 'gst_expected',
+        name: 'Expected Guest',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Pending'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pending (1)'), findsOneWidget);
+    expect(find.text('Expected Guest'), findsOneWidget);
+    expect(find.text('Checked In Guest'), findsNothing);
+    expect(find.text('Checked In (1)'), findsNothing);
+
+    await tester.tap(find.text('Checked In'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Checked In (1)'), findsOneWidget);
+    expect(find.text('Checked In Guest'), findsOneWidget);
+    expect(find.text('Expected Guest'), findsNothing);
+    expect(find.text('Pending (1)'), findsNothing);
+
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pending (1)'), findsOneWidget);
+    expect(find.text('Checked In (1)'), findsOneWidget);
+    expect(find.text('Expected Guest'), findsOneWidget);
+    expect(find.text('Checked In Guest'), findsOneWidget);
+  });
+
+  testWidgets('keeps check-in filter labels stable on phone width',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_checked_in',
+        name: 'Checked In Guest',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+      ),
+      _guest(
+        id: 'gst_expected',
+        name: 'Expected Guest',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    final allFilterLabel = find.text('All');
+    final pendingFilterLabel = find.text('Pending');
+    final checkedInFilterLabel = find.text('Checked In').first;
+    final allTextWidth = tester.getSize(allFilterLabel).width;
+    final pendingTextWidth = tester.getSize(pendingFilterLabel).width;
+    final checkedTextWidth = tester.getSize(checkedInFilterLabel).width;
+
+    await tester.tap(pendingFilterLabel);
+    await tester.pumpAndSettle();
+
+    expect(tester.getSize(allFilterLabel).width, allTextWidth);
+    expect(tester.getSize(pendingFilterLabel).width, pendingTextWidth);
+    expect(tester.getSize(checkedInFilterLabel).width, checkedTextWidth);
   });
 
   testWidgets('keeps unpaid action buttons single-line on phone width',
@@ -559,7 +700,12 @@ void main() {
     await tester.tap(find.text('Check In & Tag'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Checked In'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Checked In',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Tag Assigned'), findsOneWidget);
     expect(find.text('Alice Wong is checked in and tagged.'), findsOneWidget);
   });
