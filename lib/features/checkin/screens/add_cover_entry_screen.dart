@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
+import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/widgets/money_text_form_field.dart';
 
 class AddCoverEntryScreen extends StatefulWidget {
   const AddCoverEntryScreen({
     super.key,
+    this.initialAmountCents = 0,
     this.initialTransactionOn,
   });
 
+  final int initialAmountCents;
   final DateTime? initialTransactionOn;
 
   @override
@@ -17,7 +20,7 @@ class AddCoverEntryScreen extends StatefulWidget {
 
 class _AddCoverEntryScreenState extends State<AddCoverEntryScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController(text: '0.00');
+  late final TextEditingController _amountController;
   final _noteController = TextEditingController();
   late DateTime _transactionOn;
   CoverEntryMethod? _selectedMethod;
@@ -26,6 +29,9 @@ class _AddCoverEntryScreenState extends State<AddCoverEntryScreen> {
   @override
   void initState() {
     super.initState();
+    _amountController = TextEditingController(
+      text: formatMoneyCents(widget.initialAmountCents),
+    );
     _transactionOn = _dateOnly(widget.initialTransactionOn ?? DateTime.now());
   }
 

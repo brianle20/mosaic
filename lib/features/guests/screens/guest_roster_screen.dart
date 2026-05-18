@@ -126,9 +126,16 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   Future<void> _addCoverEntry(EventGuestRecord guest) async {
+    final initialAmountCents = await _initialCoverEntryAmountCents(guest);
+    if (!mounted) {
+      return;
+    }
+
     final submission = await Navigator.of(context).push<SubmitCoverEntryInput>(
       MaterialPageRoute(
-        builder: (_) => const AddCoverEntryScreen(),
+        builder: (_) => AddCoverEntryScreen(
+          initialAmountCents: initialAmountCents,
+        ),
       ),
     );
     if (submission == null) {
@@ -141,6 +148,26 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         input: submission,
       ),
       successMessage: 'Cover entry saved for ${guest.displayName}.',
+    );
+  }
+
+  Future<int> _initialCoverEntryAmountCents(EventGuestRecord guest) async {
+    if (guest.coverStatus != CoverStatus.partial) {
+      return suggestedCoverEntryAmountCents(guest: guest);
+    }
+
+    var coverEntries = await widget.guestRepository.readCachedGuestCoverEntries(
+      guest.id,
+    );
+    if (coverEntries.isEmpty) {
+      coverEntries = await widget.guestRepository.loadGuestCoverEntries(
+        guest.id,
+      );
+    }
+
+    return suggestedCoverEntryAmountCents(
+      guest: guest,
+      coverEntries: coverEntries,
     );
   }
 

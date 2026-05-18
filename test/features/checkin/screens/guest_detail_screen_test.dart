@@ -720,4 +720,57 @@ void main() {
     expect(repository.lastRecordedNote, 'Paid after seating');
     expect(find.text('Paid after seating'), findsOneWidget);
   });
+
+  testWidgets('prefills cover entry amount with remaining balance',
+      (tester) async {
+    final repository = _FakeGuestRepository(
+      GuestDetailRecord(
+        guest: EventGuestRecord.fromJson(const {
+          'id': 'gst_09',
+          'event_id': 'evt_01',
+          'display_name': 'Ian Q',
+          'normalized_name': 'ian q',
+          'attendance_status': 'expected',
+          'cover_status': 'partial',
+          'cover_amount_cents': 2000,
+          'is_comped': false,
+          'has_scored_play': false,
+        }),
+        coverEntries: [
+          GuestCoverEntryRecord(
+            id: 'cov_01',
+            eventId: 'evt_01',
+            eventGuestId: 'gst_09',
+            amountCents: 500,
+            method: CoverEntryMethod.cash,
+            recordedByUserId: 'usr_01',
+            transactionOn: DateTime(2026, 4, 24),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestDetailScreen(
+          guestId: 'gst_09',
+          eventId: 'evt_01',
+          guestRepository: repository,
+          nfcService: const _FakeNfcService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add Cover Entry'));
+    await tester.pumpAndSettle();
+
+    final amountField = tester.widget<EditableText>(
+      find.descendant(
+        of: find.widgetWithText(TextFormField, 'Amount'),
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(amountField.controller.text, '15.00');
+  });
 }

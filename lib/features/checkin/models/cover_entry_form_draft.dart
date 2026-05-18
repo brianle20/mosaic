@@ -83,3 +83,26 @@ class CoverEntryFormDraft {
     );
   }
 }
+
+int suggestedCoverEntryAmountCents({
+  required EventGuestRecord guest,
+  List<GuestCoverEntryRecord> coverEntries = const [],
+}) {
+  if (guest.coverAmountCents <= 0 ||
+      guest.coverStatus == CoverStatus.paid ||
+      guest.coverStatus == CoverStatus.comped ||
+      guest.coverStatus == CoverStatus.refunded) {
+    return 0;
+  }
+
+  if (coverEntries.isEmpty) {
+    return guest.coverStatus == CoverStatus.unpaid ? guest.coverAmountCents : 0;
+  }
+
+  final paidTotalCents = coverEntries.fold<int>(
+    0,
+    (total, entry) => total + entry.amountCents,
+  );
+  final remainingCents = guest.coverAmountCents - paidTotalCents;
+  return remainingCents > 0 ? remainingCents : 0;
+}

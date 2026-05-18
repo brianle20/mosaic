@@ -12,18 +12,23 @@ class _FakeGuestRepository implements GuestRepository {
   _FakeGuestRepository(
     List<EventGuestRecord> guests, {
     Map<String, GuestTagAssignmentSummary> activeAssignments = const {},
+    Map<String, List<GuestCoverEntryRecord>> coverEntries = const {},
   })  : _guests = List<EventGuestRecord>.from(guests),
         _activeAssignments =
-            Map<String, GuestTagAssignmentSummary>.from(activeAssignments);
+            Map<String, GuestTagAssignmentSummary>.from(activeAssignments),
+        _coverEntries = Map<String, List<GuestCoverEntryRecord>>.from(
+          coverEntries,
+        );
 
   final List<EventGuestRecord> _guests;
   final Map<String, GuestTagAssignmentSummary> _activeAssignments;
+  final Map<String, List<GuestCoverEntryRecord>> _coverEntries;
 
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
     String guestId,
   ) async =>
-      const [];
+      _coverEntries[guestId] ?? const [];
 
   @override
   Future<GuestDetailRecord> assignGuestTag({
@@ -97,6 +102,7 @@ class _FakeGuestRepository implements GuestRepository {
     final guest = _guestById(guestId);
     return GuestDetailRecord(
       guest: guest,
+      coverEntries: _coverEntries[guestId] ?? const [],
       activeTagAssignment: _activeAssignments[guestId],
     );
   }
@@ -118,7 +124,7 @@ class _FakeGuestRepository implements GuestRepository {
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
     String guestId,
   ) async =>
-      const [];
+      _coverEntries[guestId] ?? const [];
 
   @override
   Future<GuestDetailRecord> recordCoverEntry({
@@ -604,5 +610,30 @@ void main() {
     expect(find.text('Paid'), findsOneWidget);
     expect(find.text('Ready for check-in'), findsOneWidget);
     expect(find.text('Cover entry saved for Alice Wong.'), findsOneWidget);
+  });
+
+  testWidgets('prefills cover entry amount from the roster', (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.unpaid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add Cover Entry'));
+    await tester.pumpAndSettle();
+
+    final amountField = tester.widget<EditableText>(
+      find.descendant(
+        of: find.widgetWithText(TextFormField, 'Amount'),
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(amountField.controller.text, '20.00');
   });
 }

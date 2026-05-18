@@ -54,9 +54,17 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
   }
 
   Future<void> _openAddCoverEntry() async {
+    final detail = _controller.detail;
     final submission = await Navigator.of(context).push<SubmitCoverEntryInput>(
       MaterialPageRoute(
-        builder: (_) => const AddCoverEntryScreen(),
+        builder: (_) => AddCoverEntryScreen(
+          initialAmountCents: detail == null
+              ? 0
+              : suggestedCoverEntryAmountCents(
+                  guest: detail.guest,
+                  coverEntries: detail.coverEntries,
+                ),
+        ),
       ),
     );
     if (submission == null) {
