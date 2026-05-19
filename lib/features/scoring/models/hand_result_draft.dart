@@ -74,7 +74,7 @@ class HandResultDraft {
             winType != null ||
             discarderSeatIndex != null ||
             fanCount != null)) {
-      return 'Washouts cannot include winner, discarder, or fan fields.';
+      return 'Draws cannot include winner, discarder, or fan fields.';
     }
 
     return null;

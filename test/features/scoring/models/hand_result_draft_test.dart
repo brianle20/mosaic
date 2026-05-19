@@ -61,7 +61,7 @@ void main() {
       expect(draft.isValid, isFalse);
     });
 
-    test('washout rejects winner discarder and fan fields', () {
+    test('draw rejects winner discarder and fan fields', () {
       const draft = HandResultDraft(
         resultType: HandResultType.washout,
         winnerSeatIndex: 2,
@@ -71,8 +71,20 @@ void main() {
       );
 
       expect(draft.washoutFieldError,
-          'Washouts cannot include winner, discarder, or fan fields.');
+          'Draws cannot include winner, discarder, or fan fields.');
       expect(draft.isValid, isFalse);
+    });
+
+    test('draw is valid without dealer waiting state', () {
+      const draft = HandResultDraft(
+        resultType: HandResultType.washout,
+      );
+
+      expect(draft.isValid, isTrue);
+      expect(
+        draft.toRecordInput(tableSessionId: 'ses_01').resultType,
+        HandResultType.washout,
+      );
     });
 
     test('preview payload is only available when the draft is valid', () {

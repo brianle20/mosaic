@@ -247,7 +247,7 @@ class TableListController extends ChangeNotifier {
 
     if (hand.resultType == HandResultType.washout) {
       return const LastHandSummary(
-        title: 'Washout',
+        title: 'Draw',
         detail: 'East retains. Ready for the next hand.',
       );
     }
@@ -257,7 +257,7 @@ class TableListController extends ChangeNotifier {
         ? 'Winner'
         : _guestNameForSeat(detail, winnerSeatIndex);
     final winLabel =
-        hand.winType == HandWinType.discard ? 'wins by discard' : 'self-draw';
+        hand.winType == HandWinType.discard ? 'discard' : 'self-draw';
     final fanCount = hand.fanCount;
     return LastHandSummary(
       title: '$winner $winLabel',

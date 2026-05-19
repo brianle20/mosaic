@@ -236,7 +236,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
               ),
               ButtonSegment(
                 value: HandResultType.washout,
-                label: Text('Washout'),
+                label: Text('Draw'),
               ),
             ],
             selected: {_resultType},
@@ -288,7 +288,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
               spacing: 8,
               children: [
                 ChoiceChip(
-                  label: const Text('Self Draw'),
+                  label: const Text('Self-draw'),
                   selected: _winType == HandWinType.selfDraw,
                   onSelected: (_) {
                     setState(() {
@@ -401,7 +401,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   String _buildPreviewText() {
     if (_resultType == HandResultType.washout) {
-      return 'Washout. East retains.';
+      return 'Draw. East retains.';
     }
 
     final winner =

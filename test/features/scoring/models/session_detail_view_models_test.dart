@@ -74,7 +74,7 @@ void main() {
       );
     });
 
-    test('summarizes washouts without exchanging points', () {
+    test('summarizes draws without exchanging points', () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(
           hands: [_washoutHand()],
@@ -85,7 +85,7 @@ void main() {
 
       expect(
         viewModel.hands.single.summaryLabel,
-        'Washout · East retained · No points exchanged',
+        'Draw · East retained · No points exchanged',
       );
     });
 

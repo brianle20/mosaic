@@ -620,7 +620,7 @@ void main() {
       'default_rotation_policy_config_json': {},
     });
     final session = _session(id: 'ses_01', tableId: 'tbl_points');
-    final lastResultTitle = 'Alexandria Very Long Mahjong Name wins by discard';
+    final lastResultTitle = 'Alexandria Very Long Mahjong Name discard';
 
     await tester.pumpWidget(
       MaterialApp(
