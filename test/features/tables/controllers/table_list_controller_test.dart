@@ -442,7 +442,7 @@ void main() {
     await controller.load('evt_01');
 
     final liveSummary = controller.cards.single.liveSummary!;
-    expect(liveSummary.lastHand.title, 'Ben Wong wins by discard');
+    expect(liveSummary.lastHand.title, 'Ben Wong discard');
     expect(liveSummary.progressLabel, 'Hand 1');
   });
 

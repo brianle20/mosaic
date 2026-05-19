@@ -69,13 +69,13 @@ String _resultSummary(EventHandLedgerEntry entry) {
     return 'voided';
   }
   if (entry.resultType == HandResultType.washout) {
-    return 'washout';
+    return 'draw';
   }
 
   final fanCount = entry.fanCount;
   final winType = switch (entry.winType) {
     HandWinType.discard => 'discard',
-    HandWinType.selfDraw => 'self draw',
+    HandWinType.selfDraw => 'self-draw',
     null => 'win',
   };
 

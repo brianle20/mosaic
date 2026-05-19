@@ -34,7 +34,7 @@ void main() {
       ]);
     });
 
-    test('formats self draw, washout, and voided summaries', () {
+    test('formats self-draw, draw, and voided summaries', () {
       final rows = buildEventHandLedgerViewModels([
         EventHandLedgerEntry.fromJson(_rowJson(
           handNumber: 8,
@@ -57,8 +57,8 @@ void main() {
         )),
       ]);
 
-      expect(rows[0].resultSummary, '3 fan self draw');
-      expect(rows[1].resultSummary, 'washout');
+      expect(rows[0].resultSummary, '3 fan self-draw');
+      expect(rows[1].resultSummary, 'draw');
       expect(rows[2].resultSummary, 'voided');
       expect(rows[2].isVoided, isTrue);
     });

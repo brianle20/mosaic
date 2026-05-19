@@ -264,6 +264,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Self-draw'), findsOneWidget);
+    expect(find.text('Discard'), findsOneWidget);
     expect(find.text('Discarder'), findsNothing);
 
     await tester.tap(find.text('Discard'));
@@ -354,6 +356,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.recordedInput, isNull);
+  });
+
+  testWidgets('draw saves without a dealer waiting step', (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Draw'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dealer was waiting'), findsNothing);
+    expect(find.text('Dealer was not waiting'), findsNothing);
+    expect(find.text('Draw. East retains.'), findsOneWidget);
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput?.resultType, HandResultType.washout);
   });
 
   testWidgets('player tag scan selects the matching seated winner',

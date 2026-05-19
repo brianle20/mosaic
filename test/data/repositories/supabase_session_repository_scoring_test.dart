@@ -101,6 +101,7 @@ void main() {
           expect(functionName, 'record_hand_result');
           expect(params['target_table_session_id'], 'ses_01');
           expect(params['target_result_type'], 'washout');
+          expect(params, isNot(contains('target_dealer_was_waiting_at_draw')));
           return {
             'id': 'hand_02',
             'table_session_id': 'ses_01',
@@ -171,6 +172,7 @@ void main() {
       );
 
       expect(detail.hands.single.handNumber, 2);
+      expect(detail.hands.single.dealerRotated, isFalse);
 
       final cachedDetail = await repository.readCachedSessionDetail('ses_01');
       expect(cachedDetail?.hands.single.resultType, HandResultType.washout);

@@ -149,7 +149,7 @@ String _handSummary(
 
   if (hand.resultType == HandResultType.washout) {
     return [
-      'Washout',
+      'Draw',
       hand.dealerRotated ? 'East rotated' : 'East retained',
       'No points exchanged',
     ].join(' · ');
