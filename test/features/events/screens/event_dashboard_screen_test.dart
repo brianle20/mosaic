@@ -213,6 +213,18 @@ class _GuestRepository implements GuestRepository {
   }
 
   @override
+  Future<GuestDetailRecord> updateCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    required DateTime transactionOn,
+    String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<GuestDetailRecord> replaceGuestTag({
     required String guestId,
     required String scannedUid,

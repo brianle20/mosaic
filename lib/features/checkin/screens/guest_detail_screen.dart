@@ -78,6 +78,30 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
     );
   }
 
+  Future<void> _openEditCoverEntry(GuestCoverEntryRecord entry) async {
+    final submission = await Navigator.of(context).push<SubmitCoverEntryInput>(
+      MaterialPageRoute(
+        builder: (_) => AddCoverEntryScreen(
+          title: 'Edit Cover Entry',
+          submitButtonLabel: 'Save Changes',
+          initialAmountCents: entry.amountCents.abs(),
+          initialMethod: entry.method,
+          initialTransactionOn: entry.transactionOn,
+          initialNote: entry.note,
+        ),
+      ),
+    );
+    if (submission == null) {
+      return;
+    }
+
+    await _controller.updateCoverEntry(
+      guestId: widget.guestId,
+      coverEntryId: entry.id,
+      input: submission,
+    );
+  }
+
   Future<void> _openEditGuest(EventGuestRecord guest) async {
     var existingGuests = await widget.guestRepository.readCachedGuests(
       widget.eventId,
@@ -209,6 +233,13 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                   child: ListTile(
                     title: Text(_coverEntrySummary(entry)),
                     subtitle: entry.note == null ? null : Text(entry.note!),
+                    trailing: IconButton(
+                      tooltip: 'Edit cover entry',
+                      onPressed: _controller.isSubmitting
+                          ? null
+                          : () => _openEditCoverEntry(entry),
+                      icon: const Icon(Icons.edit),
+                    ),
                   ),
                 ),
               ),

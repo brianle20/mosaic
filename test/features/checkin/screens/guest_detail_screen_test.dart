@@ -17,6 +17,11 @@ class _FakeGuestRepository implements GuestRepository {
   CoverEntryMethod? lastRecordedMethod;
   DateTime? lastRecordedTransactionOn;
   String? lastRecordedNote;
+  String? lastUpdatedCoverEntryId;
+  int? lastUpdatedAmountCents;
+  CoverEntryMethod? lastUpdatedMethod;
+  DateTime? lastUpdatedTransactionOn;
+  String? lastUpdatedNote;
   int detailLoadCount = 0;
 
   @override
@@ -162,6 +167,45 @@ class _FakeGuestRepository implements GuestRepository {
         ),
         ...detail.coverEntries,
       ],
+      activeTagAssignment: detail.activeTagAssignment,
+    );
+  }
+
+  @override
+  Future<GuestDetailRecord> updateCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    required DateTime transactionOn,
+    String? note,
+  }) async {
+    lastUpdatedCoverEntryId = coverEntryId;
+    lastUpdatedAmountCents = amountCents;
+    lastUpdatedMethod = method;
+    lastUpdatedTransactionOn = transactionOn;
+    lastUpdatedNote = note;
+    return detail = GuestDetailRecord(
+      guest: detail.guest,
+      coverEntries: detail.coverEntries
+          .map(
+            (entry) => entry.id == coverEntryId
+                ? GuestCoverEntryRecord(
+                    id: entry.id,
+                    eventId: entry.eventId,
+                    eventGuestId: entry.eventGuestId,
+                    amountCents: method == CoverEntryMethod.refund
+                        ? -amountCents.abs()
+                        : amountCents,
+                    method: method,
+                    recordedByUserId: entry.recordedByUserId,
+                    transactionOn: transactionOn,
+                    note: note,
+                    createdAt: entry.createdAt,
+                  )
+                : entry,
+          )
+          .toList(growable: false),
       activeTagAssignment: detail.activeTagAssignment,
     );
   }
@@ -767,6 +811,81 @@ void main() {
     expect(repository.lastRecordedTransactionOn, _dateOnly(DateTime.now()));
     expect(repository.lastRecordedNote, 'Paid after seating');
     expect(find.text('Paid after seating'), findsOneWidget);
+  });
+
+  testWidgets('edits a cover ledger entry from the guest detail screen',
+      (tester) async {
+    final repository = _FakeGuestRepository(
+      GuestDetailRecord(
+        guest: EventGuestRecord.fromJson(const {
+          'id': 'gst_09',
+          'event_id': 'evt_01',
+          'display_name': 'Ian Q',
+          'normalized_name': 'ian q',
+          'attendance_status': 'expected',
+          'cover_status': 'partial',
+          'cover_amount_cents': 2000,
+          'is_comped': false,
+          'has_scored_play': false,
+        }),
+        coverEntries: [
+          GuestCoverEntryRecord(
+            id: 'cov_01',
+            eventId: 'evt_01',
+            eventGuestId: 'gst_09',
+            amountCents: 1000,
+            method: CoverEntryMethod.cash,
+            recordedByUserId: 'usr_01',
+            transactionOn: DateTime(2026, 4, 24),
+            note: 'Paid at door',
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestDetailScreen(
+          guestId: 'gst_09',
+          eventId: 'evt_01',
+          guestRepository: repository,
+          nfcService: const _FakeNfcService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Edit cover entry'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit Cover Entry'), findsOneWidget);
+    expect(find.text('Save Changes'), findsOneWidget);
+
+    final amountField = tester.widget<EditableText>(
+      find.descendant(
+        of: find.widgetWithText(TextFormField, 'Amount'),
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(amountField.controller.text, '10.00');
+    expect(find.widgetWithText(FilledButton, 'Cash'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Amount'),
+      '1500',
+    );
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Zelle'));
+    await tester.enterText(find.byType(TextFormField).last, 'Corrected amount');
+    await tester.tap(find.text('Save Changes'));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastUpdatedCoverEntryId, 'cov_01');
+    expect(repository.lastUpdatedAmountCents, 1500);
+    expect(repository.lastUpdatedMethod, CoverEntryMethod.zelle);
+    expect(repository.lastUpdatedTransactionOn, DateTime(2026, 4, 24));
+    expect(repository.lastUpdatedNote, 'Corrected amount');
+    expect(find.text('Corrected amount'), findsOneWidget);
+    expect(find.text('Zelle \$15.00 - Apr 24, 2026'), findsOneWidget);
   });
 
   testWidgets('prefills cover entry amount with remaining balance',

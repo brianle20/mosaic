@@ -279,6 +279,34 @@ class SupabaseGuestRepository implements GuestRepository {
   }
 
   @override
+  Future<GuestDetailRecord> updateCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    required DateTime transactionOn,
+    String? note,
+  }) async {
+    await _runRpcSingle(
+      'update_cover_entry',
+      {
+        'target_cover_entry_id': coverEntryId,
+        'target_amount_cents': amountCents,
+        'target_method': _coverEntryMethodName(method),
+        'target_transaction_on': _dateToJson(transactionOn),
+        'target_note': note,
+      },
+    );
+
+    final detail = await getGuestDetail(guestId);
+    if (detail == null) {
+      throw StateError('Updated guest could not be reloaded.');
+    }
+
+    return detail;
+  }
+
+  @override
   Future<GuestDetailRecord> checkInGuest(String guestId) async {
     final row = await _runRpcSingle(
       'check_in_guest',
