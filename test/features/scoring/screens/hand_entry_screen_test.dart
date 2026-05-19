@@ -376,8 +376,9 @@ void main() {
     await tester.tap(find.text('Draw'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Dealer was waiting'), findsOneWidget);
-    expect(find.text('Dealer was not waiting'), findsOneWidget);
+    expect(find.text('Dealer: Alice Wong'), findsOneWidget);
+    expect(find.text('Waiting'), findsOneWidget);
+    expect(find.text('Not waiting'), findsOneWidget);
 
     await tester.tap(find.text('Save Hand'));
     await tester.pumpAndSettle();
@@ -385,7 +386,7 @@ void main() {
     expect(find.text('Select whether dealer was waiting.'), findsOneWidget);
     expect(repository.recordedInput, isNull);
 
-    await tester.tap(find.text('Dealer was not waiting'));
+    await tester.tap(find.text('Not waiting'));
     await tester.pumpAndSettle();
     expect(find.text('Draw. Dealer rotates.'), findsOneWidget);
 
@@ -394,6 +395,45 @@ void main() {
 
     expect(repository.recordedInput?.resultType, HandResultType.washout);
     expect(repository.recordedInput?.dealerWasWaitingAtDraw, isFalse);
+  });
+
+  testWidgets('editing a draw labels the dealer from that hand',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+    final existingHand = HandResultRecord.fromJson(const {
+      'id': 'hand_01',
+      'table_session_id': 'ses_01',
+      'hand_number': 1,
+      'result_type': 'washout',
+      'winner_seat_index': null,
+      'win_type': null,
+      'discarder_seat_index': null,
+      'fan_count': null,
+      'base_points': null,
+      'dealer_was_waiting_at_draw': true,
+      'east_seat_index_before_hand': 2,
+      'east_seat_index_after_hand': 2,
+      'dealer_rotated': false,
+      'session_completed_after_hand': false,
+      'status': 'recorded',
+      'entered_by_user_id': 'usr_01',
+      'entered_at': '2026-04-24T19:05:00-07:00',
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+          initialHand: existingHand,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dealer: Carol Ng'), findsOneWidget);
+    expect(find.text('Dealer: Alice Wong'), findsNothing);
   });
 
   testWidgets('player tag scan selects the matching seated winner',

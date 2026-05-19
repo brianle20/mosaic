@@ -127,6 +127,17 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     return null;
   }
 
+  int get _drawDealerSeatIndex =>
+      widget.initialHand?.eastSeatIndexBeforeHand ??
+      widget.sessionDetail.session.currentDealerSeatIndex;
+
+  String _seatName(int seatIndex) {
+    final seat = widget.sessionDetail.seats.firstWhere(
+      (entry) => entry.seatIndex == seatIndex,
+    );
+    return widget.guestNamesById[seat.eventGuestId] ?? seat.eventGuestId;
+  }
+
   HandResultDraft get _draft => HandResultDraft(
         resultType: _resultType,
         winnerSeatIndex: _winnerSeatIndex,
@@ -174,12 +185,8 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   }
 
   String _seatLabel(int seatIndex) {
-    final seat = widget.sessionDetail.seats.firstWhere(
-      (entry) => entry.seatIndex == seatIndex,
-    );
-    final guestName =
-        widget.guestNamesById[seat.eventGuestId] ?? seat.eventGuestId;
-    final wind = switch (seat.seatIndex) {
+    final guestName = _seatName(seatIndex);
+    final wind = switch (seatIndex) {
       0 => 'East',
       1 => 'South',
       2 => 'West',
@@ -382,7 +389,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
           ],
           if (_resultType == HandResultType.washout) ...[
             Text(
-              'Dealer waiting state',
+              'Dealer: ${_seatName(_drawDealerSeatIndex)}',
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: 8),
@@ -390,11 +397,11 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
               segments: const [
                 ButtonSegment(
                   value: true,
-                  label: Text('Dealer was waiting'),
+                  label: Text('Waiting'),
                 ),
                 ButtonSegment(
                   value: false,
-                  label: Text('Dealer was not waiting'),
+                  label: Text('Not waiting'),
                 ),
               ],
               selected: _dealerWasWaitingAtDraw == null
