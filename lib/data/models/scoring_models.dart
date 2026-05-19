@@ -34,6 +34,7 @@ class HandResultRecord {
     this.discarderSeatIndex,
     this.fanCount,
     this.basePoints,
+    this.dealerWasWaitingAtDraw,
     this.correctionNote,
     this.rowVersion = 1,
   });
@@ -49,6 +50,7 @@ class HandResultRecord {
       discarderSeatIndex: _optionalInt(json, 'discarder_seat_index'),
       fanCount: _optionalInt(json, 'fan_count'),
       basePoints: _optionalInt(json, 'base_points'),
+      dealerWasWaitingAtDraw: _optionalBool(json, 'dealer_was_waiting_at_draw'),
       eastSeatIndexBeforeHand:
           _requiredInt(json, 'east_seat_index_before_hand'),
       eastSeatIndexAfterHand: _requiredInt(json, 'east_seat_index_after_hand'),
@@ -72,6 +74,7 @@ class HandResultRecord {
   final int? discarderSeatIndex;
   final int? fanCount;
   final int? basePoints;
+  final bool? dealerWasWaitingAtDraw;
   final int eastSeatIndexBeforeHand;
   final int eastSeatIndexAfterHand;
   final bool dealerRotated;
@@ -93,6 +96,7 @@ class HandResultRecord {
       'discarder_seat_index': discarderSeatIndex,
       'fan_count': fanCount,
       'base_points': basePoints,
+      'dealer_was_waiting_at_draw': dealerWasWaitingAtDraw,
       'east_seat_index_before_hand': eastSeatIndexBeforeHand,
       'east_seat_index_after_hand': eastSeatIndexAfterHand,
       'dealer_rotated': dealerRotated,
@@ -156,6 +160,7 @@ class RecordHandResultInput {
     this.winType,
     this.discarderSeatIndex,
     this.fanCount,
+    this.dealerWasWaitingAtDraw,
     this.correctionNote,
   });
 
@@ -165,6 +170,7 @@ class RecordHandResultInput {
   final HandWinType? winType;
   final int? discarderSeatIndex;
   final int? fanCount;
+  final bool? dealerWasWaitingAtDraw;
   final String? correctionNote;
 
   Map<String, dynamic> toRpcParams() {
@@ -175,6 +181,7 @@ class RecordHandResultInput {
       'target_win_type': winType == null ? null : _handWinTypeToJson(winType!),
       'target_discarder_seat_index': discarderSeatIndex,
       'target_fan_count': fanCount,
+      'target_dealer_was_waiting_at_draw': dealerWasWaitingAtDraw,
       'target_correction_note': correctionNote,
     };
   }
@@ -189,6 +196,7 @@ class EditHandResultInput {
     this.winType,
     this.discarderSeatIndex,
     this.fanCount,
+    this.dealerWasWaitingAtDraw,
     this.correctionNote,
   });
 
@@ -198,6 +206,7 @@ class EditHandResultInput {
   final HandWinType? winType;
   final int? discarderSeatIndex;
   final int? fanCount;
+  final bool? dealerWasWaitingAtDraw;
   final String? correctionNote;
 
   Map<String, dynamic> toRpcParams() {
@@ -208,6 +217,7 @@ class EditHandResultInput {
       'target_win_type': winType == null ? null : _handWinTypeToJson(winType!),
       'target_discarder_seat_index': discarderSeatIndex,
       'target_fan_count': fanCount,
+      'target_dealer_was_waiting_at_draw': dealerWasWaitingAtDraw,
       'target_correction_note': correctionNote,
     };
   }
@@ -307,6 +317,19 @@ bool _requiredBool(Map<String, dynamic> json, String key) {
   }
 
   throw FormatException('Expected bool for $key.');
+}
+
+bool? _optionalBool(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) {
+    return null;
+  }
+
+  if (value is bool) {
+    return value;
+  }
+
+  throw FormatException('Expected bool or null for $key.');
 }
 
 DateTime _requiredDateTime(Map<String, dynamic> json, String key) {

@@ -246,9 +246,11 @@ class TableListController extends ChangeNotifier {
     }
 
     if (hand.resultType == HandResultType.washout) {
-      return const LastHandSummary(
+      return LastHandSummary(
         title: 'Draw',
-        detail: 'East retains. Ready for the next hand.',
+        detail: hand.dealerRotated
+            ? 'East rotates. Ready for the next hand.'
+            : 'East retains. Ready for the next hand.',
       );
     }
 

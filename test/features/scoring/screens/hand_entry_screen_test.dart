@@ -358,7 +358,8 @@ void main() {
     expect(repository.recordedInput, isNull);
   });
 
-  testWidgets('draw saves without a dealer waiting step', (tester) async {
+  testWidgets('draw requires dealer waiting state before saving',
+      (tester) async {
     final repository = _RecordingSessionRepository();
 
     await tester.pumpWidget(
@@ -375,14 +376,24 @@ void main() {
     await tester.tap(find.text('Draw'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Dealer was waiting'), findsNothing);
-    expect(find.text('Dealer was not waiting'), findsNothing);
-    expect(find.text('Draw. East retains.'), findsOneWidget);
+    expect(find.text('Dealer was waiting'), findsOneWidget);
+    expect(find.text('Dealer was not waiting'), findsOneWidget);
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Select whether dealer was waiting.'), findsOneWidget);
+    expect(repository.recordedInput, isNull);
+
+    await tester.tap(find.text('Dealer was not waiting'));
+    await tester.pumpAndSettle();
+    expect(find.text('Draw. Dealer rotates.'), findsOneWidget);
 
     await tester.tap(find.text('Save Hand'));
     await tester.pumpAndSettle();
 
     expect(repository.recordedInput?.resultType, HandResultType.washout);
+    expect(repository.recordedInput?.dealerWasWaitingAtDraw, isFalse);
   });
 
   testWidgets('player tag scan selects the matching seated winner',

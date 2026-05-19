@@ -11,6 +11,7 @@ class HandResultDraft {
     this.winType,
     this.discarderSeatIndex,
     this.fanCount,
+    this.dealerWasWaitingAtDraw,
     this.correctionNote = '',
   });
 
@@ -19,6 +20,7 @@ class HandResultDraft {
   final HandWinType? winType;
   final int? discarderSeatIndex;
   final int? fanCount;
+  final bool? dealerWasWaitingAtDraw;
   final String correctionNote;
 
   String? get winnerSeatError {
@@ -80,12 +82,26 @@ class HandResultDraft {
     return null;
   }
 
+  String? get washoutDealerWaitingError {
+    if (resultType == HandResultType.washout &&
+        dealerWasWaitingAtDraw == null) {
+      return 'Select whether dealer was waiting.';
+    }
+
+    if (resultType == HandResultType.win && dealerWasWaitingAtDraw != null) {
+      return 'Wins cannot include dealer waiting state.';
+    }
+
+    return null;
+  }
+
   bool get isValid {
     return winnerSeatError == null &&
         fanCountError == null &&
         winTypeError == null &&
         discarderSeatError == null &&
-        washoutFieldError == null;
+        washoutFieldError == null &&
+        washoutDealerWaitingError == null;
   }
 
   bool get canBuildPreview => isValid;
@@ -100,6 +116,8 @@ class HandResultDraft {
       discarderSeatIndex:
           resultType == HandResultType.win ? discarderSeatIndex : null,
       fanCount: resultType == HandResultType.win ? fanCount : null,
+      dealerWasWaitingAtDraw:
+          resultType == HandResultType.washout ? dealerWasWaitingAtDraw : null,
       correctionNote:
           correctionNote.trim().isEmpty ? null : correctionNote.trim(),
     );
@@ -115,6 +133,8 @@ class HandResultDraft {
       discarderSeatIndex:
           resultType == HandResultType.win ? discarderSeatIndex : null,
       fanCount: resultType == HandResultType.win ? fanCount : null,
+      dealerWasWaitingAtDraw:
+          resultType == HandResultType.washout ? dealerWasWaitingAtDraw : null,
       correctionNote:
           correctionNote.trim().isEmpty ? null : correctionNote.trim(),
     );

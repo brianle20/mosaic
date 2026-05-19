@@ -39,6 +39,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   HandWinType? _winType;
   int? _winnerSeatIndex;
   int? _discarderSeatIndex;
+  bool? _dealerWasWaitingAtDraw;
   _PlayerScanTarget _playerScanTarget = _PlayerScanTarget.winner;
   late final TextEditingController _fanCountController;
   StreamSubscription<TagScanResult>? _playerTagSubscription;
@@ -54,6 +55,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     _winType = initialHand?.winType ?? HandWinType.selfDraw;
     _winnerSeatIndex = initialHand?.winnerSeatIndex;
     _discarderSeatIndex = initialHand?.discarderSeatIndex;
+    _dealerWasWaitingAtDraw = initialHand?.dealerWasWaitingAtDraw;
     _fanCountController = TextEditingController(
       text: initialHand?.fanCount?.toString() ?? '',
     );
@@ -133,6 +135,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
             _resultType == HandResultType.win ? _discarderSeatIndex : null,
         fanCount: _resultType == HandResultType.win
             ? int.tryParse(_fanCountController.text)
+            : null,
+        dealerWasWaitingAtDraw: _resultType == HandResultType.washout
+            ? _dealerWasWaitingAtDraw
             : null,
       );
 
@@ -250,6 +255,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                   _playerScanTarget = _PlayerScanTarget.winner;
                 } else {
                   _winType ??= HandWinType.selfDraw;
+                  _dealerWasWaitingAtDraw = null;
                 }
               });
             },
@@ -374,6 +380,39 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
             const SizedBox(height: 6),
             Text(_draft.washoutFieldError!),
           ],
+          if (_resultType == HandResultType.washout) ...[
+            Text(
+              'Dealer waiting state',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(
+                  value: true,
+                  label: Text('Dealer was waiting'),
+                ),
+                ButtonSegment(
+                  value: false,
+                  label: Text('Dealer was not waiting'),
+                ),
+              ],
+              selected: _dealerWasWaitingAtDraw == null
+                  ? const <bool>{}
+                  : {_dealerWasWaitingAtDraw!},
+              emptySelectionAllowed: true,
+              onSelectionChanged: (selection) {
+                setState(() {
+                  _dealerWasWaitingAtDraw =
+                      selection.isEmpty ? null : selection.first;
+                });
+              },
+            ),
+            if (_draft.washoutDealerWaitingError != null) ...[
+              const SizedBox(height: 6),
+              Text(_draft.washoutDealerWaitingError!),
+            ],
+          ],
           if (_draft.canBuildPreview) ...[
             const SizedBox(height: 20),
             const Text(
@@ -401,7 +440,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   String _buildPreviewText() {
     if (_resultType == HandResultType.washout) {
-      return 'Draw. East retains.';
+      return _dealerWasWaitingAtDraw == false
+          ? 'Draw. Dealer rotates.'
+          : 'Draw. Dealer retains.';
     }
 
     final winner =

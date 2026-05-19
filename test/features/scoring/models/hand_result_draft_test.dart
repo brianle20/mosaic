@@ -75,16 +75,36 @@ void main() {
       expect(draft.isValid, isFalse);
     });
 
-    test('draw is valid without dealer waiting state', () {
-      const draft = HandResultDraft(
+    test('draw requires whether dealer was waiting', () {
+      const missingWaitingDraft = HandResultDraft(
         resultType: HandResultType.washout,
       );
-
-      expect(draft.isValid, isTrue);
-      expect(
-        draft.toRecordInput(tableSessionId: 'ses_01').resultType,
-        HandResultType.washout,
+      const dealerWaitingDraft = HandResultDraft(
+        resultType: HandResultType.washout,
+        dealerWasWaitingAtDraw: true,
       );
+      const dealerNotWaitingDraft = HandResultDraft(
+        resultType: HandResultType.washout,
+        dealerWasWaitingAtDraw: false,
+      );
+
+      expect(
+        missingWaitingDraft.washoutDealerWaitingError,
+        'Select whether dealer was waiting.',
+      );
+      expect(missingWaitingDraft.isValid, isFalse);
+      expect(dealerWaitingDraft.isValid, isTrue);
+      expect(
+          dealerWaitingDraft
+              .toRecordInput(tableSessionId: 'ses_01')
+              .dealerWasWaitingAtDraw,
+          isTrue);
+      expect(dealerNotWaitingDraft.isValid, isTrue);
+      expect(
+          dealerNotWaitingDraft
+              .toRecordInput(tableSessionId: 'ses_01')
+              .dealerWasWaitingAtDraw,
+          isFalse);
     });
 
     test('preview payload is only available when the draft is valid', () {

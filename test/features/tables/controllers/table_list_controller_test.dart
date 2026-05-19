@@ -446,6 +446,51 @@ void main() {
     expect(liveSummary.progressLabel, 'Hand 1');
   });
 
+  test('summarizes draw dealer rotation on live table cards', () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_01',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final session = _session(
+      id: 'ses_01',
+      tableId: 'tbl_01',
+      currentDealerSeatIndex: 1,
+      handCount: 1,
+    );
+    final detail = _detail(
+      session,
+      hands: [_drawHand(dealerRotated: true)],
+    );
+
+    final controller = TableListController(
+      tableRepository: _FakeTableRepository(cachedTables: [table]),
+      sessionRepository: _FakeSessionRepository(
+        cachedSessions: [session],
+        cachedDetails: {'ses_01': detail},
+        loadedDetails: {'ses_01': detail},
+      ),
+      guestRepository: _FakeGuestRepository([
+        _guest('guest_east', 'Alice Chen'),
+        _guest('guest_south', 'Ben Wong'),
+        _guest('guest_west', 'Chris Lee'),
+        _guest('guest_north', 'Dana Park'),
+      ]),
+    );
+
+    await controller.load('evt_01');
+
+    final liveSummary = controller.cards.single.liveSummary!;
+    expect(liveSummary.lastHand.title, 'Draw');
+    expect(
+        liveSummary.lastHand.detail, 'East rotates. Ready for the next hand.');
+  });
+
   test('keeps table session history sorted newest first', () async {
     final table = EventTableRecord.fromJson(const {
       'id': 'tbl_01',
@@ -649,6 +694,28 @@ HandResultRecord _hand({
     'dealer_rotated': false,
     'session_completed_after_hand': false,
     'status': status,
+    'entered_by_user_id': 'usr_01',
+    'entered_at': '2026-04-24T19:30:00-07:00',
+  });
+}
+
+HandResultRecord _drawHand({required bool dealerRotated}) {
+  return HandResultRecord.fromJson({
+    'id': 'hand_draw',
+    'table_session_id': 'ses_01',
+    'hand_number': 1,
+    'result_type': 'washout',
+    'winner_seat_index': null,
+    'win_type': null,
+    'discarder_seat_index': null,
+    'fan_count': null,
+    'base_points': null,
+    'dealer_was_waiting_at_draw': false,
+    'east_seat_index_before_hand': 0,
+    'east_seat_index_after_hand': dealerRotated ? 1 : 0,
+    'dealer_rotated': dealerRotated,
+    'session_completed_after_hand': false,
+    'status': 'recorded',
     'entered_by_user_id': 'usr_01',
     'entered_at': '2026-04-24T19:30:00-07:00',
   });

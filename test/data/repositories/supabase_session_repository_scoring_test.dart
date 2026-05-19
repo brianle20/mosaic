@@ -101,7 +101,7 @@ void main() {
           expect(functionName, 'record_hand_result');
           expect(params['target_table_session_id'], 'ses_01');
           expect(params['target_result_type'], 'washout');
-          expect(params, isNot(contains('target_dealer_was_waiting_at_draw')));
+          expect(params['target_dealer_was_waiting_at_draw'], isFalse);
           return {
             'id': 'hand_02',
             'table_session_id': 'ses_01',
@@ -112,9 +112,10 @@ void main() {
             'discarder_seat_index': null,
             'fan_count': null,
             'base_points': null,
+            'dealer_was_waiting_at_draw': false,
             'east_seat_index_before_hand': 1,
-            'east_seat_index_after_hand': 1,
-            'dealer_rotated': false,
+            'east_seat_index_after_hand': 2,
+            'dealer_rotated': true,
             'session_completed_after_hand': false,
             'status': 'recorded',
             'entered_by_user_id': 'usr_01',
@@ -151,9 +152,10 @@ void main() {
               'discarder_seat_index': null,
               'fan_count': null,
               'base_points': null,
+              'dealer_was_waiting_at_draw': false,
               'east_seat_index_before_hand': 1,
-              'east_seat_index_after_hand': 1,
-              'dealer_rotated': false,
+              'east_seat_index_after_hand': 2,
+              'dealer_rotated': true,
               'session_completed_after_hand': false,
               'status': 'recorded',
               'entered_by_user_id': 'usr_01',
@@ -168,11 +170,13 @@ void main() {
         const RecordHandResultInput(
           tableSessionId: 'ses_01',
           resultType: HandResultType.washout,
+          dealerWasWaitingAtDraw: false,
         ),
       );
 
       expect(detail.hands.single.handNumber, 2);
-      expect(detail.hands.single.dealerRotated, isFalse);
+      expect(detail.hands.single.dealerWasWaitingAtDraw, isFalse);
+      expect(detail.hands.single.dealerRotated, isTrue);
 
       final cachedDetail = await repository.readCachedSessionDetail('ses_01');
       expect(cachedDetail?.hands.single.resultType, HandResultType.washout);
