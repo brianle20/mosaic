@@ -399,10 +399,12 @@ class _SeatGrid extends StatelessWidget {
             final textScale = MediaQuery.textScalerOf(context).scale(1);
             final useSingleColumn =
                 constraints.maxWidth < 320 || textScale > 1.3;
+            final arrangedSeats =
+                useSingleColumn ? seats : _counterClockwiseSeats(seats);
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: seats.length,
+              itemCount: arrangedSeats.length,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: useSingleColumn ? 1 : 2,
                 crossAxisSpacing: 8,
@@ -410,7 +412,7 @@ class _SeatGrid extends StatelessWidget {
                 mainAxisExtent: useSingleColumn ? 112 : 96,
               ),
               itemBuilder: (context, index) {
-                return _SeatTile(seat: seats[index]);
+                return _SeatTile(seat: arrangedSeats[index]);
               },
             );
           },
@@ -418,6 +420,27 @@ class _SeatGrid extends StatelessWidget {
       ],
     );
   }
+}
+
+List<SessionSeatViewModel> _counterClockwiseSeats(
+  List<SessionSeatViewModel> seats,
+) {
+  if (seats.length != 4) {
+    return seats;
+  }
+
+  final seatsByIndex = {for (final seat in seats) seat.seatIndex: seat};
+  final orderedSeats = [
+    seatsByIndex[0],
+    seatsByIndex[3],
+    seatsByIndex[1],
+    seatsByIndex[2],
+  ];
+  if (orderedSeats.any((seat) => seat == null)) {
+    return seats;
+  }
+
+  return [for (final seat in orderedSeats) seat!];
 }
 
 class _SeatTile extends StatelessWidget {

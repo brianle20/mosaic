@@ -261,19 +261,24 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: summary.seats.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                mainAxisExtent: 64,
-              ),
-              itemBuilder: (context, index) => _buildSeatCell(
-                summary.seats[index],
-              ),
+            Builder(
+              builder: (context) {
+                final arrangedSeats = _counterClockwiseSeats(summary.seats);
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: arrangedSeats.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    mainAxisExtent: 64,
+                  ),
+                  itemBuilder: (context, index) => _buildSeatCell(
+                    arrangedSeats[index],
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 12),
             _buildLastResultSummary(summary.lastHand),
@@ -326,6 +331,25 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         ),
       ),
     );
+  }
+
+  List<SeatSummary> _counterClockwiseSeats(List<SeatSummary> seats) {
+    if (seats.length != 4) {
+      return seats;
+    }
+
+    final seatsByIndex = {for (final seat in seats) seat.seatIndex: seat};
+    final orderedSeats = [
+      seatsByIndex[0],
+      seatsByIndex[3],
+      seatsByIndex[1],
+      seatsByIndex[2],
+    ];
+    if (orderedSeats.any((seat) => seat == null)) {
+      return seats;
+    }
+
+    return [for (final seat in orderedSeats) seat!];
   }
 
   Widget _buildSeatCell(SeatSummary seat) {

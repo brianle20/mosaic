@@ -207,7 +207,7 @@ class TableListController extends ChangeNotifier {
       for (var index = 0; index < 4; index += 1)
         SeatSummary(
           seatIndex: index,
-          windLabel: _windLabel(index),
+          windLabel: _windLabel(index, session.currentDealerSeatIndex),
           guestName: 'Unassigned',
           isDealer: index == session.currentDealerSeatIndex,
         ),
@@ -219,7 +219,7 @@ class TableListController extends ChangeNotifier {
       for (var index = 0; index < 4; index += 1)
         SeatSummary(
           seatIndex: index,
-          windLabel: _windLabel(index),
+          windLabel: _windLabel(index, detail.session.currentDealerSeatIndex),
           guestName: _guestNameForSeat(detail, index),
           isDealer: index == detail.session.currentDealerSeatIndex,
         ),
@@ -276,8 +276,9 @@ class TableListController extends ChangeNotifier {
     return 'Hand $handCount';
   }
 
-  String _windLabel(int seatIndex) {
-    return switch (seatIndex) {
+  String _windLabel(int seatIndex, int currentDealerSeatIndex) {
+    final relativeSeatIndex = (seatIndex - currentDealerSeatIndex) % 4;
+    return switch (relativeSeatIndex) {
       0 => 'East',
       1 => 'South',
       2 => 'West',

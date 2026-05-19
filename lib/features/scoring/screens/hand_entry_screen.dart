@@ -131,6 +131,10 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       widget.initialHand?.eastSeatIndexBeforeHand ??
       widget.sessionDetail.session.currentDealerSeatIndex;
 
+  int get _labelEastSeatIndex =>
+      widget.initialHand?.eastSeatIndexBeforeHand ??
+      widget.sessionDetail.session.currentDealerSeatIndex;
+
   String _seatName(int seatIndex) {
     final seat = widget.sessionDetail.seats.firstWhere(
       (entry) => entry.seatIndex == seatIndex,
@@ -186,7 +190,8 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   String _seatLabel(int seatIndex) {
     final guestName = _seatName(seatIndex);
-    final wind = switch (seatIndex) {
+    final relativeSeatIndex = (seatIndex - _labelEastSeatIndex) % 4;
+    final wind = switch (relativeSeatIndex) {
       0 => 'East',
       1 => 'South',
       2 => 'West',

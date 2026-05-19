@@ -381,8 +381,14 @@ void main() {
     ]);
     expect(
       liveSummary.seats.singleWhere((seat) => seat.isDealer).windLabel,
-      'West',
+      'East',
     );
+    expect(liveSummary.seats.map((seat) => seat.windLabel), [
+      'West',
+      'North',
+      'East',
+      'South',
+    ]);
   });
 
   test('uses latest recorded hand and ignores voided later hands', () async {

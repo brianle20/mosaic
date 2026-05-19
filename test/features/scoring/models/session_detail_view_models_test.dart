@@ -61,14 +61,17 @@ void main() {
       expect(viewModel.handCountLabel, 'Hands 2');
     });
 
-    test('builds four seat labels and marks current dealer separately', () {
+    test('builds rotated wind labels and marks current dealer separately', () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(),
         guestNamesById: _guestNamesById,
       );
 
       expect(viewModel.seats, hasLength(4));
-      expect(viewModel.seats[1].seatLabel, 'SOUTH');
+      expect(viewModel.seats[0].seatLabel, 'NORTH');
+      expect(viewModel.seats[1].seatLabel, 'EAST');
+      expect(viewModel.seats[2].seatLabel, 'SOUTH');
+      expect(viewModel.seats[3].seatLabel, 'WEST');
       expect(viewModel.seats[1].isCurrentEast, isTrue);
     });
 

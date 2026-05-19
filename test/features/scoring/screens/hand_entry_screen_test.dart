@@ -188,7 +188,7 @@ class _PassiveNfcService implements NfcService, PassiveNfcService {
 }
 
 void main() {
-  SessionDetailRecord buildDetail() {
+  SessionDetailRecord buildDetail({int currentDealerSeatIndex = 0}) {
     return SessionDetailRecord.fromJson({
       'session': {
         'id': 'ses_01',
@@ -200,7 +200,7 @@ void main() {
         'rotation_policy_config_json': {},
         'status': 'active',
         'initial_east_seat_index': 0,
-        'current_dealer_seat_index': 0,
+        'current_dealer_seat_index': currentDealerSeatIndex,
         'dealer_pass_count': 0,
         'completed_games_count': 0,
         'hand_count': 0,
@@ -324,6 +324,30 @@ void main() {
     expect(find.text('Bob Lee (South)'), findsOneWidget);
   });
 
+  testWidgets('player labels use current dealer as east', (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Winner'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bob Lee (East)'), findsOneWidget);
+    expect(find.text('Carol Ng (South)'), findsOneWidget);
+    expect(find.text('Dee Wu (West)'), findsOneWidget);
+    expect(find.text('Alice Wong (North)'), findsOneWidget);
+    expect(find.text('Bob Lee (South)'), findsNothing);
+  });
+
   testWidgets('blocks wins below three fan', (tester) async {
     final repository = _RecordingSessionRepository();
 
@@ -423,7 +447,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: HandEntryScreen(
-          sessionDetail: buildDetail(),
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
           guestNamesById: seatNames,
           sessionRepository: repository,
           initialHand: existingHand,
@@ -445,7 +469,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: HandEntryScreen(
-          sessionDetail: buildDetail(),
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
           guestNamesById: seatNames,
           guestTagAssignmentsByGuestId: {
             'gst_south': _assignment('gst_south', 'PLAYER-SOUTH'),
@@ -466,7 +490,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Bob Lee (South)'), findsOneWidget);
+    expect(find.text('Bob Lee (East)'), findsOneWidget);
 
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Fan Count'),
@@ -487,7 +511,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: HandEntryScreen(
-          sessionDetail: buildDetail(),
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
           guestNamesById: seatNames,
           guestTagAssignmentsByGuestId: {
             'gst_south': _assignment('gst_south', 'PLAYER-SOUTH'),
@@ -512,7 +536,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: HandEntryScreen(
-          sessionDetail: buildDetail(),
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
           guestNamesById: seatNames,
           guestTagAssignmentsByGuestId: {
             'gst_south': _assignment('gst_south', 'PLAYER-SOUTH'),
@@ -540,7 +564,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Bob Lee (South)'), findsOneWidget);
+    expect(find.text('Bob Lee (East)'), findsOneWidget);
     expect(find.text('Next scan sets discarder.'), findsOneWidget);
 
     nfcService.controller.add(
@@ -552,7 +576,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Carol Ng (West)'), findsOneWidget);
+    expect(find.text('Carol Ng (South)'), findsOneWidget);
 
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Fan Count'),

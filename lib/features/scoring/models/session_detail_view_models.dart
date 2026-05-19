@@ -146,7 +146,7 @@ String _progressLabel(SessionDetailRecord detail) {
 }
 
 String _seatLabel(int seatIndex, int currentEastSeatIndex) {
-  return _windLabel(seatIndex).toUpperCase();
+  return _windLabel(seatIndex, currentEastSeatIndex).toUpperCase();
 }
 
 String _handSummary(
@@ -271,8 +271,9 @@ String _firstName(String name) {
   return trimmed.split(RegExp(r'\s+')).first;
 }
 
-String _windLabel(int seatIndex) {
-  return switch (seatIndex) {
+String _windLabel(int seatIndex, int currentEastSeatIndex) {
+  final relativeSeatIndex = (seatIndex - currentEastSeatIndex) % 4;
+  return switch (relativeSeatIndex) {
     0 => 'East',
     1 => 'South',
     2 => 'West',

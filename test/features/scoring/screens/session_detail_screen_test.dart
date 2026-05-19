@@ -362,6 +362,33 @@ void main() {
     expect(find.text('Resume'), findsNothing);
   });
 
+  testWidgets('seat grid arranges seats counter-clockwise around the table',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: _buildDetail(SessionStatus.active, hasHands: false),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final alice = tester.getCenter(find.text('Alice Wong'));
+    final bob = tester.getCenter(find.text('Bob Lee'));
+    final carol = tester.getCenter(find.text('Carol Ng'));
+    final dee = tester.getCenter(find.text('Dee Wu'));
+
+    expect(alice.dx, lessThan(dee.dx));
+    expect(alice.dy, lessThan(bob.dy));
+    expect(bob.dx, lessThan(carol.dx));
+    expect(dee.dy, lessThan(carol.dy));
+  });
+
   testWidgets('active session blocks hand entry when scoring is paused',
       (tester) async {
     await tester.pumpWidget(
