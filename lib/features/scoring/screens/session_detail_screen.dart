@@ -562,6 +562,34 @@ class _HandHistory extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
+        if (viewModel.archivedHands.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Voided Hands',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 8),
+          for (final hand in viewModel.archivedHands) ...[
+            AppListSurface(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    hand.title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(hand.summaryLabel),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ],
       ],
     );
   }

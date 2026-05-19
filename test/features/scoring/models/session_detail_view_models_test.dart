@@ -36,8 +36,29 @@ void main() {
         guestNamesById: _guestNamesById,
       );
 
-      expect(viewModel.hands, hasLength(2));
+      expect(viewModel.hands, hasLength(1));
+      expect(viewModel.archivedHands, hasLength(1));
       expect(viewModel.handCountLabel, 'Hand 1');
+    });
+
+    test('archives voided hands outside the main hand sequence', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(
+          hands: [
+            _discardWinHand(id: 'hand_01', handNumber: 1),
+            _voidedHand(id: 'hand_02', handNumber: 2),
+            _washoutHand(id: 'hand_03', handNumber: 2),
+          ],
+          settlements: _discardSettlements(),
+        ),
+        guestNamesById: _guestNamesById,
+      );
+
+      expect(viewModel.hands.map((hand) => hand.title), ['Hand 1', 'Hand 2']);
+      expect(viewModel.archivedHands.map((hand) => hand.title), [
+        'Voided Hand 2',
+      ]);
+      expect(viewModel.handCountLabel, 'Hands 2');
     });
 
     test('builds four seat labels and marks current dealer separately', () {
@@ -98,7 +119,8 @@ void main() {
         guestNamesById: _guestNamesById,
       );
 
-      expect(viewModel.hands.single.summaryLabel, 'Voided · Wrong winner');
+      expect(
+          viewModel.archivedHands.single.summaryLabel, 'Voided · Wrong winner');
     });
 
     test('exposes no-hand empty state', () {
@@ -180,11 +202,14 @@ SessionDetailRecord _detail({
   });
 }
 
-Map<String, Object?> _discardWinHand() {
+Map<String, Object?> _discardWinHand({
+  String id = 'hand_01',
+  int handNumber = 1,
+}) {
   return {
-    'id': 'hand_01',
+    'id': id,
     'table_session_id': 'ses_01',
-    'hand_number': 1,
+    'hand_number': handNumber,
     'result_type': 'win',
     'winner_seat_index': 2,
     'win_type': 'discard',
@@ -201,11 +226,14 @@ Map<String, Object?> _discardWinHand() {
   };
 }
 
-Map<String, Object?> _washoutHand() {
+Map<String, Object?> _washoutHand({
+  String id = 'hand_02',
+  int handNumber = 1,
+}) {
   return {
-    'id': 'hand_02',
+    'id': id,
     'table_session_id': 'ses_01',
-    'hand_number': 1,
+    'hand_number': handNumber,
     'result_type': 'washout',
     'east_seat_index_before_hand': 1,
     'east_seat_index_after_hand': 1,
@@ -217,9 +245,12 @@ Map<String, Object?> _washoutHand() {
   };
 }
 
-Map<String, Object?> _voidedHand({String id = 'hand_01'}) {
+Map<String, Object?> _voidedHand({
+  String id = 'hand_01',
+  int handNumber = 1,
+}) {
   return {
-    ..._discardWinHand(),
+    ..._discardWinHand(id: id, handNumber: handNumber),
     'id': id,
     'status': 'voided',
     'correction_note': 'Wrong winner',

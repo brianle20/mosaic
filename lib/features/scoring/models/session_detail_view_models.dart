@@ -11,6 +11,7 @@ class SessionDetailViewModel {
     required this.progressLabel,
     required this.seats,
     required this.hands,
+    required this.archivedHands,
     required this.emptyHandHistoryLabel,
   });
 
@@ -22,6 +23,7 @@ class SessionDetailViewModel {
   final String progressLabel;
   final List<SessionSeatViewModel> seats;
   final List<SessionHandViewModel> hands;
+  final List<SessionHandViewModel> archivedHands;
   final String emptyHandHistoryLabel;
 }
 
@@ -90,6 +92,7 @@ SessionDetailViewModel buildSessionDetailViewModel({
         )
         .toList(growable: false),
     hands: detail.hands
+        .where((hand) => hand.status == HandResultStatus.recorded)
         .map(
           (hand) => SessionHandViewModel(
             handId: hand.id,
@@ -97,6 +100,18 @@ SessionDetailViewModel buildSessionDetailViewModel({
             title: 'Hand ${hand.handNumber}',
             summaryLabel: _handSummary(detail, guestNamesById, hand),
             isVoided: hand.status == HandResultStatus.voided,
+          ),
+        )
+        .toList(growable: false),
+    archivedHands: detail.hands
+        .where((hand) => hand.status == HandResultStatus.voided)
+        .map(
+          (hand) => SessionHandViewModel(
+            handId: hand.id,
+            handNumber: hand.handNumber,
+            title: 'Voided Hand ${hand.handNumber}',
+            summaryLabel: _handSummary(detail, guestNamesById, hand),
+            isVoided: true,
           ),
         )
         .toList(growable: false),

@@ -236,6 +236,7 @@ class _FakeSessionRepository implements SessionRepository {
 SessionDetailRecord _buildDetail(
   SessionStatus status, {
   bool hasHands = true,
+  List<Map<String, Object?>>? hands,
 }) {
   return SessionDetailRecord.fromJson({
     'table_label': 'Table 1',
@@ -293,26 +294,27 @@ SessionDetailRecord _buildDetail(
       },
     ],
     'hands': hasHands
-        ? [
-            {
-              'id': 'hand_01',
-              'table_session_id': 'ses_01',
-              'hand_number': 1,
-              'result_type': 'win',
-              'winner_seat_index': 2,
-              'win_type': 'discard',
-              'discarder_seat_index': 0,
-              'fan_count': 3,
-              'base_points': 8,
-              'east_seat_index_before_hand': 0,
-              'east_seat_index_after_hand': 1,
-              'dealer_rotated': true,
-              'session_completed_after_hand': false,
-              'status': 'recorded',
-              'entered_by_user_id': 'usr_01',
-              'entered_at': '2026-04-24T19:05:00-07:00',
-            },
-          ]
+        ? hands ??
+            [
+              {
+                'id': 'hand_01',
+                'table_session_id': 'ses_01',
+                'hand_number': 1,
+                'result_type': 'win',
+                'winner_seat_index': 2,
+                'win_type': 'discard',
+                'discarder_seat_index': 0,
+                'fan_count': 3,
+                'base_points': 8,
+                'east_seat_index_before_hand': 0,
+                'east_seat_index_after_hand': 1,
+                'dealer_rotated': true,
+                'session_completed_after_hand': false,
+                'status': 'recorded',
+                'entered_by_user_id': 'usr_01',
+                'entered_at': '2026-04-24T19:05:00-07:00',
+              },
+            ]
         : [],
     'settlements': hasHands
         ? [
@@ -420,6 +422,85 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('voided hands render in a separate archive section',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: _buildDetail(
+              SessionStatus.active,
+              hands: const [
+                {
+                  'id': 'hand_01',
+                  'table_session_id': 'ses_01',
+                  'hand_number': 1,
+                  'result_type': 'win',
+                  'winner_seat_index': 2,
+                  'win_type': 'discard',
+                  'discarder_seat_index': 0,
+                  'fan_count': 3,
+                  'base_points': 8,
+                  'east_seat_index_before_hand': 0,
+                  'east_seat_index_after_hand': 1,
+                  'dealer_rotated': true,
+                  'session_completed_after_hand': false,
+                  'status': 'recorded',
+                  'entered_by_user_id': 'usr_01',
+                  'entered_at': '2026-04-24T19:05:00-07:00',
+                },
+                {
+                  'id': 'hand_02',
+                  'table_session_id': 'ses_01',
+                  'hand_number': 2,
+                  'result_type': 'win',
+                  'winner_seat_index': 1,
+                  'win_type': 'self_draw',
+                  'discarder_seat_index': null,
+                  'fan_count': 3,
+                  'base_points': 8,
+                  'east_seat_index_before_hand': 1,
+                  'east_seat_index_after_hand': 1,
+                  'dealer_rotated': false,
+                  'session_completed_after_hand': false,
+                  'status': 'voided',
+                  'entered_by_user_id': 'usr_01',
+                  'entered_at': '2026-04-24T19:10:00-07:00',
+                  'correction_note': 'Incorrect result',
+                },
+                {
+                  'id': 'hand_03',
+                  'table_session_id': 'ses_01',
+                  'hand_number': 2,
+                  'result_type': 'washout',
+                  'east_seat_index_before_hand': 1,
+                  'east_seat_index_after_hand': 2,
+                  'dealer_rotated': true,
+                  'session_completed_after_hand': false,
+                  'status': 'recorded',
+                  'entered_by_user_id': 'usr_01',
+                  'entered_at': '2026-04-24T19:15:00-07:00',
+                },
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -700));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hand 1'), findsOneWidget);
+    expect(find.text('Hand 2'), findsOneWidget);
+    expect(find.text('Voided Hands'), findsOneWidget);
+    expect(find.text('Voided Hand 2'), findsOneWidget);
+    expect(find.text('Voided · Incorrect result'), findsOneWidget);
   });
 
   testWidgets('tapping hand history opens edit hand entry', (tester) async {
