@@ -188,7 +188,10 @@ class _PassiveNfcService implements NfcService, PassiveNfcService {
 }
 
 void main() {
-  SessionDetailRecord buildDetail({int currentDealerSeatIndex = 0}) {
+  SessionDetailRecord buildDetail({
+    int currentDealerSeatIndex = 0,
+    String? startedAt,
+  }) {
     return SessionDetailRecord.fromJson({
       'session': {
         'id': 'ses_01',
@@ -204,7 +207,7 @@ void main() {
         'dealer_pass_count': 0,
         'completed_games_count': 0,
         'hand_count': 0,
-        'started_at': '2026-04-24T19:00:00-07:00',
+        'started_at': startedAt ?? DateTime.now().toIso8601String(),
         'started_by_user_id': 'usr_01',
       },
       'seats': [
@@ -380,6 +383,42 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.recordedInput, isNull);
+  });
+
+  testWidgets('expired round warns but still allows saving a hand',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(
+            startedAt: DateTime.now()
+                .subtract(const Duration(minutes: 61))
+                .toIso8601String(),
+          ),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Round time has expired.'), findsOneWidget);
+
+    await tester.tap(find.text('Winner'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Alice Wong (East)').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Fan Count'),
+      '3',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput, isNotNull);
   });
 
   testWidgets('draw requires dealer waiting state before saving',

@@ -7,6 +7,7 @@ import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/hand_entry_controller.dart';
 import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
+import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
 enum _PlayerScanTarget { winner, discarder }
@@ -156,6 +157,12 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
             : null,
       );
 
+  bool get _roundExpired =>
+      widget.initialHand == null &&
+      RoundTimerState.fromStartedAt(
+        startedAt: widget.sessionDetail.session.startedAt,
+      ).isExpired;
+
   Future<void> _submit() async {
     if (!_draft.isValid) {
       setState(() {});
@@ -245,6 +252,16 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (_roundExpired) ...[
+            Text(
+              'Round time has expired.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 16),
+          ],
           SegmentedButton<HandResultType>(
             segments: const [
               ButtonSegment(

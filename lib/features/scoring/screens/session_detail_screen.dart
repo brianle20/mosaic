@@ -284,10 +284,32 @@ class _SessionHeader extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 12),
+          Text(
+            'Round Time',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 6),
+          StatusChip(
+            label: viewModel.roundTimeLabel,
+            tone: _roundTimeTone(viewModel),
+          ),
         ],
       ),
     );
   }
+}
+
+StatusChipTone _roundTimeTone(SessionDetailViewModel viewModel) {
+  if (viewModel.isRoundExpired) {
+    return StatusChipTone.danger;
+  }
+  if (viewModel.isRoundEndingSoon) {
+    return StatusChipTone.warning;
+  }
+  return StatusChipTone.neutral;
 }
 
 class _SessionSummarySurface extends StatelessWidget {

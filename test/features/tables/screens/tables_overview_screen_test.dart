@@ -532,6 +532,45 @@ void main() {
     expect(dana.dy, lessThan(chris.dy));
   });
 
+  testWidgets('live table shows expired round timer', (tester) async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_points',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final session = _session(
+      id: 'ses_01',
+      tableId: 'tbl_points',
+      startedAt: DateTime.now()
+          .subtract(const Duration(minutes: 61))
+          .toIso8601String(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(
+            sessions: [session],
+            details: {'ses_01': _detail(session)},
+          ),
+          guestRepository: _FakeGuestRepository(const []),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Time expired'), findsOneWidget);
+  });
+
   testWidgets('paused table keeps birdseye summary and view action',
       (tester) async {
     final table = EventTableRecord.fromJson(const {

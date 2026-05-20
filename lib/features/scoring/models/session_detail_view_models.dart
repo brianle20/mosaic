@@ -1,5 +1,6 @@
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 
 class SessionDetailViewModel {
   const SessionDetailViewModel({
@@ -9,6 +10,9 @@ class SessionDetailViewModel {
     required this.handCountLabel,
     required this.currentEastLabel,
     required this.progressLabel,
+    required this.roundTimeLabel,
+    required this.isRoundExpired,
+    required this.isRoundEndingSoon,
     required this.seats,
     required this.hands,
     required this.archivedHands,
@@ -21,6 +25,9 @@ class SessionDetailViewModel {
   final String handCountLabel;
   final String currentEastLabel;
   final String progressLabel;
+  final String roundTimeLabel;
+  final bool isRoundExpired;
+  final bool isRoundEndingSoon;
   final List<SessionSeatViewModel> seats;
   final List<SessionHandViewModel> hands;
   final List<SessionHandViewModel> archivedHands;
@@ -62,8 +69,13 @@ class SessionHandViewModel {
 SessionDetailViewModel buildSessionDetailViewModel({
   required SessionDetailRecord detail,
   required Map<String, String> guestNamesById,
+  DateTime? now,
 }) {
   final currentEastSeatIndex = detail.session.currentDealerSeatIndex;
+  final roundTime = RoundTimerState.fromStartedAt(
+    startedAt: detail.session.startedAt,
+    now: now,
+  );
   final currentEastName = _guestNameForSeat(
     detail,
     guestNamesById,
@@ -80,6 +92,9 @@ SessionDetailViewModel buildSessionDetailViewModel({
     handCountLabel: _handCountLabel(recordedHandCount),
     currentEastLabel: 'East: ${_firstName(currentEastName)}',
     progressLabel: _progressLabel(detail),
+    roundTimeLabel: roundTime.label,
+    isRoundExpired: roundTime.isExpired,
+    isRoundEndingSoon: roundTime.isEndingSoon,
     seats: detail.seats
         .map(
           (seat) => SessionSeatViewModel(

@@ -236,6 +236,7 @@ class _FakeSessionRepository implements SessionRepository {
 SessionDetailRecord _buildDetail(
   SessionStatus status, {
   bool hasHands = true,
+  String startedAt = '2026-04-24T19:00:00-07:00',
   List<Map<String, Object?>>? hands,
 }) {
   return SessionDetailRecord.fromJson({
@@ -260,7 +261,7 @@ SessionDetailRecord _buildDetail(
       'dealer_pass_count': 1,
       'completed_games_count': 1,
       'hand_count': hasHands ? 1 : 0,
-      'started_at': '2026-04-24T19:00:00-07:00',
+      'started_at': startedAt,
       'started_by_user_id': 'usr_01',
     },
     'seats': [
@@ -387,6 +388,30 @@ void main() {
     expect(alice.dy, lessThan(bob.dy));
     expect(bob.dx, lessThan(carol.dx));
     expect(dee.dy, lessThan(carol.dy));
+  });
+
+  testWidgets('active session shows round timer', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: _buildDetail(
+              SessionStatus.active,
+              startedAt: DateTime.now()
+                  .subtract(const Duration(minutes: 40))
+                  .toIso8601String(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Round Time'), findsOneWidget);
+    expect(find.textContaining('min left'), findsOneWidget);
   });
 
   testWidgets('active session blocks hand entry when scoring is paused',

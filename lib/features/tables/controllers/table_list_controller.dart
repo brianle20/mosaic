@@ -4,6 +4,7 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 import 'package:mosaic/features/tables/models/table_overview_card_data.dart';
 
 class TableListController extends ChangeNotifier {
@@ -11,13 +12,16 @@ class TableListController extends ChangeNotifier {
     required TableRepository tableRepository,
     required SessionRepository sessionRepository,
     required GuestRepository guestRepository,
+    DateTime Function()? now,
   })  : _tableRepository = tableRepository,
         _sessionRepository = sessionRepository,
-        _guestRepository = guestRepository;
+        _guestRepository = guestRepository,
+        _now = now ?? DateTime.now;
 
   final TableRepository _tableRepository;
   final SessionRepository _sessionRepository;
   final GuestRepository _guestRepository;
+  final DateTime Function() _now;
 
   bool isLoading = true;
   String? error;
@@ -175,12 +179,16 @@ class TableListController extends ChangeNotifier {
 
     final detail = sessionDetailsBySessionId[session.id];
     if (detail == null) {
+      final roundTime = _roundTimeFor(session);
       return LiveTableSummary(
         sessionId: session.id,
         status: session.status,
         seats: _fallbackSeats(session),
         handCount: session.handCount,
         progressLabel: _progressLabel(session.handCount),
+        roundTimeLabel: roundTime.label,
+        isRoundExpired: roundTime.isExpired,
+        isRoundEndingSoon: roundTime.isEndingSoon,
         lastHand: const LastHandSummary(title: 'No scores yet'),
       );
     }
@@ -191,6 +199,7 @@ class TableListController extends ChangeNotifier {
       ..sort((left, right) => left.handNumber.compareTo(right.handNumber));
     final latestHand = recordedHands.isEmpty ? null : recordedHands.last;
     final handCount = recordedHands.length;
+    final roundTime = _roundTimeFor(detail.session);
 
     return LiveTableSummary(
       sessionId: session.id,
@@ -198,7 +207,17 @@ class TableListController extends ChangeNotifier {
       seats: _seatSummaries(detail),
       handCount: handCount,
       progressLabel: _progressLabel(handCount),
+      roundTimeLabel: roundTime.label,
+      isRoundExpired: roundTime.isExpired,
+      isRoundEndingSoon: roundTime.isEndingSoon,
       lastHand: _lastHandSummary(detail, latestHand),
+    );
+  }
+
+  RoundTimerState _roundTimeFor(TableSessionRecord session) {
+    return RoundTimerState.fromStartedAt(
+      startedAt: session.startedAt,
+      now: _now(),
     );
   }
 

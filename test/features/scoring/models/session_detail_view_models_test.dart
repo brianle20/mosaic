@@ -75,6 +75,42 @@ void main() {
       expect(viewModel.seats[1].isCurrentEast, isTrue);
     });
 
+    test('builds round timer label with remaining time', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(startedAt: '2026-05-20T12:20:00Z'),
+        guestNamesById: _guestNamesById,
+        now: DateTime.parse('2026-05-20T13:00:00Z'),
+      );
+
+      expect(viewModel.roundTimeLabel, '20 min left');
+      expect(viewModel.isRoundExpired, isFalse);
+      expect(viewModel.isRoundEndingSoon, isFalse);
+    });
+
+    test('builds ending soon timer label under five minutes', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(startedAt: '2026-05-20T12:55:30Z'),
+        guestNamesById: _guestNamesById,
+        now: DateTime.parse('2026-05-20T13:51:00Z'),
+      );
+
+      expect(viewModel.roundTimeLabel, 'Less than 5 min left');
+      expect(viewModel.isRoundExpired, isFalse);
+      expect(viewModel.isRoundEndingSoon, isTrue);
+    });
+
+    test('builds expired timer label after one hour', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(startedAt: '2026-05-20T12:00:00Z'),
+        guestNamesById: _guestNamesById,
+        now: DateTime.parse('2026-05-20T13:01:00Z'),
+      );
+
+      expect(viewModel.roundTimeLabel, 'Time expired');
+      expect(viewModel.isRoundExpired, isTrue);
+      expect(viewModel.isRoundEndingSoon, isFalse);
+    });
+
     test('keeps east seat label plain when east is current dealer', () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(currentDealerSeatIndex: 0),
@@ -148,6 +184,7 @@ const _guestNamesById = {
 SessionDetailRecord _detail({
   String? tableLabel = 'Table 7',
   int currentDealerSeatIndex = 1,
+  String startedAt = '2026-04-24T19:00:00-07:00',
   List<Map<String, Object?>>? hands,
   List<Map<String, Object?>>? settlements,
 }) {
@@ -167,7 +204,7 @@ SessionDetailRecord _detail({
       'dealer_pass_count': 1,
       'completed_games_count': 0,
       'hand_count': 1,
-      'started_at': '2026-04-24T19:00:00-07:00',
+      'started_at': startedAt,
       'started_by_user_id': 'usr_01',
     },
     'seats': const [

@@ -254,9 +254,19 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                StatusChip(
-                  label: _liveStatusLabel(summary.status),
-                  tone: _liveStatusTone(summary.status),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    StatusChip(
+                      label: _liveStatusLabel(summary.status),
+                      tone: _liveStatusTone(summary.status),
+                    ),
+                    const SizedBox(height: 6),
+                    StatusChip(
+                      label: summary.roundTimeLabel,
+                      tone: _roundTimeTone(summary),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -587,5 +597,15 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       SessionStatus.paused => StatusChipTone.warning,
       _ => StatusChipTone.info,
     };
+  }
+
+  StatusChipTone _roundTimeTone(LiveTableSummary summary) {
+    if (summary.isRoundExpired) {
+      return StatusChipTone.danger;
+    }
+    if (summary.isRoundEndingSoon) {
+      return StatusChipTone.warning;
+    }
+    return StatusChipTone.neutral;
   }
 }
