@@ -40,7 +40,9 @@ List<EventHandLedgerRowViewModel> buildEventHandLedgerViewModels(
 }
 
 EventHandLedgerRowViewModel _buildRow(EventHandLedgerEntry entry) {
-  final hasDataIssue = entry.resultType == HandResultType.win &&
+  final requiresSettlements = entry.resultType == HandResultType.win ||
+      entry.resultType == HandResultType.falseWinPenalty;
+  final hasDataIssue = requiresSettlements &&
       entry.status == HandResultStatus.recorded &&
       !entry.hasSettlements;
 
@@ -70,6 +72,9 @@ String _resultSummary(EventHandLedgerEntry entry) {
   }
   if (entry.resultType == HandResultType.washout) {
     return 'draw';
+  }
+  if (entry.resultType == HandResultType.falseWinPenalty) {
+    return '${entry.fanCount ?? 6} fan false win penalty';
   }
 
   final fanCount = entry.fanCount;

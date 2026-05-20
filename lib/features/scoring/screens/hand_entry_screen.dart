@@ -40,6 +40,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   HandWinType? _winType;
   int? _winnerSeatIndex;
   int? _discarderSeatIndex;
+  int? _penaltySeatIndex;
   bool? _dealerWasWaitingAtDraw;
   _PlayerScanTarget _playerScanTarget = _PlayerScanTarget.winner;
   late final TextEditingController _fanCountController;
@@ -56,6 +57,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     _winType = initialHand?.winType ?? HandWinType.selfDraw;
     _winnerSeatIndex = initialHand?.winnerSeatIndex;
     _discarderSeatIndex = initialHand?.discarderSeatIndex;
+    _penaltySeatIndex = initialHand?.penaltySeatIndex;
     _dealerWasWaitingAtDraw = initialHand?.dealerWasWaitingAtDraw;
     _fanCountController = TextEditingController(
       text: initialHand?.fanCount?.toString() ?? '',
@@ -149,6 +151,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
         winType: _resultType == HandResultType.win ? _winType : null,
         discarderSeatIndex:
             _resultType == HandResultType.win ? _discarderSeatIndex : null,
+        penaltySeatIndex: _resultType == HandResultType.falseWinPenalty
+            ? _penaltySeatIndex
+            : null,
         fanCount: _resultType == HandResultType.win
             ? int.tryParse(_fanCountController.text)
             : null,
@@ -272,6 +277,10 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                 value: HandResultType.washout,
                 label: Text('Draw'),
               ),
+              ButtonSegment(
+                value: HandResultType.falseWinPenalty,
+                label: Text('False Win'),
+              ),
             ],
             selected: {_resultType},
             onSelectionChanged: (selection) {
@@ -280,10 +289,18 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                 if (_resultType == HandResultType.washout) {
                   _winnerSeatIndex = null;
                   _discarderSeatIndex = null;
+                  _penaltySeatIndex = null;
+                  _winType = null;
+                  _playerScanTarget = _PlayerScanTarget.winner;
+                } else if (_resultType == HandResultType.falseWinPenalty) {
+                  _winnerSeatIndex = null;
+                  _discarderSeatIndex = null;
+                  _dealerWasWaitingAtDraw = null;
                   _winType = null;
                   _playerScanTarget = _PlayerScanTarget.winner;
                 } else {
                   _winType ??= HandWinType.selfDraw;
+                  _penaltySeatIndex = null;
                   _dealerWasWaitingAtDraw = null;
                 }
               });
@@ -442,6 +459,24 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
               Text(_draft.washoutDealerWaitingError!),
             ],
           ],
+          if (_resultType == HandResultType.falseWinPenalty) ...[
+            DropdownButtonFormField<int>(
+              initialValue: _penaltySeatIndex,
+              decoration: const InputDecoration(labelText: 'Caller'),
+              items: winnerItems,
+              onChanged: (value) {
+                setState(() {
+                  _penaltySeatIndex = value;
+                });
+              },
+            ),
+            if (_draft.falseWinPenaltySeatError != null) ...[
+              const SizedBox(height: 6),
+              Text(_draft.falseWinPenaltySeatError!),
+            ],
+            const SizedBox(height: 8),
+            const Text('6 fan to each player.'),
+          ],
           if (_draft.canBuildPreview) ...[
             const SizedBox(height: 20),
             const Text(
@@ -472,6 +507,13 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       return _dealerWasWaitingAtDraw == false
           ? 'Draw. Dealer rotates.'
           : 'Draw. Dealer retains.';
+    }
+
+    if (_resultType == HandResultType.falseWinPenalty) {
+      final caller = _penaltySeatIndex == null
+          ? 'Unknown'
+          : _seatLabel(_penaltySeatIndex!);
+      return '$caller false win penalty. East retains.';
     }
 
     final winner =

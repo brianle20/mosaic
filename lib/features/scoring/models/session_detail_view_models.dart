@@ -185,7 +185,42 @@ String _handSummary(
     ].join(' · ');
   }
 
+  if (hand.resultType == HandResultType.falseWinPenalty) {
+    return _falseWinPenaltySummary(detail, guestNamesById, hand);
+  }
+
   return _winSummary(detail, guestNamesById, hand);
+}
+
+String _falseWinPenaltySummary(
+  SessionDetailRecord detail,
+  Map<String, String> guestNamesById,
+  HandResultRecord hand,
+) {
+  final penaltySeatIndex = hand.penaltySeatIndex;
+  final callerName = penaltySeatIndex == null
+      ? 'Caller'
+      : _guestNameForSeat(detail, guestNamesById, penaltySeatIndex);
+  final fanCount = hand.fanCount ?? 6;
+  final parts = <String>[
+    '$callerName false win penalty',
+    '$fanCount fan to each player',
+    hand.dealerRotated ? 'East rotated' : 'East retained',
+  ];
+
+  final callerGuestId = penaltySeatIndex == null
+      ? null
+      : _guestIdForSeat(detail, penaltySeatIndex);
+  final pointImpact = callerGuestId == null
+      ? null
+      : _pointImpactForGuest(detail, hand.id, callerGuestId);
+  if (pointImpact != null) {
+    parts.add('$callerName ${_signedPoints(pointImpact)}');
+  } else {
+    parts.add('No points exchanged');
+  }
+
+  return parts.join(' · ');
 }
 
 String _winSummary(

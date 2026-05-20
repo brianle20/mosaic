@@ -10,6 +10,7 @@ class HandResultDraft {
     this.winnerSeatIndex,
     this.winType,
     this.discarderSeatIndex,
+    this.penaltySeatIndex,
     this.fanCount,
     this.dealerWasWaitingAtDraw,
     this.correctionNote = '',
@@ -19,6 +20,7 @@ class HandResultDraft {
   final int? winnerSeatIndex;
   final HandWinType? winType;
   final int? discarderSeatIndex;
+  final int? penaltySeatIndex;
   final int? fanCount;
   final bool? dealerWasWaitingAtDraw;
   final String correctionNote;
@@ -82,6 +84,15 @@ class HandResultDraft {
     return null;
   }
 
+  String? get falseWinPenaltySeatError {
+    if (resultType == HandResultType.falseWinPenalty &&
+        penaltySeatIndex == null) {
+      return 'Select the false win caller.';
+    }
+
+    return null;
+  }
+
   String? get washoutDealerWaitingError {
     if (resultType == HandResultType.washout &&
         dealerWasWaitingAtDraw == null) {
@@ -101,6 +112,7 @@ class HandResultDraft {
         winTypeError == null &&
         discarderSeatError == null &&
         washoutFieldError == null &&
+        falseWinPenaltySeatError == null &&
         washoutDealerWaitingError == null;
   }
 
@@ -115,6 +127,9 @@ class HandResultDraft {
       winType: resultType == HandResultType.win ? winType : null,
       discarderSeatIndex:
           resultType == HandResultType.win ? discarderSeatIndex : null,
+      penaltySeatIndex: resultType == HandResultType.falseWinPenalty
+          ? penaltySeatIndex
+          : null,
       fanCount: resultType == HandResultType.win ? fanCount : null,
       dealerWasWaitingAtDraw:
           resultType == HandResultType.washout ? dealerWasWaitingAtDraw : null,
@@ -132,6 +147,9 @@ class HandResultDraft {
       winType: resultType == HandResultType.win ? winType : null,
       discarderSeatIndex:
           resultType == HandResultType.win ? discarderSeatIndex : null,
+      penaltySeatIndex: resultType == HandResultType.falseWinPenalty
+          ? penaltySeatIndex
+          : null,
       fanCount: resultType == HandResultType.win ? fanCount : null,
       dealerWasWaitingAtDraw:
           resultType == HandResultType.washout ? dealerWasWaitingAtDraw : null,

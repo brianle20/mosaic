@@ -371,6 +371,34 @@ void main() {
       expect(hand.dealerRotated, isTrue);
       expect(hand.sessionCompletedAfterHand, isFalse);
     });
+
+    test('parses false win penalty fields from JSON', () {
+      final hand = HandResultRecord.fromJson(const {
+        'id': 'hand_02',
+        'table_session_id': 'ses_01',
+        'hand_number': 4,
+        'result_type': 'false_win_penalty',
+        'winner_seat_index': null,
+        'win_type': null,
+        'discarder_seat_index': null,
+        'penalty_seat_index': 1,
+        'fan_count': 6,
+        'base_points': 32,
+        'east_seat_index_before_hand': 0,
+        'east_seat_index_after_hand': 0,
+        'dealer_rotated': false,
+        'session_completed_after_hand': false,
+        'status': 'recorded',
+        'entered_by_user_id': 'usr_01',
+        'entered_at': '2026-04-24T20:00:00-07:00',
+      });
+
+      expect(hand.resultType, HandResultType.falseWinPenalty);
+      expect(hand.penaltySeatIndex, 1);
+      expect(hand.fanCount, 6);
+      expect(hand.toJson()['result_type'], 'false_win_penalty');
+      expect(hand.toJson()['penalty_seat_index'], 1);
+    });
   });
 
   group('HandSettlementRecord', () {

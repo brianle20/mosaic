@@ -63,6 +63,27 @@ void main() {
       expect(rows[2].isVoided, isTrue);
     });
 
+    test('formats false win penalty summary and points', () {
+      final rows = buildEventHandLedgerViewModels([
+        EventHandLedgerEntry.fromJson(_rowJson(
+          handNumber: 10,
+          resultType: 'false_win_penalty',
+          winType: null,
+          fanCount: 6,
+          penaltySeatIndex: 1,
+          deltas: [32, -96, 32, 32],
+        )),
+      ]);
+
+      expect(rows.single.resultSummary, '6 fan false win penalty');
+      expect(rows.single.cells.map((cell) => cell.pointsLabel), [
+        '+32',
+        '-96',
+        '+32',
+        '+32',
+      ]);
+    });
+
     test('marks scored win without settlements as invalid', () {
       final rows = buildEventHandLedgerViewModels([
         EventHandLedgerEntry.fromJson(_rowJson(
@@ -86,6 +107,7 @@ Map<String, Object?> _rowJson({
   String status = 'recorded',
   String? winType = 'discard',
   int? fanCount = 7,
+  int? penaltySeatIndex,
   bool hasSettlements = true,
   List<int> deltas = const [-96, 0, 0, 96],
 }) {
@@ -102,6 +124,7 @@ Map<String, Object?> _rowJson({
     'status': status,
     'win_type': winType,
     'fan_count': fanCount,
+    'penalty_seat_index': penaltySeatIndex,
     'has_settlements': hasSettlements,
     'cells': [
       _cellJson('east', 0, 'gst_east', 'Estevon Jackson', deltas[0]),

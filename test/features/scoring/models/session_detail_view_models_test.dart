@@ -149,6 +149,22 @@ void main() {
       );
     });
 
+    test('summarizes false win penalties from persisted settlements', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(
+          hands: [_falseWinPenaltyHand()],
+          settlements: _falseWinPenaltySettlements(),
+        ),
+        guestNamesById: _guestNamesById,
+      );
+
+      expect(
+        viewModel.hands.single.summaryLabel,
+        'Giang Tran false win penalty · 6 fan to each player · '
+        'East retained · Giang Tran -96',
+      );
+    });
+
     test('summarizes voided hands with correction note', () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(
@@ -285,6 +301,31 @@ Map<String, Object?> _washoutHand({
   };
 }
 
+Map<String, Object?> _falseWinPenaltyHand({
+  String id = 'hand_04',
+  int handNumber = 2,
+}) {
+  return {
+    'id': id,
+    'table_session_id': 'ses_01',
+    'hand_number': handNumber,
+    'result_type': 'false_win_penalty',
+    'winner_seat_index': null,
+    'win_type': null,
+    'discarder_seat_index': null,
+    'penalty_seat_index': 1,
+    'fan_count': 6,
+    'base_points': 32,
+    'east_seat_index_before_hand': 1,
+    'east_seat_index_after_hand': 1,
+    'dealer_rotated': false,
+    'session_completed_after_hand': false,
+    'status': 'recorded',
+    'entered_by_user_id': 'usr_01',
+    'entered_at': '2026-04-24T19:15:00-07:00',
+  };
+}
+
 Map<String, Object?> _voidedHand({
   String id = 'hand_01',
   int handNumber = 1,
@@ -314,6 +355,35 @@ List<Map<String, Object?>> _discardSettlements() {
       'payee_event_guest_id': 'gst_west',
       'amount_points': 8,
       'multiplier_flags_json': ['discard'],
+    },
+  ];
+}
+
+List<Map<String, Object?>> _falseWinPenaltySettlements() {
+  return const [
+    {
+      'id': 'set_03',
+      'hand_result_id': 'hand_04',
+      'payer_event_guest_id': 'gst_south',
+      'payee_event_guest_id': 'gst_east',
+      'amount_points': 32,
+      'multiplier_flags_json': ['false_win_penalty'],
+    },
+    {
+      'id': 'set_04',
+      'hand_result_id': 'hand_04',
+      'payer_event_guest_id': 'gst_south',
+      'payee_event_guest_id': 'gst_west',
+      'amount_points': 32,
+      'multiplier_flags_json': ['false_win_penalty'],
+    },
+    {
+      'id': 'set_05',
+      'hand_result_id': 'hand_04',
+      'payer_event_guest_id': 'gst_south',
+      'payee_event_guest_id': 'gst_north',
+      'amount_points': 32,
+      'multiplier_flags_json': ['false_win_penalty'],
     },
   ];
 }

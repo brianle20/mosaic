@@ -273,6 +273,18 @@ class TableListController extends ChangeNotifier {
       );
     }
 
+    if (hand.resultType == HandResultType.falseWinPenalty) {
+      final penaltySeatIndex = hand.penaltySeatIndex;
+      final caller = penaltySeatIndex == null
+          ? 'Caller'
+          : _guestNameForSeat(detail, penaltySeatIndex);
+      return LastHandSummary(
+        title: '$caller false win penalty',
+        detail:
+            '${hand.fanCount ?? 6} fan penalty. East retains. Ready for the next hand.',
+      );
+    }
+
     final winnerSeatIndex = hand.winnerSeatIndex;
     final winner = winnerSeatIndex == null
         ? 'Winner'

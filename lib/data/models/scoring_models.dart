@@ -3,6 +3,7 @@ import 'package:meta/meta.dart';
 enum HandResultType {
   win,
   washout,
+  falseWinPenalty,
 }
 
 enum HandWinType {
@@ -32,6 +33,7 @@ class HandResultRecord {
     this.winnerSeatIndex,
     this.winType,
     this.discarderSeatIndex,
+    this.penaltySeatIndex,
     this.fanCount,
     this.basePoints,
     this.dealerWasWaitingAtDraw,
@@ -48,6 +50,7 @@ class HandResultRecord {
       winnerSeatIndex: _optionalInt(json, 'winner_seat_index'),
       winType: _optionalWinType(json, 'win_type'),
       discarderSeatIndex: _optionalInt(json, 'discarder_seat_index'),
+      penaltySeatIndex: _optionalInt(json, 'penalty_seat_index'),
       fanCount: _optionalInt(json, 'fan_count'),
       basePoints: _optionalInt(json, 'base_points'),
       dealerWasWaitingAtDraw: _optionalBool(json, 'dealer_was_waiting_at_draw'),
@@ -72,6 +75,7 @@ class HandResultRecord {
   final int? winnerSeatIndex;
   final HandWinType? winType;
   final int? discarderSeatIndex;
+  final int? penaltySeatIndex;
   final int? fanCount;
   final int? basePoints;
   final bool? dealerWasWaitingAtDraw;
@@ -94,6 +98,7 @@ class HandResultRecord {
       'winner_seat_index': winnerSeatIndex,
       'win_type': winType == null ? null : _handWinTypeToJson(winType!),
       'discarder_seat_index': discarderSeatIndex,
+      'penalty_seat_index': penaltySeatIndex,
       'fan_count': fanCount,
       'base_points': basePoints,
       'dealer_was_waiting_at_draw': dealerWasWaitingAtDraw,
@@ -159,6 +164,7 @@ class RecordHandResultInput {
     this.winnerSeatIndex,
     this.winType,
     this.discarderSeatIndex,
+    this.penaltySeatIndex,
     this.fanCount,
     this.dealerWasWaitingAtDraw,
     this.correctionNote,
@@ -169,6 +175,7 @@ class RecordHandResultInput {
   final int? winnerSeatIndex;
   final HandWinType? winType;
   final int? discarderSeatIndex;
+  final int? penaltySeatIndex;
   final int? fanCount;
   final bool? dealerWasWaitingAtDraw;
   final String? correctionNote;
@@ -180,6 +187,7 @@ class RecordHandResultInput {
       'target_winner_seat_index': winnerSeatIndex,
       'target_win_type': winType == null ? null : _handWinTypeToJson(winType!),
       'target_discarder_seat_index': discarderSeatIndex,
+      'target_penalty_seat_index': penaltySeatIndex,
       'target_fan_count': fanCount,
       'target_dealer_was_waiting_at_draw': dealerWasWaitingAtDraw,
       'target_correction_note': correctionNote,
@@ -195,6 +203,7 @@ class EditHandResultInput {
     this.winnerSeatIndex,
     this.winType,
     this.discarderSeatIndex,
+    this.penaltySeatIndex,
     this.fanCount,
     this.dealerWasWaitingAtDraw,
     this.correctionNote,
@@ -205,6 +214,7 @@ class EditHandResultInput {
   final int? winnerSeatIndex;
   final HandWinType? winType;
   final int? discarderSeatIndex;
+  final int? penaltySeatIndex;
   final int? fanCount;
   final bool? dealerWasWaitingAtDraw;
   final String? correctionNote;
@@ -216,6 +226,7 @@ class EditHandResultInput {
       'target_winner_seat_index': winnerSeatIndex,
       'target_win_type': winType == null ? null : _handWinTypeToJson(winType!),
       'target_discarder_seat_index': discarderSeatIndex,
+      'target_penalty_seat_index': penaltySeatIndex,
       'target_fan_count': fanCount,
       'target_dealer_was_waiting_at_draw': dealerWasWaitingAtDraw,
       'target_correction_note': correctionNote,
@@ -354,6 +365,7 @@ HandResultType _handResultTypeFromJson(String value) {
   return switch (value) {
     'win' => HandResultType.win,
     'washout' => HandResultType.washout,
+    'false_win_penalty' => HandResultType.falseWinPenalty,
     _ => throw FormatException('Unknown hand result type: $value'),
   };
 }
@@ -362,6 +374,7 @@ String _handResultTypeToJson(HandResultType value) {
   return switch (value) {
     HandResultType.win => 'win',
     HandResultType.washout => 'washout',
+    HandResultType.falseWinPenalty => 'false_win_penalty',
   };
 }
 

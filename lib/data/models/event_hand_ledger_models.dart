@@ -56,6 +56,7 @@ class EventHandLedgerEntry {
     required this.cells,
     this.winType,
     this.fanCount,
+    this.penaltySeatIndex,
   });
 
   factory EventHandLedgerEntry.fromJson(Map<String, dynamic> json) {
@@ -83,6 +84,7 @@ class EventHandLedgerEntry {
       status: _handResultStatusFromJson(_requiredString(json, 'status')),
       winType: _optionalWinType(json, 'win_type'),
       fanCount: _optionalInt(json, 'fan_count'),
+      penaltySeatIndex: _optionalInt(json, 'penalty_seat_index'),
       hasSettlements: _boolOrDefault(json, 'has_settlements', false),
       cells: cells,
     );
@@ -100,6 +102,7 @@ class EventHandLedgerEntry {
   final HandResultStatus status;
   final HandWinType? winType;
   final int? fanCount;
+  final int? penaltySeatIndex;
   final bool hasSettlements;
   final List<EventHandLedgerCell> cells;
 
@@ -117,6 +120,7 @@ class EventHandLedgerEntry {
       'status': _handResultStatusToJson(status),
       'win_type': winType == null ? null : _handWinTypeToJson(winType!),
       'fan_count': fanCount,
+      'penalty_seat_index': penaltySeatIndex,
       'has_settlements': hasSettlements,
       'cells': cells.map((cell) => cell.toJson()).toList(growable: false),
     };
@@ -221,6 +225,7 @@ HandResultType _handResultTypeFromJson(String value) {
   return switch (value) {
     'win' => HandResultType.win,
     'washout' => HandResultType.washout,
+    'false_win_penalty' => HandResultType.falseWinPenalty,
     _ => throw FormatException('Unknown hand result type: $value'),
   };
 }
@@ -229,6 +234,7 @@ String _handResultTypeToJson(HandResultType type) {
   return switch (type) {
     HandResultType.win => 'win',
     HandResultType.washout => 'washout',
+    HandResultType.falseWinPenalty => 'false_win_penalty',
   };
 }
 

@@ -107,6 +107,37 @@ void main() {
           isFalse);
     });
 
+    test('false win penalty requires caller and clears win-only fields', () {
+      const missingCallerDraft = HandResultDraft(
+        resultType: HandResultType.falseWinPenalty,
+      );
+      const validDraft = HandResultDraft(
+        resultType: HandResultType.falseWinPenalty,
+        penaltySeatIndex: 1,
+        winnerSeatIndex: 2,
+        fanCount: 8,
+        winType: HandWinType.discard,
+        discarderSeatIndex: 3,
+        dealerWasWaitingAtDraw: true,
+      );
+
+      expect(
+        missingCallerDraft.falseWinPenaltySeatError,
+        'Select the false win caller.',
+      );
+      expect(missingCallerDraft.isValid, isFalse);
+      expect(validDraft.isValid, isTrue);
+
+      final input = validDraft.toRecordInput(tableSessionId: 'ses_01');
+      expect(input.resultType, HandResultType.falseWinPenalty);
+      expect(input.penaltySeatIndex, 1);
+      expect(input.winnerSeatIndex, isNull);
+      expect(input.winType, isNull);
+      expect(input.discarderSeatIndex, isNull);
+      expect(input.fanCount, isNull);
+      expect(input.dealerWasWaitingAtDraw, isNull);
+    });
+
     test('preview payload is only available when the draft is valid', () {
       const invalidDraft = HandResultDraft(resultType: HandResultType.win);
       const validDraft = HandResultDraft(

@@ -460,6 +460,53 @@ void main() {
     expect(repository.recordedInput?.dealerWasWaitingAtDraw, isFalse);
   });
 
+  testWidgets('false win penalty records caller without win fields',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('False Win'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Caller'), findsOneWidget);
+    expect(find.text('6 fan to each player.'), findsOneWidget);
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+    expect(find.text('Select the false win caller.'), findsOneWidget);
+    expect(repository.recordedInput, isNull);
+
+    await tester.tap(find.text('Caller'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Carol Ng (South)').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Carol Ng (South) false win penalty. East retains.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(
+        repository.recordedInput?.resultType, HandResultType.falseWinPenalty);
+    expect(repository.recordedInput?.penaltySeatIndex, 2);
+    expect(repository.recordedInput?.winnerSeatIndex, isNull);
+    expect(repository.recordedInput?.winType, isNull);
+    expect(repository.recordedInput?.fanCount, isNull);
+  });
+
   testWidgets('editing a draw labels the dealer from that hand',
       (tester) async {
     final repository = _RecordingSessionRepository();

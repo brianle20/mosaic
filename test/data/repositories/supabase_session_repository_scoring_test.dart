@@ -182,6 +182,93 @@ void main() {
       expect(cachedDetail?.hands.single.resultType, HandResultType.washout);
     });
 
+    test('records false win penalty caller through scoring RPC', () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseSessionRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcSingleRunner: (functionName, params) async {
+          expect(functionName, 'record_hand_result');
+          expect(params['target_result_type'], 'false_win_penalty');
+          expect(params['target_penalty_seat_index'], 2);
+          expect(params['target_fan_count'], isNull);
+          return {
+            'id': 'hand_03',
+            'table_session_id': 'ses_01',
+            'hand_number': 3,
+            'result_type': 'false_win_penalty',
+            'winner_seat_index': null,
+            'win_type': null,
+            'discarder_seat_index': null,
+            'penalty_seat_index': 2,
+            'fan_count': 6,
+            'base_points': 32,
+            'east_seat_index_before_hand': 1,
+            'east_seat_index_after_hand': 1,
+            'dealer_rotated': false,
+            'session_completed_after_hand': false,
+            'status': 'recorded',
+            'entered_by_user_id': 'usr_01',
+            'entered_at': '2026-04-24T19:30:00-07:00',
+          };
+        },
+        sessionDetailLoader: (_) async => {
+          'session': {
+            'id': 'ses_01',
+            'event_id': 'evt_01',
+            'event_table_id': 'tbl_01',
+            'session_number_for_table': 1,
+            'ruleset_id': 'HK_STANDARD',
+            'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+            'rotation_policy_config_json': {},
+            'status': 'active',
+            'initial_east_seat_index': 0,
+            'current_dealer_seat_index': 1,
+            'dealer_pass_count': 1,
+            'completed_games_count': 3,
+            'hand_count': 3,
+            'started_at': '2026-04-24T19:00:00-07:00',
+            'started_by_user_id': 'usr_01',
+          },
+          'seats': const [],
+          'hands': [
+            {
+              'id': 'hand_03',
+              'table_session_id': 'ses_01',
+              'hand_number': 3,
+              'result_type': 'false_win_penalty',
+              'winner_seat_index': null,
+              'win_type': null,
+              'discarder_seat_index': null,
+              'penalty_seat_index': 2,
+              'fan_count': 6,
+              'base_points': 32,
+              'east_seat_index_before_hand': 1,
+              'east_seat_index_after_hand': 1,
+              'dealer_rotated': false,
+              'session_completed_after_hand': false,
+              'status': 'recorded',
+              'entered_by_user_id': 'usr_01',
+              'entered_at': '2026-04-24T19:30:00-07:00',
+            }
+          ],
+          'settlements': const [],
+        },
+      );
+
+      final detail = await repository.recordHand(
+        const RecordHandResultInput(
+          tableSessionId: 'ses_01',
+          resultType: HandResultType.falseWinPenalty,
+          penaltySeatIndex: 2,
+        ),
+      );
+
+      expect(detail.hands.single.resultType, HandResultType.falseWinPenalty);
+      expect(detail.hands.single.penaltySeatIndex, 2);
+      expect(detail.hands.single.fanCount, 6);
+    });
+
     test('edits and voids a hand through scoring RPCs', () async {
       final rpcCalls = <String>[];
       final cache = await LocalCache.create();
