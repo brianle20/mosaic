@@ -13,6 +13,7 @@ class StartSessionScreen extends StatefulWidget {
     required this.eventId,
     required this.table,
     required this.guestRepository,
+    required this.seatingRepository,
     required this.sessionRepository,
     required this.nfcService,
     this.preverifiedTableTagUid,
@@ -21,6 +22,7 @@ class StartSessionScreen extends StatefulWidget {
   final String eventId;
   final EventTableRecord table;
   final GuestRepository guestRepository;
+  final SeatingRepository seatingRepository;
   final SessionRepository sessionRepository;
   final NfcService nfcService;
   final String? preverifiedTableTagUid;
@@ -39,6 +41,7 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
     _controller = StartSessionController(
       table: widget.table,
       guestRepository: widget.guestRepository,
+      seatingRepository: widget.seatingRepository,
       sessionRepository: widget.sessionRepository,
       preverifiedTableTagUid: widget.preverifiedTableTagUid,
     )

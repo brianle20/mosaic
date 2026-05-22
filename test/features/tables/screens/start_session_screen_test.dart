@@ -6,6 +6,7 @@ import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -220,6 +221,33 @@ class _FakeSessionRepository implements SessionRepository {
 
   @override
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
+    throw UnimplementedError();
+  }
+}
+
+class _FakeSeatingRepository implements SeatingRepository {
+  const _FakeSeatingRepository([this.assignments = const []]);
+
+  final List<SeatingAssignmentRecord> assignments;
+
+  @override
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
+      assignments;
+
+  @override
+  Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
+    String eventId,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> readCachedAssignments(String eventId) {
     throw UnimplementedError();
   }
 }
@@ -440,6 +468,7 @@ void main() {
             assignments: buildAssignments(),
           ),
           sessionRepository: sessionRepository,
+          seatingRepository: const _FakeSeatingRepository(),
           nfcService: _QueuedNfcService([
             const TagScanResult(
               rawUid: 'TABLE-001',
@@ -539,6 +568,7 @@ void main() {
             assignments: buildAssignments(),
           ),
           sessionRepository: _FakeSessionRepository(),
+          seatingRepository: const _FakeSeatingRepository(),
           nfcService: const _ThrowingNfcService(
             'NFC is disabled. Enable NFC in system settings, then try again.',
           ),
@@ -584,6 +614,7 @@ void main() {
             assignments: buildAssignments(),
           ),
           sessionRepository: _FakeSessionRepository(),
+          seatingRepository: const _FakeSeatingRepository(),
           nfcService: nfcService,
         ),
       ),
@@ -626,6 +657,7 @@ void main() {
             assignments: buildAssignments(),
           ),
           sessionRepository: _FakeSessionRepository(),
+          seatingRepository: const _FakeSeatingRepository(),
           nfcService: _CompletingTableScanNfcService(tableScanCompleter),
         ),
       ),
@@ -672,6 +704,7 @@ void main() {
               assignments: buildAssignments(),
             ),
             sessionRepository: sessionRepository,
+            seatingRepository: const _FakeSeatingRepository(),
             nfcService: _QueuedNfcService([
               const TagScanResult(
                 rawUid: 'PLAYER-EAST',
@@ -754,6 +787,7 @@ void main() {
             assignments: buildAssignments(),
           ),
           sessionRepository: _FakeSessionRepository(),
+          seatingRepository: const _FakeSeatingRepository(),
           nfcService: _QueuedNfcService([
             const TagScanResult(
               rawUid: 'TABLE-001',
@@ -788,4 +822,96 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('prompts for assigned player when table assignments exist',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StartSessionScreen(
+          eventId: 'evt_01',
+          table: EventTableRecord.fromJson(const {
+            'id': 'tbl_01',
+            'event_id': 'evt_01',
+            'label': 'Table 1',
+            'mode': 'points',
+            'display_order': 1,
+            'default_ruleset_id': 'HK_STANDARD',
+            'default_rotation_policy_type':
+                'dealer_cycle_return_to_initial_east',
+            'default_rotation_policy_config_json': {},
+            'status': 'active',
+          }),
+          guestRepository: _FakeGuestRepository(
+            guests: buildGuests(),
+            assignments: buildAssignments(),
+          ),
+          sessionRepository: _FakeSessionRepository(),
+          seatingRepository: _FakeSeatingRepository(_tableAssignments()),
+          nfcService: _QueuedNfcService([
+            const TagScanResult(
+              rawUid: 'TABLE-001',
+              normalizedUid: 'TABLE-001',
+              isManualEntry: true,
+            ),
+          ]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan Next Tag'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Scan Alice Wong for East'), findsOneWidget);
+    expect(find.text('Scan East Player Tag'), findsNothing);
+  });
+}
+
+List<SeatingAssignmentRecord> _tableAssignments() {
+  return const [
+    SeatingAssignmentRecord(
+      id: 'seat_asg_east',
+      eventId: 'evt_01',
+      eventTableId: 'tbl_01',
+      tableLabel: 'Table 1',
+      eventGuestId: 'gst_east',
+      displayName: 'Alice Wong',
+      seatIndex: 0,
+      assignmentRound: 1,
+      status: 'active',
+    ),
+    SeatingAssignmentRecord(
+      id: 'seat_asg_south',
+      eventId: 'evt_01',
+      eventTableId: 'tbl_01',
+      tableLabel: 'Table 1',
+      eventGuestId: 'gst_south',
+      displayName: 'Bob Lee',
+      seatIndex: 1,
+      assignmentRound: 1,
+      status: 'active',
+    ),
+    SeatingAssignmentRecord(
+      id: 'seat_asg_west',
+      eventId: 'evt_01',
+      eventTableId: 'tbl_01',
+      tableLabel: 'Table 1',
+      eventGuestId: 'gst_west',
+      displayName: 'Carol Ng',
+      seatIndex: 2,
+      assignmentRound: 1,
+      status: 'active',
+    ),
+    SeatingAssignmentRecord(
+      id: 'seat_asg_north',
+      eventId: 'evt_01',
+      eventTableId: 'tbl_01',
+      tableLabel: 'Table 1',
+      eventGuestId: 'gst_north',
+      displayName: 'Dee Wu',
+      seatIndex: 3,
+      assignmentRound: 1,
+      status: 'active',
+    ),
+  ];
 }

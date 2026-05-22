@@ -158,6 +158,7 @@ class AppRouter {
             eventId: args.eventId,
             table: args.table,
             guestRepository: guestRepository,
+            seatingRepository: seatingRepository,
             sessionRepository: sessionRepository,
             nfcService: nfcService,
             preverifiedTableTagUid: args.preverifiedTableTagUid,

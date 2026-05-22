@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -10,9 +11,11 @@ class StartSessionController extends ChangeNotifier {
   StartSessionController({
     required this.table,
     required GuestRepository guestRepository,
+    required SeatingRepository seatingRepository,
     required SessionRepository sessionRepository,
     String? preverifiedTableTagUid,
   })  : _guestRepository = guestRepository,
+        _seatingRepository = seatingRepository,
         _sessionRepository = sessionRepository,
         state = preverifiedTableTagUid == null
             ? StartSessionScanState.initial()
@@ -20,6 +23,7 @@ class StartSessionController extends ChangeNotifier {
 
   final EventTableRecord table;
   final GuestRepository _guestRepository;
+  final SeatingRepository _seatingRepository;
   final SessionRepository _sessionRepository;
 
   bool isLoading = true;
@@ -29,6 +33,7 @@ class StartSessionController extends ChangeNotifier {
   StartSessionScanState state;
   Map<String, EventGuestRecord> guestsById = const {};
   Map<String, GuestTagAssignmentSummary> assignmentsByGuestId = const {};
+  Map<int, SeatingAssignmentRecord> expectedAssignmentsBySeatIndex = const {};
 
   Future<void> load(String eventId) async {
     isLoading = true;
@@ -39,10 +44,15 @@ class StartSessionController extends ChangeNotifier {
       final guests = await _guestRepository.listGuests(eventId);
       final assignments =
           await _guestRepository.listActiveTagAssignments(eventId);
+      final seatingAssignments =
+          await _seatingRepository.loadAssignments(eventId);
       guestsById = {
         for (final guest in guests) guest.id: guest,
       };
       assignmentsByGuestId = assignments;
+      expectedAssignmentsBySeatIndex = _expectedAssignmentsForTable(
+        seatingAssignments,
+      );
     } catch (exception) {
       error = exception.toString();
     }
@@ -52,6 +62,12 @@ class StartSessionController extends ChangeNotifier {
   }
 
   String get currentPrompt {
+    final expectedAssignment = _expectedAssignmentForCurrentSeat;
+    final currentSeatLabel = state.currentSeatLabel;
+    if (expectedAssignment != null && currentSeatLabel != null) {
+      return 'Scan ${expectedAssignment.displayName} for $currentSeatLabel';
+    }
+
     return switch (state.currentStep) {
       StartSessionScanStep.scanTable => 'Scan Table Tag',
       StartSessionScanStep.scanEast => 'Scan East Player Tag',
@@ -96,6 +112,16 @@ class StartSessionController extends ChangeNotifier {
     if (assignment == null) {
       actionError =
           'Unknown player tag. Register player tags during check-in first.';
+      notifyListeners();
+      return;
+    }
+
+    final expectedAssignment = _expectedAssignmentForCurrentSeat;
+    if (expectedAssignment != null &&
+        assignment.eventGuestId != expectedAssignment.eventGuestId) {
+      actionError =
+          'Expected ${expectedAssignment.displayName} for ${state.currentSeatLabel}. '
+          'Scan the assigned player tag.';
       notifyListeners();
       return;
     }
@@ -151,6 +177,31 @@ class StartSessionController extends ChangeNotifier {
       }
     }
     return null;
+  }
+
+  SeatingAssignmentRecord? get _expectedAssignmentForCurrentSeat {
+    final seatIndex = state.scannedPlayerUids.length;
+    return expectedAssignmentsBySeatIndex[seatIndex];
+  }
+
+  Map<int, SeatingAssignmentRecord> _expectedAssignmentsForTable(
+    List<SeatingAssignmentRecord> assignments,
+  ) {
+    final tableAssignments = assignments
+        .where(
+          (assignment) =>
+              assignment.eventTableId == table.id &&
+              assignment.status == 'active',
+        )
+        .toList(growable: false);
+    if (tableAssignments.length != 4) {
+      return const {};
+    }
+
+    return {
+      for (final assignment in tableAssignments)
+        assignment.seatIndex: assignment,
+    };
   }
 }
 
