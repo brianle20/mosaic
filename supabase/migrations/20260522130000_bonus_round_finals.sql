@@ -1212,8 +1212,12 @@ declare
     '2026-05-17T18:23:17Z'::timestamptz;
   dealer_compound_cap_effective_at constant timestamptz :=
     '2026-05-19T14:00:00Z'::timestamptz;
+  round_time_limit_effective_at constant timestamptz :=
+    '2026-05-21T12:00:00Z'::timestamptz;
+  round_time_limit_duration constant interval := interval '1 hour';
   recorded_hand_count integer := 0;
   dealer_win_count integer := 0;
+  round_time_completed boolean := false;
 begin
   select *
   into session_row
@@ -1376,6 +1380,13 @@ begin
       completion_flag := true;
     end if;
 
+    if not round_time_completed
+      and hand_row.entered_at >= round_time_limit_effective_at
+      and hand_row.entered_at >= session_row.started_at + round_time_limit_duration then
+      completion_flag := true;
+      round_time_completed := true;
+    end if;
+
     update public.hand_results
     set
       base_points = base_points_value,
@@ -1396,21 +1407,25 @@ begin
     hand_count = recorded_hand_count,
     status = case
       when session_row.status in ('ended_early', 'aborted') then session_row.status
+      when round_time_completed then 'completed'
       when current_east = initial_east and next_pass_count >= 4 then 'completed'
       else 'active'
     end,
     ended_at = case
       when session_row.status in ('ended_early', 'aborted') then session_row.ended_at
+      when round_time_completed then coalesce(session_row.ended_at, now())
       when current_east = initial_east and next_pass_count >= 4 then coalesce(session_row.ended_at, now())
       else null
     end,
     ended_by_user_id = case
       when session_row.status in ('ended_early', 'aborted') then session_row.ended_by_user_id
+      when round_time_completed then coalesce(session_row.ended_by_user_id, auth.uid())
       when current_east = initial_east and next_pass_count >= 4 then coalesce(session_row.ended_by_user_id, auth.uid())
       else null
     end,
     end_reason = case
       when session_row.status in ('ended_early', 'aborted') then session_row.end_reason
+      when round_time_completed then null
       when current_east = initial_east and next_pass_count >= 4 then null
       else null
     end

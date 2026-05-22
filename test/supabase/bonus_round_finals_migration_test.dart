@@ -33,6 +33,16 @@ void main() {
     expect(migration, contains('champion_top_up_points'));
     expect(migration, contains('bonus_round_id'));
     expect(migration, contains('public.list_event_hand_ledger'));
+    expect(migration, contains('round_time_limit_effective_at'));
+    expect(migration, contains('round_time_limit_duration'));
+    expect(migration, contains('round_time_completed'));
+    expect(migration, contains("when round_time_completed then 'completed'"));
+    expect(
+      migration,
+      contains(
+        'when round_time_completed then coalesce(session_row.ended_at, now())',
+      ),
+    );
     expect(
       migration,
       contains('East: #4, South: #3, West: #2, North: #1'),
