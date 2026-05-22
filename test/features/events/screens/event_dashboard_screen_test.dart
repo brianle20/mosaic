@@ -403,9 +403,11 @@ class _TableRepository implements TableRepository {
 class _SessionRepository implements SessionRepository {
   const _SessionRepository({
     this.sessions = const [],
+    this.ledgerRows = const [],
   });
 
   final List<TableSessionRecord> sessions;
+  final List<EventHandLedgerEntry> ledgerRows;
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -424,7 +426,7 @@ class _SessionRepository implements SessionRepository {
   Future<List<EventHandLedgerEntry>> loadEventHandLedger(
     String eventId,
   ) async =>
-      const [];
+      ledgerRows;
 
   @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async =>
@@ -491,7 +493,7 @@ class _SessionRepository implements SessionRepository {
   Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
     String eventId,
   ) async =>
-      const [];
+      ledgerRows;
 
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
@@ -639,6 +641,75 @@ LeaderboardEntry _leaderboardEntry({
     discardWins: 1,
     rank: rank,
   );
+}
+
+EventHandLedgerEntry _championAwardEntry() {
+  return EventHandLedgerEntry.fromJson({
+    'event_id': 'evt_01',
+    'entered_at': '2026-04-24T22:15:00-07:00',
+    'ledger_row_type': 'adjustment',
+    'adjustment_id': 'adj_01',
+    'adjustment_type': 'finals_champion_award',
+    'adjustment_amount_points': 37,
+    'adjustment_event_guest_id': 'gst_alice',
+    'adjustment_display_name': 'Alice Wong',
+    'adjustment_context_json': {
+      'champion_bonus_score_points': 24,
+      'champion_top_up_points': 13,
+    },
+    'cells': const [],
+  });
+}
+
+EventHandLedgerEntry _redemptionHandEntry() {
+  return EventHandLedgerEntry.fromJson({
+    'event_id': 'evt_01',
+    'table_id': 'tbl_02',
+    'table_label': 'Table 2',
+    'session_id': 'ses_02',
+    'session_number_for_table': 1,
+    'hand_id': 'hand_01',
+    'hand_number': 1,
+    'entered_at': '2026-04-24T22:20:00-07:00',
+    'result_type': 'win',
+    'status': 'recorded',
+    'win_type': 'discard',
+    'fan_count': 3,
+    'has_settlements': true,
+    'ledger_row_type': 'hand',
+    'bonus_round_id': 'bonus_01',
+    'bonus_table_role': 'table_of_redemption',
+    'cells': const [
+      {
+        'wind': 'east',
+        'seat_index': 0,
+        'event_guest_id': 'gst_brian',
+        'display_name': 'Brian Lee',
+        'points_delta': 18,
+      },
+      {
+        'wind': 'south',
+        'seat_index': 1,
+        'event_guest_id': 'gst_carla',
+        'display_name': 'Carla Park',
+        'points_delta': -6,
+      },
+      {
+        'wind': 'west',
+        'seat_index': 2,
+        'event_guest_id': 'gst_dan',
+        'display_name': 'Dan Yu',
+        'points_delta': -6,
+      },
+      {
+        'wind': 'north',
+        'seat_index': 3,
+        'event_guest_id': 'gst_emi',
+        'display_name': 'Emi Chen',
+        'points_delta': -6,
+      },
+    ],
+  });
 }
 
 TableSessionRecord _session({
@@ -1113,6 +1184,39 @@ void main() {
     expect(find.text('Leader'), findsOneWidget);
     expect(find.text('Brian Le'), findsOneWidget);
     expect(find.text('Giang Pham'), findsNothing);
+  });
+
+  testWidgets('dashboard surfaces bonus round winners after finals',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      event: completedEvent,
+      leaderboardRepository: _LeaderboardRepository(
+        entries: [
+          _leaderboardEntry(
+            eventGuestId: 'gst_alice',
+            displayName: 'Alice Wong',
+            totalPoints: 121,
+            handsPlayed: 6,
+            rank: 1,
+          ),
+        ],
+      ),
+      sessionRepository: _SessionRepository(
+        ledgerRows: [
+          _championAwardEntry(),
+          _redemptionHandEntry(),
+        ],
+      ),
+    );
+
+    expect(find.text('Bonus Round Results'), findsOneWidget);
+    expect(find.text('Final champion'), findsOneWidget);
+    expect(find.text('Alice Wong'), findsWidgets);
+    expect(find.text('121 pts total'), findsOneWidget);
+    expect(find.text('Redemption winner'), findsOneWidget);
+    expect(find.text('Brian Lee'), findsOneWidget);
+    expect(find.text('Score +18'), findsOneWidget);
   });
 
   testWidgets('activity action routes into the activity screen',

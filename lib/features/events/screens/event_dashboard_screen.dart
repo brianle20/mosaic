@@ -4,6 +4,7 @@ import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
+import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
 import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/app_actions.dart';
@@ -750,6 +751,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 onPrizes: _openPrizes,
                 onLeaderboard: _openLeaderboard,
               ),
+              if (_controller.bonusRoundResults.hasResults) ...[
+                const SizedBox(height: 12),
+                _BonusRoundResultsPanel(summary: _controller.bonusRoundResults),
+              ],
               const SizedBox(height: 16),
               HeroActionButton(
                 label: _primaryActionLabel(event),
@@ -875,6 +880,106 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       EventLifecycleStatus.finalized => _openLeaderboard,
       EventLifecycleStatus.cancelled => _openActivity,
     };
+  }
+}
+
+class _BonusRoundResultsPanel extends StatelessWidget {
+  const _BonusRoundResultsPanel({required this.summary});
+
+  final BonusRoundResultsSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: colorScheme.tertiaryContainer.withValues(alpha: 0.36),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: colorScheme.tertiary.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bonus Round Results',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          const SizedBox(height: 10),
+          if (summary.finalChampion != null)
+            _BonusRoundResultLine(
+              icon: Icons.emoji_events,
+              label: 'Final champion',
+              result: summary.finalChampion!,
+            ),
+          if (summary.finalChampion != null && summary.redemptionWinner != null)
+            const SizedBox(height: 10),
+          if (summary.redemptionWinner != null)
+            _BonusRoundResultLine(
+              icon: Icons.replay_circle_filled,
+              label: 'Redemption winner',
+              result: summary.redemptionWinner!,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BonusRoundResultLine extends StatelessWidget {
+  const _BonusRoundResultLine({
+    required this.icon,
+    required this.label,
+    required this.result,
+  });
+
+  final IconData icon;
+  final String label;
+  final BonusRoundResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: colorScheme.tertiary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              Text(
+                result.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          result.detailLabel,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+      ],
+    );
   }
 }
 

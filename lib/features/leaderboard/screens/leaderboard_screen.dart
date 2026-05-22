@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
 import 'package:mosaic/features/leaderboard/controllers/leaderboard_controller.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
 
@@ -10,10 +11,12 @@ class LeaderboardScreen extends StatefulWidget {
     super.key,
     required this.eventId,
     required this.leaderboardRepository,
+    this.sessionRepository,
   });
 
   final String eventId;
   final LeaderboardRepository leaderboardRepository;
+  final SessionRepository? sessionRepository;
 
   @override
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
@@ -27,6 +30,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     super.initState();
     _controller = LeaderboardController(
       leaderboardRepository: widget.leaderboardRepository,
+      sessionRepository: widget.sessionRepository,
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
@@ -58,6 +62,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             if (_controller.entries.isNotEmpty) ...[
+              if (_controller.bonusRoundResults.hasResults) ...[
+                _BonusRoundResultsCard(
+                  summary: _controller.bonusRoundResults,
+                ),
+                const SizedBox(height: 12),
+              ],
               Text(
                 'Minimum hands to qualify: ${_controller.minimumHandsForPrize}',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -97,6 +107,104 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _BonusRoundResultsCard extends StatelessWidget {
+  const _BonusRoundResultsCard({required this.summary});
+
+  final BonusRoundResultsSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      color: colorScheme.tertiaryContainer.withValues(alpha: 0.32),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Bonus Round Results',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onSurface,
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 10),
+            if (summary.finalChampion != null)
+              _BonusRoundResultLine(
+                icon: Icons.emoji_events,
+                label: 'Final champion',
+                result: summary.finalChampion!,
+              ),
+            if (summary.finalChampion != null &&
+                summary.redemptionWinner != null)
+              const SizedBox(height: 10),
+            if (summary.redemptionWinner != null)
+              _BonusRoundResultLine(
+                icon: Icons.replay_circle_filled,
+                label: 'Redemption winner',
+                result: summary.redemptionWinner!,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BonusRoundResultLine extends StatelessWidget {
+  const _BonusRoundResultLine({
+    required this.icon,
+    required this.label,
+    required this.result,
+  });
+
+  final IconData icon;
+  final String label;
+  final BonusRoundResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, color: colorScheme.tertiary, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              Text(
+                result.displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          result.detailLabel,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+      ],
     );
   }
 }

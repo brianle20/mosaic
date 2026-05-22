@@ -186,6 +186,7 @@ class AppRouter {
           builder: (_) => LeaderboardScreen(
             eventId: args.eventId,
             leaderboardRepository: leaderboardRepository,
+            sessionRepository: sessionRepository,
           ),
           settings: settings,
         );

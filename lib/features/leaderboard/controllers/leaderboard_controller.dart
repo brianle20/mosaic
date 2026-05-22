@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
 
 class PrizePlacementRow {
   const PrizePlacementRow({
@@ -13,13 +15,18 @@ class PrizePlacementRow {
 }
 
 class LeaderboardController extends ChangeNotifier {
-  LeaderboardController({required this.leaderboardRepository});
+  LeaderboardController({
+    required this.leaderboardRepository,
+    this.sessionRepository,
+  });
 
   final LeaderboardRepository leaderboardRepository;
+  final SessionRepository? sessionRepository;
 
   bool isLoading = false;
   String? error;
   List<LeaderboardEntry> entries = const [];
+  BonusRoundResultsSummary bonusRoundResults = const BonusRoundResultsSummary();
 
   int get minimumHandsForPrize {
     final scoredHands = entries
@@ -82,10 +89,18 @@ class LeaderboardController extends ChangeNotifier {
     isLoading = true;
     error = null;
     entries = await leaderboardRepository.readCachedLeaderboard(eventId);
+    bonusRoundResults = buildBonusRoundResultsSummary(
+      ledgerEntries: await _readCachedBonusLedger(eventId),
+      leaderboardEntries: entries,
+    );
     notifyListeners();
 
     try {
       entries = await leaderboardRepository.loadLeaderboard(eventId);
+      bonusRoundResults = buildBonusRoundResultsSummary(
+        ledgerEntries: await _loadBonusLedger(eventId),
+        leaderboardEntries: entries,
+      );
     } catch (err) {
       if (entries.isEmpty) {
         error = err.toString();
@@ -93,6 +108,30 @@ class LeaderboardController extends ChangeNotifier {
     } finally {
       isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<List<EventHandLedgerEntry>> _readCachedBonusLedger(
+    String eventId,
+  ) async {
+    final repository = sessionRepository;
+    if (repository == null) {
+      return const [];
+    }
+
+    return repository.readCachedEventHandLedger(eventId);
+  }
+
+  Future<List<EventHandLedgerEntry>> _loadBonusLedger(String eventId) async {
+    final repository = sessionRepository;
+    if (repository == null) {
+      return const [];
+    }
+
+    try {
+      return await repository.loadEventHandLedger(eventId);
+    } catch (_) {
+      return const [];
     }
   }
 }
