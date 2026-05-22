@@ -111,6 +111,22 @@ void main() {
       expect(viewModel.isRoundEndingSoon, isFalse);
     });
 
+    test('freezes round timer label when a session ended early', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(
+          status: 'ended_early',
+          startedAt: '2026-05-20T12:00:00Z',
+          endedAt: '2026-05-20T12:25:00Z',
+        ),
+        guestNamesById: _guestNamesById,
+        now: DateTime.parse('2026-05-20T12:50:00Z'),
+      );
+
+      expect(viewModel.roundTimeLabel, '35:00');
+      expect(viewModel.isRoundExpired, isFalse);
+      expect(viewModel.isRoundEndingSoon, isFalse);
+    });
+
     test('keeps east seat label plain when east is current dealer', () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(currentDealerSeatIndex: 0),
@@ -199,8 +215,10 @@ const _guestNamesById = {
 
 SessionDetailRecord _detail({
   String? tableLabel = 'Table 7',
+  String status = 'active',
   int currentDealerSeatIndex = 1,
   String startedAt = '2026-04-24T19:00:00-07:00',
+  String? endedAt,
   List<Map<String, Object?>>? hands,
   List<Map<String, Object?>>? settlements,
 }) {
@@ -214,13 +232,14 @@ SessionDetailRecord _detail({
       'ruleset_id': 'HK_STANDARD',
       'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'rotation_policy_config_json': {},
-      'status': 'active',
+      'status': status,
       'initial_east_seat_index': 0,
       'current_dealer_seat_index': currentDealerSeatIndex,
       'dealer_pass_count': 1,
       'completed_games_count': 0,
       'hand_count': 1,
       'started_at': startedAt,
+      'ended_at': endedAt,
       'started_by_user_id': 'usr_01',
     },
     'seats': const [

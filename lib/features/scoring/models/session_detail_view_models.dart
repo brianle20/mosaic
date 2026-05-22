@@ -74,7 +74,7 @@ SessionDetailViewModel buildSessionDetailViewModel({
   final currentEastSeatIndex = detail.session.currentDealerSeatIndex;
   final roundTime = RoundTimerState.fromStartedAt(
     startedAt: detail.session.startedAt,
-    now: now,
+    now: _roundTimerSnapshotTime(detail.session, now),
   );
   final currentEastName = _guestNameForSeat(
     detail,
@@ -132,6 +132,18 @@ SessionDetailViewModel buildSessionDetailViewModel({
         .toList(growable: false),
     emptyHandHistoryLabel: 'No hands recorded yet.',
   );
+}
+
+DateTime? _roundTimerSnapshotTime(TableSessionRecord session, DateTime? now) {
+  if (_isLiveSession(session.status)) {
+    return now;
+  }
+
+  return session.endedAt ?? now;
+}
+
+bool _isLiveSession(SessionStatus status) {
+  return status == SessionStatus.active || status == SessionStatus.paused;
 }
 
 String _contextLabel(SessionDetailRecord detail) {
