@@ -17,6 +17,7 @@ import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/activity/screens/activity_screen.dart';
+import 'package:mosaic/features/events/screens/bonus_round_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 import 'package:mosaic/features/scoring/screens/event_hand_ledger_screen.dart';
@@ -1230,6 +1231,51 @@ void main() {
     );
     expect(find.byType(SeatingAssignmentScreen), findsOneWidget);
     expect(find.text('Generate Seating'), findsOneWidget);
+  });
+
+  testWidgets('active event bonus round action routes to setup screen',
+      (tester) async {
+    RouteSettings? openedSettings;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.bonusRoundRoute) {
+            openedSettings = settings;
+            final args = settings.arguments! as BonusRoundArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => BonusRoundScreen(
+                eventId: args.eventId,
+                leaderboardRepository: _LeaderboardRepository(),
+                tableRepository: _TableRepository(),
+                sessionRepository: const _SessionRepository(),
+                seatingRepository: const _SeatingRepository(),
+                nfcService: const _NfcService(),
+              ),
+              settings: settings,
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Create Bonus Round'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create Bonus Round'));
+    await tester.pumpAndSettle();
+
+    expect(openedSettings?.name, AppRouter.bonusRoundRoute);
+    expect((openedSettings?.arguments as BonusRoundArgs?)?.eventId, 'evt_01');
+    expect(find.byType(BonusRoundScreen), findsOneWidget);
   });
 
   testWidgets('draft event exposes seating prep action', (tester) async {

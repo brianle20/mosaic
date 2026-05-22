@@ -86,15 +86,20 @@ class _LedgerRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final rowColor = row.isBonusRound
+        ? colorScheme.tertiaryContainer.withValues(alpha: 0.32)
+        : colorScheme.surface.withValues(alpha: 0.84);
+    final borderColor =
+        row.isBonusRound ? colorScheme.tertiary : colorScheme.outlineVariant;
     return Opacity(
       opacity: row.isVoided ? 0.58 : 1,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: colorScheme.surface.withValues(alpha: 0.84),
+          color: rowColor,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: colorScheme.outlineVariant),
+          border: Border.all(color: borderColor),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -119,14 +124,9 @@ class _LedgerRow extends StatelessWidget {
                                   ),
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          row.loggedTimeLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
+                        _LedgerMetaLine(
+                          loggedTimeLabel: row.loggedTimeLabel,
+                          isBonusRound: row.isBonusRound,
                         ),
                       ],
                     ),
@@ -164,6 +164,54 @@ class _LedgerRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LedgerMetaLine extends StatelessWidget {
+  const _LedgerMetaLine({
+    required this.loggedTimeLabel,
+    required this.isBonusRound,
+  });
+
+  final String loggedTimeLabel;
+  final bool isBonusRound;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final metaStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSurfaceVariant,
+        );
+    final bonusStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: colorScheme.tertiary,
+          fontWeight: FontWeight.w800,
+        );
+
+    return Row(
+      children: [
+        Flexible(
+          child: Text(
+            loggedTimeLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: metaStyle,
+          ),
+        ),
+        if (isBonusRound) ...[
+          const SizedBox(width: 8),
+          Icon(Icons.emoji_events, size: 13, color: colorScheme.tertiary),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              'Bonus round',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: bonusStyle,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

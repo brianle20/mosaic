@@ -46,6 +46,51 @@ void main() {
 
     expect(find.text('No hands recorded yet.'), findsOneWidget);
   });
+
+  testWidgets('renders bonus tint marker without crowding hand label',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventHandLedgerScreen(
+          eventId: 'evt_01',
+          sessionRepository: _FakeSessionRepository(
+            rows: [_entry(bonusRoundId: 'bonus_01')],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Table 1 · Session 2 · Hand 4'), findsOneWidget);
+    expect(find.text('Bonus round'), findsOneWidget);
+    expect(find.text('4 fan discard'), findsOneWidget);
+    expect(find.text('Bonus'), findsNothing);
+    expect(find.text('Bonus round only'), findsNothing);
+  });
+
+  testWidgets('keeps shortened finals champion award summary inside ledger row',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventHandLedgerScreen(
+          eventId: 'evt_01',
+          sessionRepository: _FakeSessionRepository(
+            rows: [_adjustmentEntry()],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Champion award'), findsOneWidget);
+    expect(find.text('Bonus +24 · Top +13'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 class _FakeSessionRepository implements SessionRepository {
@@ -121,7 +166,7 @@ class _FakeSessionRepository implements SessionRepository {
   }
 }
 
-EventHandLedgerEntry _entry() {
+EventHandLedgerEntry _entry({String? bonusRoundId}) {
   return EventHandLedgerEntry(
     eventId: 'evt_01',
     tableId: 'tbl_01',
@@ -135,6 +180,8 @@ EventHandLedgerEntry _entry() {
     status: HandResultStatus.recorded,
     winType: HandWinType.discard,
     fanCount: 4,
+    bonusRoundId: bonusRoundId,
+    bonusTableRole: bonusRoundId == null ? null : 'table_of_champions',
     hasSettlements: true,
     cells: const [
       EventHandLedgerCell(
@@ -167,4 +214,22 @@ EventHandLedgerEntry _entry() {
       ),
     ],
   );
+}
+
+EventHandLedgerEntry _adjustmentEntry() {
+  return EventHandLedgerEntry.fromJson({
+    'event_id': 'evt_01',
+    'entered_at': '2026-04-24T22:15:00-07:00',
+    'ledger_row_type': 'adjustment',
+    'adjustment_id': 'adj_01',
+    'adjustment_type': 'finals_champion_award',
+    'adjustment_amount_points': 37,
+    'adjustment_event_guest_id': 'gst_01',
+    'adjustment_display_name': 'Alice Wong',
+    'adjustment_context_json': {
+      'champion_bonus_score_points': 24,
+      'champion_top_up_points': 13,
+    },
+    'cells': const [],
+  });
 }

@@ -223,6 +223,19 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     await _reloadDashboardAfterReturn(event.id);
   }
 
+  Future<void> _openBonusRound() async {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    await Navigator.of(context).pushNamed(
+      AppRouter.bonusRoundRoute,
+      arguments: BonusRoundArgs(eventId: event.id),
+    );
+    await _reloadDashboardAfterReturn(event.id);
+  }
+
   Future<void> _openActivity() async {
     final event = _controller.event;
     if (event == null) {
@@ -788,6 +801,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 lifecycleStatus: lifecycleStatus,
                 isSubmitting: _controller.isSubmittingLifecycle,
                 onSeating: _openSeating,
+                onBonusRound: _openBonusRound,
                 onActivity: _openActivity,
                 onHandLedger: _openHandLedger,
                 onDelete: _confirmDeleteEvent,
@@ -1030,6 +1044,7 @@ class _EventOptionsSection extends StatelessWidget {
     required this.lifecycleStatus,
     required this.isSubmitting,
     required this.onSeating,
+    required this.onBonusRound,
     required this.onActivity,
     required this.onHandLedger,
     required this.onDelete,
@@ -1042,6 +1057,7 @@ class _EventOptionsSection extends StatelessWidget {
   final EventLifecycleStatus lifecycleStatus;
   final bool isSubmitting;
   final VoidCallback onSeating;
+  final VoidCallback onBonusRound;
   final VoidCallback onActivity;
   final VoidCallback onHandLedger;
   final VoidCallback onDelete;
@@ -1079,6 +1095,11 @@ class _EventOptionsSection extends StatelessWidget {
           children: [
             if (_showsSeatingPrepAction)
               UtilityActionButton(label: 'Seating', onPressed: onSeating),
+            if (lifecycleStatus == EventLifecycleStatus.active)
+              UtilityActionButton(
+                label: 'Create Bonus Round',
+                onPressed: onBonusRound,
+              ),
             UtilityActionButton(label: 'Activity', onPressed: onActivity),
             UtilityActionButton(
               label: 'Hand Ledger',

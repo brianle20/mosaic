@@ -3,6 +3,7 @@ import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/screens/guest_detail_screen.dart';
 import 'package:mosaic/features/activity/screens/activity_screen.dart';
+import 'package:mosaic/features/events/screens/bonus_round_screen.dart';
 import 'package:mosaic/features/events/screens/create_event_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
@@ -56,6 +57,7 @@ class AppRouter {
   static const leaderboardRoute = '/leaderboard';
   static const activityRoute = '/activity';
   static const eventHandLedgerRoute = '/events/hand-ledger';
+  static const bonusRoundRoute = '/events/bonus-round';
   static const prizePlanRoute = '/prizes/plan';
   static const prizeAwardsRoute = '/prizes/awards';
   static const seatingAssignmentsRoute = '/tables/seating';
@@ -205,6 +207,19 @@ class AppRouter {
           ),
           settings: settings,
         );
+      case bonusRoundRoute:
+        final args = settings.arguments as BonusRoundArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => BonusRoundScreen(
+            eventId: args.eventId,
+            leaderboardRepository: leaderboardRepository,
+            tableRepository: tableRepository,
+            sessionRepository: sessionRepository,
+            seatingRepository: seatingRepository,
+            nfcService: nfcService,
+          ),
+          settings: settings,
+        );
       case prizePlanRoute:
         final args = settings.arguments as PrizePlanArgs;
         return MaterialPageRoute<void>(
@@ -268,6 +283,14 @@ class GuestRosterArgs {
 
 class EventHandLedgerArgs {
   const EventHandLedgerArgs({
+    required this.eventId,
+  });
+
+  final String eventId;
+}
+
+class BonusRoundArgs {
+  const BonusRoundArgs({
     required this.eventId,
   });
 

@@ -469,6 +469,16 @@ begin
       using errcode = 'P0001';
   end if;
 
+  if exists (
+    select 1
+    from public.event_bonus_rounds as bonus_round
+    where bonus_round.event_id = target_event_id
+      and bonus_round.status = 'active'
+  ) then
+    raise exception 'An active bonus round already exists for this event.'
+      using errcode = 'P0001';
+  end if;
+
   if not exists (
     select 1
     from public.event_tables as event_table
@@ -501,7 +511,19 @@ begin
 
   select count(*)
   into ranked_player_count
-  from public.get_event_leaderboard(target_event_id);
+  from public.get_event_leaderboard(target_event_id) as leaderboard
+  join public.event_guests as guest
+    on guest.id = leaderboard.event_guest_id
+    and guest.event_id = target_event_id
+    and guest.attendance_status = 'checked_in'
+  join public.event_guest_tag_assignments as tag_assignment
+    on tag_assignment.event_guest_id = guest.id
+    and tag_assignment.event_id = guest.event_id
+    and tag_assignment.status = 'assigned'
+  join public.nfc_tags as tag
+    on tag.id = tag_assignment.nfc_tag_id
+    and tag.default_tag_type = 'player'
+    and tag.status = 'active';
 
   if ranked_player_count < 8 then
     raise exception 'At least eight ranked players are required to generate bonus round seating assignments.'
@@ -546,6 +568,18 @@ begin
       ))::integer as seed_rank,
       (count(*) over ())::integer as player_count
     from public.get_event_leaderboard(target_event_id) as leaderboard
+    join public.event_guests as guest
+      on guest.id = leaderboard.event_guest_id
+      and guest.event_id = target_event_id
+      and guest.attendance_status = 'checked_in'
+    join public.event_guest_tag_assignments as tag_assignment
+      on tag_assignment.event_guest_id = guest.id
+      and tag_assignment.event_id = guest.event_id
+      and tag_assignment.status = 'assigned'
+    join public.nfc_tags as tag
+      on tag.id = tag_assignment.nfc_tag_id
+      and tag.default_tag_type = 'player'
+      and tag.status = 'active'
   ),
   champions as (
     select
@@ -1457,6 +1491,8 @@ returns table (
   win_type text,
   fan_count integer,
   penalty_seat_index integer,
+  bonus_round_id uuid,
+  bonus_table_role text,
   has_settlements boolean,
   cells jsonb,
   ledger_row_type text,
@@ -1492,6 +1528,8 @@ as $$
       hand_result.win_type,
       hand_result.fan_count,
       hand_result.penalty_seat_index,
+      session.bonus_round_id,
+      session.bonus_table_role,
       hand_result.east_seat_index_before_hand,
       exists (
         select 1
@@ -1521,6 +1559,8 @@ as $$
       hand_row.win_type,
       hand_row.fan_count,
       hand_row.penalty_seat_index,
+      hand_row.bonus_round_id,
+      hand_row.bonus_table_role,
       hand_row.has_settlements,
       jsonb_agg(
         jsonb_build_object(
@@ -1584,6 +1624,8 @@ as $$
       hand_row.win_type,
       hand_row.fan_count,
       hand_row.penalty_seat_index,
+      hand_row.bonus_round_id,
+      hand_row.bonus_table_role,
       hand_row.has_settlements
   ),
   ledger_adjustment_rows as (
@@ -1601,6 +1643,8 @@ as $$
       null::text as win_type,
       null::integer as fan_count,
       null::integer as penalty_seat_index,
+      source_session.bonus_round_id,
+      source_session.bonus_table_role,
       false as has_settlements,
       '[]'::jsonb as cells,
       'adjustment'::text as ledger_row_type,
@@ -1615,6 +1659,8 @@ as $$
       on adjustment.event_id = authorized_event.id
     join public.event_guests as guest
       on guest.id = adjustment.event_guest_id
+    left join public.table_sessions as source_session
+      on source_session.id = adjustment.source_table_session_id
     where adjustment.adjustment_type = 'finals_champion_award'
   )
   select *

@@ -33,6 +33,12 @@ void main() {
     expect(migration, contains('champion_top_up_points'));
     expect(migration, contains('bonus_round_id'));
     expect(migration, contains('public.list_event_hand_ledger'));
+    expect(migration, contains('session.bonus_round_id'));
+    expect(migration, contains('hand_row.bonus_table_role'));
+    expect(migration, contains('guest.attendance_status = \'checked_in\''));
+    expect(migration, contains('tag.default_tag_type = \'player\''));
+    expect(migration, contains('An active bonus round already exists'));
+    expect(migration, contains('source_session.bonus_round_id'));
     expect(migration, contains('round_time_limit_effective_at'));
     expect(migration, contains('round_time_limit_duration'));
     expect(migration, contains('round_time_completed'));

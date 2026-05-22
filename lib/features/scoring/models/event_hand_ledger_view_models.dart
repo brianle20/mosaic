@@ -10,6 +10,7 @@ class EventHandLedgerRowViewModel {
     required this.cells,
     required this.isVoided,
     required this.hasDataIssue,
+    required this.isBonusRound,
   });
 
   final String handId;
@@ -19,6 +20,7 @@ class EventHandLedgerRowViewModel {
   final List<EventHandLedgerCellViewModel> cells;
   final bool isVoided;
   final bool hasDataIssue;
+  final bool isBonusRound;
 }
 
 class EventHandLedgerCellViewModel {
@@ -40,6 +42,10 @@ List<EventHandLedgerRowViewModel> buildEventHandLedgerViewModels(
 }
 
 EventHandLedgerRowViewModel _buildRow(EventHandLedgerEntry entry) {
+  if (entry.rowType == EventHandLedgerRowType.adjustment) {
+    return _buildAdjustmentRow(entry);
+  }
+
   final requiresSettlements = entry.resultType == HandResultType.win ||
       entry.resultType == HandResultType.falseWinPenalty;
   final hasDataIssue = requiresSettlements &&
@@ -63,6 +69,27 @@ EventHandLedgerRowViewModel _buildRow(EventHandLedgerEntry entry) {
         .toList(growable: false),
     isVoided: entry.status == HandResultStatus.voided,
     hasDataIssue: hasDataIssue,
+    isBonusRound: entry.bonusRoundId != null,
+  );
+}
+
+EventHandLedgerRowViewModel _buildAdjustmentRow(EventHandLedgerEntry entry) {
+  final amount = entry.adjustmentAmountPoints ?? 0;
+  return EventHandLedgerRowViewModel(
+    handId: entry.handId,
+    handLabel: _adjustmentLabel(entry),
+    loggedTimeLabel: _loggedTimeLabel(entry.enteredAt),
+    resultSummary: _adjustmentSummary(entry),
+    cells: [
+      EventHandLedgerCellViewModel(
+        displayName: _firstName(entry.adjustmentDisplayName ?? 'Champion'),
+        pointsDelta: amount,
+        pointsLabel: _signedPoints(amount),
+      ),
+    ],
+    isVoided: false,
+    hasDataIssue: false,
+    isBonusRound: entry.bonusRoundId != null,
   );
 }
 
@@ -88,6 +115,45 @@ String _resultSummary(EventHandLedgerEntry entry) {
     return winType;
   }
   return '$fanCount fan $winType';
+}
+
+String _adjustmentLabel(EventHandLedgerEntry entry) {
+  return switch (entry.adjustmentType) {
+    'finals_champion_award' => 'Champion award',
+    _ => 'Event adjustment',
+  };
+}
+
+String _adjustmentSummary(EventHandLedgerEntry entry) {
+  if (entry.adjustmentType != 'finals_champion_award') {
+    return _signedPoints(entry.adjustmentAmountPoints ?? 0);
+  }
+
+  final bonusScore = _contextInt(
+    entry.adjustmentContextJson,
+    'champion_bonus_score_points',
+  );
+  final topUp = _contextInt(
+    entry.adjustmentContextJson,
+    'champion_top_up_points',
+  );
+
+  if (bonusScore == null || topUp == null) {
+    return _signedPoints(entry.adjustmentAmountPoints ?? 0);
+  }
+
+  return 'Bonus ${_signedPoints(bonusScore)} · Top ${_signedPoints(topUp)}';
+}
+
+int? _contextInt(Map<String, dynamic> context, String key) {
+  final value = context[key];
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return null;
 }
 
 String _loggedTimeLabel(DateTime enteredAt) {

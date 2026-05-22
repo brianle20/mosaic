@@ -2,6 +2,11 @@ import 'package:meta/meta.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 
+enum EventHandLedgerRowType {
+  hand,
+  adjustment,
+}
+
 @immutable
 class EventHandLedgerCell {
   const EventHandLedgerCell({
@@ -54,12 +59,24 @@ class EventHandLedgerEntry {
     required this.status,
     required this.hasSettlements,
     required this.cells,
+    this.rowType = EventHandLedgerRowType.hand,
     this.winType,
     this.fanCount,
     this.penaltySeatIndex,
+    this.bonusRoundId,
+    this.bonusTableRole,
+    this.adjustmentId,
+    this.adjustmentType,
+    this.adjustmentAmountPoints,
+    this.adjustmentEventGuestId,
+    this.adjustmentDisplayName,
+    this.adjustmentContextJson = const {},
   });
 
   factory EventHandLedgerEntry.fromJson(Map<String, dynamic> json) {
+    final rowType = _rowTypeFromJson(
+      _stringOrDefault(json, 'ledger_row_type', 'hand'),
+    );
     final rawCells = json['cells'] as List<dynamic>? ?? const [];
     final cells = rawCells
         .map((cell) => EventHandLedgerCell.fromJson(
@@ -67,26 +84,51 @@ class EventHandLedgerEntry {
             ))
         .toList(growable: false);
 
-    if (cells.length != 4) {
+    if (rowType == EventHandLedgerRowType.hand && cells.length != 4) {
       throw FormatException('Expected 4 cells for event hand ledger row.');
     }
 
     return EventHandLedgerEntry(
       eventId: _requiredString(json, 'event_id'),
-      tableId: _requiredString(json, 'table_id'),
+      tableId: rowType == EventHandLedgerRowType.hand
+          ? _requiredString(json, 'table_id')
+          : _stringOrDefault(json, 'table_id', ''),
       tableLabel: _stringOrDefault(json, 'table_label', 'Table'),
-      sessionId: _requiredString(json, 'session_id'),
+      sessionId: rowType == EventHandLedgerRowType.hand
+          ? _requiredString(json, 'session_id')
+          : _stringOrDefault(json, 'session_id', ''),
       sessionNumberForTable: _intOrDefault(json, 'session_number_for_table', 1),
-      handId: _requiredString(json, 'hand_id'),
-      handNumber: _requiredInt(json, 'hand_number'),
+      handId: rowType == EventHandLedgerRowType.hand
+          ? _requiredString(json, 'hand_id')
+          : _requiredString(json, 'adjustment_id'),
+      handNumber: rowType == EventHandLedgerRowType.hand
+          ? _requiredInt(json, 'hand_number')
+          : 0,
       enteredAt: _requiredDateTime(json, 'entered_at'),
-      resultType: _handResultTypeFromJson(_requiredString(json, 'result_type')),
-      status: _handResultStatusFromJson(_requiredString(json, 'status')),
+      resultType: rowType == EventHandLedgerRowType.hand
+          ? _handResultTypeFromJson(_requiredString(json, 'result_type'))
+          : null,
+      status: _handResultStatusFromJson(
+        _stringOrDefault(json, 'status', 'recorded'),
+      ),
       winType: _optionalWinType(json, 'win_type'),
       fanCount: _optionalInt(json, 'fan_count'),
       penaltySeatIndex: _optionalInt(json, 'penalty_seat_index'),
       hasSettlements: _boolOrDefault(json, 'has_settlements', false),
       cells: cells,
+      rowType: rowType,
+      bonusRoundId: _optionalString(json, 'bonus_round_id'),
+      bonusTableRole: _optionalString(json, 'bonus_table_role'),
+      adjustmentId: _optionalString(json, 'adjustment_id'),
+      adjustmentType: _optionalString(json, 'adjustment_type'),
+      adjustmentAmountPoints: _optionalInt(json, 'adjustment_amount_points'),
+      adjustmentEventGuestId:
+          _optionalString(json, 'adjustment_event_guest_id'),
+      adjustmentDisplayName: _optionalString(json, 'adjustment_display_name'),
+      adjustmentContextJson: _jsonObjectOrEmpty(
+        json,
+        'adjustment_context_json',
+      ),
     );
   }
 
@@ -98,17 +140,27 @@ class EventHandLedgerEntry {
   final String handId;
   final int handNumber;
   final DateTime enteredAt;
-  final HandResultType resultType;
+  final HandResultType? resultType;
   final HandResultStatus status;
+  final EventHandLedgerRowType rowType;
   final HandWinType? winType;
   final int? fanCount;
   final int? penaltySeatIndex;
+  final String? bonusRoundId;
+  final String? bonusTableRole;
+  final String? adjustmentId;
+  final String? adjustmentType;
+  final int? adjustmentAmountPoints;
+  final String? adjustmentEventGuestId;
+  final String? adjustmentDisplayName;
+  final Map<String, dynamic> adjustmentContextJson;
   final bool hasSettlements;
   final List<EventHandLedgerCell> cells;
 
   Map<String, dynamic> toJson() {
     return {
       'event_id': eventId,
+      'ledger_row_type': _rowTypeToJson(rowType),
       'table_id': tableId,
       'table_label': tableLabel,
       'session_id': sessionId,
@@ -116,11 +168,20 @@ class EventHandLedgerEntry {
       'hand_id': handId,
       'hand_number': handNumber,
       'entered_at': enteredAt.toIso8601String(),
-      'result_type': _handResultTypeToJson(resultType),
+      'result_type':
+          resultType == null ? null : _handResultTypeToJson(resultType!),
       'status': _handResultStatusToJson(status),
       'win_type': winType == null ? null : _handWinTypeToJson(winType!),
       'fan_count': fanCount,
       'penalty_seat_index': penaltySeatIndex,
+      'bonus_round_id': bonusRoundId,
+      'bonus_table_role': bonusTableRole,
+      'adjustment_id': adjustmentId,
+      'adjustment_type': adjustmentType,
+      'adjustment_amount_points': adjustmentAmountPoints,
+      'adjustment_event_guest_id': adjustmentEventGuestId,
+      'adjustment_display_name': adjustmentDisplayName,
+      'adjustment_context_json': adjustmentContextJson,
       'has_settlements': hasSettlements,
       'cells': cells.map((cell) => cell.toJson()).toList(growable: false),
     };
@@ -145,6 +206,17 @@ String _stringOrDefault(
     return value;
   }
   return fallback;
+}
+
+String? _optionalString(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) {
+    return null;
+  }
+  if (value is String && value.trim().isNotEmpty) {
+    return value;
+  }
+  throw FormatException('Expected non-empty string or null for $key.');
 }
 
 int _requiredInt(Map<String, dynamic> json, String key) {
@@ -197,6 +269,22 @@ bool _boolOrDefault(Map<String, dynamic> json, String key, bool fallback) {
   throw FormatException('Expected bool for $key.');
 }
 
+Map<String, dynamic> _jsonObjectOrEmpty(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) {
+    return const {};
+  }
+  if (value is Map<String, dynamic>) {
+    return Map<String, dynamic>.unmodifiable(value);
+  }
+  if (value is Map) {
+    return Map<String, dynamic>.unmodifiable(
+      value.map((mapKey, mapValue) => MapEntry(mapKey.toString(), mapValue)),
+    );
+  }
+  throw FormatException('Expected JSON object for $key.');
+}
+
 DateTime _requiredDateTime(Map<String, dynamic> json, String key) {
   final value = _requiredString(json, key);
   return DateTime.parse(value);
@@ -218,6 +306,21 @@ String _seatWindToJson(SeatWind wind) {
     SeatWind.south => 'south',
     SeatWind.west => 'west',
     SeatWind.north => 'north',
+  };
+}
+
+EventHandLedgerRowType _rowTypeFromJson(String value) {
+  return switch (value) {
+    'hand' => EventHandLedgerRowType.hand,
+    'adjustment' => EventHandLedgerRowType.adjustment,
+    _ => throw FormatException('Unknown hand ledger row type: $value'),
+  };
+}
+
+String _rowTypeToJson(EventHandLedgerRowType rowType) {
+  return switch (rowType) {
+    EventHandLedgerRowType.hand => 'hand',
+    EventHandLedgerRowType.adjustment => 'adjustment',
   };
 }
 
