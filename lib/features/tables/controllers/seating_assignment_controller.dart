@@ -1,25 +1,35 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+
+const seatingChangeBlockedMessage =
+    'End active or paused sessions before changing seating.';
 
 class SeatingAssignmentController extends ChangeNotifier {
   SeatingAssignmentController({
     required SeatingRepository seatingRepository,
     required GuestRepository guestRepository,
+    required SessionRepository sessionRepository,
   })  : _seatingRepository = seatingRepository,
-        _guestRepository = guestRepository;
+        _guestRepository = guestRepository,
+        _sessionRepository = sessionRepository;
 
   final SeatingRepository _seatingRepository;
   final GuestRepository _guestRepository;
+  final SessionRepository _sessionRepository;
 
   bool isLoading = true;
   bool isSubmitting = false;
+  bool hasLiveSessions = false;
   String? error;
   List<SeatingAssignmentRecord> assignments = const [];
   List<EventGuestRecord> eligibleGuests = const [];
   List<EventGuestRecord> unassignedGuests = const [];
+
+  bool get canChangeSeating => !hasLiveSessions;
 
   List<SeatingTableGroup> get tableGroups {
     final groups = <String, SeatingTableGroup>{};
@@ -61,8 +71,10 @@ class SeatingAssignmentController extends ChangeNotifier {
         eventId,
       );
       final loadedEligibleGuests = await _loadEligibleGuests(eventId);
+      final loadedHasLiveSessions = await _loadHasLiveSessions(eventId);
       assignments = loadedAssignments;
       eligibleGuests = loadedEligibleGuests;
+      hasLiveSessions = loadedHasLiveSessions;
       _updateUnassignedGuests();
       error = null;
     } catch (exception) {
@@ -76,6 +88,13 @@ class SeatingAssignmentController extends ChangeNotifier {
   }
 
   Future<void> generate(String eventId) async {
+    await _refreshLiveSessions(eventId);
+    if (hasLiveSessions) {
+      error = seatingChangeBlockedMessage;
+      notifyListeners();
+      return;
+    }
+
     isSubmitting = true;
     error = null;
     notifyListeners();
@@ -93,6 +112,13 @@ class SeatingAssignmentController extends ChangeNotifier {
   }
 
   Future<void> clear(String eventId) async {
+    await _refreshLiveSessions(eventId);
+    if (hasLiveSessions) {
+      error = seatingChangeBlockedMessage;
+      notifyListeners();
+      return;
+    }
+
     isSubmitting = true;
     error = null;
     notifyListeners();
@@ -112,6 +138,10 @@ class SeatingAssignmentController extends ChangeNotifier {
   Future<void> _refreshEligibleGuests(String eventId) async {
     eligibleGuests = await _loadEligibleGuests(eventId);
     _updateUnassignedGuests();
+  }
+
+  Future<void> _refreshLiveSessions(String eventId) async {
+    hasLiveSessions = await _loadHasLiveSessions(eventId);
   }
 
   Future<List<EventGuestRecord>> _loadEligibleGuests(String eventId) async {
@@ -142,6 +172,15 @@ class SeatingAssignmentController extends ChangeNotifier {
     unassignedGuests = eligibleGuests
         .where((guest) => !assignedGuestIds.contains(guest.id))
         .toList(growable: false);
+  }
+
+  Future<bool> _loadHasLiveSessions(String eventId) async {
+    final sessions = await _sessionRepository.listSessions(eventId);
+    return sessions.any(
+      (session) =>
+          session.status == SessionStatus.active ||
+          session.status == SessionStatus.paused,
+    );
   }
 }
 

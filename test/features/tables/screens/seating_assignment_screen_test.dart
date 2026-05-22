@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/tables/controllers/seating_assignment_controller.dart';
 import 'package:mosaic/features/tables/screens/seating_assignment_screen.dart';
 
 class _FakeSeatingRepository implements SeatingRepository {
@@ -132,6 +136,79 @@ class _FakeGuestRepository implements GuestRepository {
   }
 }
 
+class _FakeSessionRepository implements SessionRepository {
+  const _FakeSessionRepository({this.sessions = const []});
+
+  final List<TableSessionRecord> sessions;
+
+  @override
+  Future<SessionDetailRecord> editHand(EditHandResultInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> endSession({
+    required String sessionId,
+    required String reason,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<EventHandLedgerEntry>> loadEventHandLedger(
+          String eventId) async =>
+      const [];
+
+  @override
+  Future<SessionDetailRecord> loadSessionDetail(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<TableSessionRecord>> listSessions(String eventId) async =>
+      sessions;
+
+  @override
+  Future<SessionDetailRecord> pauseSession(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> recordHand(RecordHandResultInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
+  Future<SessionDetailRecord?> readCachedSessionDetail(
+          String sessionId) async =>
+      null;
+
+  @override
+  Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
+      sessions;
+
+  @override
+  Future<SessionDetailRecord> resumeSession(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
+    throw UnimplementedError();
+  }
+}
+
 void main() {
   testWidgets('shows empty state and generate action', (tester) async {
     await tester.pumpWidget(
@@ -140,6 +217,7 @@ void main() {
           eventId: 'evt_01',
           seatingRepository: _FakeSeatingRepository(),
           guestRepository: _FakeGuestRepository(),
+          sessionRepository: const _FakeSessionRepository(),
         ),
       ),
     );
@@ -193,6 +271,7 @@ void main() {
             ],
           ),
           guestRepository: _FakeGuestRepository(),
+          sessionRepository: const _FakeSessionRepository(),
         ),
       ),
     );
@@ -230,6 +309,7 @@ void main() {
           eventId: 'evt_01',
           seatingRepository: repository,
           guestRepository: _FakeGuestRepository(),
+          sessionRepository: const _FakeSessionRepository(),
         ),
       ),
     );
@@ -268,6 +348,7 @@ void main() {
           eventId: 'evt_01',
           seatingRepository: repository,
           guestRepository: _FakeGuestRepository(),
+          sessionRepository: const _FakeSessionRepository(),
         ),
       ),
     );
@@ -345,6 +426,7 @@ void main() {
                 guest.id: _tagAssignment(guestId: guest.id),
             },
           ),
+          sessionRepository: const _FakeSessionRepository(),
         ),
       ),
     );
@@ -355,6 +437,41 @@ void main() {
 
     expect(find.text('Unassigned'), findsOneWidget);
     expect(find.text('Eli Waiting'), findsOneWidget);
+  });
+
+  testWidgets('blocks seating changes while a session is live', (tester) async {
+    final repository = _FakeSeatingRepository(
+      loadedAssignments: [
+        _assignment(displayName: 'Ava East'),
+      ],
+      generatedAssignments: [
+        _assignment(displayName: 'New East'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          seatingRepository: repository,
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            sessions: [_session(SessionStatus.paused)],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(seatingChangeBlockedMessage), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+        isNull);
+    expect(
+      tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+      isNull,
+    );
+    expect(repository.generateCallCount, 0);
+    expect(repository.clearCallCount, 0);
   });
 }
 
@@ -377,6 +494,26 @@ SeatingAssignmentRecord _assignment({
     seatIndex: seatIndex,
     assignmentRound: 1,
     status: 'active',
+  );
+}
+
+TableSessionRecord _session(SessionStatus status) {
+  return TableSessionRecord(
+    id: 'ses_${status.name}',
+    eventId: 'evt_01',
+    eventTableId: 'tbl_01',
+    sessionNumberForTable: 1,
+    rulesetId: 'HK_STANDARD',
+    rotationPolicyType: RotationPolicyType.dealerCycleReturnToInitialEast,
+    rotationPolicyConfig: const {},
+    status: status,
+    initialEastSeatIndex: 0,
+    currentDealerSeatIndex: 0,
+    dealerPassCount: 0,
+    completedGamesCount: 0,
+    handCount: 0,
+    startedAt: DateTime.parse('2026-05-22T12:00:00Z'),
+    startedByUserId: 'usr_01',
   );
 }
 

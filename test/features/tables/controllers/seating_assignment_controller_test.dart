@@ -1,6 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/seating_assignment_controller.dart';
@@ -136,6 +139,79 @@ class _FakeGuestRepository implements GuestRepository {
   }
 }
 
+class _FakeSessionRepository implements SessionRepository {
+  _FakeSessionRepository({this.sessions = const []});
+
+  final List<TableSessionRecord> sessions;
+
+  @override
+  Future<SessionDetailRecord> editHand(EditHandResultInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> endSession({
+    required String sessionId,
+    required String reason,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<EventHandLedgerEntry>> loadEventHandLedger(
+          String eventId) async =>
+      const [];
+
+  @override
+  Future<SessionDetailRecord> loadSessionDetail(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<TableSessionRecord>> listSessions(String eventId) async =>
+      sessions;
+
+  @override
+  Future<SessionDetailRecord> pauseSession(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> recordHand(RecordHandResultInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
+  Future<SessionDetailRecord?> readCachedSessionDetail(
+          String sessionId) async =>
+      null;
+
+  @override
+  Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
+      sessions;
+
+  @override
+  Future<SessionDetailRecord> resumeSession(String sessionId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
+    throw UnimplementedError();
+  }
+}
+
 void main() {
   test('load publishes cached assignments before remote assignments', () async {
     final repository = _FakeSeatingRepository(
@@ -145,6 +221,7 @@ void main() {
     final controller = SeatingAssignmentController(
       seatingRepository: repository,
       guestRepository: _FakeGuestRepository(),
+      sessionRepository: _FakeSessionRepository(),
     );
     final snapshots = <List<String>>[];
     controller.addListener(() {
@@ -197,6 +274,7 @@ void main() {
     final controller = SeatingAssignmentController(
       seatingRepository: repository,
       guestRepository: _FakeGuestRepository(),
+      sessionRepository: _FakeSessionRepository(),
     );
 
     await controller.generate('evt_01');
@@ -224,6 +302,7 @@ void main() {
     final controller = SeatingAssignmentController(
       seatingRepository: repository,
       guestRepository: _FakeGuestRepository(),
+      sessionRepository: _FakeSessionRepository(),
     );
 
     await controller.clear('evt_01');
@@ -264,6 +343,7 @@ void main() {
             guest.id: _tagAssignment(guestId: guest.id),
         },
       ),
+      sessionRepository: _FakeSessionRepository(),
     );
 
     await controller.generate('evt_01');
@@ -272,6 +352,26 @@ void main() {
       controller.unassignedGuests.map((guest) => guest.displayName),
       ['Ellen'],
     );
+  });
+
+  test('generate and clear are blocked while a session is live', () async {
+    final repository = _FakeSeatingRepository(
+      generatedAssignments: [_assignment()],
+    );
+    final controller = SeatingAssignmentController(
+      seatingRepository: repository,
+      guestRepository: _FakeGuestRepository(),
+      sessionRepository: _FakeSessionRepository(
+        sessions: [_session(SessionStatus.active)],
+      ),
+    );
+
+    await controller.generate('evt_01');
+    await controller.clear('evt_01');
+
+    expect(repository.calls, isEmpty);
+    expect(controller.hasLiveSessions, isTrue);
+    expect(controller.error, seatingChangeBlockedMessage);
   });
 }
 
@@ -294,6 +394,26 @@ SeatingAssignmentRecord _assignment({
     seatIndex: seatIndex,
     assignmentRound: 1,
     status: 'active',
+  );
+}
+
+TableSessionRecord _session(SessionStatus status) {
+  return TableSessionRecord(
+    id: 'ses_${status.name}',
+    eventId: 'evt_01',
+    eventTableId: 'tbl_01',
+    sessionNumberForTable: 1,
+    rulesetId: 'HK_STANDARD',
+    rotationPolicyType: RotationPolicyType.dealerCycleReturnToInitialEast,
+    rotationPolicyConfig: const {},
+    status: status,
+    initialEastSeatIndex: 0,
+    currentDealerSeatIndex: 0,
+    dealerPassCount: 0,
+    completedGamesCount: 0,
+    handCount: 0,
+    startedAt: DateTime.parse('2026-05-22T12:00:00Z'),
+    startedByUserId: 'usr_01',
   );
 }
 

@@ -1198,6 +1198,7 @@ void main() {
                 eventId: args.eventId,
                 seatingRepository: const _SeatingRepository(),
                 guestRepository: _GuestRepository(),
+                sessionRepository: const _SessionRepository(),
               ),
               settings: settings,
             );

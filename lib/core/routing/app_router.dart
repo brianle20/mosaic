@@ -231,6 +231,7 @@ class AppRouter {
             eventId: args.eventId,
             seatingRepository: seatingRepository,
             guestRepository: guestRepository,
+            sessionRepository: sessionRepository,
           ),
           settings: settings,
         );

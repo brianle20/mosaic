@@ -13,11 +13,13 @@ class SeatingAssignmentScreen extends StatefulWidget {
     required this.eventId,
     required this.seatingRepository,
     required this.guestRepository,
+    required this.sessionRepository,
   });
 
   final String eventId;
   final SeatingRepository seatingRepository;
   final GuestRepository guestRepository;
+  final SessionRepository sessionRepository;
 
   @override
   State<SeatingAssignmentScreen> createState() =>
@@ -33,6 +35,7 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
     _controller = SeatingAssignmentController(
       seatingRepository: widget.seatingRepository,
       guestRepository: widget.guestRepository,
+      sessionRepository: widget.sessionRepository,
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
@@ -125,6 +128,10 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
               InlineErrorBanner(message: _controller.error!),
               const SizedBox(height: 12),
             ],
+            if (_controller.hasLiveSessions) ...[
+              const InfoPanel(message: seatingChangeBlockedMessage),
+              const SizedBox(height: 12),
+            ],
             if (!hasAssignments)
               const EmptyStateCard(
                 icon: Icons.event_seat,
@@ -142,7 +149,10 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
             ],
             const SizedBox(height: 4),
             FilledButton(
-              onPressed: _controller.isSubmitting ? null : _generateSeating,
+              onPressed:
+                  _controller.isSubmitting || !_controller.canChangeSeating
+                      ? null
+                      : _generateSeating,
               child: Text(
                 _controller.isSubmitting ? 'Working' : 'Generate Seating',
               ),
@@ -150,7 +160,10 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
             if (hasAssignments) ...[
               const SizedBox(height: 8),
               OutlinedButton(
-                onPressed: _controller.isSubmitting ? null : _clearSeating,
+                onPressed:
+                    _controller.isSubmitting || !_controller.canChangeSeating
+                        ? null
+                        : _clearSeating,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Theme.of(context).colorScheme.error,
                 ),
