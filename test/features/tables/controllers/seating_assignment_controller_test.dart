@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/seating_assignment_controller.dart';
 
@@ -46,13 +48,104 @@ class _FakeSeatingRepository implements SeatingRepository {
   }
 }
 
+class _FakeGuestRepository implements GuestRepository {
+  _FakeGuestRepository({
+    this.guests = const [],
+    this.assignments = const {},
+  });
+
+  final List<EventGuestRecord> guests;
+  final Map<String, GuestTagAssignmentSummary> assignments;
+
+  @override
+  Future<GuestDetailRecord> assignGuestTag({
+    required String guestId,
+    required String scannedUid,
+    String? displayLabel,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<GuestDetailRecord> checkInGuest(String guestId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventGuestRecord> createGuest(CreateGuestInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<GuestProfileMatch>> findGuestProfileMatches(
+    GuestProfileLookupInput input,
+  ) async =>
+      const [];
+
+  @override
+  Future<GuestDetailRecord?> getGuestDetail(String guestId) async => null;
+
+  @override
+  Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
+    String guestId,
+  ) async =>
+      const [];
+
+  @override
+  Future<List<EventGuestRecord>> listGuests(String eventId) async => guests;
+
+  @override
+  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
+    String eventId,
+  ) async =>
+      assignments;
+
+  @override
+  Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
+    String guestId,
+  ) async =>
+      const [];
+
+  @override
+  Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
+      guests;
+
+  @override
+  Future<GuestDetailRecord> recordCoverEntry({
+    required String guestId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    required DateTime transactionOn,
+    String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<GuestDetailRecord> replaceGuestTag({
+    required String guestId,
+    required String scannedUid,
+    String? displayLabel,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
+    throw UnimplementedError();
+  }
+}
+
 void main() {
   test('load publishes cached assignments before remote assignments', () async {
     final repository = _FakeSeatingRepository(
       cachedAssignments: [_assignment(displayName: 'Cached East')],
       loadedAssignments: [_assignment(displayName: 'Remote East')],
     );
-    final controller = SeatingAssignmentController(repository);
+    final controller = SeatingAssignmentController(
+      seatingRepository: repository,
+      guestRepository: _FakeGuestRepository(),
+    );
     final snapshots = <List<String>>[];
     controller.addListener(() {
       snapshots.add([
@@ -101,7 +194,10 @@ void main() {
         ),
       ],
     );
-    final controller = SeatingAssignmentController(repository);
+    final controller = SeatingAssignmentController(
+      seatingRepository: repository,
+      guestRepository: _FakeGuestRepository(),
+    );
 
     await controller.generate('evt_01');
 
@@ -125,7 +221,10 @@ void main() {
     final repository = _FakeSeatingRepository(
       clearedAssignments: const [],
     );
-    final controller = SeatingAssignmentController(repository);
+    final controller = SeatingAssignmentController(
+      seatingRepository: repository,
+      guestRepository: _FakeGuestRepository(),
+    );
 
     await controller.clear('evt_01');
 
@@ -133,6 +232,46 @@ void main() {
     expect(controller.assignments, isEmpty);
     expect(controller.isSubmitting, isFalse);
     expect(controller.error, isNull);
+  });
+
+  test('generate identifies eligible guests left unassigned', () async {
+    final guests = [
+      _guest(id: 'gst_01', displayName: 'Alice'),
+      _guest(id: 'gst_02', displayName: 'Billy'),
+      _guest(id: 'gst_03', displayName: 'Carmen'),
+      _guest(id: 'gst_04', displayName: 'Dev'),
+      _guest(id: 'gst_05', displayName: 'Ellen'),
+      _guest(
+        id: 'gst_06',
+        displayName: 'Not Checked In',
+        attendanceStatus: 'expected',
+      ),
+    ];
+    final repository = _FakeSeatingRepository(
+      generatedAssignments: [
+        _assignment(guestId: 'gst_01', displayName: 'Alice', seatIndex: 0),
+        _assignment(guestId: 'gst_02', displayName: 'Billy', seatIndex: 1),
+        _assignment(guestId: 'gst_03', displayName: 'Carmen', seatIndex: 2),
+        _assignment(guestId: 'gst_04', displayName: 'Dev', seatIndex: 3),
+      ],
+    );
+    final controller = SeatingAssignmentController(
+      seatingRepository: repository,
+      guestRepository: _FakeGuestRepository(
+        guests: guests,
+        assignments: {
+          for (final guest in guests)
+            guest.id: _tagAssignment(guestId: guest.id),
+        },
+      ),
+    );
+
+    await controller.generate('evt_01');
+
+    expect(
+      controller.unassignedGuests.map((guest) => guest.displayName),
+      ['Ellen'],
+    );
   });
 }
 
@@ -155,5 +294,40 @@ SeatingAssignmentRecord _assignment({
     seatIndex: seatIndex,
     assignmentRound: 1,
     status: 'active',
+  );
+}
+
+EventGuestRecord _guest({
+  required String id,
+  required String displayName,
+  String attendanceStatus = 'checked_in',
+}) {
+  return EventGuestRecord.fromJson({
+    'id': id,
+    'event_id': 'evt_01',
+    'display_name': displayName,
+    'normalized_name': displayName.toLowerCase(),
+    'attendance_status': attendanceStatus,
+    'cover_status': 'paid',
+    'cover_amount_cents': 0,
+    'is_comped': false,
+    'has_scored_play': false,
+  });
+}
+
+GuestTagAssignmentSummary _tagAssignment({required String guestId}) {
+  return GuestTagAssignmentSummary(
+    assignmentId: 'asg_$guestId',
+    eventId: 'evt_01',
+    eventGuestId: guestId,
+    status: GuestTagAssignmentStatus.assigned,
+    assignedAt: DateTime.parse('2026-05-22T12:00:00Z'),
+    tag: NfcTagRecord(
+      id: 'tag_$guestId',
+      uidHex: 'UID_$guestId',
+      uidFingerprint: 'fingerprint_$guestId',
+      defaultTagType: NfcTagType.player,
+      status: NfcTagStatus.active,
+    ),
   );
 }

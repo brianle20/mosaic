@@ -230,6 +230,7 @@ class AppRouter {
           builder: (_) => SeatingAssignmentScreen(
             eventId: args.eventId,
             seatingRepository: seatingRepository,
+            guestRepository: guestRepository,
           ),
           settings: settings,
         );

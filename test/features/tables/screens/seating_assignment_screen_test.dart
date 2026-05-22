@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/screens/seating_assignment_screen.dart';
 
@@ -42,6 +44,94 @@ class _FakeSeatingRepository implements SeatingRepository {
       const [];
 }
 
+class _FakeGuestRepository implements GuestRepository {
+  _FakeGuestRepository({
+    this.guests = const [],
+    this.assignments = const {},
+  });
+
+  final List<EventGuestRecord> guests;
+  final Map<String, GuestTagAssignmentSummary> assignments;
+
+  @override
+  Future<GuestDetailRecord> assignGuestTag({
+    required String guestId,
+    required String scannedUid,
+    String? displayLabel,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<GuestDetailRecord> checkInGuest(String guestId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventGuestRecord> createGuest(CreateGuestInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<GuestProfileMatch>> findGuestProfileMatches(
+    GuestProfileLookupInput input,
+  ) async =>
+      const [];
+
+  @override
+  Future<GuestDetailRecord?> getGuestDetail(String guestId) async => null;
+
+  @override
+  Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
+    String guestId,
+  ) async =>
+      const [];
+
+  @override
+  Future<List<EventGuestRecord>> listGuests(String eventId) async => guests;
+
+  @override
+  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
+    String eventId,
+  ) async =>
+      assignments;
+
+  @override
+  Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
+    String guestId,
+  ) async =>
+      const [];
+
+  @override
+  Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
+      guests;
+
+  @override
+  Future<GuestDetailRecord> recordCoverEntry({
+    required String guestId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    required DateTime transactionOn,
+    String? note,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<GuestDetailRecord> replaceGuestTag({
+    required String guestId,
+    required String scannedUid,
+    String? displayLabel,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
+    throw UnimplementedError();
+  }
+}
+
 void main() {
   testWidgets('shows empty state and generate action', (tester) async {
     await tester.pumpWidget(
@@ -49,6 +139,7 @@ void main() {
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
           seatingRepository: _FakeSeatingRepository(),
+          guestRepository: _FakeGuestRepository(),
         ),
       ),
     );
@@ -101,6 +192,7 @@ void main() {
               ),
             ],
           ),
+          guestRepository: _FakeGuestRepository(),
         ),
       ),
     );
@@ -137,6 +229,7 @@ void main() {
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
           seatingRepository: repository,
+          guestRepository: _FakeGuestRepository(),
         ),
       ),
     );
@@ -174,6 +267,7 @@ void main() {
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
           seatingRepository: repository,
+          guestRepository: _FakeGuestRepository(),
         ),
       ),
     );
@@ -201,6 +295,67 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('shows eligible guests left unassigned after generation',
+      (tester) async {
+    final guests = [
+      _guest(id: 'gst_01', displayName: 'Ava East'),
+      _guest(id: 'gst_02', displayName: 'Ben South'),
+      _guest(id: 'gst_03', displayName: 'Cam West'),
+      _guest(id: 'gst_04', displayName: 'Dia North'),
+      _guest(id: 'gst_05', displayName: 'Eli Waiting'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          seatingRepository: _FakeSeatingRepository(
+            generatedAssignments: [
+              _assignment(
+                id: 'a1',
+                guestId: 'gst_01',
+                displayName: 'Ava East',
+                seatIndex: 0,
+              ),
+              _assignment(
+                id: 'a2',
+                guestId: 'gst_02',
+                displayName: 'Ben South',
+                seatIndex: 1,
+              ),
+              _assignment(
+                id: 'a3',
+                guestId: 'gst_03',
+                displayName: 'Cam West',
+                seatIndex: 2,
+              ),
+              _assignment(
+                id: 'a4',
+                guestId: 'gst_04',
+                displayName: 'Dia North',
+                seatIndex: 3,
+              ),
+            ],
+          ),
+          guestRepository: _FakeGuestRepository(
+            guests: guests,
+            assignments: {
+              for (final guest in guests)
+                guest.id: _tagAssignment(guestId: guest.id),
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Generate Seating'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unassigned'), findsOneWidget);
+    expect(find.text('Eli Waiting'), findsOneWidget);
+  });
 }
 
 SeatingAssignmentRecord _assignment({
@@ -222,5 +377,39 @@ SeatingAssignmentRecord _assignment({
     seatIndex: seatIndex,
     assignmentRound: 1,
     status: 'active',
+  );
+}
+
+EventGuestRecord _guest({
+  required String id,
+  required String displayName,
+}) {
+  return EventGuestRecord.fromJson({
+    'id': id,
+    'event_id': 'evt_01',
+    'display_name': displayName,
+    'normalized_name': displayName.toLowerCase(),
+    'attendance_status': 'checked_in',
+    'cover_status': 'paid',
+    'cover_amount_cents': 0,
+    'is_comped': false,
+    'has_scored_play': false,
+  });
+}
+
+GuestTagAssignmentSummary _tagAssignment({required String guestId}) {
+  return GuestTagAssignmentSummary(
+    assignmentId: 'asg_$guestId',
+    eventId: 'evt_01',
+    eventGuestId: guestId,
+    status: GuestTagAssignmentStatus.assigned,
+    assignedAt: DateTime.parse('2026-05-22T12:00:00Z'),
+    tag: NfcTagRecord(
+      id: 'tag_$guestId',
+      uidHex: 'UID_$guestId',
+      uidFingerprint: 'fingerprint_$guestId',
+      defaultTagType: NfcTagType.player,
+      status: NfcTagStatus.active,
+    ),
   );
 }

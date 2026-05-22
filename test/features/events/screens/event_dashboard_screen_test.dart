@@ -1197,6 +1197,7 @@ void main() {
               builder: (_) => SeatingAssignmentScreen(
                 eventId: args.eventId,
                 seatingRepository: const _SeatingRepository(),
+                guestRepository: _GuestRepository(),
               ),
               settings: settings,
             );

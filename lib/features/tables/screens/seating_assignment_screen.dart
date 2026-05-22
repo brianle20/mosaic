@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/seating_assignment_controller.dart';
@@ -11,10 +12,12 @@ class SeatingAssignmentScreen extends StatefulWidget {
     super.key,
     required this.eventId,
     required this.seatingRepository,
+    required this.guestRepository,
   });
 
   final String eventId;
   final SeatingRepository seatingRepository;
+  final GuestRepository guestRepository;
 
   @override
   State<SeatingAssignmentScreen> createState() =>
@@ -27,7 +30,10 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = SeatingAssignmentController(widget.seatingRepository)
+    _controller = SeatingAssignmentController(
+      seatingRepository: widget.seatingRepository,
+      guestRepository: widget.guestRepository,
+    )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
   }
@@ -130,6 +136,10 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
                 _TableSeatingCard(group: group),
                 const SizedBox(height: 12),
               ],
+            if (hasAssignments && _controller.unassignedGuests.isNotEmpty) ...[
+              _UnassignedGuestsCard(guests: _controller.unassignedGuests),
+              const SizedBox(height: 12),
+            ],
             const SizedBox(height: 4),
             FilledButton(
               onPressed: _controller.isSubmitting ? null : _generateSeating,
@@ -147,6 +157,38 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
                 child: const Text('Clear Assignments'),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UnassignedGuestsCard extends StatelessWidget {
+  const _UnassignedGuestsCard({required this.guests});
+
+  final List<EventGuestRecord> guests;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Unassigned',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            for (final guest in guests)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(guest.displayName),
+              ),
           ],
         ),
       ),
