@@ -377,6 +377,14 @@ class _FakeSeatingRepository implements SeatingRepository {
       const [];
 
   @override
+  Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
+    required String eventId,
+    required String championsTableId,
+    required String redemptionTableId,
+  }) async =>
+      const [];
+
+  @override
   Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
       const [];
 

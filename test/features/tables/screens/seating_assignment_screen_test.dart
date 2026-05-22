@@ -38,6 +38,15 @@ class _FakeSeatingRepository implements SeatingRepository {
   }
 
   @override
+  Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
+    required String eventId,
+    required String championsTableId,
+    required String redemptionTableId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
       loadedAssignments;
 

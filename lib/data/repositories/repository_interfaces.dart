@@ -192,6 +192,12 @@ abstract interface class SeatingRepository {
     String eventId,
   );
 
+  Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
+    required String eventId,
+    required String championsTableId,
+    required String redemptionTableId,
+  });
+
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId);
 }
 

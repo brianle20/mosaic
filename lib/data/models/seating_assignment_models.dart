@@ -1,5 +1,15 @@
 import 'package:meta/meta.dart';
 
+enum SeatingAssignmentType {
+  random,
+  bonus,
+}
+
+enum BonusTableRole {
+  tableOfChampions,
+  tableOfRedemption,
+}
+
 @immutable
 class SeatingAssignmentRecord {
   const SeatingAssignmentRecord({
@@ -12,6 +22,10 @@ class SeatingAssignmentRecord {
     required this.seatIndex,
     required this.assignmentRound,
     required this.status,
+    this.assignmentType = SeatingAssignmentType.random,
+    this.bonusRoundId,
+    this.bonusTableRole,
+    this.seedRank,
   });
 
   factory SeatingAssignmentRecord.fromJson(Map<String, dynamic> json) {
@@ -28,6 +42,12 @@ class SeatingAssignmentRecord {
       seatIndex: _requiredInt(json, 'seat_index'),
       assignmentRound: _requiredInt(json, 'assignment_round'),
       status: _requiredString(json, 'status'),
+      assignmentType: _assignmentTypeFromJson(
+        _stringOrDefault(json, 'assignment_type', 'random'),
+      ),
+      bonusRoundId: _optionalString(json, 'bonus_round_id'),
+      bonusTableRole: _optionalBonusTableRole(json, 'bonus_table_role'),
+      seedRank: _optionalInt(json, 'seed_rank'),
     );
   }
 
@@ -40,6 +60,10 @@ class SeatingAssignmentRecord {
   final int seatIndex;
   final int assignmentRound;
   final String status;
+  final SeatingAssignmentType assignmentType;
+  final String? bonusRoundId;
+  final BonusTableRole? bonusTableRole;
+  final int? seedRank;
 
   Map<String, dynamic> toJson() {
     return {
@@ -52,6 +76,12 @@ class SeatingAssignmentRecord {
       'seat_index': seatIndex,
       'assignment_round': assignmentRound,
       'status': status,
+      'assignment_type': _assignmentTypeToJson(assignmentType),
+      'bonus_round_id': bonusRoundId,
+      'bonus_table_role': bonusTableRole == null
+          ? null
+          : _bonusTableRoleToJson(bonusTableRole!),
+      'seed_rank': seedRank,
     };
   }
 }
@@ -76,6 +106,32 @@ String _requiredStringFromAny(Map<String, dynamic> json, List<String> keys) {
   throw FormatException('Expected non-empty string for one of $keys.');
 }
 
+String _stringOrDefault(
+  Map<String, dynamic> json,
+  String key,
+  String fallback,
+) {
+  final value = json[key];
+  if (value is String && value.trim().isNotEmpty) {
+    return value;
+  }
+
+  return fallback;
+}
+
+String? _optionalString(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) {
+    return null;
+  }
+
+  if (value is String && value.trim().isNotEmpty) {
+    return value;
+  }
+
+  throw FormatException('Expected non-empty string or null for $key.');
+}
+
 int _requiredInt(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is int) {
@@ -87,4 +143,63 @@ int _requiredInt(Map<String, dynamic> json, String key) {
   }
 
   throw FormatException('Expected int for $key.');
+}
+
+int? _optionalInt(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) {
+    return null;
+  }
+
+  if (value is int) {
+    return value;
+  }
+
+  if (value is num) {
+    return value.toInt();
+  }
+
+  throw FormatException('Expected int or null for $key.');
+}
+
+SeatingAssignmentType _assignmentTypeFromJson(String value) {
+  return switch (value) {
+    'random' => SeatingAssignmentType.random,
+    'bonus' => SeatingAssignmentType.bonus,
+    _ => throw FormatException('Unknown seating assignment type: $value'),
+  };
+}
+
+String _assignmentTypeToJson(SeatingAssignmentType type) {
+  return switch (type) {
+    SeatingAssignmentType.random => 'random',
+    SeatingAssignmentType.bonus => 'bonus',
+  };
+}
+
+BonusTableRole? _optionalBonusTableRole(
+  Map<String, dynamic> json,
+  String key,
+) {
+  final value = json[key];
+  if (value == null) {
+    return null;
+  }
+
+  if (value is! String) {
+    throw FormatException('Expected string or null for $key.');
+  }
+
+  return switch (value) {
+    'table_of_champions' => BonusTableRole.tableOfChampions,
+    'table_of_redemption' => BonusTableRole.tableOfRedemption,
+    _ => throw FormatException('Unknown bonus table role: $value'),
+  };
+}
+
+String _bonusTableRoleToJson(BonusTableRole role) {
+  return switch (role) {
+    BonusTableRole.tableOfChampions => 'table_of_champions',
+    BonusTableRole.tableOfRedemption => 'table_of_redemption',
+  };
 }
