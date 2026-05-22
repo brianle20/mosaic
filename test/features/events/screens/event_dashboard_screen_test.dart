@@ -10,6 +10,7 @@ import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -20,6 +21,7 @@ import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 import 'package:mosaic/features/scoring/screens/event_hand_ledger_screen.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
+import 'package:mosaic/features/tables/screens/seating_assignment_screen.dart';
 import 'package:mosaic/services/nfc/native_nfc_reader.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/app_actions.dart';
@@ -253,6 +255,31 @@ class _ActivityRepository implements ActivityRepository {
   Future<List<EventActivityEntry>> readCachedActivity(
     String eventId,
     EventActivityCategory category,
+  ) async =>
+      const [];
+}
+
+class _SeatingRepository implements SeatingRepository {
+  const _SeatingRepository();
+
+  @override
+  Future<List<SeatingAssignmentRecord>> clearAssignments(
+          String eventId) async =>
+      const [];
+
+  @override
+  Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
+      const [];
+
+  @override
+  Future<List<SeatingAssignmentRecord>> readCachedAssignments(
+    String eventId,
   ) async =>
       const [];
 }
@@ -718,6 +745,19 @@ void main() {
     'default_ruleset_id': 'HK_STANDARD',
     'prevailing_wind': 'east',
   });
+  final cancelledEvent = EventRecord.fromJson(const {
+    'id': 'evt_05',
+    'owner_user_id': 'usr_01',
+    'title': 'Cancelled Friday Night Mahjong',
+    'timezone': 'America/Los_Angeles',
+    'starts_at': '2026-04-24T19:00:00-07:00',
+    'lifecycle_status': 'cancelled',
+    'checkin_open': false,
+    'scoring_open': false,
+    'cover_charge_cents': 2000,
+    'default_ruleset_id': 'HK_STANDARD',
+    'prevailing_wind': 'east',
+  });
 
   final activeCheckinOnlyEvent = EventRecord.fromJson(const {
     'id': 'evt_04',
@@ -846,6 +886,7 @@ void main() {
       leaderboardRepository: _LeaderboardRepository(),
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
+      seatingRepository: const _SeatingRepository(),
       nfcService: const _NfcService(),
     );
 
@@ -1075,6 +1116,7 @@ void main() {
       leaderboardRepository: _LeaderboardRepository(),
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
+      seatingRepository: const _SeatingRepository(),
       nfcService: const _NfcService(),
     );
 
@@ -1109,6 +1151,7 @@ void main() {
       leaderboardRepository: _LeaderboardRepository(),
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
+      seatingRepository: const _SeatingRepository(),
       nfcService: const _NfcService(),
     );
 
@@ -1134,6 +1177,87 @@ void main() {
     expect(find.text('No hands recorded yet.'), findsOneWidget);
   });
 
+  testWidgets('active event seating action routes into assignments screen',
+      (tester) async {
+    RouteSettings? openedSettings;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.seatingAssignmentsRoute) {
+            openedSettings = settings;
+            final args = settings.arguments! as SeatingAssignmentsArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => SeatingAssignmentScreen(
+                eventId: args.eventId,
+                seatingRepository: const _SeatingRepository(),
+              ),
+              settings: settings,
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Seating'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Seating'));
+    await tester.pumpAndSettle();
+
+    expect(openedSettings?.name, AppRouter.seatingAssignmentsRoute);
+    expect(
+      (openedSettings?.arguments as SeatingAssignmentsArgs?)?.eventId,
+      'evt_01',
+    );
+    expect(find.byType(SeatingAssignmentScreen), findsOneWidget);
+    expect(find.text('Generate Seating'), findsOneWidget);
+  });
+
+  testWidgets('draft event exposes seating prep action', (tester) async {
+    await _pumpDashboard(tester, event: draftEvent);
+
+    await tester.ensureVisible(find.text('Event options'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Seating'), findsOneWidget);
+  });
+
+  testWidgets('completed event exposes seating prep action', (tester) async {
+    await _pumpDashboard(tester, event: completedEvent);
+
+    await tester.ensureVisible(find.text('Event options'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Seating'), findsOneWidget);
+  });
+
+  testWidgets('finalized event hides seating prep action', (tester) async {
+    await _pumpDashboard(tester, event: finalizedEvent);
+
+    await tester.ensureVisible(find.text('Event options'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Seating'), findsNothing);
+  });
+
+  testWidgets('cancelled event does not expose prep actions', (tester) async {
+    await _pumpDashboard(tester, event: cancelledEvent);
+
+    await tester.ensureVisible(find.text('Event options'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Seating'), findsNothing);
+  });
+
   testWidgets('scan table routes to active table session', (tester) async {
     final table = _table();
     final activeSession = _session(id: 'sess_active');
@@ -1146,6 +1270,7 @@ void main() {
       leaderboardRepository: _LeaderboardRepository(),
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
+      seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 
@@ -1242,6 +1367,7 @@ void main() {
       leaderboardRepository: _LeaderboardRepository(),
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
+      seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 
@@ -1287,6 +1413,7 @@ void main() {
       leaderboardRepository: _LeaderboardRepository(),
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
+      seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 
@@ -1324,6 +1451,7 @@ void main() {
       leaderboardRepository: _LeaderboardRepository(),
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
+      seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 

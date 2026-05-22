@@ -210,6 +210,19 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     await _reloadDashboardAfterReturn(event.id);
   }
 
+  Future<void> _openSeating() async {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    await Navigator.of(context).pushNamed(
+      AppRouter.seatingAssignmentsRoute,
+      arguments: SeatingAssignmentsArgs(eventId: event.id),
+    );
+    await _reloadDashboardAfterReturn(event.id);
+  }
+
   Future<void> _openActivity() async {
     final event = _controller.event;
     if (event == null) {
@@ -774,6 +787,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               _EventOptionsSection(
                 lifecycleStatus: lifecycleStatus,
                 isSubmitting: _controller.isSubmittingLifecycle,
+                onSeating: _openSeating,
                 onActivity: _openActivity,
                 onHandLedger: _openHandLedger,
                 onDelete: _confirmDeleteEvent,
@@ -1015,6 +1029,7 @@ class _EventOptionsSection extends StatelessWidget {
   const _EventOptionsSection({
     required this.lifecycleStatus,
     required this.isSubmitting,
+    required this.onSeating,
     required this.onActivity,
     required this.onHandLedger,
     required this.onDelete,
@@ -1026,6 +1041,7 @@ class _EventOptionsSection extends StatelessWidget {
 
   final EventLifecycleStatus lifecycleStatus;
   final bool isSubmitting;
+  final VoidCallback onSeating;
   final VoidCallback onActivity;
   final VoidCallback onHandLedger;
   final VoidCallback onDelete;
@@ -1033,6 +1049,16 @@ class _EventOptionsSection extends StatelessWidget {
   final VoidCallback onFinalize;
   final VoidCallback onRevert;
   final VoidCallback onCancel;
+
+  bool get _showsSeatingPrepAction {
+    return switch (lifecycleStatus) {
+      EventLifecycleStatus.draft ||
+      EventLifecycleStatus.active ||
+      EventLifecycleStatus.completed =>
+        true,
+      EventLifecycleStatus.finalized || EventLifecycleStatus.cancelled => false,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1051,6 +1077,8 @@ class _EventOptionsSection extends StatelessWidget {
           spacing: 10,
           runSpacing: 10,
           children: [
+            if (_showsSeatingPrepAction)
+              UtilityActionButton(label: 'Seating', onPressed: onSeating),
             UtilityActionButton(label: 'Activity', onPressed: onActivity),
             UtilityActionButton(
               label: 'Hand Ledger',

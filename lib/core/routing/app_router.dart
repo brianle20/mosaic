@@ -13,6 +13,7 @@ import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
 import 'package:mosaic/features/scoring/screens/event_hand_ledger_screen.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
+import 'package:mosaic/features/tables/screens/seating_assignment_screen.dart';
 import 'package:mosaic/features/tables/screens/table_form_screen.dart';
 import 'package:mosaic/features/tables/screens/start_session_screen.dart';
 import 'package:mosaic/features/tables/screens/tables_overview_screen.dart';
@@ -28,6 +29,7 @@ class AppRouter {
     required this.leaderboardRepository,
     required this.activityRepository,
     required this.prizeRepository,
+    required this.seatingRepository,
     required this.nfcService,
   });
 
@@ -38,6 +40,7 @@ class AppRouter {
   final LeaderboardRepository leaderboardRepository;
   final ActivityRepository activityRepository;
   final PrizeRepository prizeRepository;
+  final SeatingRepository seatingRepository;
   final NfcService nfcService;
 
   static const eventListRoute = '/';
@@ -55,6 +58,7 @@ class AppRouter {
   static const eventHandLedgerRoute = '/events/hand-ledger';
   static const prizePlanRoute = '/prizes/plan';
   static const prizeAwardsRoute = '/prizes/awards';
+  static const seatingAssignmentsRoute = '/tables/seating';
 
   Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -219,6 +223,15 @@ class AppRouter {
           ),
           settings: settings,
         );
+      case seatingAssignmentsRoute:
+        final args = settings.arguments as SeatingAssignmentsArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => SeatingAssignmentScreen(
+            eventId: args.eventId,
+            seatingRepository: seatingRepository,
+          ),
+          settings: settings,
+        );
       default:
         return MaterialPageRoute<void>(
           builder: (_) => EventListScreen(
@@ -324,6 +337,14 @@ class StartSessionArgs {
   final String eventId;
   final EventTableRecord table;
   final String? preverifiedTableTagUid;
+}
+
+class SeatingAssignmentsArgs {
+  const SeatingAssignmentsArgs({
+    required this.eventId,
+  });
+
+  final String eventId;
 }
 
 class SessionDetailArgs {

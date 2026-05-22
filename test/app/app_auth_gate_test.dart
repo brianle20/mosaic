@@ -11,6 +11,7 @@ import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -363,6 +364,29 @@ class _FakeActivityRepository implements ActivityRepository {
       const [];
 }
 
+class _FakeSeatingRepository implements SeatingRepository {
+  @override
+  Future<List<SeatingAssignmentRecord>> clearAssignments(
+          String eventId) async =>
+      const [];
+
+  @override
+  Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
+      const [];
+
+  @override
+  Future<List<SeatingAssignmentRecord>> readCachedAssignments(
+    String eventId,
+  ) async =>
+      const [];
+}
+
 class _FakeNfcService implements NfcService {
   const _FakeNfcService();
 
@@ -414,6 +438,7 @@ void main() {
           leaderboardRepository: _FakeLeaderboardRepository(),
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
+          seatingRepository: _FakeSeatingRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
@@ -456,6 +481,7 @@ void main() {
           leaderboardRepository: _FakeLeaderboardRepository(),
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
+          seatingRepository: _FakeSeatingRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
@@ -500,6 +526,7 @@ void main() {
           leaderboardRepository: _FakeLeaderboardRepository(),
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
+          seatingRepository: _FakeSeatingRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
