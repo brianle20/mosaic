@@ -391,7 +391,7 @@ void main() {
     ]);
   });
 
-  test('builds compact round timer labels for active table cards', () async {
+  test('builds countdown round timer labels for active table cards', () async {
     final table = EventTableRecord.fromJson(const {
       'id': 'tbl_01',
       'event_id': 'evt_01',
@@ -422,7 +422,7 @@ void main() {
     await controller.load('evt_01');
 
     final summary = controller.cards.single.liveSummary!;
-    expect(summary.roundTimeLabel, '25 min left');
+    expect(summary.roundTimeLabel, '25:00');
     expect(summary.isRoundExpired, isFalse);
     expect(summary.isRoundEndingSoon, isFalse);
   });

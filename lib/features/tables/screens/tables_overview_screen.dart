@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
@@ -20,6 +22,7 @@ class TablesOverviewScreen extends StatefulWidget {
     required this.tableRepository,
     required this.sessionRepository,
     required this.guestRepository,
+    this.now,
   });
 
   final String eventId;
@@ -29,6 +32,7 @@ class TablesOverviewScreen extends StatefulWidget {
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
   final GuestRepository guestRepository;
+  final DateTime Function()? now;
 
   @override
   State<TablesOverviewScreen> createState() => _TablesOverviewScreenState();
@@ -36,6 +40,7 @@ class TablesOverviewScreen extends StatefulWidget {
 
 class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   late final TableListController _controller;
+  Timer? _roundTimer;
 
   @override
   void initState() {
@@ -44,13 +49,18 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       tableRepository: widget.tableRepository,
       sessionRepository: widget.sessionRepository,
       guestRepository: widget.guestRepository,
+      now: widget.now,
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
+    _roundTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _controller.refreshRoundTimers();
+    });
   }
 
   @override
   void dispose() {
+    _roundTimer?.cancel();
     _controller
       ..removeListener(_handleUpdate)
       ..dispose();

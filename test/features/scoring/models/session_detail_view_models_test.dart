@@ -75,14 +75,14 @@ void main() {
       expect(viewModel.seats[1].isCurrentEast, isTrue);
     });
 
-    test('builds round timer label with remaining time', () {
+    test('builds round timer label with countdown time', () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(startedAt: '2026-05-20T12:20:00Z'),
         guestNamesById: _guestNamesById,
         now: DateTime.parse('2026-05-20T13:00:00Z'),
       );
 
-      expect(viewModel.roundTimeLabel, '20 min left');
+      expect(viewModel.roundTimeLabel, '20:00');
       expect(viewModel.isRoundExpired, isFalse);
       expect(viewModel.isRoundEndingSoon, isFalse);
     });
@@ -94,7 +94,7 @@ void main() {
         now: DateTime.parse('2026-05-20T13:51:00Z'),
       );
 
-      expect(viewModel.roundTimeLabel, 'Less than 5 min left');
+      expect(viewModel.roundTimeLabel, '04:30');
       expect(viewModel.isRoundExpired, isFalse);
       expect(viewModel.isRoundEndingSoon, isTrue);
     });

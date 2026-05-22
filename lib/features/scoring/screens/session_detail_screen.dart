@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -19,6 +21,7 @@ class SessionDetailScreen extends StatefulWidget {
     required this.guestRepository,
     required this.sessionRepository,
     this.nfcService,
+    this.now,
   });
 
   final String eventId;
@@ -27,6 +30,7 @@ class SessionDetailScreen extends StatefulWidget {
   final GuestRepository guestRepository;
   final SessionRepository sessionRepository;
   final NfcService? nfcService;
+  final DateTime Function()? now;
 
   @override
   State<SessionDetailScreen> createState() => _SessionDetailScreenState();
@@ -34,6 +38,7 @@ class SessionDetailScreen extends StatefulWidget {
 
 class _SessionDetailScreenState extends State<SessionDetailScreen> {
   late final SessionDetailController _controller;
+  Timer? _roundTimer;
 
   @override
   void initState() {
@@ -44,10 +49,16 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     )
       ..addListener(_handleUpdate)
       ..load(eventId: widget.eventId, sessionId: widget.sessionId);
+    _roundTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
   void dispose() {
+    _roundTimer?.cancel();
     _controller
       ..removeListener(_handleUpdate)
       ..dispose();
@@ -157,6 +168,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         : buildSessionDetailViewModel(
             detail: detail,
             guestNamesById: _controller.guestNamesById,
+            now: widget.now?.call(),
           );
     final sessionStatus = detail?.session.status;
     final canRecordHand =

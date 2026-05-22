@@ -363,6 +363,39 @@ void main() {
     expect(find.text('Resume'), findsNothing);
   });
 
+  testWidgets('round timer counts down while session detail is open',
+      (tester) async {
+    var now = DateTime.parse('2026-05-21T12:59:58Z');
+    final startedAt = DateTime.parse('2026-05-21T12:00:00Z').toIso8601String();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: _buildDetail(
+              SessionStatus.active,
+              startedAt: startedAt,
+            ),
+          ),
+          now: () => now,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('00:02'), findsOneWidget);
+
+    now = now.add(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('00:01'), findsOneWidget);
+
+    now = now.add(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Time expired'), findsOneWidget);
+  });
+
   testWidgets('seat grid arranges seats counter-clockwise around the table',
       (tester) async {
     await tester.pumpWidget(
@@ -411,7 +444,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Round Time'), findsOneWidget);
-    expect(find.textContaining('min left'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Text &&
+            RegExp(r'^\d{2}:\d{2}$').hasMatch(widget.data ?? ''),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('active session blocks hand entry when scoring is paused',

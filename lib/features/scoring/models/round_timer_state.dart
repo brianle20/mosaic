@@ -23,30 +23,22 @@ class RoundTimerState {
       );
     }
 
-    if (remaining < const Duration(minutes: 1)) {
-      return const RoundTimerState(
-        label: 'Less than 1 min left',
-        isExpired: false,
-        isEndingSoon: true,
-      );
-    }
-
-    if (remaining <= roundEndingSoonThreshold) {
-      return const RoundTimerState(
-        label: 'Less than 5 min left',
-        isExpired: false,
-        isEndingSoon: true,
-      );
-    }
-
     return RoundTimerState(
-      label: '${remaining.inMinutes} min left',
+      label: _formatCountdown(remaining),
       isExpired: false,
-      isEndingSoon: false,
+      isEndingSoon: remaining <= roundEndingSoonThreshold,
     );
   }
 
   final String label;
   final bool isExpired;
   final bool isEndingSoon;
+}
+
+String _formatCountdown(Duration remaining) {
+  final totalSeconds = remaining.inSeconds;
+  final minutes = totalSeconds ~/ 60;
+  final seconds = totalSeconds % 60;
+  return '${minutes.toString().padLeft(2, '0')}:'
+      '${seconds.toString().padLeft(2, '0')}';
 }

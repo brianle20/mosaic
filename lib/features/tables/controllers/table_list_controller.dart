@@ -32,6 +32,15 @@ class TableListController extends ChangeNotifier {
   Map<String, String> guestNamesById = const {};
   List<TableOverviewCardData> cards = const [];
 
+  void refreshRoundTimers() {
+    if (activeSessionsByTableId.isEmpty) {
+      return;
+    }
+
+    cards = _buildCards();
+    notifyListeners();
+  }
+
   Future<void> load(String eventId) async {
     final cachedTables = await _tableRepository.readCachedTables(eventId);
     final cachedSessions = await _sessionRepository.readCachedSessions(eventId);
