@@ -4,6 +4,7 @@ import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
@@ -43,6 +44,79 @@ void main() {
 
       expect(record.lifecycleStatus, EventLifecycleStatus.draft);
       expect(record.toJson()['lifecycle_status'], 'draft');
+    });
+
+    test('round-trips seating mode from JSON', () {
+      final record = EventRecord.fromJson(const {
+        'id': 'evt_01',
+        'owner_user_id': 'usr_01',
+        'title': 'Friday Night Mahjong',
+        'timezone': 'America/Los_Angeles',
+        'starts_at': '2026-04-24T19:00:00-07:00',
+        'lifecycle_status': 'draft',
+        'checkin_open': false,
+        'scoring_open': false,
+        'cover_charge_cents': 2000,
+        'default_ruleset_id': 'HK_STANDARD',
+        'prevailing_wind': 'east',
+        'seating_mode': 'manual',
+      });
+
+      expect(record.seatingMode, EventSeatingMode.manual);
+      expect(record.toJson()['seating_mode'], 'manual');
+    });
+
+    test('defaults missing cached seating mode to random', () {
+      final record = EventRecord.fromJson(const {
+        'id': 'evt_01',
+        'owner_user_id': 'usr_01',
+        'title': 'Friday Night Mahjong',
+        'timezone': 'America/Los_Angeles',
+        'starts_at': '2026-04-24T19:00:00-07:00',
+        'lifecycle_status': 'draft',
+        'checkin_open': false,
+        'scoring_open': false,
+        'cover_charge_cents': 2000,
+        'default_ruleset_id': 'HK_STANDARD',
+        'prevailing_wind': 'east',
+      });
+
+      expect(record.seatingMode, EventSeatingMode.random);
+      expect(record.toJson()['seating_mode'], 'random');
+    });
+  });
+
+  group('SeatingAssignmentRecord', () {
+    test('parses RPC rows and serializes for cache', () {
+      final record = SeatingAssignmentRecord.fromJson(const {
+        'id': 'asg_01',
+        'event_id': 'evt_01',
+        'event_table_id': 'tbl_01',
+        'table_label': 'Table 1',
+        'event_guest_id': 'gst_01',
+        'guest_display_name': 'Alice Wong',
+        'seat_index': 2,
+        'assignment_round': 1,
+        'status': 'active',
+      });
+
+      expect(record.id, 'asg_01');
+      expect(record.tableLabel, 'Table 1');
+      expect(record.displayName, 'Alice Wong');
+      expect(record.seatIndex, 2);
+      expect(record.assignmentRound, 1);
+      expect(record.status, 'active');
+      expect(record.toJson(), {
+        'id': 'asg_01',
+        'event_id': 'evt_01',
+        'event_table_id': 'tbl_01',
+        'table_label': 'Table 1',
+        'event_guest_id': 'gst_01',
+        'display_name': 'Alice Wong',
+        'seat_index': 2,
+        'assignment_round': 1,
+        'status': 'active',
+      });
     });
   });
 

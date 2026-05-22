@@ -6,6 +6,7 @@ import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,6 +30,7 @@ class LocalCache {
   static const _sessionDetailKeyPrefix = 'session-detail:';
   static const _eventHandLedgerKeyPrefix = 'event-hand-ledger:';
   static const _leaderboardKeyPrefix = 'leaderboard:';
+  static const _seatingAssignmentsKeyPrefix = 'seating-assignments:';
   static const _prizePlanKeyPrefix = 'prize-plan:';
   static const _prizePreviewKeyPrefix = 'prize-preview:';
   static const _prizeAwardsKeyPrefix = 'prize-awards:';
@@ -232,6 +234,34 @@ class LocalCache {
     } on TypeError {
       return const [];
     }
+  }
+
+  Future<void> saveSeatingAssignments(
+    String eventId,
+    List<SeatingAssignmentRecord> assignments,
+  ) async {
+    await _preferences.setString(
+      '$_seatingAssignmentsKeyPrefix$eventId',
+      jsonEncode(
+        assignments.map((assignment) => assignment.toJson()).toList(),
+      ),
+    );
+  }
+
+  List<SeatingAssignmentRecord> readSeatingAssignments(String eventId) {
+    final raw = _preferences.getString('$_seatingAssignmentsKeyPrefix$eventId');
+    if (raw == null || raw.isEmpty) {
+      return const [];
+    }
+
+    final decoded = jsonDecode(raw) as List<dynamic>;
+    return decoded
+        .map(
+          (assignment) => SeatingAssignmentRecord.fromJson(
+            (assignment as Map).cast<String, dynamic>(),
+          ),
+        )
+        .toList(growable: false);
   }
 
   Future<void> savePrizePlan(String eventId, PrizePlanDetail detail) async {

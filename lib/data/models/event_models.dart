@@ -16,6 +16,11 @@ enum PrevailingWind {
   north,
 }
 
+enum EventSeatingMode {
+  random,
+  manual,
+}
+
 @immutable
 class CreateEventInput {
   const CreateEventInput({
@@ -53,6 +58,7 @@ class CreateEventInput {
       'cover_charge_cents': coverChargeCents,
       'default_ruleset_id': defaultRulesetId,
       'prevailing_wind': 'east',
+      'seating_mode': 'random',
     };
   }
 }
@@ -72,6 +78,7 @@ class EventRecord {
     required this.coverChargeCents,
     required this.defaultRulesetId,
     required this.prevailingWind,
+    this.seatingMode = EventSeatingMode.random,
     this.description,
     this.venueName,
     this.venueAddress,
@@ -102,6 +109,9 @@ class EventRecord {
       prevailingWind: _prevailingWindFromJson(
         _requiredString(json, 'prevailing_wind'),
       ),
+      seatingMode: _eventSeatingModeFromJson(
+        _stringOrDefault(json, 'seating_mode', 'random'),
+      ),
       rowVersion: _intOrDefault(json, 'row_version', 1),
     );
   }
@@ -122,6 +132,7 @@ class EventRecord {
   final int coverChargeCents;
   final String defaultRulesetId;
   final PrevailingWind prevailingWind;
+  final EventSeatingMode seatingMode;
   final int rowVersion;
 
   Map<String, dynamic> toJson() {
@@ -142,6 +153,7 @@ class EventRecord {
       'cover_charge_cents': coverChargeCents,
       'default_ruleset_id': defaultRulesetId,
       'prevailing_wind': prevailingWind.name,
+      'seating_mode': seatingMode.name,
       'row_version': rowVersion,
     };
   }
@@ -225,6 +237,20 @@ int _intOrDefault(Map<String, dynamic> json, String key, int fallback) {
   throw FormatException('Expected int or null for $key.');
 }
 
+String _stringOrDefault(
+    Map<String, dynamic> json, String key, String fallback) {
+  final value = json[key];
+  if (value == null) {
+    return fallback;
+  }
+
+  if (value is String && value.trim().isNotEmpty) {
+    return value;
+  }
+
+  throw FormatException('Expected non-empty string or null for $key.');
+}
+
 EventLifecycleStatus _eventLifecycleStatusFromJson(String value) {
   return switch (value) {
     'draft' => EventLifecycleStatus.draft,
@@ -243,5 +269,13 @@ PrevailingWind _prevailingWindFromJson(String value) {
     'west' => PrevailingWind.west,
     'north' => PrevailingWind.north,
     _ => throw FormatException('Unknown prevailing wind: $value'),
+  };
+}
+
+EventSeatingMode _eventSeatingModeFromJson(String value) {
+  return switch (value) {
+    'random' => EventSeatingMode.random,
+    'manual' => EventSeatingMode.manual,
+    _ => throw FormatException('Unknown event seating mode: $value'),
   };
 }

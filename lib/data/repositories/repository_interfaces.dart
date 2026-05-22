@@ -7,6 +7,7 @@ import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/ruleset_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -180,6 +181,18 @@ abstract interface class LeaderboardRepository {
   Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId);
 
   Future<List<LeaderboardEntry>> loadLeaderboard(String eventId);
+}
+
+abstract interface class SeatingRepository {
+  Future<List<SeatingAssignmentRecord>> readCachedAssignments(String eventId);
+
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId);
+
+  Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
+    String eventId,
+  );
+
+  Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId);
 }
 
 abstract interface class ActivityRepository {
