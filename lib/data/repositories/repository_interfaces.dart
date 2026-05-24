@@ -164,6 +164,10 @@ abstract interface class SessionRepository {
 
   Future<StartedTableSessionRecord> startSession(StartTableSessionInput input);
 
+  Future<StartedTableSessionRecord> startAssignedSession(
+    StartAssignedTableSessionInput input,
+  );
+
   Future<SessionDetailRecord> pauseSession(String sessionId);
 
   Future<SessionDetailRecord> resumeSession(String sessionId);

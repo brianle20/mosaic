@@ -6,6 +6,7 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/controllers/start_session_controller.dart';
 import 'package:mosaic/features/tables/models/start_session_scan_state.dart';
@@ -147,6 +148,16 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
 }
 
 class _FakeSessionRepository extends ThrowingSessionRepository {
+  StartAssignedTableSessionInput? startedAssignedInput;
+
+  @override
+  Future<StartedTableSessionRecord> startAssignedSession(
+    StartAssignedTableSessionInput input,
+  ) async {
+    startedAssignedInput = input;
+    return _startedSession();
+  }
+
   @override
   Future<StartedTableSessionRecord> startSession(
     StartTableSessionInput input,
@@ -219,6 +230,33 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 }
 
 void main() {
+  test('assigned table can start from generated seats without player scans',
+      () async {
+    final sessionRepository = _FakeSessionRepository();
+    final controller = _buildController(
+      seatingAssignments: _tableAssignments(),
+      sessionRepository: sessionRepository,
+      preverifiedTableTagUid: 'TABLE-001',
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.hasAssignedTableSeating, isTrue);
+    expect(controller.currentPrompt, 'Review assigned seating');
+    expect(controller.resolvedSeats.map((seat) => seat.guestName), [
+      'Alice',
+      'Billy',
+      'Carol',
+      'Dee',
+    ]);
+
+    final started = await controller.confirmStart();
+
+    expect(started?.session.id, 'ses_01');
+    expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
+    expect(sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
+  });
+
   test('rejects a player scanned for the wrong assigned seat', () async {
     final controller = _buildController(
       seatingAssignments: _tableAssignments(),
@@ -266,6 +304,8 @@ void main() {
 
 StartSessionController _buildController({
   List<SeatingAssignmentRecord> seatingAssignments = const [],
+  SessionRepository? sessionRepository,
+  String? preverifiedTableTagUid,
 }) {
   return StartSessionController(
     table: _table(),
@@ -274,7 +314,8 @@ StartSessionController _buildController({
       tagAssignments: _tagAssignments(),
     ),
     seatingRepository: _FakeSeatingRepository(seatingAssignments),
-    sessionRepository: _FakeSessionRepository(),
+    sessionRepository: sessionRepository ?? _FakeSessionRepository(),
+    preverifiedTableTagUid: preverifiedTableTagUid,
   );
 }
 
@@ -381,5 +422,57 @@ SeatingAssignmentRecord _assignment({
     seatIndex: seatIndex,
     assignmentRound: 1,
     status: 'active',
+  );
+}
+
+StartedTableSessionRecord _startedSession() {
+  return StartedTableSessionRecord.fromJson(
+    sessionJson: const {
+      'id': 'ses_01',
+      'event_id': 'evt_01',
+      'event_table_id': 'tbl_01',
+      'session_number_for_table': 1,
+      'ruleset_id': 'HK_STANDARD',
+      'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'rotation_policy_config_json': {},
+      'status': 'active',
+      'initial_east_seat_index': 0,
+      'current_dealer_seat_index': 0,
+      'dealer_pass_count': 0,
+      'completed_games_count': 0,
+      'hand_count': 0,
+      'started_at': '2026-04-24T19:00:00-07:00',
+      'started_by_user_id': 'usr_01',
+    },
+    seatsJson: const [
+      {
+        'id': 'seat_01',
+        'table_session_id': 'ses_01',
+        'seat_index': 0,
+        'initial_wind': 'east',
+        'event_guest_id': 'gst_east',
+      },
+      {
+        'id': 'seat_02',
+        'table_session_id': 'ses_01',
+        'seat_index': 1,
+        'initial_wind': 'south',
+        'event_guest_id': 'gst_south',
+      },
+      {
+        'id': 'seat_03',
+        'table_session_id': 'ses_01',
+        'seat_index': 2,
+        'initial_wind': 'west',
+        'event_guest_id': 'gst_west',
+      },
+      {
+        'id': 'seat_04',
+        'table_session_id': 'ses_01',
+        'seat_index': 3,
+        'initial_wind': 'north',
+        'event_guest_id': 'gst_north',
+      },
+    ],
   );
 }

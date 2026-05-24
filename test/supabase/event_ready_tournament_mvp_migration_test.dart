@@ -78,6 +78,10 @@ void main() {
       migrationsSql,
       'public.start_table_session',
     );
+    final assignedStartSessionSql = _extractFunction(
+      migrationsSql,
+      'public.start_assigned_table_session',
+    );
 
     expect(startSessionSql, contains('current_scoring_phase'));
     expect(startSessionSql, contains('effective_scoring_phase'));
@@ -87,6 +91,19 @@ void main() {
       contains(
         'case when bonus_assignment_row.id is null then effective_scoring_phase else',
       ),
+    );
+    expect(
+      assignedStartSessionSql,
+      contains('create or replace function public.start_assigned_table_session'),
+    );
+    expect(assignedStartSessionSql, contains('scanned_table_uid text'));
+    expect(
+      assignedStartSessionSql,
+      contains('count(*) = 4'),
+    );
+    expect(
+      assignedStartSessionSql,
+      contains('insert into public.table_session_seats'),
     );
   });
 
@@ -163,6 +180,22 @@ void main() {
     expect(scoringPhaseSql,
         contains('current_scoring_phase = target_scoring_phase'));
     expect(scoringPhaseSql, contains("session.status in ('active', 'paused')"));
+    expect(
+      scoringPhaseSql,
+      contains("target_scoring_phase = 'tournament'"),
+    );
+    expect(
+      scoringPhaseSql,
+      contains("existing_event.current_scoring_phase <> 'tournament'"),
+    );
+    expect(
+      scoringPhaseSql,
+      contains('perform public.generate_random_seating_assignments'),
+    );
+    expect(
+      scoringPhaseSql,
+      contains('delete from public.event_seating_assignments'),
+    );
   });
 
   test('public realtime uses a public-safe update table', () {

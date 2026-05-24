@@ -250,6 +250,13 @@ class _SessionRepository implements SessionRepository {
   }
 
   @override
+  Future<StartedTableSessionRecord> startAssignedSession(
+    StartAssignedTableSessionInput input,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
     throw UnimplementedError();
   }

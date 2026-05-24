@@ -277,6 +277,24 @@ class StartTableSessionInput {
   }
 }
 
+@immutable
+class StartAssignedTableSessionInput {
+  const StartAssignedTableSessionInput({
+    required this.eventTableId,
+    required this.scannedTableUid,
+  });
+
+  final String eventTableId;
+  final String scannedTableUid;
+
+  Map<String, dynamic> toRpcParams() {
+    return {
+      'target_event_table_id': eventTableId,
+      'scanned_table_uid': scannedTableUid,
+    };
+  }
+}
+
 SeatWind seatWindForIndex(int index) {
   return switch (index) {
     0 => SeatWind.east,

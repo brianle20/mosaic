@@ -35,6 +35,11 @@ class StartSessionController extends ChangeNotifier {
   Map<String, GuestTagAssignmentSummary> assignmentsByGuestId = const {};
   Map<int, SeatingAssignmentRecord> expectedAssignmentsBySeatIndex = const {};
 
+  bool get hasAssignedTableSeating =>
+      state.tableTagUid != null && expectedAssignmentsBySeatIndex.length == 4;
+
+  bool get canConfirmStart => hasAssignedTableSeating || state.canReview;
+
   Future<void> load(String eventId) async {
     isLoading = true;
     error = null;
@@ -62,6 +67,10 @@ class StartSessionController extends ChangeNotifier {
   }
 
   String get currentPrompt {
+    if (hasAssignedTableSeating) {
+      return 'Review assigned seating';
+    }
+
     final expectedAssignment = _expectedAssignmentForCurrentSeat;
     final currentSeatLabel = state.currentSeatLabel;
     if (expectedAssignment != null && currentSeatLabel != null) {
@@ -79,6 +88,17 @@ class StartSessionController extends ChangeNotifier {
   }
 
   List<ResolvedSeat> get resolvedSeats {
+    if (hasAssignedTableSeating) {
+      return [
+        for (final entry in expectedAssignmentsBySeatIndex.entries.toList()
+          ..sort((left, right) => left.key.compareTo(right.key)))
+          ResolvedSeat(
+            seatLabel: seatWindForIndex(entry.key).name,
+            guestName: entry.value.displayName,
+          ),
+      ];
+    }
+
     final resolved = <ResolvedSeat>[];
     for (var index = 0; index < state.scannedPlayerUids.length; index++) {
       final assignment = _findAssignmentByUid(state.scannedPlayerUids[index]);
@@ -140,7 +160,7 @@ class StartSessionController extends ChangeNotifier {
   }
 
   Future<StartedTableSessionRecord?> confirmStart() async {
-    if (!state.canReview) {
+    if (!canConfirmStart) {
       return null;
     }
 
@@ -149,16 +169,23 @@ class StartSessionController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final started = await _sessionRepository.startSession(
-        StartTableSessionInput(
-          eventTableId: table.id,
-          scannedTableUid: state.tableTagUid!,
-          eastPlayerUid: state.scannedPlayerUids[0],
-          southPlayerUid: state.scannedPlayerUids[1],
-          westPlayerUid: state.scannedPlayerUids[2],
-          northPlayerUid: state.scannedPlayerUids[3],
-        ),
-      );
+      final started = hasAssignedTableSeating
+          ? await _sessionRepository.startAssignedSession(
+              StartAssignedTableSessionInput(
+                eventTableId: table.id,
+                scannedTableUid: state.tableTagUid!,
+              ),
+            )
+          : await _sessionRepository.startSession(
+              StartTableSessionInput(
+                eventTableId: table.id,
+                scannedTableUid: state.tableTagUid!,
+                eastPlayerUid: state.scannedPlayerUids[0],
+                southPlayerUid: state.scannedPlayerUids[1],
+                westPlayerUid: state.scannedPlayerUids[2],
+                northPlayerUid: state.scannedPlayerUids[3],
+              ),
+            );
       isSubmitting = false;
       notifyListeners();
       return started;

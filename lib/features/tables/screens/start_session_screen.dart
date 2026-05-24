@@ -158,18 +158,20 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
               Text(_controller.actionError!),
             ],
             const SizedBox(height: 20),
-            if (_controller.state.currentStep != StartSessionScanStep.review)
+            if (!_controller.canConfirmStart)
               FilledButton(
                 onPressed: _isScanningTag ? null : _scanNext,
                 child: Text(_isScanningTag ? 'Scanning...' : 'Scan Next Tag'),
               ),
-            if (_controller.state.currentStep == StartSessionScanStep.review)
+            if (_controller.canConfirmStart)
               FilledButton(
                 onPressed: _controller.isSubmitting ? null : _confirm,
                 child: Text(
                   _controller.isSubmitting
                       ? 'Starting...'
-                      : 'Confirm Start Session',
+                      : _controller.hasAssignedTableSeating
+                          ? 'Start Assigned Table'
+                          : 'Confirm Start Session',
                 ),
               ),
           ],

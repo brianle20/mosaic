@@ -154,6 +154,13 @@ class _RecordingSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<StartedTableSessionRecord> startAssignedSession(
+    StartAssignedTableSessionInput input,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) async {
     voidedInput = input;
     return _detailFromStatus(HandResultStatus.voided);
