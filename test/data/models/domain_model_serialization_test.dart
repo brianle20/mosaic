@@ -505,6 +505,7 @@ void main() {
         'hands_won': 3,
         'self_draw_wins': 1,
         'discard_wins': 2,
+        'discard_losses': 4,
         'rank': 1,
       });
 
@@ -513,6 +514,8 @@ void main() {
       expect(entry.handsPlayed, 7);
       expect(entry.handsWon, 3);
       expect(entry.selfDrawWins, 1);
+      expect(entry.discardWins, 2);
+      expect(entry.discardLosses, 4);
       expect(entry.rank, 1);
     });
   });

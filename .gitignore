@@ -8,6 +8,10 @@
 build/
 coverage/
 
+# Node / web tooling
+node_modules/
+.next/
+
 # IDE
 .idea/
 .vscode/
@@ -18,6 +22,7 @@ coverage/
 
 # Secrets
 .env
+.env*.local
 
 # Local planning/artifact output
 .superpowers/

@@ -1,5 +1,8 @@
 import { LiveStandings } from "../../../../components/LiveStandings";
-import { fetchPublicStandings } from "../../../../lib/public-standings";
+import {
+  fetchPublicStandings,
+  type PublicStandingsClient,
+} from "../../../../lib/public-standings";
 import { createPublicSupabaseClient } from "../../../../lib/supabase";
 
 type StandingsPageProps = {
@@ -14,7 +17,8 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
   let loadError: string | null = null;
 
   try {
-    initialSnapshot = await fetchPublicStandings(createPublicSupabaseClient(), eventId);
+    const publicClient = createPublicSupabaseClient() as unknown as PublicStandingsClient;
+    initialSnapshot = await fetchPublicStandings(publicClient, eventId);
   } catch (error) {
     initialSnapshot = {
       eventTitle: "Mosaic tournament",

@@ -168,12 +168,16 @@ void main() {
     expect(find.text('West Guest'), findsOneWidget);
     expect(find.text('16 pts'), findsOneWidget);
     expect(find.text('Minimum hands to qualify: 2'), findsOneWidget);
-    expect(find.text('Hands played 3 • Wins 1'), findsOneWidget);
+    expect(
+      find.text('Hands 3 • Wins 1 • Discard wins 1 • Discard losses 0'),
+      findsOneWidget,
+    );
     expect(find.text('1'), findsWidgets);
     expect(find.text('East Guest'), findsOneWidget);
   });
 
-  testWidgets('uses local dense placement ranks for prize-eligible players',
+  testWidgets(
+      'uses local competition placement ranks for prize-eligible players',
       (tester) async {
     final repository = _RecordingLeaderboardRepository(
       entries: const [
@@ -243,9 +247,18 @@ void main() {
     expect(find.text('Minimum hands to qualify: 1'), findsOneWidget);
     expect(find.text('Prize Placements'), findsOneWidget);
     expect(find.text('Not Prize Eligible'), findsOneWidget);
-    expect(find.text('Hands played 1 • Wins 1'), findsOneWidget);
-    expect(find.text('Hands played 1 • Wins 0'), findsNWidgets(3));
-    expect(find.text('Hands played 0 • Wins 0'), findsOneWidget);
+    expect(
+      find.text('Hands 1 • Wins 1 • Discard wins 1 • Discard losses 0'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Hands 1 • Wins 0 • Discard wins 1 • Discard losses 0'),
+      findsNWidgets(3),
+    );
+    expect(
+      find.text('Hands 0 • Wins 0 • Discard wins 0 • Discard losses 0'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Prize #'), findsNothing);
     expect(find.textContaining(r'$'), findsNothing);
     expect(

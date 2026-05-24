@@ -3,6 +3,7 @@
   --background: #f7f3ed;
   --surface: #ffffff;
   --surface-muted: #f1f5f4;
+  --table-header: #e4ebe7;
   --ink: #17211e;
   --muted: #61716c;
   --line: #d8dfda;
@@ -39,15 +40,15 @@ select {
 .standings-shell {
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 40px 0 56px;
+  padding: 28px 0 52px;
 }
 
 .standings-header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .eyebrow {
@@ -59,10 +60,10 @@ select {
   text-transform: uppercase;
 }
 
-h1 {
+.standings-header h1 {
   margin: 0;
-  font-size: clamp(2rem, 5vw, 4.2rem);
-  line-height: 0.95;
+  font-size: clamp(1.8rem, 4vw, 3.2rem);
+  line-height: 1;
 }
 
 .updated-at {
@@ -117,11 +118,18 @@ h1 {
 }
 
 .standings-table-wrap {
-  overflow-x: auto;
+  max-height: min(70vh, 760px);
+  overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   box-shadow: 0 18px 42px rgba(23, 33, 30, 0.08);
+}
+
+.section-heading {
+  margin: 20px 0 10px;
+  font-size: 1rem;
+  font-weight: 800;
 }
 
 .standings-table {
@@ -139,10 +147,43 @@ h1 {
 }
 
 .standings-table th {
-  background: var(--surface-muted);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--table-header);
+  box-shadow: 0 1px 0 var(--line);
   color: var(--muted);
   font-size: 0.8rem;
   text-transform: uppercase;
+}
+
+.standings-table tbody tr:nth-child(even) {
+  background: rgba(0, 108, 103, 0.025);
+}
+
+.standings-table tbody tr:hover {
+  background: rgba(0, 108, 103, 0.055);
+}
+
+.is-live-updated {
+  animation: standings-flash 2200ms ease-out;
+}
+
+.standings-table tbody tr.top-four-row {
+  background: #fffaf0;
+  box-shadow: inset 4px 0 0 color-mix(in srgb, var(--gold), white 8%);
+}
+
+.standings-table tbody tr.top-four-row:nth-child(even) {
+  background: #fff7e8;
+}
+
+.standings-table tbody tr.top-four-row:hover {
+  background: #fff2d7;
+}
+
+.top-four-row .rank-cell {
+  color: #805400;
 }
 
 .standings-table tbody tr:last-child td {
@@ -153,6 +194,42 @@ h1 {
   text-align: right;
 }
 
+.points-cell {
+  color: var(--ink);
+  font-size: 1.08rem;
+  font-weight: 800;
+}
+
+.points-cell-positive {
+  color: var(--accent-strong);
+}
+
+.points-cell-negative {
+  color: var(--danger);
+}
+
+.points-cell-neutral {
+  color: var(--ink);
+}
+
+.points-delta {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+  animation: points-delta-pop 2200ms ease-out;
+  vertical-align: 0.08em;
+}
+
+.points-delta-positive {
+  color: var(--accent-strong);
+}
+
+.points-delta-negative {
+  color: var(--danger);
+}
+
 .rank-cell {
   color: var(--accent-strong);
   font-weight: 800;
@@ -160,6 +237,66 @@ h1 {
 
 .player-cell {
   font-weight: 700;
+}
+
+.mobile-standings-cards {
+  display: none;
+}
+
+.mobile-card-details {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    grid-template-rows 180ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.mobile-card-details-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mobile-standings-card.is-expanded .mobile-card-details {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes standings-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--gold), white 68%);
+    box-shadow: inset 0 0 0 9999px rgba(255, 248, 226, 0.58);
+  }
+
+  100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 9999px rgba(255, 248, 226, 0);
+  }
+}
+
+@keyframes points-delta-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  78% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.98);
+  }
 }
 
 .empty-state,
@@ -198,28 +335,201 @@ h1 {
 @media (max-width: 680px) {
   .standings-shell {
     width: min(100% - 20px, 1120px);
-    padding-top: 24px;
+    padding: 20px 0 36px;
   }
 
   .standings-header {
-    display: block;
+    display: grid;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .standings-header h1 {
+    font-size: clamp(1.8rem, 9vw, 2.6rem);
+    line-height: 1.02;
   }
 
   .updated-at {
-    margin-top: 16px;
+    width: fit-content;
+    min-width: 0;
+    padding: 8px 10px;
     text-align: left;
   }
 
-  .wide-only {
+  .updated-at span {
+    font-size: 0.75rem;
+  }
+
+  .updated-at time {
+    font-size: 0.95rem;
+  }
+
+  .standings-table-wrap {
     display: none;
   }
 
-  .standings-table {
-    min-width: 420px;
+  .mobile-standings-cards {
+    display: grid;
+    gap: 10px;
   }
 
-  .standings-table th,
-  .standings-table td {
-    padding: 12px 10px;
+  .mobile-standings-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: 0 8px 24px rgba(23, 33, 30, 0.06);
+    overflow: hidden;
+    transition:
+      background-color 160ms ease,
+      border-color 160ms ease;
+  }
+
+  .top-four-mobile-card {
+    border-left: 4px solid color-mix(in srgb, var(--gold), white 8%);
+  }
+
+  .mobile-standings-card.is-expanded {
+    background: #fffaf0;
+  }
+
+  .mobile-card-toggle {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 6px 10px;
+    align-items: center;
+    width: 100%;
+    padding: 12px 14px;
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+  }
+
+  .mobile-card-rank {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    align-self: center;
+    color: var(--accent-strong);
+    font-size: 1.24rem;
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .top-four-mobile-card .mobile-card-rank {
+    color: color-mix(in srgb, var(--gold), black 28%);
+  }
+
+  .mobile-card-name {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-card-points {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    align-self: center;
+    display: grid;
+    gap: 1px;
+    justify-self: end;
+    font-size: 1.2rem;
+    font-weight: 800;
+    line-height: 1.1;
+    text-align: right;
+  }
+
+  .mobile-card-points.points-cell-positive {
+    color: var(--accent-strong);
+  }
+
+  .mobile-card-points.points-cell-negative {
+    color: var(--danger);
+  }
+
+  .mobile-card-points.points-cell-neutral {
+    color: var(--ink);
+  }
+
+  .mobile-card-points-value {
+    line-height: 1;
+  }
+
+  .mobile-card-points-label {
+    color: var(--muted);
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: lowercase;
+  }
+
+  .mobile-card-points .points-delta {
+    margin-left: 0;
+    margin-top: 3px;
+    font-size: 0.66rem;
+    text-align: right;
+  }
+
+  .mobile-card-summary {
+    grid-column: 2;
+    grid-row: 2;
+    color: var(--muted);
+    font-size: 0.88rem;
+    font-weight: 700;
+    min-width: 0;
+  }
+
+  .mobile-card-summary strong {
+    color: var(--ink);
+    font-size: 1rem;
+    font-weight: 800;
+  }
+
+  .mobile-card-details dl {
+    display: grid;
+    align-items: baseline;
+    grid-template-columns: max-content minmax(2ch, auto);
+    gap: 7px 14px;
+    width: fit-content;
+    margin: 0;
+    padding: 0 14px 12px 48px;
+  }
+
+  .mobile-card-details dl > div {
+    display: contents;
+  }
+
+  .mobile-card-details dt {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+    text-align: left;
+    text-transform: uppercase;
+  }
+
+  .mobile-card-details dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    line-height: 1;
+    text-align: right;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-card-details,
+  .is-live-updated,
+  .points-delta,
+  .mobile-standings-card {
+    transition: none;
+    animation: none;
   }
 }

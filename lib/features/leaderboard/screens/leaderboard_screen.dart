@@ -242,7 +242,8 @@ class _LeaderboardCard extends StatelessWidget {
         leading: displayRank == null ? null : Text('$displayRank'),
         title: Text(entry.displayName),
         subtitle: Text(
-          'Hands played ${entry.handsPlayed} • Wins ${entry.handsWon}',
+          'Hands ${entry.handsPlayed} • Wins ${entry.handsWon} • '
+          'Discard wins ${entry.discardWins} • Discard losses ${entry.discardLosses}',
         ),
         trailing: Text('${entry.totalPoints} pts'),
       ),

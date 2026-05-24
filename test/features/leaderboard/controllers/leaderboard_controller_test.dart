@@ -89,6 +89,56 @@ void main() {
     );
   });
 
+  test('uses competition placement ranks for tied prize-eligible players',
+      () async {
+    final controller = LeaderboardController(
+      leaderboardRepository: _FakeLeaderboardRepository(
+        cachedEntries: const [
+          LeaderboardEntry(
+            eventGuestId: 'gst_alice',
+            displayName: 'Alice Wong',
+            totalPoints: 40,
+            handsPlayed: 4,
+            handsWon: 2,
+            selfDrawWins: 1,
+            discardWins: 1,
+            discardLosses: 0,
+            rank: 1,
+          ),
+          LeaderboardEntry(
+            eventGuestId: 'gst_brian',
+            displayName: 'Brian Le',
+            totalPoints: 40,
+            handsPlayed: 4,
+            handsWon: 2,
+            selfDrawWins: 0,
+            discardWins: 2,
+            discardLosses: 1,
+            rank: 1,
+          ),
+          LeaderboardEntry(
+            eventGuestId: 'gst_chris',
+            displayName: 'Chris Ng',
+            totalPoints: 8,
+            handsPlayed: 4,
+            handsWon: 1,
+            selfDrawWins: 0,
+            discardWins: 1,
+            discardLosses: 2,
+            rank: 3,
+          ),
+        ],
+      ),
+    );
+
+    await controller.load('evt_01');
+
+    expect(
+      controller.prizePlacementRows.map((row) => row.placement),
+      [1, 1, 3],
+    );
+  });
+
   test('loads cached leaderboard entries when the remote fetch fails',
       () async {
     final cachedEntry = const LeaderboardEntry(

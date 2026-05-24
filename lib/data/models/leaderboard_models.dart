@@ -12,6 +12,7 @@ class EventScoreTotalRecord {
     required this.handsWon,
     required this.selfDrawWins,
     required this.discardWins,
+    this.discardLosses = 0,
     required this.sessionsStarted,
     required this.sessionsCompleted,
   });
@@ -26,6 +27,7 @@ class EventScoreTotalRecord {
       handsWon: _requiredInt(json, 'hands_won'),
       selfDrawWins: _requiredInt(json, 'self_draw_wins'),
       discardWins: _requiredInt(json, 'discard_wins'),
+      discardLosses: _intOrDefault(json, 'discard_losses'),
       sessionsStarted: _requiredInt(json, 'sessions_started'),
       sessionsCompleted: _requiredInt(json, 'sessions_completed'),
     );
@@ -39,6 +41,7 @@ class EventScoreTotalRecord {
   final int handsWon;
   final int selfDrawWins;
   final int discardWins;
+  final int discardLosses;
   final int sessionsStarted;
   final int sessionsCompleted;
 
@@ -52,6 +55,7 @@ class EventScoreTotalRecord {
       'hands_won': handsWon,
       'self_draw_wins': selfDrawWins,
       'discard_wins': discardWins,
+      'discard_losses': discardLosses,
       'sessions_started': sessionsStarted,
       'sessions_completed': sessionsCompleted,
     };
@@ -68,6 +72,7 @@ class LeaderboardEntry {
     required this.handsWon,
     required this.selfDrawWins,
     required this.discardWins,
+    this.discardLosses = 0,
     required this.rank,
   });
 
@@ -80,6 +85,7 @@ class LeaderboardEntry {
       handsWon: _requiredInt(json, 'hands_won'),
       selfDrawWins: _requiredInt(json, 'self_draw_wins'),
       discardWins: _requiredInt(json, 'discard_wins'),
+      discardLosses: _intOrDefault(json, 'discard_losses'),
       rank: _requiredInt(json, 'rank'),
     );
   }
@@ -91,6 +97,7 @@ class LeaderboardEntry {
   final int handsWon;
   final int selfDrawWins;
   final int discardWins;
+  final int discardLosses;
   final int rank;
 
   Map<String, dynamic> toJson() {
@@ -102,6 +109,7 @@ class LeaderboardEntry {
       'hands_won': handsWon,
       'self_draw_wins': selfDrawWins,
       'discard_wins': discardWins,
+      'discard_losses': discardLosses,
       'rank': rank,
     };
   }
@@ -177,6 +185,23 @@ String _requiredString(Map<String, dynamic> json, String key) {
 
 int _requiredInt(Map<String, dynamic> json, String key) {
   final value = json[key];
+  if (value is int) {
+    return value;
+  }
+
+  if (value is num) {
+    return value.toInt();
+  }
+
+  throw FormatException('Expected int for $key.');
+}
+
+int _intOrDefault(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) {
+    return 0;
+  }
+
   if (value is int) {
     return value;
   }

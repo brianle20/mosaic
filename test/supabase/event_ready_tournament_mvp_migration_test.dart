@@ -45,6 +45,34 @@ void main() {
     expect(migrationsSql, contains('bonus'));
   });
 
+  test('historical recorded games are backfilled into tournament standings',
+      () {
+    expect(
+      migrationsSql,
+      contains('backfill_historical_tournament_results'),
+    );
+    expect(
+      migrationsSql,
+      contains("session.scoring_phase = 'qualification'"),
+    );
+    expect(
+      migrationsSql,
+      contains("set scoring_phase = 'tournament'"),
+    );
+    expect(
+      migrationsSql,
+      contains("guest.tournament_status = 'open_play_only'"),
+    );
+    expect(
+      migrationsSql,
+      contains("tournament_status = 'qualified'"),
+    );
+    expect(
+      migrationsSql,
+      contains('app_private.refresh_event_score_totals(event_row.event_id)'),
+    );
+  });
+
   test('starting a table session stamps the event scoring phase', () {
     final startSessionSql = _extractFunction(
       migrationsSql,
@@ -80,6 +108,11 @@ void main() {
     );
 
     expect(leaderboardSql, contains("guest.tournament_status = 'qualified'"));
+    expect(leaderboardSql, contains('discard_losses'));
+    expect(
+      leaderboardSql,
+      contains('rank() over (order by score.total_points desc)'),
+    );
   });
 
   test('host qualification leaderboard filters qualification sessions', () {
@@ -140,6 +173,57 @@ void main() {
     expect(migrationsSql, contains('insert_public_event_update'));
   });
 
+  test('public realtime streams a cached standings snapshot row', () {
+    final publicUpdateSql = _extractFunction(
+      migrationsSql,
+      'app_private.insert_public_event_update',
+    );
+    final refreshTotalsSql = _extractFunction(
+      migrationsSql,
+      'app_private.refresh_event_score_totals',
+    );
+
+    expect(
+      migrationsSql,
+      contains('public.public_event_standings_snapshots'),
+    );
+    expect(migrationsSql, contains('payload jsonb not null'));
+    expect(
+      migrationsSql,
+      contains('public_event_standings_snapshots_public_read'),
+    );
+    expect(migrationsSql, contains('to anon, authenticated'));
+    expect(migrationsSql, contains('alter publication supabase_realtime'));
+    expect(
+      migrationsSql,
+      contains('app_private.build_public_event_standings_snapshot'),
+    );
+    expect(
+      migrationsSql,
+      contains('app_private.refresh_public_event_standings_snapshot'),
+    );
+    expect(migrationsSql, contains('on conflict (event_id) do update'));
+    expect(
+      migrationsSql,
+      contains(
+        'perform app_private.refresh_public_event_standings_snapshot(target_event_id)',
+      ),
+    );
+    expect(
+      publicUpdateSql,
+      contains('tg_table_name not in'),
+    );
+    expect(publicUpdateSql, contains("'event_score_totals'"));
+    expect(publicUpdateSql, contains("'hand_results'"));
+    expect(publicUpdateSql, contains("'table_sessions'"));
+    expect(
+      refreshTotalsSql,
+      contains(
+        'perform app_private.refresh_public_event_standings_snapshot(target_event_id);',
+      ),
+    );
+  });
+
   test('public event summary exposes public-safe event title', () {
     final eventSummarySql = _extractFunction(
       migrationsSql,
@@ -175,6 +259,11 @@ void main() {
         contains("guest.tournament_status = 'qualified'"));
     expect(publicLeaderboardSql,
         contains("guest.attendance_status = 'checked_in'"));
+    expect(publicLeaderboardSql, contains('discard_losses'));
+    expect(
+      publicLeaderboardSql,
+      contains('rank() over (order by score.total_points desc)'),
+    );
     expect(
       migrationsSql,
       contains(

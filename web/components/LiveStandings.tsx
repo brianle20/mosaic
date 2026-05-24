@@ -2,17 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { StandingsTable } from "./StandingsTable";
+import { StandingsTable, type ScoreChangeMap } from "./StandingsTable";
 import {
   fetchPublicStandings,
-  type PublicStandingsRpcClient,
+  mapPublicStandingsSnapshotPayload,
+  type PublicStandingsClient,
+  type PublicLeaderboardRow,
   type PublicStandingsSnapshot,
 } from "../lib/public-standings";
 import { createPublicSupabaseClient } from "../lib/supabase";
 
-type SupabaseRealtimeClient = PublicStandingsRpcClient & {
+type SupabaseRealtimeClient = PublicStandingsClient & {
   channel: (name: string) => RealtimeChannel;
   removeChannel?: (channel: RealtimeChannel) => Promise<unknown>;
+};
+
+type RealtimeSnapshotPayload = {
+  new?: Record<string, unknown>;
+  old?: Record<string, unknown>;
 };
 
 type LiveStandingsProps = {
@@ -20,18 +27,61 @@ type LiveStandingsProps = {
   initialSnapshot: PublicStandingsSnapshot;
   supabaseClient?: SupabaseRealtimeClient;
   fetchStandings?: (
-    client: PublicStandingsRpcClient,
+    client: PublicStandingsClient,
     eventId: string,
   ) => Promise<PublicStandingsSnapshot>;
 };
 
-const REALTIME_TABLES = ["public_event_updates"] as const;
+const REALTIME_SNAPSHOT_TABLE = "public_event_standings_snapshots";
 
 const REFRESH_DEBOUNCE_MS = 200;
+const AUTO_REFRESH_INTERVAL_MS = 30_000;
+const AUTO_REFRESH_JITTER_MS = 5_000;
+const SCORE_CHANGE_VISIBLE_MS = 2500;
 
-function payloadMatchesEvent(payload: { new?: Record<string, unknown>; old?: Record<string, unknown> }, eventId: string) {
+function payloadMatchesEvent(payload: RealtimeSnapshotPayload, eventId: string) {
   const eventIdFromPayload = payload.new?.event_id ?? payload.old?.event_id;
   return eventIdFromPayload === undefined || eventIdFromPayload === eventId;
+}
+
+function snapshotFromRealtimePayload(
+  payload: RealtimeSnapshotPayload,
+): PublicStandingsSnapshot | null {
+  if (!payload.new || !("payload" in payload.new)) {
+    return null;
+  }
+
+  return mapPublicStandingsSnapshotPayload(
+    payload.new.payload,
+    typeof payload.new.updated_at === "string" ? payload.new.updated_at : null,
+  );
+}
+
+function createRealtimeClient(): SupabaseRealtimeClient {
+  return createPublicSupabaseClient() as unknown as SupabaseRealtimeClient;
+}
+
+function getScoreChanges(
+  previousRows: PublicLeaderboardRow[],
+  nextRows: PublicLeaderboardRow[],
+): ScoreChangeMap {
+  const previousRowsByGuestId = new Map(
+    previousRows.map((row) => [row.eventGuestId, row]),
+  );
+
+  return nextRows.reduce<ScoreChangeMap>((changes, row) => {
+    const previousRow = previousRowsByGuestId.get(row.eventGuestId);
+    if (!previousRow) {
+      return changes;
+    }
+
+    const pointsDelta = row.totalPoints - previousRow.totalPoints;
+    if (pointsDelta !== 0) {
+      changes[row.eventGuestId] = { pointsDelta };
+    }
+
+    return changes;
+  }, {});
 }
 
 export function LiveStandings({
@@ -48,17 +98,30 @@ export function LiveStandings({
     eventId: string;
     status: "idle" | "refreshing" | "error";
   }>({ eventId, status: "idle" });
+  const [scoreChangesState, setScoreChangesState] = useState<{
+    eventId: string;
+    scoreChanges: ScoreChangeMap;
+  }>({ eventId, scoreChanges: {} });
   const clientRef = useRef<SupabaseRealtimeClient | null>(supabaseClient ?? null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scoreChangesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const snapshotRef = useRef({
+    eventId,
+    snapshot: initialSnapshot,
+  });
   const snapshot =
     snapshotState.eventId === eventId ? snapshotState.snapshot : initialSnapshot;
   const status = statusState.eventId === eventId ? statusState.status : "idle";
+  const scoreChanges =
+    scoreChangesState.eventId === eventId ? scoreChangesState.scoreChanges : {};
 
   useEffect(() => {
     let isCurrentEvent = true;
     let client: SupabaseRealtimeClient;
+    snapshotRef.current = { eventId, snapshot: initialSnapshot };
     try {
-      client = clientRef.current ?? createPublicSupabaseClient();
+      client = clientRef.current ?? createRealtimeClient();
     } catch {
       queueMicrotask(() => {
         if (isCurrentEvent) {
@@ -68,6 +131,36 @@ export function LiveStandings({
       return;
     }
     clientRef.current = client;
+
+    const applySnapshot = (refreshedSnapshot: PublicStandingsSnapshot) => {
+      if (!isCurrentEvent) {
+        return;
+      }
+
+      const previousSnapshot = snapshotRef.current;
+      const nextScoreChanges =
+        previousSnapshot.eventId === eventId
+          ? getScoreChanges(
+              previousSnapshot.snapshot.leaderboard,
+              refreshedSnapshot.leaderboard,
+            )
+          : {};
+
+      if (scoreChangesTimerRef.current) {
+        clearTimeout(scoreChangesTimerRef.current);
+      }
+
+      setScoreChangesState({ eventId, scoreChanges: nextScoreChanges });
+      scoreChangesTimerRef.current = setTimeout(() => {
+        if (isCurrentEvent) {
+          setScoreChangesState({ eventId, scoreChanges: {} });
+        }
+      }, SCORE_CHANGE_VISIBLE_MS);
+
+      snapshotRef.current = { eventId, snapshot: refreshedSnapshot };
+      setSnapshotState({ eventId, snapshot: refreshedSnapshot });
+      setStatusState({ eventId, status: "idle" });
+    };
 
     const refresh = () => {
       if (timerRef.current) {
@@ -79,8 +172,7 @@ export function LiveStandings({
         try {
           const refreshedSnapshot = await fetchStandings(client, eventId);
           if (isCurrentEvent) {
-            setSnapshotState({ eventId, snapshot: refreshedSnapshot });
-            setStatusState({ eventId, status: "idle" });
+            applySnapshot(refreshedSnapshot);
           }
         } catch {
           if (isCurrentEvent) {
@@ -90,30 +182,67 @@ export function LiveStandings({
       }, REFRESH_DEBOUNCE_MS);
     };
 
-    const channel = REALTIME_TABLES.reduce(
-      (currentChannel, table) =>
-        currentChannel.on(
-          "postgres_changes",
-          { event: "*", schema: "public", table },
-          (payload) => {
-            if (payloadMatchesEvent(payload, eventId)) {
-              refresh();
-            }
-          },
-        ),
-      client.channel(`public-standings:${eventId}`),
-    );
+    const stopAutoRefresh = () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+
+    const startAutoRefresh = () => {
+      if (document.visibilityState === "hidden" || intervalRef.current) {
+        return;
+      }
+
+      intervalRef.current = setInterval(
+        refresh,
+        AUTO_REFRESH_INTERVAL_MS + Math.floor(Math.random() * AUTO_REFRESH_JITTER_MS),
+      );
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        stopAutoRefresh();
+      } else {
+        startAutoRefresh();
+        refresh();
+      }
+    };
+
+    const channel = client
+      .channel(`public-standings:${eventId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: REALTIME_SNAPSHOT_TABLE },
+        (payload) => {
+          if (!payloadMatchesEvent(payload, eventId)) {
+            return;
+          }
+
+          const streamedSnapshot = snapshotFromRealtimePayload(payload);
+          if (streamedSnapshot) {
+            applySnapshot(streamedSnapshot);
+          }
+        },
+      );
 
     channel.subscribe();
+    startAutoRefresh();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       isCurrentEvent = false;
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
+      if (scoreChangesTimerRef.current) {
+        clearTimeout(scoreChangesTimerRef.current);
+      }
+      stopAutoRefresh();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       void client.removeChannel?.(channel);
     };
-  }, [eventId, fetchStandings]);
+  }, [eventId, fetchStandings, initialSnapshot]);
 
   return (
     <main className="standings-shell">
@@ -150,7 +279,7 @@ export function LiveStandings({
         </section>
       ) : null}
 
-      <StandingsTable rows={snapshot.leaderboard} />
+      <StandingsTable rows={snapshot.leaderboard} scoreChanges={scoreChanges} />
 
       {status === "refreshing" ? <p className="status-line">Refreshing standings...</p> : null}
       {status === "error" ? (

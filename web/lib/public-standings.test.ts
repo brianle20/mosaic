@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   fetchPublicStandings,
+  mapPublicStandingsSnapshotPayload,
   mapBonusResultRow,
   mapLeaderboardRow,
   type PublicLeaderboardRow,
@@ -16,6 +17,7 @@ describe("public standings data mapping", () => {
       wins: 3,
       self_draw_wins: 1,
       discard_wins: 2,
+      discard_losses: 4,
       rank: 1,
     });
 
@@ -27,6 +29,7 @@ describe("public standings data mapping", () => {
       wins: 3,
       selfDrawWins: 1,
       discardWins: 2,
+      discardLosses: 4,
       rank: 1,
     });
   });
@@ -45,6 +48,7 @@ describe("public standings data mapping", () => {
       wins: 1,
       self_draw_wins: 0,
       discard_wins: 1,
+      discard_losses: 0,
       rank: 2,
     });
 
@@ -78,6 +82,120 @@ describe("public standings data mapping", () => {
     });
     expect(rpc).toHaveBeenCalledWith("get_public_event_bonus_results", {
       target_event_id: "event-1",
+    });
+  });
+
+  it("loads public standings from the cached snapshot before falling back to RPCs", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        payload: {
+          eventTitle: "FV Mahjong 1",
+          leaderboard: [
+            {
+              eventGuestId: "guest-1",
+              publicDisplayName: "Caren L.",
+              totalPoints: 1024,
+              handsPlayed: 15,
+              wins: 7,
+              selfDrawWins: 2,
+              discardWins: 5,
+              discardLosses: 0,
+              rank: 1,
+            },
+          ],
+          bonusResults: [],
+          updatedAt: "2026-05-24T12:01:00.000Z",
+        },
+        updated_at: "2026-05-24T12:01:01.000Z",
+      },
+      error: null,
+    });
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq }));
+    const from = vi.fn(() => ({ select }));
+    const rpc = vi.fn();
+
+    const result = await fetchPublicStandings({ from, rpc }, "event-1");
+
+    expect(from).toHaveBeenCalledWith("public_event_standings_snapshots");
+    expect(select).toHaveBeenCalledWith("payload, updated_at");
+    expect(eq).toHaveBeenCalledWith("event_id", "event-1");
+    expect(rpc).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      eventTitle: "FV Mahjong 1",
+      leaderboard: [
+        {
+          eventGuestId: "guest-1",
+          publicDisplayName: "Caren L.",
+          totalPoints: 1024,
+          handsPlayed: 15,
+          wins: 7,
+          selfDrawWins: 2,
+          discardWins: 5,
+          discardLosses: 0,
+          rank: 1,
+        },
+      ],
+      bonusResults: [],
+      updatedAt: "2026-05-24T12:01:00.000Z",
+    });
+  });
+
+  it("maps public standings snapshot payloads defensively", () => {
+    expect(
+      mapPublicStandingsSnapshotPayload(
+        {
+          eventTitle: "  FV Mahjong 1  ",
+          leaderboard: [
+            {
+              eventGuestId: "guest-1",
+              publicDisplayName: "  Caren L.  ",
+              totalPoints: "1024",
+              handsPlayed: "15",
+              wins: "7",
+              selfDrawWins: "2",
+              discardWins: "5",
+              discardLosses: "0",
+              rank: "1",
+            },
+          ],
+          bonusResults: [
+            {
+              eventGuestId: "guest-2",
+              publicDisplayName: "  CJ  ",
+              resultLabel: "  Table of Champions  ",
+              placement: "1",
+              pointsDelta: "384",
+            },
+          ],
+        },
+        "2026-05-24T12:02:00.000Z",
+      ),
+    ).toEqual({
+      eventTitle: "FV Mahjong 1",
+      leaderboard: [
+        {
+          eventGuestId: "guest-1",
+          publicDisplayName: "Caren L.",
+          totalPoints: 1024,
+          handsPlayed: 15,
+          wins: 7,
+          selfDrawWins: 2,
+          discardWins: 5,
+          discardLosses: 0,
+          rank: 1,
+        },
+      ],
+      bonusResults: [
+        {
+          eventGuestId: "guest-2",
+          publicDisplayName: "CJ",
+          resultLabel: "Table of Champions",
+          placement: 1,
+          pointsDelta: 384,
+        },
+      ],
+      updatedAt: "2026-05-24T12:02:00.000Z",
     });
   });
 

@@ -62,9 +62,11 @@ class LeaderboardController extends ChangeNotifier {
     int placement = 0;
     int? previousPoints;
 
-    for (final entry in prizePlacementEntries) {
+    for (final indexedEntry in prizePlacementEntries.indexed) {
+      final displayPosition = indexedEntry.$1 + 1;
+      final entry = indexedEntry.$2;
       if (previousPoints != entry.totalPoints) {
-        placement += 1;
+        placement = displayPosition;
         previousPoints = entry.totalPoints;
       }
 
