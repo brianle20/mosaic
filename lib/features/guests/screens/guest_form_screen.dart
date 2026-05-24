@@ -10,6 +10,7 @@ import 'package:mosaic/features/guests/models/guest_form_draft.dart';
 import 'package:mosaic/widgets/money_text_form_field.dart';
 
 const guestNameFieldKey = Key('guest-name-field');
+const guestPublicDisplayNameFieldKey = Key('guest-public-display-name-field');
 const guestCoverAmountFieldKey = Key('guest-cover-amount-field');
 const _profileMatchDebounceDuration = Duration(milliseconds: 400);
 
@@ -38,6 +39,7 @@ class GuestFormScreen extends StatefulWidget {
 class _GuestFormScreenState extends State<GuestFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
+  late final TextEditingController _publicDisplayNameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
   late final TextEditingController _instagramController;
@@ -49,12 +51,21 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
   GuestProfileRecord? _selectedProfile;
   Timer? _profileMatchDebounce;
   int _profileMatchRequestId = 0;
+  bool _isPublicDisplayNameManuallyEdited = false;
+  bool _isSyncingPublicDisplayName = false;
 
   @override
   void initState() {
     super.initState();
     final guest = widget.initialGuest;
     _nameController = TextEditingController(text: guest?.displayName ?? '');
+    final initialPublicDisplayName = guest?.publicDisplayName ??
+        GuestFormDraft.defaultPublicDisplayNameFor(guest?.displayName ?? '');
+    _publicDisplayNameController = TextEditingController(
+      text: initialPublicDisplayName,
+    );
+    _isPublicDisplayNameManuallyEdited =
+        (guest?.publicDisplayName?.trim().isNotEmpty ?? false);
     _phoneController = TextEditingController(
       text: formatPhoneForDisplay(guest?.phoneE164),
     );
@@ -71,7 +82,8 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
     _coverStatus = guest?.coverStatus ?? CoverStatus.unpaid;
     _controller = GuestFormController(guestRepository: widget.guestRepository)
       ..addListener(_handleUpdate);
-    _nameController.addListener(_scheduleProfileMatchLoad);
+    _nameController.addListener(_handleNameChanged);
+    _publicDisplayNameController.addListener(_handlePublicDisplayNameChanged);
     _phoneController.addListener(_scheduleProfileMatchLoad);
     _emailController.addListener(_scheduleProfileMatchLoad);
     _instagramController.addListener(_scheduleProfileMatchLoad);
@@ -80,11 +92,15 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
   @override
   void dispose() {
     _profileMatchDebounce?.cancel();
-    _nameController.removeListener(_scheduleProfileMatchLoad);
+    _nameController.removeListener(_handleNameChanged);
+    _publicDisplayNameController.removeListener(
+      _handlePublicDisplayNameChanged,
+    );
     _phoneController.removeListener(_scheduleProfileMatchLoad);
     _emailController.removeListener(_scheduleProfileMatchLoad);
     _instagramController.removeListener(_scheduleProfileMatchLoad);
     _nameController.dispose();
+    _publicDisplayNameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
     _instagramController.dispose();
@@ -107,12 +123,40 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
 
     return GuestFormDraft(
       displayName: _nameController.text,
+      publicDisplayName: _publicDisplayNameController.text,
+      isPublicDisplayNameManuallyEdited: _isPublicDisplayNameManuallyEdited,
       phoneE164: _phoneController.text,
       email: _emailController.text,
       instagramHandle: _instagramController.text,
       note: _noteController.text,
       coverAmountCents: coverAmount.cents ?? -1,
       coverStatus: _coverStatus,
+    );
+  }
+
+  void _handleNameChanged() {
+    if (!_isPublicDisplayNameManuallyEdited) {
+      _syncPublicDisplayNameFromFullName();
+    }
+    _scheduleProfileMatchLoad();
+  }
+
+  void _handlePublicDisplayNameChanged() {
+    if (_isSyncingPublicDisplayName) {
+      return;
+    }
+    _isPublicDisplayNameManuallyEdited = true;
+  }
+
+  void _setPublicDisplayName(String value) {
+    _isSyncingPublicDisplayName = true;
+    _publicDisplayNameController.text = value;
+    _isSyncingPublicDisplayName = false;
+  }
+
+  void _syncPublicDisplayNameFromFullName() {
+    _setPublicDisplayName(
+      GuestFormDraft.defaultPublicDisplayNameFor(_nameController.text),
     );
   }
 
@@ -214,6 +258,15 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
 
     setState(() {
       _profileMatches = matches;
+      final primaryMatch = _primaryIdentityMatch();
+      if (_selectedProfile == null &&
+          primaryMatch != null &&
+          !_isPublicDisplayNameManuallyEdited) {
+        final profilePublicName = primaryMatch.profile.publicDisplayName;
+        if (profilePublicName?.trim().isNotEmpty == true) {
+          _setPublicDisplayName(profilePublicName!.trim());
+        }
+      }
     });
   }
 
@@ -253,6 +306,13 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
     setState(() {
       _selectedProfile = profile;
       _nameController.text = profile.displayName;
+      _setPublicDisplayName(
+        profile.publicDisplayName?.trim().isNotEmpty == true
+            ? profile.publicDisplayName!.trim()
+            : GuestFormDraft.defaultPublicDisplayNameFor(profile.displayName),
+      );
+      _isPublicDisplayNameManuallyEdited =
+          profile.publicDisplayName?.trim().isNotEmpty == true;
       _phoneController.text = formatPhoneForDisplay(profile.phoneE164);
       _emailController.text = profile.emailLower ?? '';
       _instagramController.text = formatInstagramHandleForDisplay(
@@ -403,6 +463,13 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
               controller: _nameController,
               decoration: const InputDecoration(labelText: 'Name'),
               validator: (_) => _buildDraft().displayNameError,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              key: guestPublicDisplayNameFieldKey,
+              controller: _publicDisplayNameController,
+              decoration:
+                  const InputDecoration(labelText: 'Public Display Name'),
             ),
             _buildProfileMatchMessage(),
             if (duplicateWarning != null) ...[

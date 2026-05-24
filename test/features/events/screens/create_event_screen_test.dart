@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/features/events/screens/create_event_screen.dart';
 
-class _RecordingEventRepository implements EventRepository {
+class _RecordingEventRepository extends ThrowingEventRepository {
   CreateEventInput? capturedInput;
 
   @override

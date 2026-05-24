@@ -25,6 +25,13 @@ enum CoverEntryMethod {
   refund,
 }
 
+enum EventTournamentStatus {
+  openPlayOnly,
+  qualifying,
+  qualified,
+  withdrawn,
+}
+
 enum GuestProfileMatchType {
   phone,
   email,
@@ -39,6 +46,7 @@ class GuestProfileRecord {
     required this.ownerUserId,
     required this.displayName,
     required this.normalizedName,
+    this.publicDisplayName,
     this.phoneE164,
     this.emailLower,
     this.instagramHandle,
@@ -51,6 +59,7 @@ class GuestProfileRecord {
       ownerUserId: _requiredString(json, 'owner_user_id'),
       displayName: _requiredString(json, 'display_name'),
       normalizedName: _requiredString(json, 'normalized_name'),
+      publicDisplayName: _optionalString(json, 'public_display_name'),
       phoneE164: _optionalString(json, 'phone_e164'),
       emailLower: _optionalString(json, 'email_lower'),
       instagramHandle: _optionalString(json, 'instagram_handle'),
@@ -62,6 +71,7 @@ class GuestProfileRecord {
   final String ownerUserId;
   final String displayName;
   final String normalizedName;
+  final String? publicDisplayName;
   final String? phoneE164;
   final String? emailLower;
   final String? instagramHandle;
@@ -73,6 +83,7 @@ class GuestProfileRecord {
       'owner_user_id': ownerUserId,
       'display_name': displayName,
       'normalized_name': normalizedName,
+      'public_display_name': publicDisplayName,
       'phone_e164': phoneE164,
       'email_lower': emailLower,
       'instagram_handle': instagramHandle,
@@ -116,6 +127,7 @@ class CreateGuestInput {
     required this.coverStatus,
     required this.coverAmountCents,
     required this.isComped,
+    this.publicDisplayName,
     this.phoneE164,
     this.emailLower,
     this.instagramHandle,
@@ -126,6 +138,7 @@ class CreateGuestInput {
   final String eventId;
   final String displayName;
   final String normalizedName;
+  final String? publicDisplayName;
   final String? guestProfileId;
   final String? phoneE164;
   final String? emailLower;
@@ -143,9 +156,13 @@ class CreateGuestInput {
         'guest_profile_id': resolvedGuestProfileId,
       'display_name': displayName,
       'normalized_name': normalizedName,
+      'public_display_name': publicDisplayName,
       'phone_e164': phoneE164,
       'email_lower': emailLower,
       'attendance_status': 'expected',
+      'tournament_status': _eventTournamentStatusToJson(
+        EventTournamentStatus.openPlayOnly,
+      ),
       'cover_status': _coverStatusToJson(coverStatus),
       'cover_amount_cents': coverAmountCents,
       'is_comped': isComped,
@@ -165,6 +182,7 @@ class UpdateGuestInput {
     required this.coverStatus,
     required this.coverAmountCents,
     required this.isComped,
+    this.publicDisplayName,
     this.phoneE164,
     this.emailLower,
     this.instagramHandle,
@@ -175,6 +193,7 @@ class UpdateGuestInput {
   final String eventId;
   final String displayName;
   final String normalizedName;
+  final String? publicDisplayName;
   final String? phoneE164;
   final String? emailLower;
   final String? instagramHandle;
@@ -187,6 +206,7 @@ class UpdateGuestInput {
     return {
       'display_name': displayName,
       'normalized_name': normalizedName,
+      'public_display_name': publicDisplayName,
       'phone_e164': phoneE164,
       'email_lower': emailLower,
       'cover_status': _coverStatusToJson(coverStatus),
@@ -206,10 +226,12 @@ class EventGuestRecord {
     required this.displayName,
     required this.normalizedName,
     required this.attendanceStatus,
+    this.tournamentStatus = EventTournamentStatus.openPlayOnly,
     required this.coverStatus,
     required this.coverAmountCents,
     required this.isComped,
     required this.hasScoredPlay,
+    this.publicDisplayName,
     this.phoneE164,
     this.emailLower,
     this.instagramHandle,
@@ -230,12 +252,17 @@ class EventGuestRecord {
           profile?.displayName ?? _requiredString(json, 'display_name'),
       normalizedName:
           profile?.normalizedName ?? _requiredString(json, 'normalized_name'),
+      publicDisplayName: _optionalString(json, 'public_display_name') ??
+          profile?.publicDisplayName,
       phoneE164: profile?.phoneE164 ?? _optionalString(json, 'phone_e164'),
       emailLower: profile?.emailLower ?? _optionalString(json, 'email_lower'),
       instagramHandle:
           profile?.instagramHandle ?? _optionalString(json, 'instagram_handle'),
       attendanceStatus: _attendanceStatusFromJson(
         _requiredString(json, 'attendance_status'),
+      ),
+      tournamentStatus: _eventTournamentStatusFromJson(
+        _stringOrDefault(json, 'tournament_status', 'open_play_only'),
       ),
       coverStatus: _coverStatusFromJson(_requiredString(json, 'cover_status')),
       coverAmountCents: _requiredInt(json, 'cover_amount_cents'),
@@ -252,10 +279,12 @@ class EventGuestRecord {
   final String guestProfileId;
   final String displayName;
   final String normalizedName;
+  final String? publicDisplayName;
   final String? phoneE164;
   final String? emailLower;
   final String? instagramHandle;
   final AttendanceStatus attendanceStatus;
+  final EventTournamentStatus tournamentStatus;
   final CoverStatus coverStatus;
   final int coverAmountCents;
   final bool isComped;
@@ -277,10 +306,12 @@ class EventGuestRecord {
       'guest_profile_id': guestProfileId,
       'display_name': displayName,
       'normalized_name': normalizedName,
+      'public_display_name': publicDisplayName,
       'phone_e164': phoneE164,
       'email_lower': emailLower,
       'instagram_handle': instagramHandle,
       'attendance_status': _attendanceStatusToJson(attendanceStatus),
+      'tournament_status': _eventTournamentStatusToJson(tournamentStatus),
       'cover_status': _coverStatusToJson(coverStatus),
       'cover_amount_cents': coverAmountCents,
       'is_comped': isComped,
@@ -456,6 +487,23 @@ int _intOrDefault(Map<String, dynamic> json, String key, int fallback) {
   throw FormatException('Expected int or null for $key.');
 }
 
+String _stringOrDefault(
+  Map<String, dynamic> json,
+  String key,
+  String fallback,
+) {
+  final value = json[key];
+  if (value == null) {
+    return fallback;
+  }
+
+  if (value is String && value.trim().isNotEmpty) {
+    return value;
+  }
+
+  throw FormatException('Expected non-empty string or null for $key.');
+}
+
 DateTime? _optionalDateTime(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value == null) {
@@ -502,6 +550,33 @@ String _attendanceStatusToJson(AttendanceStatus value) {
     AttendanceStatus.checkedIn => 'checked_in',
     AttendanceStatus.checkedOut => 'checked_out',
     AttendanceStatus.noShow => 'no_show',
+  };
+}
+
+EventTournamentStatus eventTournamentStatusFromJson(String value) {
+  return _eventTournamentStatusFromJson(value);
+}
+
+String eventTournamentStatusToJson(EventTournamentStatus value) {
+  return _eventTournamentStatusToJson(value);
+}
+
+EventTournamentStatus _eventTournamentStatusFromJson(String value) {
+  return switch (value) {
+    'open_play_only' => EventTournamentStatus.openPlayOnly,
+    'qualifying' => EventTournamentStatus.qualifying,
+    'qualified' => EventTournamentStatus.qualified,
+    'withdrawn' => EventTournamentStatus.withdrawn,
+    _ => throw FormatException('Unknown tournament status: $value'),
+  };
+}
+
+String _eventTournamentStatusToJson(EventTournamentStatus value) {
+  return switch (value) {
+    EventTournamentStatus.openPlayOnly => 'open_play_only',
+    EventTournamentStatus.qualifying => 'qualifying',
+    EventTournamentStatus.qualified => 'qualified',
+    EventTournamentStatus.withdrawn => 'withdrawn',
   };
 }
 

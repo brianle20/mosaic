@@ -29,6 +29,47 @@ void main() {
       expect(draft.toCreateInput(eventId: 'evt_01').phoneE164, '+14155552671');
     });
 
+    test('generates default public display names from full names', () {
+      expect(
+          GuestFormDraft.defaultPublicDisplayNameFor('Brian Le'), 'Brian L.');
+      expect(
+        GuestFormDraft.defaultPublicDisplayNameFor('Alice Wong Chen'),
+        'Alice C.',
+      );
+      expect(GuestFormDraft.defaultPublicDisplayNameFor('Cher'), 'Cher');
+      expect(
+        GuestFormDraft.defaultPublicDisplayNameFor('  Alice   Wong   Chen  '),
+        'Alice C.',
+      );
+    });
+
+    test('keeps public display name generated until host edits it', () {
+      final generated = const GuestFormDraft(
+        displayName: 'Brian Le',
+      ).withDisplayName('Alice Wong Chen');
+
+      expect(generated.publicDisplayName, 'Alice C.');
+      expect(generated.isPublicDisplayNameManuallyEdited, isFalse);
+
+      final overridden = generated.withPublicDisplayName('Table One Alice');
+      final renamed = overridden.withDisplayName('Alice Zhang');
+
+      expect(renamed.publicDisplayName, 'Table One Alice');
+      expect(renamed.isPublicDisplayNameManuallyEdited, isTrue);
+    });
+
+    test('clearing public display name returns to generated value on save', () {
+      final draft = const GuestFormDraft(
+        displayName: 'Brian Le',
+        publicDisplayName: 'Brian',
+        isPublicDisplayNameManuallyEdited: true,
+      ).withPublicDisplayName('');
+
+      final input = draft.toCreateInput(eventId: 'evt_01');
+
+      expect(input.publicDisplayName, 'Brian L.');
+    });
+
     test('rejects invalid phone numbers', () {
       const draft = GuestFormDraft(
         displayName: 'Alice',
@@ -76,6 +117,7 @@ void main() {
             displayName: 'ALICE WONG',
             normalizedName: 'alice wong',
             attendanceStatus: AttendanceStatus.expected,
+            tournamentStatus: EventTournamentStatus.openPlayOnly,
             coverStatus: CoverStatus.unpaid,
             coverAmountCents: 0,
             isComped: false,
@@ -96,6 +138,7 @@ void main() {
         displayName: 'ALICE WONG',
         normalizedName: 'alice wong',
         attendanceStatus: AttendanceStatus.expected,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
         coverStatus: CoverStatus.unpaid,
         coverAmountCents: 0,
         isComped: false,
@@ -116,6 +159,7 @@ void main() {
         displayName: 'Alice Wong',
         normalizedName: 'alice wong',
         attendanceStatus: AttendanceStatus.expected,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
         coverStatus: CoverStatus.unpaid,
         coverAmountCents: 0,
         isComped: false,

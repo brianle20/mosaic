@@ -21,6 +21,12 @@ enum EventSeatingMode {
   manual,
 }
 
+enum EventScoringPhase {
+  qualification,
+  tournament,
+  bonus,
+}
+
 @immutable
 class CreateEventInput {
   const CreateEventInput({
@@ -78,6 +84,7 @@ class EventRecord {
     required this.coverChargeCents,
     required this.defaultRulesetId,
     required this.prevailingWind,
+    this.currentScoringPhase = EventScoringPhase.qualification,
     this.seatingMode = EventSeatingMode.random,
     this.description,
     this.venueName,
@@ -109,6 +116,13 @@ class EventRecord {
       prevailingWind: _prevailingWindFromJson(
         _requiredString(json, 'prevailing_wind'),
       ),
+      currentScoringPhase: _eventScoringPhaseFromJson(
+        _stringOrDefault(
+          json,
+          'current_scoring_phase',
+          'qualification',
+        ),
+      ),
       seatingMode: _eventSeatingModeFromJson(
         _stringOrDefault(json, 'seating_mode', 'random'),
       ),
@@ -132,6 +146,7 @@ class EventRecord {
   final int coverChargeCents;
   final String defaultRulesetId;
   final PrevailingWind prevailingWind;
+  final EventScoringPhase currentScoringPhase;
   final EventSeatingMode seatingMode;
   final int rowVersion;
 
@@ -153,6 +168,7 @@ class EventRecord {
       'cover_charge_cents': coverChargeCents,
       'default_ruleset_id': defaultRulesetId,
       'prevailing_wind': prevailingWind.name,
+      'current_scoring_phase': eventScoringPhaseToJson(currentScoringPhase),
       'seating_mode': seatingMode.name,
       'row_version': rowVersion,
     };
@@ -277,5 +293,26 @@ EventSeatingMode _eventSeatingModeFromJson(String value) {
     'random' => EventSeatingMode.random,
     'manual' => EventSeatingMode.manual,
     _ => throw FormatException('Unknown event seating mode: $value'),
+  };
+}
+
+EventScoringPhase eventScoringPhaseFromJson(String value) {
+  return _eventScoringPhaseFromJson(value);
+}
+
+String eventScoringPhaseToJson(EventScoringPhase value) {
+  return switch (value) {
+    EventScoringPhase.qualification => 'qualification',
+    EventScoringPhase.tournament => 'tournament',
+    EventScoringPhase.bonus => 'bonus',
+  };
+}
+
+EventScoringPhase _eventScoringPhaseFromJson(String value) {
+  return switch (value) {
+    'qualification' => EventScoringPhase.qualification,
+    'tournament' => EventScoringPhase.tournament,
+    'bonus' => EventScoringPhase.bonus,
+    _ => throw FormatException('Unknown event scoring phase: $value'),
   };
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
 import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
@@ -40,6 +41,7 @@ class EventDashboardScreen extends StatefulWidget {
 
 class _EventDashboardScreenState extends State<EventDashboardScreen> {
   late final EventDashboardController _controller;
+  final _scrollController = ScrollController();
   bool _isScanningTableTag = false;
 
   bool get _isTableScanInProgress =>
@@ -65,6 +67,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     _controller
       ..removeListener(_handleUpdate)
       ..dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -322,6 +325,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     }
 
     await _controller.cancelEvent();
+    _scrollToTop();
   }
 
   Future<void> _confirmRevertToDraft() async {
@@ -350,6 +354,13 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     }
 
     await _controller.revertToDraft();
+    _scrollToTop();
+  }
+
+  void _scrollToTop() {
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
   }
 
   String _flagStatusLabel(bool isOpen) => isOpen ? 'Open' : 'Not Open';
@@ -729,6 +740,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         child: SafeArea(
           bottom: false,
           child: ListView(
+            controller: _scrollController,
             padding: const EdgeInsets.fromLTRB(16, kToolbarHeight - 8, 16, 24),
             children: [
               _LiveStatusRow(
@@ -815,6 +827,18 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 onRevert: _confirmRevertToDraft,
                 onCancel: _confirmCancelEvent,
               ),
+              const SizedBox(height: 14),
+              _ScoringPhasePanel(
+                currentPhase: event.currentScoringPhase,
+                isSubmitting: _controller.isSubmittingLifecycle,
+                onChanged: _controller.setScoringPhase,
+              ),
+              if (_controller.qualificationLeaderboard.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _QualificationLeaderboardPanel(
+                  rows: _controller.qualificationLeaderboard,
+                ),
+              ],
             ],
           ),
         ),
@@ -880,6 +904,145 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       EventLifecycleStatus.finalized => _openLeaderboard,
       EventLifecycleStatus.cancelled => _openActivity,
     };
+  }
+}
+
+class _ScoringPhasePanel extends StatelessWidget {
+  const _ScoringPhasePanel({
+    required this.currentPhase,
+    required this.isSubmitting,
+    required this.onChanged,
+  });
+
+  final EventScoringPhase currentPhase;
+  final bool isSubmitting;
+  final ValueChanged<EventScoringPhase> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Scoring Phase',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SegmentedButton<EventScoringPhase>(
+              selected: {currentPhase},
+              showSelectedIcon: false,
+              onSelectionChanged: isSubmitting
+                  ? null
+                  : (selection) => onChanged(selection.single),
+              segments: const [
+                ButtonSegment(
+                  value: EventScoringPhase.qualification,
+                  label: Text('Qualification'),
+                ),
+                ButtonSegment(
+                  value: EventScoringPhase.tournament,
+                  label: Text('Tournament'),
+                ),
+                ButtonSegment(
+                  value: EventScoringPhase.bonus,
+                  label: Text('Bonus'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QualificationLeaderboardPanel extends StatelessWidget {
+  const _QualificationLeaderboardPanel({required this.rows});
+
+  final List<QualificationLeaderboardRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Qualification Leaderboard',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 8),
+          for (final row in rows.take(6)) ...[
+            Row(
+              children: [
+                SizedBox(
+                  width: 28,
+                  child: Text(
+                    '#${row.rank}',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    row.fullName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('${row.qualificationPoints} pts'),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: Wrap(
+                spacing: 10,
+                children: [
+                  Text(
+                    '${row.handsPlayed} hands',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  Text(
+                    '${row.wins} wins',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            if (row != rows.take(6).last) const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
   }
 }
 

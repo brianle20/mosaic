@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
-class _FakeEventRepository implements EventRepository {
+class _FakeEventRepository extends ThrowingEventRepository {
   _FakeEventRepository(this.events);
 
   final List<EventRecord> events;

@@ -6,11 +6,11 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/controllers/seating_assignment_controller.dart';
 import 'package:mosaic/features/tables/screens/seating_assignment_screen.dart';
 
-class _FakeSeatingRepository implements SeatingRepository {
+class _FakeSeatingRepository extends ThrowingSeatingRepository {
   _FakeSeatingRepository({
     this.loadedAssignments = const [],
     this.generatedAssignments = const [],
@@ -57,7 +57,7 @@ class _FakeSeatingRepository implements SeatingRepository {
       const [];
 }
 
-class _FakeGuestRepository implements GuestRepository {
+class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository({
     this.guests = const [],
     this.assignments = const {},
@@ -157,7 +157,7 @@ class _FakeGuestRepository implements GuestRepository {
   }
 }
 
-class _FakeSessionRepository implements SessionRepository {
+class _FakeSessionRepository extends ThrowingSessionRepository {
   const _FakeSessionRepository({this.sessions = const []});
 
   final List<TableSessionRecord> sessions;
@@ -548,6 +548,7 @@ EventGuestRecord _guest({
     'display_name': displayName,
     'normalized_name': displayName.toLowerCase(),
     'attendance_status': 'checked_in',
+    'tournament_status': 'qualified',
     'cover_status': 'paid',
     'cover_amount_cents': 0,
     'is_comped': false,

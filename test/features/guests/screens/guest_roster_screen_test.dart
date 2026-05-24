@@ -4,11 +4,12 @@ import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
-class _FakeGuestRepository implements GuestRepository {
+class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository(
     List<EventGuestRecord> guests, {
     Map<String, GuestTagAssignmentSummary> activeAssignments = const {},
@@ -23,6 +24,7 @@ class _FakeGuestRepository implements GuestRepository {
   final List<EventGuestRecord> _guests;
   final Map<String, GuestTagAssignmentSummary> _activeAssignments;
   final Map<String, List<GuestCoverEntryRecord>> _coverEntries;
+  final statusUpdates = <String, EventTournamentStatus>{};
 
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
@@ -68,9 +70,12 @@ class _FakeGuestRepository implements GuestRepository {
       guestProfileId: guest.guestProfileId,
       displayName: guest.displayName,
       normalizedName: guest.normalizedName,
+      publicDisplayName: guest.publicDisplayName,
       phoneE164: guest.phoneE164,
       emailLower: guest.emailLower,
+      instagramHandle: guest.instagramHandle,
       attendanceStatus: AttendanceStatus.checkedIn,
+      tournamentStatus: guest.tournamentStatus,
       coverStatus: guest.coverStatus,
       coverAmountCents: guest.coverAmountCents,
       isComped: guest.isComped,
@@ -141,10 +146,12 @@ class _FakeGuestRepository implements GuestRepository {
       guestProfileId: guest.guestProfileId,
       displayName: guest.displayName,
       normalizedName: guest.normalizedName,
+      publicDisplayName: guest.publicDisplayName,
       phoneE164: guest.phoneE164,
       emailLower: guest.emailLower,
       instagramHandle: guest.instagramHandle,
       attendanceStatus: guest.attendanceStatus,
+      tournamentStatus: guest.tournamentStatus,
       coverStatus: amountCents >= guest.coverAmountCents
           ? CoverStatus.paid
           : CoverStatus.partial,
@@ -203,9 +210,11 @@ class _FakeGuestRepository implements GuestRepository {
       guestProfileId: _guestById(input.id).guestProfileId,
       displayName: input.displayName,
       normalizedName: input.normalizedName,
+      publicDisplayName: input.publicDisplayName,
       phoneE164: input.phoneE164,
       emailLower: input.emailLower,
       attendanceStatus: _guestById(input.id).attendanceStatus,
+      tournamentStatus: _guestById(input.id).tournamentStatus,
       coverStatus: input.coverStatus,
       coverAmountCents: input.coverAmountCents,
       isComped: input.isComped,
@@ -213,6 +222,37 @@ class _FakeGuestRepository implements GuestRepository {
       note: input.note,
       checkedInAt: _guestById(input.id).checkedInAt,
       rowVersion: _guestById(input.id).rowVersion,
+    );
+    _replaceGuest(updated);
+    return updated;
+  }
+
+  @override
+  Future<EventGuestRecord> updateEventGuestTournamentStatus({
+    required String eventGuestId,
+    required EventTournamentStatus status,
+  }) async {
+    statusUpdates[eventGuestId] = status;
+    final guest = _guestById(eventGuestId);
+    final updated = EventGuestRecord(
+      id: guest.id,
+      eventId: guest.eventId,
+      guestProfileId: guest.guestProfileId,
+      displayName: guest.displayName,
+      normalizedName: guest.normalizedName,
+      publicDisplayName: guest.publicDisplayName,
+      phoneE164: guest.phoneE164,
+      emailLower: guest.emailLower,
+      instagramHandle: guest.instagramHandle,
+      attendanceStatus: guest.attendanceStatus,
+      coverStatus: guest.coverStatus,
+      coverAmountCents: guest.coverAmountCents,
+      isComped: guest.isComped,
+      hasScoredPlay: guest.hasScoredPlay,
+      tournamentStatus: status,
+      note: guest.note,
+      checkedInAt: guest.checkedInAt,
+      rowVersion: guest.rowVersion,
     );
     _replaceGuest(updated);
     return updated;
@@ -262,6 +302,8 @@ EventGuestRecord _guest({
   required AttendanceStatus attendanceStatus,
   required CoverStatus coverStatus,
   bool isComped = false,
+  EventTournamentStatus tournamentStatus = EventTournamentStatus.openPlayOnly,
+  String? publicDisplayName,
 }) {
   return EventGuestRecord.fromJson({
     'id': id,
@@ -284,6 +326,8 @@ EventGuestRecord _guest({
     'cover_amount_cents': 2000,
     'is_comped': isComped,
     'has_scored_play': false,
+    'tournament_status': eventTournamentStatusToJson(tournamentStatus),
+    'public_display_name': publicDisplayName,
   });
 }
 
@@ -559,6 +603,129 @@ void main() {
     expect(find.text('Checked In (1)'), findsOneWidget);
     expect(find.text('Expected Guest'), findsOneWidget);
     expect(find.text('Checked In Guest'), findsOneWidget);
+  });
+
+  testWidgets('filters guests by tournament status', (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_qualifying',
+        name: 'Quinn Qualifying',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_qualified',
+        name: 'Quincy Qualified',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+      _guest(
+        id: 'gst_open',
+        name: 'Opal Open',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
+      ),
+      _guest(
+        id: 'gst_withdrawn',
+        name: 'Wendy Withdrawn',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.withdrawn,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Qualifying'), findsOneWidget);
+    expect(find.text('Qualified'), findsOneWidget);
+    expect(find.text('Open Play Only'), findsOneWidget);
+    expect(find.text('Withdrawn'), findsOneWidget);
+
+    await tester.tap(find.text('Qualified').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Quincy Qualified'), findsOneWidget);
+    expect(find.text('Quinn Qualifying'), findsNothing);
+    expect(find.text('Opal Open'), findsNothing);
+    expect(find.text('Wendy Withdrawn'), findsNothing);
+
+    await tester.tap(find.text('Open Play Only'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Opal Open'), findsOneWidget);
+    expect(find.text('Quincy Qualified'), findsNothing);
+  });
+
+  testWidgets('qualification quick actions update tournament status', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Mark Qualifying'));
+    await tester.pumpAndSettle();
+    expect(
+      repository.statusUpdates['gst_01'],
+      EventTournamentStatus.qualifying,
+    );
+
+    await tester.tap(find.text('Mark Qualified'));
+    await tester.pumpAndSettle();
+    expect(repository.statusUpdates['gst_01'], EventTournamentStatus.qualified);
+
+    await tester.tap(find.text('Move to Open Play Only'));
+    await tester.pumpAndSettle();
+    expect(
+      repository.statusUpdates['gst_01'],
+      EventTournamentStatus.openPlayOnly,
+    );
+
+    await tester.tap(find.text('Withdraw'));
+    await tester.pumpAndSettle();
+    expect(repository.statusUpdates['gst_01'], EventTournamentStatus.withdrawn);
+  });
+
+  testWidgets('roster shows host full names instead of public display names', (
+    tester,
+  ) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        publicDisplayName: 'A. W.',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice Wong'), findsOneWidget);
+    expect(find.text('A. W.'), findsNothing);
   });
 
   testWidgets('searches guests by name and contact fields', (tester) async {

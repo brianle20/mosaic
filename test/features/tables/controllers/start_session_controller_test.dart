@@ -6,11 +6,11 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/controllers/start_session_controller.dart';
 import 'package:mosaic/features/tables/models/start_session_scan_state.dart';
 
-class _FakeGuestRepository implements GuestRepository {
+class _FakeGuestRepository extends ThrowingGuestRepository {
   const _FakeGuestRepository({
     required this.guests,
     required this.tagAssignments,
@@ -110,7 +110,7 @@ class _FakeGuestRepository implements GuestRepository {
   }
 }
 
-class _FakeSeatingRepository implements SeatingRepository {
+class _FakeSeatingRepository extends ThrowingSeatingRepository {
   const _FakeSeatingRepository(this.assignments);
 
   final List<SeatingAssignmentRecord> assignments;
@@ -146,7 +146,7 @@ class _FakeSeatingRepository implements SeatingRepository {
   }
 }
 
-class _FakeSessionRepository implements SessionRepository {
+class _FakeSessionRepository extends ThrowingSessionRepository {
   @override
   Future<StartedTableSessionRecord> startSession(
     StartTableSessionInput input,

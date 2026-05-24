@@ -22,7 +22,15 @@ enum _GuestRosterCheckInFilter {
   checkedIn,
 }
 
-const _guestCardSectionGap = 10.0;
+enum _GuestRosterTournamentFilter {
+  all,
+  qualifying,
+  qualified,
+  openPlayOnly,
+  withdrawn,
+}
+
+const _guestCardSectionGap = 6.0;
 
 class GuestRosterScreen extends StatefulWidget {
   const GuestRosterScreen({
@@ -48,6 +56,8 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   late final GuestRosterController _controller;
   final _searchController = TextEditingController();
   _GuestRosterCheckInFilter _checkInFilter = _GuestRosterCheckInFilter.all;
+  _GuestRosterTournamentFilter _tournamentFilter =
+      _GuestRosterTournamentFilter.all;
 
   @override
   void initState() {
@@ -144,6 +154,20 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     );
   }
 
+  Future<void> _updateTournamentStatus(
+    EventGuestRecord guest,
+    EventTournamentStatus status,
+  ) async {
+    await _runQuickAction(
+      () => _controller.updateTournamentStatus(
+        guestId: guest.id,
+        status: status,
+      ),
+      successMessage:
+          '${guest.displayName} is now ${_tournamentStatusLabel(status).toLowerCase()}.',
+    );
+  }
+
   Future<void> _addCoverEntry(EventGuestRecord guest) async {
     final initialAmountCents = await _initialCoverEntryAmountCents(guest);
     if (!mounted) {
@@ -223,6 +247,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     final filteredGuests = _controller.guests
         .where((guest) => _matchesSearch(guest, searchQuery))
         .where(_matchesCheckInFilter)
+        .where(_matchesTournamentFilter)
         .toList(growable: false);
     final notCheckedInGuests = filteredGuests
         .where((guest) => !guest.isCheckedIn)
@@ -253,7 +278,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
               _buildSearchField(),
               const SizedBox(height: 12),
               _buildCheckInFilter(),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              _buildTournamentFilter(),
+              const SizedBox(height: 12),
               ..._buildGuestSection(
                 context,
                 title: 'Pending',
@@ -334,11 +361,70 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     );
   }
 
+  Widget _buildTournamentFilter() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        _buildTournamentFilterChip(
+          value: _GuestRosterTournamentFilter.all,
+          label: 'All Tournament',
+        ),
+        _buildTournamentFilterChip(
+          value: _GuestRosterTournamentFilter.qualifying,
+          label: 'Qualifying',
+        ),
+        _buildTournamentFilterChip(
+          value: _GuestRosterTournamentFilter.qualified,
+          label: 'Qualified',
+        ),
+        _buildTournamentFilterChip(
+          value: _GuestRosterTournamentFilter.openPlayOnly,
+          label: 'Open Play Only',
+        ),
+        _buildTournamentFilterChip(
+          value: _GuestRosterTournamentFilter.withdrawn,
+          label: 'Withdrawn',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTournamentFilterChip({
+    required _GuestRosterTournamentFilter value,
+    required String label,
+  }) {
+    return ChoiceChip(
+      visualDensity: VisualDensity.compact,
+      label: Text(label),
+      selected: _tournamentFilter == value,
+      onSelected: (_) {
+        setState(() {
+          _tournamentFilter = value;
+        });
+      },
+    );
+  }
+
   bool _matchesCheckInFilter(EventGuestRecord guest) {
     return switch (_checkInFilter) {
       _GuestRosterCheckInFilter.all => true,
       _GuestRosterCheckInFilter.notCheckedIn => !guest.isCheckedIn,
       _GuestRosterCheckInFilter.checkedIn => guest.isCheckedIn,
+    };
+  }
+
+  bool _matchesTournamentFilter(EventGuestRecord guest) {
+    return switch (_tournamentFilter) {
+      _GuestRosterTournamentFilter.all => true,
+      _GuestRosterTournamentFilter.qualifying =>
+        guest.tournamentStatus == EventTournamentStatus.qualifying,
+      _GuestRosterTournamentFilter.qualified =>
+        guest.tournamentStatus == EventTournamentStatus.qualified,
+      _GuestRosterTournamentFilter.openPlayOnly =>
+        guest.tournamentStatus == EventTournamentStatus.openPlayOnly,
+      _GuestRosterTournamentFilter.withdrawn =>
+        guest.tournamentStatus == EventTournamentStatus.withdrawn,
     };
   }
 
@@ -387,7 +473,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
 
     return Card(
       child: InkWell(
-        key: ValueKey('guest-row-${guest.id}'),
         onTap: () => _openGuestDetail(guest),
         borderRadius: BorderRadius.circular(8),
         child: Padding(
@@ -400,6 +485,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                 children: [
                   Expanded(
                     child: Text(
+                      key: ValueKey('guest-row-${guest.id}'),
                       guest.displayName,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontSize: 17,
@@ -470,10 +556,73 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     }
 
     if (guest.isEligibleForPlayerTagAssignment) {
+      for (final action in _tournamentActionsForGuest(guest)) {
+        actions.add(action);
+      }
       actions.add(
         TextButton(
           onPressed: isSubmitting ? null : () => _addCoverEntry(guest),
           child: const Text('Add Cover Entry'),
+        ),
+      );
+    }
+
+    return actions;
+  }
+
+  List<Widget> _tournamentActionsForGuest(EventGuestRecord guest) {
+    final isSubmitting = _controller.isSubmittingGuest(guest.id);
+    final actions = <Widget>[];
+
+    if (guest.tournamentStatus != EventTournamentStatus.qualifying) {
+      actions.add(
+        TextButton(
+          onPressed: isSubmitting
+              ? null
+              : () => _updateTournamentStatus(
+                    guest,
+                    EventTournamentStatus.qualifying,
+                  ),
+          child: const Text('Mark Qualifying'),
+        ),
+      );
+    }
+    if (guest.tournamentStatus != EventTournamentStatus.qualified) {
+      actions.add(
+        TextButton(
+          onPressed: isSubmitting
+              ? null
+              : () => _updateTournamentStatus(
+                    guest,
+                    EventTournamentStatus.qualified,
+                  ),
+          child: const Text('Mark Qualified'),
+        ),
+      );
+    }
+    if (guest.tournamentStatus != EventTournamentStatus.openPlayOnly) {
+      actions.add(
+        TextButton(
+          onPressed: isSubmitting
+              ? null
+              : () => _updateTournamentStatus(
+                    guest,
+                    EventTournamentStatus.openPlayOnly,
+                  ),
+          child: const Text('Move to Open Play Only'),
+        ),
+      );
+    }
+    if (guest.tournamentStatus != EventTournamentStatus.withdrawn) {
+      actions.add(
+        TextButton(
+          onPressed: isSubmitting
+              ? null
+              : () => _updateTournamentStatus(
+                    guest,
+                    EventTournamentStatus.withdrawn,
+                  ),
+          child: const Text('Withdraw'),
         ),
       );
     }
@@ -576,6 +725,15 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       CoverStatus.partial => 'Partial',
       CoverStatus.comped => 'Comped',
       CoverStatus.refunded => 'Refunded',
+    };
+  }
+
+  String _tournamentStatusLabel(EventTournamentStatus status) {
+    return switch (status) {
+      EventTournamentStatus.openPlayOnly => 'Open Play Only',
+      EventTournamentStatus.qualifying => 'Qualifying',
+      EventTournamentStatus.qualified => 'Qualified',
+      EventTournamentStatus.withdrawn => 'Withdrawn',
     };
   }
 

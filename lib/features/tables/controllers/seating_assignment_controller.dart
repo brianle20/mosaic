@@ -152,6 +152,7 @@ class SeatingAssignmentController extends ChangeNotifier {
     return guests.where((guest) {
       final tagAssignment = assignmentsByGuestId[guest.id];
       return guest.isCheckedIn &&
+          guest.tournamentStatus == EventTournamentStatus.qualified &&
           tagAssignment != null &&
           tagAssignment.isActive &&
           tagAssignment.tag.defaultTagType == NfcTagType.player &&

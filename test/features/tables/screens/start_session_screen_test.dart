@@ -10,12 +10,12 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/screens/start_session_screen.dart';
 import 'package:mosaic/services/nfc/native_nfc_reader.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
-class _FakeGuestRepository implements GuestRepository {
+class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository({
     required this.guests,
     required this.assignments,
@@ -115,7 +115,7 @@ class _FakeGuestRepository implements GuestRepository {
   }
 }
 
-class _FakeSessionRepository implements SessionRepository {
+class _FakeSessionRepository extends ThrowingSessionRepository {
   StartTableSessionInput? startedInput;
 
   @override
@@ -237,7 +237,7 @@ class _FakeSessionRepository implements SessionRepository {
   }
 }
 
-class _FakeSeatingRepository implements SeatingRepository {
+class _FakeSeatingRepository extends ThrowingSeatingRepository {
   const _FakeSeatingRepository([this.assignments = const []]);
 
   final List<SeatingAssignmentRecord> assignments;

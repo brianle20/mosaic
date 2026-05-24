@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/events/controllers/event_list_controller.dart';
 
 void main() {
@@ -24,7 +24,7 @@ void main() {
   });
 }
 
-class _FakeEventRepository implements EventRepository {
+class _FakeEventRepository extends ThrowingEventRepository {
   _FakeEventRepository({
     required this.cachedEvents,
     required this.remoteEventsFuture,

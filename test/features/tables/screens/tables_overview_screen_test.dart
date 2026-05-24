@@ -7,10 +7,10 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/screens/tables_overview_screen.dart';
 
-class _FakeTableRepository implements TableRepository {
+class _FakeTableRepository extends ThrowingTableRepository {
   _FakeTableRepository(this.tables);
 
   final List<EventTableRecord> tables;
@@ -50,7 +50,7 @@ class _FakeTableRepository implements TableRepository {
   }
 }
 
-class _FakeSessionRepository implements SessionRepository {
+class _FakeSessionRepository extends ThrowingSessionRepository {
   _FakeSessionRepository({
     required this.sessions,
     this.details = const {},
@@ -128,7 +128,7 @@ class _FakeSessionRepository implements SessionRepository {
   }
 }
 
-class _FakeGuestRepository implements GuestRepository {
+class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository(this.guests);
 
   final List<EventGuestRecord> guests;

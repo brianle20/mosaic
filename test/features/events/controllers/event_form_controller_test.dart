@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/events/controllers/event_form_controller.dart';
 import 'package:mosaic/features/events/models/event_form_draft.dart';
 
-class _CompleterEventRepository implements EventRepository {
+class _CompleterEventRepository extends ThrowingEventRepository {
   final createEventCompleter = Completer<EventRecord>();
 
   CreateEventInput? capturedInput;
@@ -66,7 +66,7 @@ class _CompleterEventRepository implements EventRepository {
   Future<List<EventRecord>> readCachedEvents() async => const [];
 }
 
-class _ImmediateEventRepository implements EventRepository {
+class _ImmediateEventRepository extends ThrowingEventRepository {
   CreateEventInput? capturedInput;
 
   @override

@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
 
-class _RecordingGuestRepository implements GuestRepository {
+class _RecordingGuestRepository extends ThrowingGuestRepository {
   CreateGuestInput? created;
+  UpdateGuestInput? updated;
   List<GuestProfileMatch> matches = const [];
   GuestProfileLookupInput? lastLookupInput;
   int profileLookupCount = 0;
@@ -116,8 +117,25 @@ class _RecordingGuestRepository implements GuestRepository {
   }
 
   @override
-  Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
-    throw UnimplementedError();
+  Future<EventGuestRecord> updateGuest(UpdateGuestInput input) async {
+    updated = input;
+    return EventGuestRecord.fromJson({
+      'id': input.id,
+      'event_id': input.eventId,
+      'display_name': input.displayName,
+      'normalized_name': input.normalizedName,
+      'attendance_status': 'expected',
+      'cover_status': input.coverStatus.name,
+      'cover_amount_cents': input.coverAmountCents,
+      'is_comped': input.isComped,
+      'has_scored_play': false,
+      'guest_profile_id': 'prf_01',
+      'phone_e164': input.phoneE164,
+      'email_lower': input.emailLower,
+      'instagram_handle': input.instagramHandle,
+      'note': input.note,
+      'public_display_name': input.publicDisplayName,
+    });
   }
 }
 
@@ -171,6 +189,68 @@ void main() {
     expect(repository.created, isNotNull);
     expect(repository.created!.normalizedName, 'alice wong');
     expect(createdGuest, isNotNull);
+  });
+
+  testWidgets('shows public display name directly below full name', (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          guestRepository: repository,
+          onSaved: (_) {},
+        ),
+      ),
+    );
+
+    expect(find.byKey(guestNameFieldKey), findsOneWidget);
+    expect(find.byKey(guestPublicDisplayNameFieldKey), findsOneWidget);
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Public Display Name'), findsOneWidget);
+
+    final nameTop = tester.getTopLeft(find.byKey(guestNameFieldKey)).dy;
+    final publicNameTop =
+        tester.getTopLeft(find.byKey(guestPublicDisplayNameFieldKey)).dy;
+    expect(nameTop, lessThan(publicNameTop));
+  });
+
+  testWidgets('saves generated and manually overridden public display names', (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          guestRepository: repository,
+          onSaved: (_) {},
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byKey(guestNameFieldKey), 'Brian Le');
+    await tester.ensureVisible(find.text('Save Guest'));
+    await tester.tap(find.text('Save Guest'));
+    await tester.pumpAndSettle();
+
+    expect(repository.created?.displayName, 'Brian Le');
+    expect(repository.created?.publicDisplayName, 'Brian L.');
+
+    repository.created = null;
+    await tester.enterText(
+      find.byKey(guestPublicDisplayNameFieldKey),
+      'Brian from Table 1',
+    );
+    await tester.tap(find.text('Save Guest'));
+    await tester.pumpAndSettle();
+
+    expect(repository.created?.publicDisplayName, 'Brian from Table 1');
   });
 
   testWidgets('defaults cover amount from the event and formats money input', (
@@ -237,6 +317,7 @@ void main() {
             'display_name': 'Brian Le',
             'normalized_name': 'brian le',
             'phone_e164': '+14155552671',
+            'public_display_name': 'BL',
           }),
         ),
       ];
@@ -261,6 +342,18 @@ void main() {
 
     expect(find.text('Using existing guest: Brian Le'), findsOneWidget);
     expect(repository.lastLookupInput?.phoneE164, '+14155552671');
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(
+              of: find.byKey(guestPublicDisplayNameFieldKey),
+              matching: find.byType(EditableText),
+            ),
+          )
+          .controller
+          .text,
+      'BL',
+    );
 
     await tester.ensureVisible(find.text('Save Guest'));
     await tester.tap(find.text('Save Guest'));
@@ -268,6 +361,7 @@ void main() {
 
     expect(repository.created, isNotNull);
     expect(repository.created!.phoneE164, '+14155552671');
+    expect(repository.created!.publicDisplayName, 'BL');
   });
 
   testWidgets('requires an explicit action before using a name-only profile', (
@@ -509,6 +603,9 @@ void main() {
         ),
       ),
     );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pumpAndSettle();
 
     final noteEditable = tester.widget<EditableText>(
       find.descendant(

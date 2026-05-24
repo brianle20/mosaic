@@ -16,6 +16,7 @@ import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/activity/screens/activity_screen.dart';
 import 'package:mosaic/features/events/screens/bonus_round_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
@@ -28,7 +29,7 @@ import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/app_actions.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
 
-class _EventRepository implements EventRepository {
+class _EventRepository extends ThrowingEventRepository {
   _EventRepository(
     this.event, {
     this.onComplete,
@@ -47,6 +48,8 @@ class _EventRepository implements EventRepository {
   final Future<EventRecord> Function(String eventId)? onCancel;
   final Future<EventRecord> Function(String eventId)? onRevertToDraft;
   final Future<void> Function(String eventId)? onDelete;
+  final Future<EventRecord> Function(String eventId, EventScoringPhase phase)?
+      onUpdateScoringPhase = null;
   final Future<EventRecord> Function(
     String eventId,
     bool checkinOpen,
@@ -118,6 +121,20 @@ class _EventRepository implements EventRepository {
   }
 
   @override
+  Future<EventRecord> updateEventScoringPhase({
+    required String eventId,
+    required EventScoringPhase phase,
+  }) async {
+    final handler = onUpdateScoringPhase;
+    if (handler != null) {
+      event = await handler(eventId, phase);
+      return event;
+    }
+
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventRecord> completeEvent(String eventId) async {
     final handler = onComplete;
     if (handler != null) {
@@ -150,7 +167,7 @@ class _EventRepository implements EventRepository {
   Future<List<EventRecord>> readCachedEvents() async => [event];
 }
 
-class _GuestRepository implements GuestRepository {
+class _GuestRepository extends ThrowingGuestRepository {
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
     String guestId,
@@ -199,6 +216,27 @@ class _GuestRepository implements GuestRepository {
       const [];
 
   @override
+  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
+    required String eventId,
+  }) async {
+    return const [
+      QualificationLeaderboardRow(
+        eventGuestId: 'gst_alice',
+        guestProfileId: 'prf_alice',
+        fullName: 'Alice Wong',
+        tournamentStatus: EventTournamentStatus.qualifying,
+        qualificationPoints: 72,
+        handsPlayed: 9,
+        wins: 3,
+        selfDrawWins: 1,
+        discardWins: 2,
+        rank: 1,
+      ),
+    ];
+  }
+
+  @override
+  @override
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
     String guestId,
   ) async =>
@@ -242,7 +280,7 @@ class _GuestRepository implements GuestRepository {
   }
 }
 
-class _LeaderboardRepository implements LeaderboardRepository {
+class _LeaderboardRepository extends ThrowingLeaderboardRepository {
   const _LeaderboardRepository({this.entries = const []});
 
   final List<LeaderboardEntry> entries;
@@ -256,7 +294,7 @@ class _LeaderboardRepository implements LeaderboardRepository {
       entries;
 }
 
-class _ActivityRepository implements ActivityRepository {
+class _ActivityRepository extends ThrowingActivityRepository {
   @override
   Future<List<EventActivityEntry>> loadActivity(
     String eventId,
@@ -272,7 +310,7 @@ class _ActivityRepository implements ActivityRepository {
       const [];
 }
 
-class _SeatingRepository implements SeatingRepository {
+class _SeatingRepository extends ThrowingSeatingRepository {
   const _SeatingRepository();
 
   @override
@@ -305,7 +343,7 @@ class _SeatingRepository implements SeatingRepository {
       const [];
 }
 
-class _PrizeRepository implements PrizeRepository {
+class _PrizeRepository extends ThrowingPrizeRepository {
   _PrizeRepository({
     PrizePlanDetail? loadedPlan,
     List<PrizePlanDetail?> loadedPlans = const [],
@@ -356,7 +394,7 @@ class _PrizeRepository implements PrizeRepository {
   }
 }
 
-class _TableRepository implements TableRepository {
+class _TableRepository extends ThrowingTableRepository {
   _TableRepository({
     List<EventTableRecord> tables = const [],
     this.resolvedTable,
@@ -412,7 +450,7 @@ class _TableRepository implements TableRepository {
   }
 }
 
-class _SessionRepository implements SessionRepository {
+class _SessionRepository extends ThrowingSessionRepository {
   const _SessionRepository({
     this.sessions = const [],
     this.ledgerRows = const [],
@@ -895,6 +933,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Activity'), findsOneWidget);
+  });
+
+  testWidgets('dashboard shows phase controls and qualification leaderboard',
+      (tester) async {
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'current_scoring_phase': 'qualification',
+    });
+
+    await _pumpDashboard(tester, event: event);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -700));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Scoring Phase'), findsOneWidget);
+    expect(find.text('Qualification'), findsWidgets);
+    expect(find.text('Tournament'), findsOneWidget);
+    expect(find.text('Bonus'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Qualification Leaderboard'), findsOneWidget);
+    expect(find.text('Alice Wong'), findsOneWidget);
+    expect(find.text('72 pts'), findsOneWidget);
+    expect(find.text('9 hands'), findsOneWidget);
+    expect(find.text('3 wins'), findsOneWidget);
   });
 
   testWidgets('dashboard summarizes configured prize pool', (tester) async {

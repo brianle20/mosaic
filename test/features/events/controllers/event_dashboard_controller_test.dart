@@ -1,13 +1,15 @@
 import 'package:collection/collection.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
+import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
+import '../../../helpers/repository_fakes.dart';
 
-class _FakeEventRepository implements EventRepository {
+class _FakeEventRepository extends ThrowingEventRepository {
   _FakeEventRepository({
     required this.cachedEvents,
     this.eventLoader,
@@ -17,6 +19,8 @@ class _FakeEventRepository implements EventRepository {
   final Future<EventRecord?> Function(String eventId)? eventLoader;
   EventRecord Function(String eventId)? cancelHandler;
   EventRecord Function(String eventId)? revertToDraftHandler;
+  EventRecord Function(String eventId, EventScoringPhase phase)?
+      scoringPhaseHandler;
   void Function(String eventId)? deleteHandler;
 
   @override
@@ -88,12 +92,24 @@ class _FakeEventRepository implements EventRepository {
   }
 
   @override
+  Future<EventRecord> updateEventScoringPhase({
+    required String eventId,
+    required EventScoringPhase phase,
+  }) async {
+    final handler = scoringPhaseHandler;
+    if (handler == null) {
+      throw UnimplementedError();
+    }
+    return handler(eventId, phase);
+  }
+
+  @override
   Future<EventRecord> startEvent(String eventId) {
     throw UnimplementedError();
   }
 }
 
-class _FakeGuestRepository implements GuestRepository {
+class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository({
     required this.cachedGuests,
     this.guestLoader,
@@ -153,6 +169,26 @@ class _FakeGuestRepository implements GuestRepository {
       cachedGuests;
 
   @override
+  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
+    required String eventId,
+  }) async {
+    return const [
+      QualificationLeaderboardRow(
+        eventGuestId: 'gst_brian',
+        guestProfileId: 'prf_brian',
+        fullName: 'Brian Le',
+        tournamentStatus: EventTournamentStatus.qualifying,
+        qualificationPoints: 48,
+        handsPlayed: 8,
+        wins: 2,
+        selfDrawWins: 1,
+        discardWins: 1,
+        rank: 1,
+      ),
+    ];
+  }
+
+  @override
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
     String guestId,
   ) {
@@ -202,7 +238,7 @@ class _FakeGuestRepository implements GuestRepository {
   }
 }
 
-class _FakeLeaderboardRepository implements LeaderboardRepository {
+class _FakeLeaderboardRepository extends ThrowingLeaderboardRepository {
   const _FakeLeaderboardRepository({
     required this.cachedEntries,
     required this.remoteEntries,
@@ -218,6 +254,22 @@ class _FakeLeaderboardRepository implements LeaderboardRepository {
   @override
   Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId) async =>
       cachedEntries;
+}
+
+class _FakeSessionRepository extends ThrowingSessionRepository {
+  const _FakeSessionRepository(this.sessions);
+
+  final List<TableSessionRecord> sessions;
+
+  @override
+  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
+  Future<List<TableSessionRecord>> listSessions(String eventId) async =>
+      sessions;
 }
 
 void main() {
@@ -322,6 +374,125 @@ void main() {
     await controller.load('evt_01');
 
     expect(controller.leaderLabel, 'Brian Le');
+  });
+
+  test('defaults to qualification phase and loads qualification leaderboard',
+      () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+    });
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(cachedEvents: [event]),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+    );
+
+    await controller.load('evt_01');
+
+    expect(
+        controller.event?.currentScoringPhase, EventScoringPhase.qualification);
+    expect(controller.qualificationLeaderboard.single.fullName, 'Brian Le');
+    expect(controller.qualificationLeaderboard.single.qualificationPoints, 48);
+  });
+
+  test('updates event scoring phase through repository', () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'qualification',
+    });
+    final repository = _FakeEventRepository(cachedEvents: [event]);
+    repository.scoringPhaseHandler = (eventId, phase) {
+      expect(eventId, 'evt_01');
+      return EventRecord.fromJson({
+        ...event.toJson(),
+        'current_scoring_phase': eventScoringPhaseToJson(phase),
+      });
+    };
+    final controller = EventDashboardController(
+      eventRepository: repository,
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+    );
+    await controller.load('evt_01');
+
+    await controller.setScoringPhase(EventScoringPhase.tournament);
+
+    expect(controller.event?.currentScoringPhase, EventScoringPhase.tournament);
+    expect(controller.lifecycleError, isNull);
+  });
+
+  test('blocks scoring phase changes while a session is live', () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'qualification',
+    });
+    final repository = _FakeEventRepository(cachedEvents: [event]);
+    var didUpdatePhase = false;
+    repository.scoringPhaseHandler = (_, __) {
+      didUpdatePhase = true;
+      return event;
+    };
+    final controller = EventDashboardController(
+      eventRepository: repository,
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      sessionRepository: _FakeSessionRepository([
+        TableSessionRecord.fromJson(const {
+          'id': 'ses_01',
+          'event_id': 'evt_01',
+          'event_table_id': 'tbl_01',
+          'session_number_for_table': 1,
+          'ruleset_id': 'HK_STANDARD',
+          'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+          'rotation_policy_config_json': {},
+          'status': 'active',
+          'initial_east_seat_index': 0,
+          'current_dealer_seat_index': 0,
+          'dealer_pass_count': 0,
+          'completed_games_count': 0,
+          'hand_count': 0,
+          'scoring_phase': 'qualification',
+          'started_at': '2026-04-24T19:05:00-07:00',
+          'started_by_user_id': 'usr_01',
+        }),
+      ]),
+    );
+    await controller.load('evt_01');
+
+    await controller.setScoringPhase(EventScoringPhase.tournament);
+
+    expect(didUpdatePhase, isFalse);
+    expect(
+        controller.event?.currentScoringPhase, EventScoringPhase.qualification);
+    expect(controller.lifecycleError,
+        contains(scoringPhaseLiveSessionBlockedMessage));
   });
 
   test('cancelEvent updates the event to cancelled', () async {

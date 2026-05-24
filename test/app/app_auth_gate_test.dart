@@ -88,6 +88,14 @@ class _FakeEventRepository implements EventRepository {
   }
 
   @override
+  Future<EventRecord> updateEventScoringPhase({
+    required String eventId,
+    required EventScoringPhase phase,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventRecord> completeEvent(String eventId) {
     throw UnimplementedError();
   }
@@ -204,6 +212,20 @@ class _FakeGuestRepository implements GuestRepository {
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<EventGuestRecord> updateEventGuestTournamentStatus({
+    required String eventGuestId,
+    required EventTournamentStatus status,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
+    required String eventId,
+  }) async =>
+      const [];
 }
 
 class _FakeTableRepository implements TableRepository {

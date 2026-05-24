@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 
 enum RotationPolicyType {
@@ -31,6 +32,7 @@ class TableSessionRecord {
     required this.rotationPolicyType,
     required this.rotationPolicyConfig,
     required this.status,
+    this.scoringPhase = EventScoringPhase.qualification,
     required this.initialEastSeatIndex,
     required this.currentDealerSeatIndex,
     required this.dealerPassCount,
@@ -56,6 +58,9 @@ class TableSessionRecord {
       ),
       rotationPolicyConfig: _jsonObject(json, 'rotation_policy_config_json'),
       status: _sessionStatusFromJson(_requiredString(json, 'status')),
+      scoringPhase: eventScoringPhaseFromJson(
+        _stringOrDefault(json, 'scoring_phase', 'qualification'),
+      ),
       initialEastSeatIndex: _requiredInt(json, 'initial_east_seat_index'),
       currentDealerSeatIndex: _requiredInt(json, 'current_dealer_seat_index'),
       dealerPassCount: _requiredInt(json, 'dealer_pass_count'),
@@ -78,6 +83,7 @@ class TableSessionRecord {
   final RotationPolicyType rotationPolicyType;
   final Map<String, dynamic> rotationPolicyConfig;
   final SessionStatus status;
+  final EventScoringPhase scoringPhase;
   final int initialEastSeatIndex;
   final int currentDealerSeatIndex;
   final int dealerPassCount;
@@ -100,6 +106,7 @@ class TableSessionRecord {
       'rotation_policy_type': _rotationPolicyTypeToJson(rotationPolicyType),
       'rotation_policy_config_json': rotationPolicyConfig,
       'status': _sessionStatusToJson(status),
+      'scoring_phase': eventScoringPhaseToJson(scoringPhase),
       'initial_east_seat_index': initialEastSeatIndex,
       'current_dealer_seat_index': currentDealerSeatIndex,
       'dealer_pass_count': dealerPassCount,
@@ -330,6 +337,23 @@ int _intOrDefault(Map<String, dynamic> json, String key, int fallback) {
   }
 
   throw FormatException('Expected int or null for $key.');
+}
+
+String _stringOrDefault(
+  Map<String, dynamic> json,
+  String key,
+  String fallback,
+) {
+  final value = json[key];
+  if (value == null) {
+    return fallback;
+  }
+
+  if (value is String && value.trim().isNotEmpty) {
+    return value;
+  }
+
+  throw FormatException('Expected non-empty string or null for $key.');
 }
 
 DateTime _requiredDateTime(Map<String, dynamic> json, String key) {

@@ -42,6 +42,11 @@ abstract interface class EventRepository {
     required bool scoringOpen,
   });
 
+  Future<EventRecord> updateEventScoringPhase({
+    required String eventId,
+    required EventScoringPhase phase,
+  });
+
   Future<EventRecord> completeEvent(String eventId);
 
   Future<EventRecord> finalizeEvent(String eventId);
@@ -77,6 +82,15 @@ abstract interface class GuestRepository {
   Future<EventGuestRecord> createGuest(CreateGuestInput input);
 
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input);
+
+  Future<EventGuestRecord> updateEventGuestTournamentStatus({
+    required String eventGuestId,
+    required EventTournamentStatus status,
+  });
+
+  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
+    required String eventId,
+  });
 
   Future<GuestDetailRecord> recordCoverEntry({
     required String guestId,

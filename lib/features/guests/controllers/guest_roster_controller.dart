@@ -57,6 +57,7 @@ class GuestRosterController extends ChangeNotifier {
               eventId: guest.eventId,
               displayName: guest.displayName,
               normalizedName: guest.normalizedName,
+              publicDisplayName: guest.publicDisplayName,
               phoneE164: guest.phoneE164,
               emailLower: guest.emailLower,
               coverStatus: CoverStatus.paid,
@@ -81,6 +82,7 @@ class GuestRosterController extends ChangeNotifier {
               eventId: guest.eventId,
               displayName: guest.displayName,
               normalizedName: guest.normalizedName,
+              publicDisplayName: guest.publicDisplayName,
               phoneE164: guest.phoneE164,
               emailLower: guest.emailLower,
               coverStatus: CoverStatus.comped,
@@ -90,6 +92,23 @@ class GuestRosterController extends ChangeNotifier {
             ),
           )
           .then(_mergeGuest),
+    );
+    return true;
+  }
+
+  Future<bool> updateTournamentStatus({
+    required String guestId,
+    required EventTournamentStatus status,
+  }) async {
+    await _runGuestAction(
+      guestId,
+      () async {
+        final updated = await _guestRepository.updateEventGuestTournamentStatus(
+          eventGuestId: guestId,
+          status: status,
+        );
+        _mergeGuest(updated);
+      },
     );
     return true;
   }

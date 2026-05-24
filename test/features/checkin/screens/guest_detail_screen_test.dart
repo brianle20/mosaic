@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/screens/guest_detail_screen.dart';
@@ -259,6 +260,20 @@ class _FakeGuestRepository implements GuestRepository {
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<EventGuestRecord> updateEventGuestTournamentStatus({
+    required String eventGuestId,
+    required EventTournamentStatus status,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
+    required String eventId,
+  }) async =>
+      const [];
 }
 
 class _FakeNfcService implements NfcService {

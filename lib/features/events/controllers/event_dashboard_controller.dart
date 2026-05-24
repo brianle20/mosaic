@@ -10,6 +10,9 @@ import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
 
+const scoringPhaseLiveSessionBlockedMessage =
+    'End active or paused sessions before changing scoring phase.';
+
 sealed class DashboardTableScanResult {
   const DashboardTableScanResult();
 }
@@ -63,6 +66,7 @@ class EventDashboardController extends ChangeNotifier {
   int tableCount = 0;
   int? prizePoolCents;
   String leaderLabel = 'No scores';
+  List<QualificationLeaderboardRow> qualificationLeaderboard = const [];
   BonusRoundResultsSummary bonusRoundResults = const BonusRoundResultsSummary();
 
   Future<void> load(String eventId) async {
@@ -88,6 +92,7 @@ class EventDashboardController extends ChangeNotifier {
     guestCount = cachedGuests.length;
     tableCount = cachedTables?.length ?? 0;
     leaderLabel = _formatLeader(cachedLeaderboard);
+    qualificationLeaderboard = const [];
     bonusRoundResults = buildBonusRoundResultsSummary(
       ledgerEntries: cachedLedger ?? const [],
       leaderboardEntries: cachedLeaderboard ?? const [],
@@ -137,6 +142,13 @@ class EventDashboardController extends ChangeNotifier {
       );
     } catch (_) {
       // Prize setup is a dashboard summary only; keep event loading usable.
+    }
+
+    try {
+      qualificationLeaderboard = await _guestRepository
+          .fetchQualificationLeaderboard(eventId: eventId);
+    } catch (_) {
+      qualificationLeaderboard = const [];
     }
 
     isLoading = false;
@@ -362,6 +374,40 @@ class EventDashboardController extends ChangeNotifier {
         eventId: currentEvent.id,
         checkinOpen: checkinOpen,
         scoringOpen: scoringOpen,
+      );
+    } catch (exception) {
+      lifecycleError = _formatLifecycleError(exception);
+    }
+
+    isSubmittingLifecycle = false;
+    notifyListeners();
+  }
+
+  Future<void> setScoringPhase(EventScoringPhase phase) async {
+    final currentEvent = event;
+    if (currentEvent == null || isSubmittingLifecycle) {
+      return;
+    }
+
+    isSubmittingLifecycle = true;
+    lifecycleError = null;
+    notifyListeners();
+
+    try {
+      final sessions = await _sessionRepository?.listSessions(currentEvent.id);
+      final hasLiveSessions = sessions?.any(
+            (session) =>
+                session.status == SessionStatus.active ||
+                session.status == SessionStatus.paused,
+          ) ??
+          false;
+      if (hasLiveSessions) {
+        throw StateError(scoringPhaseLiveSessionBlockedMessage);
+      }
+
+      event = await _eventRepository.updateEventScoringPhase(
+        eventId: currentEvent.id,
+        phase: phase,
       );
     } catch (exception) {
       lifecycleError = _formatLifecycleError(exception);

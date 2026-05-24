@@ -5,10 +5,10 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
-import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/controllers/seating_assignment_controller.dart';
 
-class _FakeSeatingRepository implements SeatingRepository {
+class _FakeSeatingRepository extends ThrowingSeatingRepository {
   _FakeSeatingRepository({
     this.cachedAssignments = const [],
     this.loadedAssignments = const [],
@@ -60,7 +60,7 @@ class _FakeSeatingRepository implements SeatingRepository {
   }
 }
 
-class _FakeGuestRepository implements GuestRepository {
+class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository({
     this.guests = const [],
     this.assignments = const {},
@@ -160,7 +160,7 @@ class _FakeGuestRepository implements GuestRepository {
   }
 }
 
-class _FakeSessionRepository implements SessionRepository {
+class _FakeSessionRepository extends ThrowingSessionRepository {
   _FakeSessionRepository({this.sessions = const []});
 
   final List<TableSessionRecord> sessions;
@@ -336,15 +336,36 @@ void main() {
 
   test('generate identifies eligible guests left unassigned', () async {
     final guests = [
-      _guest(id: 'gst_01', displayName: 'Alice'),
-      _guest(id: 'gst_02', displayName: 'Billy'),
-      _guest(id: 'gst_03', displayName: 'Carmen'),
-      _guest(id: 'gst_04', displayName: 'Dev'),
-      _guest(id: 'gst_05', displayName: 'Ellen'),
+      _guest(
+        id: 'gst_01',
+        displayName: 'Alice',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+      _guest(
+        id: 'gst_02',
+        displayName: 'Billy',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+      _guest(
+        id: 'gst_03',
+        displayName: 'Carmen',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+      _guest(
+        id: 'gst_04',
+        displayName: 'Dev',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+      _guest(
+        id: 'gst_05',
+        displayName: 'Ellen',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
       _guest(
         id: 'gst_06',
         displayName: 'Not Checked In',
         attendanceStatus: 'expected',
+        tournamentStatus: EventTournamentStatus.qualified,
       ),
     ];
     final repository = _FakeSeatingRepository(
@@ -372,6 +393,63 @@ void main() {
     expect(
       controller.unassignedGuests.map((guest) => guest.displayName),
       ['Ellen'],
+    );
+  });
+
+  test(
+      'eligible tournament players must be qualified checked-in tagged players',
+      () async {
+    final guests = [
+      _guest(
+        id: 'gst_qualified',
+        displayName: 'Qualified Player',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+      _guest(
+        id: 'gst_qualifying',
+        displayName: 'Qualifying Player',
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_open',
+        displayName: 'Open Play Player',
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
+      ),
+      _guest(
+        id: 'gst_withdrawn',
+        displayName: 'Withdrawn Player',
+        tournamentStatus: EventTournamentStatus.withdrawn,
+      ),
+      _guest(
+        id: 'gst_expected',
+        displayName: 'Not Checked In',
+        attendanceStatus: 'expected',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+      _guest(
+        id: 'gst_untagged',
+        displayName: 'No Active Tag',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+    ];
+    final controller = SeatingAssignmentController(
+      seatingRepository: _FakeSeatingRepository(),
+      guestRepository: _FakeGuestRepository(
+        guests: guests,
+        assignments: {
+          for (final guest in guests)
+            if (guest.id != 'gst_untagged')
+              guest.id: _tagAssignment(guestId: guest.id),
+        },
+      ),
+      sessionRepository: _FakeSessionRepository(),
+    );
+
+    await controller.load('evt_01');
+
+    expect(
+      controller.eligibleGuests.map((guest) => guest.displayName),
+      ['Qualified Player'],
     );
   });
 
@@ -442,6 +520,7 @@ EventGuestRecord _guest({
   required String id,
   required String displayName,
   String attendanceStatus = 'checked_in',
+  EventTournamentStatus tournamentStatus = EventTournamentStatus.openPlayOnly,
 }) {
   return EventGuestRecord.fromJson({
     'id': id,
@@ -453,6 +532,7 @@ EventGuestRecord _guest({
     'cover_amount_cents': 0,
     'is_comped': false,
     'has_scored_play': false,
+    'tournament_status': eventTournamentStatusToJson(tournamentStatus),
   });
 }
 

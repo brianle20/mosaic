@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
@@ -144,6 +145,20 @@ class _FakeGuestRepository implements GuestRepository {
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<EventGuestRecord> updateEventGuestTournamentStatus({
+    required String eventGuestId,
+    required EventTournamentStatus status,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
+    required String eventId,
+  }) async =>
+      const [];
 }
 
 class _FakeSessionRepository implements SessionRepository {

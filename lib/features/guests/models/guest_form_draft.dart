@@ -6,6 +6,8 @@ import 'package:mosaic/features/guests/models/guest_contact_formatters.dart';
 class GuestFormDraft {
   const GuestFormDraft({
     required this.displayName,
+    this.publicDisplayName,
+    this.isPublicDisplayNameManuallyEdited = false,
     this.phoneE164 = '',
     this.email = '',
     this.instagramHandle = '',
@@ -15,6 +17,8 @@ class GuestFormDraft {
   });
 
   final String displayName;
+  final String? publicDisplayName;
+  final bool isPublicDisplayNameManuallyEdited;
   final String phoneE164;
   final String email;
   final String instagramHandle;
@@ -75,6 +79,59 @@ class GuestFormDraft {
     return displayName.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
 
+  static String defaultPublicDisplayNameFor(String fullName) {
+    final parts = fullName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) {
+      return '';
+    }
+    if (parts.length == 1) {
+      return parts.first;
+    }
+    return '${parts.first} ${parts.last.substring(0, 1).toUpperCase()}.';
+  }
+
+  String resolvedPublicDisplayName() {
+    final trimmed = publicDisplayName?.trim() ?? '';
+    if (trimmed.isEmpty) {
+      return defaultPublicDisplayNameFor(displayName);
+    }
+    return trimmed;
+  }
+
+  GuestFormDraft withDisplayName(String value) {
+    return GuestFormDraft(
+      displayName: value,
+      publicDisplayName: isPublicDisplayNameManuallyEdited
+          ? publicDisplayName
+          : defaultPublicDisplayNameFor(value),
+      isPublicDisplayNameManuallyEdited: isPublicDisplayNameManuallyEdited,
+      phoneE164: phoneE164,
+      email: email,
+      instagramHandle: instagramHandle,
+      note: note,
+      coverAmountCents: coverAmountCents,
+      coverStatus: coverStatus,
+    );
+  }
+
+  GuestFormDraft withPublicDisplayName(String value) {
+    return GuestFormDraft(
+      displayName: displayName,
+      publicDisplayName: value,
+      isPublicDisplayNameManuallyEdited: true,
+      phoneE164: phoneE164,
+      email: email,
+      instagramHandle: instagramHandle,
+      note: note,
+      coverAmountCents: coverAmountCents,
+      coverStatus: coverStatus,
+    );
+  }
+
   EventGuestRecord? duplicateNameMatch(
     Iterable<EventGuestRecord> existingGuests, {
     String? excludeGuestId,
@@ -126,6 +183,7 @@ class GuestFormDraft {
       eventId: eventId,
       displayName: displayName.trim(),
       normalizedName: normalizedName,
+      publicDisplayName: resolvedPublicDisplayName(),
       phoneE164: phoneE164Value(),
       emailLower: emailLowerValue(),
       instagramHandle: instagramHandleValue(),
@@ -147,6 +205,7 @@ class GuestFormDraft {
       eventId: eventId,
       displayName: displayName.trim(),
       normalizedName: normalizedName,
+      publicDisplayName: resolvedPublicDisplayName(),
       phoneE164: phoneE164Value(),
       emailLower: emailLowerValue(),
       instagramHandle: instagramHandleValue(),

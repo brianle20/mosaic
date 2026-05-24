@@ -1,9 +1,11 @@
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+typedef CurrentUserIdReader = String? Function();
 typedef GuestByIdLoader = Future<Map<String, dynamic>> Function(String guestId);
 typedef ActiveAssignmentLoader = Future<Map<String, dynamic>?> Function(
   String guestId,
@@ -11,7 +13,21 @@ typedef ActiveAssignmentLoader = Future<Map<String, dynamic>?> Function(
 typedef CoverEntriesLoader = Future<List<Map<String, dynamic>>> Function(
   String guestId,
 );
+typedef ProfileOnEventChecker = Future<void> Function({
+  required String eventId,
+  required String guestProfileId,
+});
+typedef GuestProfileInsertRunner = Future<Map<String, dynamic>> Function(
+  Map<String, dynamic> json,
+);
+typedef EventGuestInsertRunner = Future<Map<String, dynamic>> Function(
+  Map<String, dynamic> json,
+);
 typedef RpcSingleRunner = Future<Map<String, dynamic>> Function(
+  String functionName,
+  Map<String, dynamic> params,
+);
+typedef RpcListRunner = Future<List<Map<String, dynamic>>> Function(
   String functionName,
   Map<String, dynamic> params,
 );
@@ -25,20 +41,41 @@ class SupabaseGuestRepository implements GuestRepository {
     GuestByIdLoader? guestByIdLoader,
     ActiveAssignmentLoader? activeAssignmentLoader,
     CoverEntriesLoader? coverEntriesLoader,
+    CurrentUserIdReader? currentUserIdReader,
+    ProfileOnEventChecker? profileOnEventChecker,
+    GuestProfileInsertRunner? guestProfileInsertRunner,
+    EventGuestInsertRunner? eventGuestInsertRunner,
     RpcSingleRunner? rpcSingleRunner,
+    RpcListRunner? rpcListRunner,
   })  : _guestByIdLoader = guestByIdLoader,
         _activeAssignmentLoader = activeAssignmentLoader,
         _coverEntriesLoader = coverEntriesLoader,
-        _rpcSingleRunner = rpcSingleRunner;
+        _currentUserIdReader = currentUserIdReader,
+        _profileOnEventChecker = profileOnEventChecker,
+        _guestProfileInsertRunner = guestProfileInsertRunner,
+        _eventGuestInsertRunner = eventGuestInsertRunner,
+        _rpcSingleRunner = rpcSingleRunner,
+        _rpcListRunner = rpcListRunner;
 
   final SupabaseClient client;
   final LocalCache cache;
   final GuestByIdLoader? _guestByIdLoader;
   final ActiveAssignmentLoader? _activeAssignmentLoader;
   final CoverEntriesLoader? _coverEntriesLoader;
+  final CurrentUserIdReader? _currentUserIdReader;
+  final ProfileOnEventChecker? _profileOnEventChecker;
+  final GuestProfileInsertRunner? _guestProfileInsertRunner;
+  final EventGuestInsertRunner? _eventGuestInsertRunner;
   final RpcSingleRunner? _rpcSingleRunner;
+  final RpcListRunner? _rpcListRunner;
 
   String? _currentUserId() {
+    final userIdReader = _currentUserIdReader;
+    if (userIdReader != null) {
+      final userId = userIdReader();
+      return userId == null || userId.isEmpty ? null : userId;
+    }
+
     final userId = client.auth.currentUser?.id;
     if (userId == null || userId.isEmpty) {
       return null;
@@ -70,16 +107,27 @@ class SupabaseGuestRepository implements GuestRepository {
 
   @override
   Future<EventGuestRecord> createGuest(CreateGuestInput input) async {
-    final profile = await _resolveProfileForCreate(input);
+    final defaultPublicDisplayName = _defaultPublicDisplayName(
+      input.displayName,
+    );
+    final profile = await _resolveProfileForCreate(
+      input,
+      publicDisplayName: input.publicDisplayName ?? defaultPublicDisplayName,
+    );
     await _ensureProfileIsNotOnEvent(
       eventId: input.eventId,
       guestProfileId: profile.id,
     );
-    final inserted = await client
-        .from('event_guests')
-        .insert(input.toInsertJson(guestProfileId: profile.id))
-        .select(_eventGuestSelect)
-        .single();
+    final publicDisplayName = input.publicDisplayName ??
+        profile.publicDisplayName ??
+        defaultPublicDisplayName;
+    final inserted = await _insertEventGuest({
+      ...input.toInsertJson(guestProfileId: profile.id),
+      'public_display_name': publicDisplayName,
+      'tournament_status': eventTournamentStatusToJson(
+        EventTournamentStatus.openPlayOnly,
+      ),
+    });
 
     final guest = EventGuestRecord.fromJson(inserted);
     await _saveMergedGuestList(input.eventId, guest);
@@ -380,13 +428,19 @@ class SupabaseGuestRepository implements GuestRepository {
       guestProfileId: currentGuest.guestProfileId,
       displayName: input.displayName,
       normalizedName: input.normalizedName,
+      publicDisplayName: input.publicDisplayName ??
+          _defaultPublicDisplayName(input.displayName),
       phoneE164: input.phoneE164,
       emailLower: input.emailLower,
       instagramHandle: input.instagramHandle,
     );
     final updated = await client
         .from('event_guests')
-        .update(input.toUpdateJson())
+        .update({
+          ...input.toUpdateJson(),
+          'public_display_name': input.publicDisplayName ??
+              _defaultPublicDisplayName(input.displayName),
+        })
         .eq('id', input.id)
         .select(_eventGuestSelect)
         .single();
@@ -394,6 +448,36 @@ class SupabaseGuestRepository implements GuestRepository {
     final guest = EventGuestRecord.fromJson(updated);
     await _saveMergedGuestList(input.eventId, guest);
     return guest;
+  }
+
+  @override
+  Future<EventGuestRecord> updateEventGuestTournamentStatus({
+    required String eventGuestId,
+    required EventTournamentStatus status,
+  }) async {
+    final row = await _runRpcSingle(
+      'update_event_guest_tournament_status',
+      {
+        'target_event_guest_id': eventGuestId,
+        'target_tournament_status': eventTournamentStatusToJson(status),
+      },
+    );
+    final guest = EventGuestRecord.fromJson(row);
+    await _saveMergedGuestList(guest.eventId, guest);
+    return guest;
+  }
+
+  @override
+  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
+    required String eventId,
+  }) async {
+    final rows = await _runRpcList(
+      'get_event_qualification_leaderboard',
+      {'target_event_id': eventId},
+    );
+    return rows
+        .map(QualificationLeaderboardRow.fromJson)
+        .toList(growable: false);
   }
 
   Future<void> _saveMergedGuestList(
@@ -409,8 +493,9 @@ class SupabaseGuestRepository implements GuestRepository {
   }
 
   Future<GuestProfileRecord> _resolveProfileForCreate(
-    CreateGuestInput input,
-  ) async {
+    CreateGuestInput input, {
+    required String publicDisplayName,
+  }) async {
     final userId = _currentUserId();
     if (userId == null) {
       throw StateError('A signed-in host is required to add a guest.');
@@ -463,24 +548,22 @@ class SupabaseGuestRepository implements GuestRepository {
     if (matchedProfile != null) {
       return _fillBlankProfileFields(
         profile: matchedProfile,
+        publicDisplayName: publicDisplayName,
         phoneE164: input.phoneE164,
         emailLower: input.emailLower,
         instagramHandle: input.instagramHandle,
       );
     }
 
-    final inserted = await client
-        .from('guest_profiles')
-        .insert({
-          'owner_user_id': userId,
-          'display_name': input.displayName,
-          'normalized_name': input.normalizedName,
-          'phone_e164': input.phoneE164,
-          'email_lower': input.emailLower,
-          'instagram_handle': input.instagramHandle,
-        })
-        .select()
-        .single();
+    final inserted = await _insertGuestProfile({
+      'owner_user_id': userId,
+      'display_name': input.displayName,
+      'normalized_name': input.normalizedName,
+      'public_display_name': publicDisplayName,
+      'phone_e164': input.phoneE164,
+      'email_lower': input.emailLower,
+      'instagram_handle': input.instagramHandle,
+    });
 
     return GuestProfileRecord.fromJson(inserted);
   }
@@ -489,6 +572,12 @@ class SupabaseGuestRepository implements GuestRepository {
     required String eventId,
     required String guestProfileId,
   }) async {
+    final checker = _profileOnEventChecker;
+    if (checker != null) {
+      await checker(eventId: eventId, guestProfileId: guestProfileId);
+      return;
+    }
+
     final existing = await client
         .from('event_guests')
         .select('id, display_name')
@@ -544,11 +633,15 @@ class SupabaseGuestRepository implements GuestRepository {
 
   Future<GuestProfileRecord> _fillBlankProfileFields({
     required GuestProfileRecord profile,
+    required String? publicDisplayName,
     required String? phoneE164,
     required String? emailLower,
     required String? instagramHandle,
   }) async {
     final updates = <String, dynamic>{};
+    if (profile.publicDisplayName == null && publicDisplayName != null) {
+      updates['public_display_name'] = publicDisplayName;
+    }
     if (profile.phoneE164 == null && phoneE164 != null) {
       updates['phone_e164'] = phoneE164;
     }
@@ -576,6 +669,7 @@ class SupabaseGuestRepository implements GuestRepository {
     required String guestProfileId,
     required String displayName,
     required String normalizedName,
+    required String publicDisplayName,
     required String? phoneE164,
     required String? emailLower,
     required String? instagramHandle,
@@ -611,10 +705,40 @@ class SupabaseGuestRepository implements GuestRepository {
     await client.from('guest_profiles').update({
       'display_name': displayName,
       'normalized_name': normalizedName,
+      'public_display_name': publicDisplayName,
       'phone_e164': phoneE164,
       'email_lower': emailLower,
       'instagram_handle': instagramHandle,
     }).eq('id', guestProfileId);
+  }
+
+  Future<Map<String, dynamic>> _insertGuestProfile(
+    Map<String, dynamic> json,
+  ) async {
+    final runner = _guestProfileInsertRunner;
+    if (runner != null) {
+      return runner(json);
+    }
+
+    final inserted =
+        await client.from('guest_profiles').insert(json).select().single();
+    return inserted;
+  }
+
+  Future<Map<String, dynamic>> _insertEventGuest(
+    Map<String, dynamic> json,
+  ) async {
+    final runner = _eventGuestInsertRunner;
+    if (runner != null) {
+      return runner(json);
+    }
+
+    final inserted = await client
+        .from('event_guests')
+        .insert(json)
+        .select(_eventGuestSelect)
+        .single();
+    return inserted;
   }
 
   Future<Map<String, dynamic>?> _loadGuestById(String guestId) async {
@@ -752,6 +876,27 @@ class SupabaseGuestRepository implements GuestRepository {
     return row;
   }
 
+  Future<List<Map<String, dynamic>>> _runRpcList(
+    String functionName,
+    Map<String, dynamic> params,
+  ) async {
+    final rpcListRunner = _rpcListRunner;
+    if (rpcListRunner != null) {
+      return rpcListRunner(functionName, params);
+    }
+
+    final result = await client.rpc(functionName, params: params);
+    if (result is! List) {
+      throw StateError(
+        'Expected RPC $functionName to return a list.',
+      );
+    }
+
+    return result
+        .map((row) => (row as Map).cast<String, dynamic>())
+        .toList(growable: false);
+  }
+
   Map<String, dynamic>? _castMaybeSingleRpcRow(dynamic value) {
     if (value == null) {
       return null;
@@ -815,5 +960,21 @@ class SupabaseGuestRepository implements GuestRepository {
     return '${value.year.toString().padLeft(4, '0')}-'
         '${value.month.toString().padLeft(2, '0')}-'
         '${value.day.toString().padLeft(2, '0')}';
+  }
+
+  String _defaultPublicDisplayName(String fullName) {
+    final tokens = fullName
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((token) => token.isNotEmpty)
+        .toList(growable: false);
+    if (tokens.isEmpty) {
+      return fullName.trim();
+    }
+    if (tokens.length == 1) {
+      return tokens.single;
+    }
+
+    return '${tokens.first} ${tokens.last.substring(0, 1).toUpperCase()}.';
   }
 }
