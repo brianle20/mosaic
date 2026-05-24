@@ -42,19 +42,22 @@ class EventDashboardController extends ChangeNotifier {
     PrizeRepository? prizeRepository,
     TableRepository? tableRepository,
     SessionRepository? sessionRepository,
+    SeatingRepository? seatingRepository,
   })  : _eventRepository = eventRepository,
         _guestRepository = guestRepository,
         _leaderboardRepository = leaderboardRepository,
         _prizeRepository = prizeRepository,
         _tableRepository = tableRepository,
-        _sessionRepository = sessionRepository;
+        _sessionRepository = sessionRepository,
+        _seatingRepository = seatingRepository;
 
   final EventRepository _eventRepository;
   final GuestRepository _guestRepository;
   final LeaderboardRepository? _leaderboardRepository;
   final PrizeRepository? _prizeRepository;
   final TableRepository? _tableRepository;
-  final SessionRepository? _sessionRepository;
+  SessionRepository? _sessionRepository;
+  SeatingRepository? _seatingRepository;
 
   bool isLoading = true;
   bool isSubmittingLifecycle = false;
@@ -434,6 +437,76 @@ class EventDashboardController extends ChangeNotifier {
 
     isSubmittingLifecycle = false;
     notifyListeners();
+  }
+
+  void updateRuntimeRepositories({
+    SessionRepository? sessionRepository,
+    SeatingRepository? seatingRepository,
+  }) {
+    _sessionRepository = sessionRepository ?? _sessionRepository;
+    _seatingRepository = seatingRepository ?? _seatingRepository;
+  }
+
+  Future<bool> startTournament() async {
+    final currentEvent = event;
+    final sessionRepository = _sessionRepository;
+    final seatingRepository = _seatingRepository;
+    if (currentEvent == null || isSubmittingLifecycle) {
+      return false;
+    }
+    if (sessionRepository == null || seatingRepository == null) {
+      lifecycleError =
+          'Session and seating setup are required to start tournament play.';
+      notifyListeners();
+      return false;
+    }
+
+    isSubmittingLifecycle = true;
+    lifecycleError = null;
+    notifyListeners();
+
+    var switchedToTournament = false;
+    try {
+      final sessions = await sessionRepository.listSessions(currentEvent.id);
+      final liveQualificationSessions = sessions.where(
+        (session) =>
+            session.scoringPhase == EventScoringPhase.qualification &&
+            (session.status == SessionStatus.active ||
+                session.status == SessionStatus.paused),
+      );
+      for (final session in liveQualificationSessions) {
+        await sessionRepository.endSession(
+          sessionId: session.id,
+          reason: 'tournament_started',
+        );
+      }
+
+      event = await _eventRepository.updateEventScoringPhase(
+        eventId: currentEvent.id,
+        phase: EventScoringPhase.tournament,
+      );
+      switchedToTournament = true;
+
+      await seatingRepository.generateRandomAssignments(currentEvent.id);
+      isSubmittingLifecycle = false;
+      notifyListeners();
+      return true;
+    } catch (exception) {
+      if (switchedToTournament) {
+        try {
+          event = await _eventRepository.updateEventScoringPhase(
+            eventId: currentEvent.id,
+            phase: EventScoringPhase.qualification,
+          );
+        } catch (_) {
+          // Keep the original assignment/start error visible to the host.
+        }
+      }
+      lifecycleError = _formatLifecycleError(exception);
+      isSubmittingLifecycle = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<DashboardTableScanResult?> resolveScannedTableTag(

@@ -966,7 +966,8 @@ void main() {
     expect(find.text('Activity'), findsOneWidget);
   });
 
-  testWidgets('dashboard shows phase controls and qualification leaderboard',
+  testWidgets(
+      'dashboard links to qualification standings without embedding them',
       (tester) async {
     final event = EventRecord.fromJson({
       ...activeEvent.toJson(),
@@ -982,15 +983,10 @@ void main() {
     expect(find.text('Qualification'), findsWidgets);
     expect(find.text('Tournament'), findsOneWidget);
     expect(find.text('Bonus'), findsOneWidget);
-
-    await tester.drag(find.byType(ListView), const Offset(0, -500));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Qualification Leaderboard'), findsOneWidget);
-    expect(find.text('Alice Wong'), findsOneWidget);
-    expect(find.text('72 pts'), findsOneWidget);
-    expect(find.text('9 hands'), findsOneWidget);
-    expect(find.text('3 wins'), findsOneWidget);
+    expect(find.text('View Qualification Standings'), findsOneWidget);
+    expect(find.text('Qualification Leaderboard'), findsNothing);
+    expect(find.text('Alice Wong'), findsNothing);
+    expect(find.text('72 pts'), findsNothing);
   });
 
   testWidgets('dashboard summarizes configured prize pool', (tester) async {
@@ -2301,6 +2297,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Scoring Open'), findsOneWidget);
+    expect(find.text('Pause Scoring'), findsOneWidget);
+  });
+
+  testWidgets('qualification scoring exposes a clear start tournament action',
+      (tester) async {
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'scoring_open': true,
+      'current_scoring_phase': 'qualification',
+    });
+
+    await _pumpDashboard(tester, event: event);
+
+    expect(find.text('Start Tournament'), findsOneWidget);
     expect(find.text('Pause Scoring'), findsOneWidget);
   });
 

@@ -90,6 +90,7 @@ class AppRouter {
             prizeRepository: prizeRepository,
             tableRepository: tableRepository,
             sessionRepository: sessionRepository,
+            seatingRepository: seatingRepository,
             nfcService: nfcService,
           ),
           settings: settings,
@@ -188,7 +189,9 @@ class AppRouter {
           builder: (_) => LeaderboardScreen(
             eventId: args.eventId,
             leaderboardRepository: leaderboardRepository,
+            guestRepository: guestRepository,
             sessionRepository: sessionRepository,
+            initialQualificationTab: args.initialQualificationTab,
           ),
           settings: settings,
         );
@@ -393,9 +396,11 @@ class SessionDetailArgs {
 class LeaderboardArgs {
   const LeaderboardArgs({
     required this.eventId,
+    this.initialQualificationTab = false,
   });
 
   final String eventId;
+  final bool initialQualificationTab;
 }
 
 class PrizePlanArgs {

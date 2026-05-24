@@ -180,6 +180,12 @@ void main() {
         qualificationSql, contains("session.scoring_phase = 'qualification'"));
     expect(qualificationSql, contains('qualification_points'));
     expect(qualificationSql, contains('full_name text'));
+    expect(
+      qualificationSql,
+      contains(
+        'rank() over (order by coalesce(points_totals.qualification_points, 0) desc)',
+      ),
+    );
   });
 
   test('host mutation RPCs update tournament status and scoring phase', () {

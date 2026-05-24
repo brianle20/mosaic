@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
+import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -30,6 +31,21 @@ class _RecordingLeaderboardRepository implements LeaderboardRepository {
   @override
   Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId) async =>
       const [];
+}
+
+class _QualificationGuestRepository extends Fake implements GuestRepository {
+  _QualificationGuestRepository({required this.rows});
+
+  final List<QualificationLeaderboardRow> rows;
+  int fetchCount = 0;
+
+  @override
+  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
+    required String eventId,
+  }) async {
+    fetchCount += 1;
+    return rows;
+  }
 }
 
 class _LedgerSessionRepository implements SessionRepository {
@@ -181,6 +197,97 @@ void main() {
     );
     expect(find.text('1'), findsWidgets);
     expect(find.text('East Guest'), findsOneWidget);
+  });
+
+  testWidgets('shows qualification standings in a separate tab', (
+    tester,
+  ) async {
+    final leaderboardRepository = _RecordingLeaderboardRepository(
+      entries: const [],
+    );
+    final guestRepository = _QualificationGuestRepository(
+      rows: const [
+        QualificationLeaderboardRow(
+          eventGuestId: 'gst_alice',
+          guestProfileId: 'prof_alice',
+          fullName: 'Alice Wong',
+          tournamentStatus: EventTournamentStatus.qualifying,
+          qualificationPoints: 16,
+          handsPlayed: 1,
+          wins: 1,
+          selfDrawWins: 0,
+          discardWins: 1,
+          rank: 1,
+        ),
+        QualificationLeaderboardRow(
+          eventGuestId: 'gst_brian',
+          guestProfileId: 'prof_brian',
+          fullName: 'Brian Le',
+          tournamentStatus: EventTournamentStatus.qualifying,
+          qualificationPoints: 0,
+          handsPlayed: 1,
+          wins: 0,
+          selfDrawWins: 0,
+          discardWins: 0,
+          rank: 2,
+        ),
+        QualificationLeaderboardRow(
+          eventGuestId: 'gst_carla',
+          guestProfileId: 'prof_carla',
+          fullName: 'Carla Park',
+          tournamentStatus: EventTournamentStatus.qualifying,
+          qualificationPoints: 0,
+          handsPlayed: 1,
+          wins: 0,
+          selfDrawWins: 0,
+          discardWins: 0,
+          rank: 2,
+        ),
+        QualificationLeaderboardRow(
+          eventGuestId: 'gst_dan',
+          guestProfileId: 'prof_dan',
+          fullName: 'Dan Yu',
+          tournamentStatus: EventTournamentStatus.qualifying,
+          qualificationPoints: -16,
+          handsPlayed: 1,
+          wins: 0,
+          selfDrawWins: 0,
+          discardWins: 0,
+          rank: 4,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LeaderboardScreen(
+          eventId: 'evt_01',
+          leaderboardRepository: leaderboardRepository,
+          guestRepository: guestRepository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tournament'), findsOneWidget);
+    expect(find.text('Qualification'), findsOneWidget);
+    expect(find.text('Alice Wong'), findsNothing);
+
+    await tester.tap(find.text('Qualification'));
+    await tester.pumpAndSettle();
+
+    expect(guestRepository.fetchCount, 1);
+    expect(find.text('Qualification Standings'), findsOneWidget);
+    expect(find.text('Alice Wong'), findsOneWidget);
+    expect(find.text('16 pts'), findsOneWidget);
+    expect(find.text('1 hand • 1 win'), findsOneWidget);
+    expect(find.text('Brian Le'), findsOneWidget);
+    expect(find.text('Carla Park'), findsOneWidget);
+    expect(find.text('Dan Yu'), findsOneWidget);
+    expect(find.text('#1'), findsOneWidget);
+    expect(find.text('#2'), findsNWidgets(2));
+    expect(find.text('#3'), findsNothing);
+    expect(find.text('#4'), findsOneWidget);
   });
 
   testWidgets(

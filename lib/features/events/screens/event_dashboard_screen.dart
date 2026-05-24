@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
-import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
 import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
@@ -23,6 +22,7 @@ class EventDashboardScreen extends StatefulWidget {
     this.prizeRepository,
     this.tableRepository,
     this.sessionRepository,
+    this.seatingRepository,
     this.nfcService,
   });
 
@@ -33,6 +33,7 @@ class EventDashboardScreen extends StatefulWidget {
   final PrizeRepository? prizeRepository;
   final TableRepository? tableRepository;
   final SessionRepository? sessionRepository;
+  final SeatingRepository? seatingRepository;
   final NfcService? nfcService;
 
   @override
@@ -57,9 +58,19 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       prizeRepository: widget.prizeRepository,
       tableRepository: widget.tableRepository,
       sessionRepository: widget.sessionRepository,
+      seatingRepository: widget.seatingRepository,
     )
       ..addListener(_handleUpdate)
       ..load(widget.args.eventId);
+  }
+
+  @override
+  void didUpdateWidget(covariant EventDashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _controller.updateRuntimeRepositories(
+      sessionRepository: widget.sessionRepository,
+      seatingRepository: widget.seatingRepository,
+    );
   }
 
   @override
@@ -187,7 +198,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     }
   }
 
-  Future<void> _openLeaderboard() async {
+  Future<void> _openLeaderboard({bool initialQualificationTab = false}) async {
     final event = _controller.event;
     if (event == null) {
       return;
@@ -195,7 +206,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
     await Navigator.of(context).pushNamed(
       AppRouter.leaderboardRoute,
-      arguments: LeaderboardArgs(eventId: event.id),
+      arguments: LeaderboardArgs(
+        eventId: event.id,
+        initialQualificationTab: initialQualificationTab,
+      ),
     );
     await _reloadDashboardAfterReturn(event.id);
   }
@@ -264,6 +278,25 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     await Navigator.of(context).pushNamed(
       AppRouter.eventHandLedgerRoute,
       arguments: EventHandLedgerArgs(eventId: event.id),
+    );
+    await _reloadDashboardAfterReturn(event.id);
+  }
+
+  Future<void> _startTournament() async {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    final started = await _controller.startTournament();
+    if (!mounted || !started) {
+      _scrollToTop();
+      return;
+    }
+
+    await Navigator.of(context).pushNamed(
+      AppRouter.seatingAssignmentsRoute,
+      arguments: SeatingAssignmentsArgs(eventId: event.id),
     );
     await _reloadDashboardAfterReturn(event.id);
   }
@@ -822,6 +855,16 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   closedMessage: showQualificationSetup
                       ? 'Start qualification when hosts are ready to log open-play games.'
                       : 'Open scoring when hosts are ready to start rounds.',
+                  primaryActionLabel: event.currentScoringPhase ==
+                              EventScoringPhase.qualification &&
+                          event.scoringOpen
+                      ? 'Start Tournament'
+                      : null,
+                  onPrimaryAction: event.currentScoringPhase ==
+                              EventScoringPhase.qualification &&
+                          event.scoringOpen
+                      ? _startTournament
+                      : null,
                   onToggleScoring: event.scoringOpen
                       ? () => _controller.setOperationalFlags(
                             checkinOpen: event.checkinOpen,
@@ -857,10 +900,18 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 isSubmitting: _controller.isSubmittingLifecycle,
                 onChanged: _controller.setScoringPhase,
               ),
-              if (_controller.qualificationLeaderboard.isNotEmpty) ...[
+              if (event.currentScoringPhase ==
+                  EventScoringPhase.qualification) ...[
                 const SizedBox(height: 12),
-                _QualificationLeaderboardPanel(
-                  rows: _controller.qualificationLeaderboard,
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openLeaderboard(
+                      initialQualificationTab: true,
+                    ),
+                    icon: const Icon(Icons.leaderboard),
+                    label: const Text('View Qualification Standings'),
+                  ),
                 ),
               ],
             ],
@@ -931,7 +982,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             scoringOpen: true,
           ),
       EventLifecycleStatus.completed => () => _controller.finalizeEvent(),
-      EventLifecycleStatus.finalized => _openLeaderboard,
+      EventLifecycleStatus.finalized => () => _openLeaderboard(),
       EventLifecycleStatus.cancelled => _openActivity,
     };
   }
@@ -998,84 +1049,6 @@ class _ScoringPhasePanel extends StatelessWidget {
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QualificationLeaderboardPanel extends StatelessWidget {
-  const _QualificationLeaderboardPanel({required this.rows});
-
-  final List<QualificationLeaderboardRow> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Qualification Leaderboard',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: 8),
-          for (final row in rows.take(6)) ...[
-            Row(
-              children: [
-                SizedBox(
-                  width: 28,
-                  child: Text(
-                    '#${row.rank}',
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                ),
-                Expanded(
-                  child: Text(
-                    row.fullName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text('${row.qualificationPoints} pts'),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.only(left: 28),
-              child: Wrap(
-                spacing: 10,
-                children: [
-                  Text(
-                    '${row.handsPlayed} hands',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  Text(
-                    '${row.wins} wins',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            if (row != rows.take(6).last) const SizedBox(height: 8),
-          ],
         ],
       ),
     );
@@ -1360,6 +1333,8 @@ class _LiveOperationsStrip extends StatelessWidget {
     required this.title,
     required this.openMessage,
     required this.closedMessage,
+    required this.primaryActionLabel,
+    required this.onPrimaryAction,
     required this.onToggleScoring,
   });
 
@@ -1368,6 +1343,8 @@ class _LiveOperationsStrip extends StatelessWidget {
   final String title;
   final String openMessage;
   final String closedMessage;
+  final String? primaryActionLabel;
+  final VoidCallback? onPrimaryAction;
   final VoidCallback? onToggleScoring;
 
   @override
@@ -1403,11 +1380,23 @@ class _LiveOperationsStrip extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          if (scoringOpen)
-            OutlinedButton(
-              onPressed: isSubmitting ? null : onToggleScoring,
-              child: const Text('Pause Scoring'),
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (primaryActionLabel != null)
+                FilledButton(
+                  onPressed: isSubmitting ? null : onPrimaryAction,
+                  child: Text(primaryActionLabel!),
+                ),
+              if (primaryActionLabel != null && scoringOpen)
+                const SizedBox(height: 8),
+              if (scoringOpen)
+                OutlinedButton(
+                  onPressed: isSubmitting ? null : onToggleScoring,
+                  child: const Text('Pause Scoring'),
+                ),
+            ],
+          ),
         ],
       ),
     );

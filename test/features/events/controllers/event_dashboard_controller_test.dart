@@ -4,6 +4,7 @@ import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
@@ -257,9 +258,14 @@ class _FakeLeaderboardRepository extends ThrowingLeaderboardRepository {
 }
 
 class _FakeSessionRepository extends ThrowingSessionRepository {
-  const _FakeSessionRepository(this.sessions);
+  _FakeSessionRepository(
+    this.sessions, {
+    this.onEndSession,
+  });
 
   final List<TableSessionRecord> sessions;
+  final Future<SessionDetailRecord> Function(String sessionId, String reason)?
+      onEndSession;
 
   @override
   Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
@@ -270,6 +276,80 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async =>
       sessions;
+
+  @override
+  Future<SessionDetailRecord> endSession({
+    required String sessionId,
+    required String reason,
+  }) async {
+    final handler = onEndSession;
+    if (handler == null) {
+      throw UnimplementedError();
+    }
+    return handler(sessionId, reason);
+  }
+}
+
+class _FakeSeatingRepository extends ThrowingSeatingRepository {
+  _FakeSeatingRepository({this.onGenerate});
+
+  final Future<List<SeatingAssignmentRecord>> Function(String eventId)?
+      onGenerate;
+
+  @override
+  Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
+    String eventId,
+  ) async {
+    final handler = onGenerate;
+    if (handler == null) {
+      throw UnimplementedError();
+    }
+    return handler(eventId);
+  }
+}
+
+TableSessionRecord _tableSession({
+  required String id,
+  required SessionStatus status,
+  required EventScoringPhase scoringPhase,
+}) {
+  return TableSessionRecord.fromJson({
+    'id': id,
+    'event_id': 'evt_01',
+    'event_table_id': 'tbl_01',
+    'session_number_for_table': 1,
+    'ruleset_id': 'HK_STANDARD',
+    'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+    'rotation_policy_config_json': {},
+    'status': switch (status) {
+      SessionStatus.active => 'active',
+      SessionStatus.paused => 'paused',
+      SessionStatus.completed => 'completed',
+      SessionStatus.endedEarly => 'ended_early',
+      SessionStatus.aborted => 'aborted',
+    },
+    'initial_east_seat_index': 0,
+    'current_dealer_seat_index': 0,
+    'dealer_pass_count': 0,
+    'completed_games_count': 0,
+    'hand_count': 0,
+    'scoring_phase': eventScoringPhaseToJson(scoringPhase),
+    'started_at': '2026-04-24T19:05:00-07:00',
+    'started_by_user_id': 'usr_01',
+  });
+}
+
+SessionDetailRecord _sessionDetail(String sessionId) {
+  return SessionDetailRecord(
+    session: _tableSession(
+      id: sessionId,
+      status: SessionStatus.endedEarly,
+      scoringPhase: EventScoringPhase.qualification,
+    ),
+    seats: const [],
+    hands: const [],
+    settlements: const [],
+  );
 }
 
 void main() {
@@ -493,6 +573,125 @@ void main() {
         controller.event?.currentScoringPhase, EventScoringPhase.qualification);
     expect(controller.lifecycleError,
         contains(scoringPhaseLiveSessionBlockedMessage));
+  });
+
+  test('startTournament ends live qualification sessions and generates seating',
+      () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'qualification',
+    });
+    final operations = <String>[];
+    final repository = _FakeEventRepository(cachedEvents: [event]);
+    repository.scoringPhaseHandler = (eventId, phase) {
+      operations.add('phase:${eventScoringPhaseToJson(phase)}');
+      return EventRecord.fromJson({
+        ...event.toJson(),
+        'current_scoring_phase': eventScoringPhaseToJson(phase),
+      });
+    };
+    final controller = EventDashboardController(
+      eventRepository: repository,
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      sessionRepository: _FakeSessionRepository(
+        [
+          _tableSession(
+            id: 'ses_active_qualification',
+            status: SessionStatus.active,
+            scoringPhase: EventScoringPhase.qualification,
+          ),
+          _tableSession(
+            id: 'ses_paused_qualification',
+            status: SessionStatus.paused,
+            scoringPhase: EventScoringPhase.qualification,
+          ),
+          _tableSession(
+            id: 'ses_completed_qualification',
+            status: SessionStatus.completed,
+            scoringPhase: EventScoringPhase.qualification,
+          ),
+        ],
+        onEndSession: (sessionId, reason) async {
+          operations.add('end:$sessionId:$reason');
+          return _sessionDetail(sessionId);
+        },
+      ),
+      seatingRepository: _FakeSeatingRepository(
+        onGenerate: (eventId) async {
+          operations.add('generate:$eventId');
+          return const [];
+        },
+      ),
+    );
+    await controller.load('evt_01');
+
+    final started = await controller.startTournament();
+
+    expect(started, isTrue);
+    expect(controller.event?.currentScoringPhase, EventScoringPhase.tournament);
+    expect(controller.lifecycleError, isNull);
+    expect(operations, [
+      'end:ses_active_qualification:tournament_started',
+      'end:ses_paused_qualification:tournament_started',
+      'phase:tournament',
+      'generate:evt_01',
+    ]);
+  });
+
+  test('startTournament can use repositories attached after controller init',
+      () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'qualification',
+    });
+    final repository = _FakeEventRepository(cachedEvents: [event]);
+    repository.scoringPhaseHandler = (_, phase) {
+      return EventRecord.fromJson({
+        ...event.toJson(),
+        'current_scoring_phase': eventScoringPhaseToJson(phase),
+      });
+    };
+    var generatedAssignments = false;
+    final controller = EventDashboardController(
+      eventRepository: repository,
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+    );
+    await controller.load('evt_01');
+
+    controller.updateRuntimeRepositories(
+      sessionRepository: _FakeSessionRepository(const []),
+      seatingRepository: _FakeSeatingRepository(
+        onGenerate: (_) async {
+          generatedAssignments = true;
+          return const [];
+        },
+      ),
+    );
+    final started = await controller.startTournament();
+
+    expect(started, isTrue);
+    expect(generatedAssignments, isTrue);
+    expect(controller.lifecycleError, isNull);
   });
 
   test('cancelEvent updates the event to cancelled', () async {
