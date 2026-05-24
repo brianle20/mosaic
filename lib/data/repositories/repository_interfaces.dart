@@ -86,6 +86,15 @@ abstract interface class GuestRepository {
     String? note,
   });
 
+  Future<GuestDetailRecord> updateCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+    required int amountCents,
+    required CoverEntryMethod method,
+    required DateTime transactionOn,
+    String? note,
+  });
+
   Future<GuestDetailRecord> checkInGuest(String guestId);
 
   Future<GuestDetailRecord> assignGuestTag({

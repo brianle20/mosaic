@@ -7,12 +7,20 @@ import 'package:mosaic/widgets/money_text_form_field.dart';
 class AddCoverEntryScreen extends StatefulWidget {
   const AddCoverEntryScreen({
     super.key,
+    this.title = 'Record Cover Entry',
+    this.submitButtonLabel = 'Save Cover Entry',
     this.initialAmountCents = 0,
+    this.initialMethod,
     this.initialTransactionOn,
+    this.initialNote,
   });
 
+  final String title;
+  final String submitButtonLabel;
   final int initialAmountCents;
+  final CoverEntryMethod? initialMethod;
   final DateTime? initialTransactionOn;
+  final String? initialNote;
 
   @override
   State<AddCoverEntryScreen> createState() => _AddCoverEntryScreenState();
@@ -21,7 +29,7 @@ class AddCoverEntryScreen extends StatefulWidget {
 class _AddCoverEntryScreenState extends State<AddCoverEntryScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _amountController;
-  final _noteController = TextEditingController();
+  late final TextEditingController _noteController;
   late DateTime _transactionOn;
   CoverEntryMethod? _selectedMethod;
   bool _hasTriedSubmit = false;
@@ -32,6 +40,8 @@ class _AddCoverEntryScreenState extends State<AddCoverEntryScreen> {
     _amountController = TextEditingController(
       text: formatMoneyCents(widget.initialAmountCents),
     );
+    _noteController = TextEditingController(text: widget.initialNote ?? '');
+    _selectedMethod = widget.initialMethod;
     _transactionOn = _dateOnly(widget.initialTransactionOn ?? DateTime.now());
   }
 
@@ -81,12 +91,12 @@ class _AddCoverEntryScreenState extends State<AddCoverEntryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Record Cover Entry')),
+      appBar: AppBar(title: Text(widget.title)),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
         child: FilledButton(
           onPressed: _submit,
-          child: const Text('Save Cover Entry'),
+          child: Text(widget.submitButtonLabel),
         ),
       ),
       body: Form(

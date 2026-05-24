@@ -145,6 +145,77 @@ void main() {
       expect(cachedEntries.first.note, 'Paid after seating');
     });
 
+    test('updateCoverEntry calls RPC and refreshes cached ledger rows',
+        () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseGuestRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcSingleRunner: (functionName, params) async {
+          expect(functionName, 'update_cover_entry');
+          expect(params['target_cover_entry_id'], 'cov_03');
+          expect(params['target_amount_cents'], 1500);
+          expect(params['target_method'], 'zelle');
+          expect(params['target_transaction_on'], '2026-04-25');
+          expect(params['target_note'], 'Corrected amount');
+          return {
+            'id': 'cov_03',
+            'event_id': 'evt_01',
+            'event_guest_id': 'gst_02',
+            'amount_cents': 1500,
+            'method': 'zelle',
+            'recorded_by_user_id': 'usr_01',
+            'transaction_on': '2026-04-25',
+            'note': 'Corrected amount',
+            'created_at': '2026-04-24T19:20:00-07:00',
+          };
+        },
+        guestByIdLoader: (_) async => {
+          'id': 'gst_02',
+          'event_id': 'evt_01',
+          'display_name': 'Bob',
+          'normalized_name': 'bob',
+          'attendance_status': 'expected',
+          'cover_status': 'partial',
+          'cover_amount_cents': 2000,
+          'is_comped': false,
+          'has_scored_play': false,
+        },
+        activeAssignmentLoader: (_) async => null,
+        coverEntriesLoader: (_) async => [
+          {
+            'id': 'cov_03',
+            'event_id': 'evt_01',
+            'event_guest_id': 'gst_02',
+            'amount_cents': 1500,
+            'method': 'zelle',
+            'recorded_by_user_id': 'usr_01',
+            'transaction_on': '2026-04-25',
+            'note': 'Corrected amount',
+            'created_at': '2026-04-24T19:20:00-07:00',
+          },
+        ],
+      );
+
+      final detail = await repository.updateCoverEntry(
+        guestId: 'gst_02',
+        coverEntryId: 'cov_03',
+        amountCents: 1500,
+        method: CoverEntryMethod.zelle,
+        transactionOn: DateTime(2026, 4, 25),
+        note: 'Corrected amount',
+      );
+
+      expect(detail.coverEntries, hasLength(1));
+      expect(detail.coverEntries.single.method, CoverEntryMethod.zelle);
+      expect(detail.coverEntries.single.amountCents, 1500);
+
+      final cachedEntries = await repository.readCachedGuestCoverEntries(
+        'gst_02',
+      );
+      expect(cachedEntries.single.note, 'Corrected amount');
+    });
+
     test('recordCoverEntry falls back when dated RPC signature is unavailable',
         () async {
       final cache = await LocalCache.create();

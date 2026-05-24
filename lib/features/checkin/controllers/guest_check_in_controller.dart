@@ -164,6 +164,32 @@ class GuestCheckInController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+    required SubmitCoverEntryInput input,
+  }) async {
+    isSubmitting = true;
+    actionError = null;
+    notifyListeners();
+
+    try {
+      detail = await _guestRepository.updateCoverEntry(
+        guestId: guestId,
+        coverEntryId: coverEntryId,
+        amountCents: input.amountCents,
+        method: input.method,
+        transactionOn: input.transactionOn,
+        note: input.note,
+      );
+    } catch (exception) {
+      actionError = exception.toString();
+    }
+
+    isSubmitting = false;
+    notifyListeners();
+  }
+
   Future<void> _scanAndAssign({
     required String guestId,
     required Future<TagScanResult?> Function() scanForTag,
