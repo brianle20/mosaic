@@ -81,6 +81,61 @@ void main() {
       expect(cached.single.displayName, 'Bob Lee');
     });
 
+    test('generates bonus round assignments through RPC and refreshes cache',
+        () async {
+      final calls = <({String functionName, Map<String, dynamic> params})>[];
+      final cache = await LocalCache.create();
+      final repository = SupabaseSeatingRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcListRunner: (functionName, params) async {
+          calls.add((functionName: functionName, params: params));
+          return [
+            {
+              'id': 'asg_bonus_01',
+              'event_id': 'evt_01',
+              'event_table_id': 'tbl_champions',
+              'table_label': 'Table 1',
+              'event_guest_id': 'gst_04',
+              'guest_display_name': 'Seed Four',
+              'seat_index': 0,
+              'assignment_round': 3,
+              'status': 'active',
+              'assignment_type': 'bonus',
+              'bonus_round_id': 'bonus_01',
+              'bonus_table_role': 'table_of_champions',
+              'seed_rank': 4,
+            },
+          ];
+        },
+      );
+
+      final assignments = await repository.generateBonusRoundAssignments(
+        eventId: 'evt_01',
+        championsTableId: 'tbl_champions',
+        redemptionTableId: 'tbl_redemption',
+      );
+
+      expect(calls.single.functionName,
+          'generate_bonus_round_seating_assignments');
+      expect(calls.single.params, {
+        'target_event_id': 'evt_01',
+        'champions_table_id': 'tbl_champions',
+        'redemption_table_id': 'tbl_redemption',
+      });
+      expect(assignments.single.assignmentType, SeatingAssignmentType.bonus);
+      expect(
+        assignments.single.bonusTableRole,
+        BonusTableRole.tableOfChampions,
+      );
+      expect(assignments.single.bonusRoundId, 'bonus_01');
+      expect(assignments.single.seedRank, 4);
+
+      final cached = await repository.readCachedAssignments('evt_01');
+      expect(cached.single.assignmentType, SeatingAssignmentType.bonus);
+      expect(cached.single.bonusTableRole, BonusTableRole.tableOfChampions);
+    });
+
     test('clears assignments through RPC and clears cache on empty result',
         () async {
       final calls = <({String functionName, Map<String, dynamic> params})>[];

@@ -45,6 +45,23 @@ class SupabaseSeatingRepository implements SeatingRepository {
   }
 
   @override
+  Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
+    required String eventId,
+    required String championsTableId,
+    required String redemptionTableId,
+  }) async {
+    return _loadAndCache(
+      eventId,
+      'generate_bonus_round_seating_assignments',
+      {
+        'target_event_id': eventId,
+        'champions_table_id': championsTableId,
+        'redemption_table_id': redemptionTableId,
+      },
+    );
+  }
+
+  @override
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId) async {
     return _loadAndCache(
       eventId,
@@ -54,11 +71,12 @@ class SupabaseSeatingRepository implements SeatingRepository {
 
   Future<List<SeatingAssignmentRecord>> _loadAndCache(
     String eventId,
-    String functionName,
-  ) async {
+    String functionName, [
+    Map<String, dynamic>? params,
+  ]) async {
     final rows = await _runRpcList(
       functionName,
-      {'target_event_id': eventId},
+      params ?? {'target_event_id': eventId},
     );
     final assignments = rows
         .map((row) => SeatingAssignmentRecord.fromJson(row))

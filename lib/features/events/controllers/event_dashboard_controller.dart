@@ -1,5 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
@@ -7,6 +8,7 @@ import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
 
 sealed class DashboardTableScanResult {
   const DashboardTableScanResult();
@@ -61,6 +63,7 @@ class EventDashboardController extends ChangeNotifier {
   int tableCount = 0;
   int? prizePoolCents;
   String leaderLabel = 'No scores';
+  BonusRoundResultsSummary bonusRoundResults = const BonusRoundResultsSummary();
 
   Future<void> load(String eventId) async {
     final cachedEvent = (await _eventRepository.readCachedEvents())
@@ -70,6 +73,9 @@ class EventDashboardController extends ChangeNotifier {
     final cachedTables = await _tableRepository?.readCachedTables(eventId);
     final cachedLeaderboard =
         await _leaderboardRepository?.readCachedLeaderboard(eventId);
+    final cachedLedger = await _sessionRepository?.readCachedEventHandLedger(
+      eventId,
+    );
     final cachedPrizePlan = await _prizeRepository?.readCachedPrizePlan(
       eventId,
     );
@@ -82,6 +88,10 @@ class EventDashboardController extends ChangeNotifier {
     guestCount = cachedGuests.length;
     tableCount = cachedTables?.length ?? 0;
     leaderLabel = _formatLeader(cachedLeaderboard);
+    bonusRoundResults = buildBonusRoundResultsSummary(
+      ledgerEntries: cachedLedger ?? const [],
+      leaderboardEntries: cachedLeaderboard ?? const [],
+    );
     prizePoolCents = _totalPrizeCents(cachedPrizePlan);
     notifyListeners();
 
@@ -109,8 +119,13 @@ class EventDashboardController extends ChangeNotifier {
     }
 
     try {
-      leaderLabel = _formatLeader(
-        await _leaderboardRepository?.loadLeaderboard(eventId),
+      final leaderboard = await _leaderboardRepository?.loadLeaderboard(
+        eventId,
+      );
+      leaderLabel = _formatLeader(leaderboard);
+      bonusRoundResults = buildBonusRoundResultsSummary(
+        ledgerEntries: await _loadBonusLedger(eventId),
+        leaderboardEntries: leaderboard ?? const [],
       );
     } catch (_) {
       // Leaderboard is a dashboard shortcut only; keep event loading usable.
@@ -176,6 +191,19 @@ class EventDashboardController extends ChangeNotifier {
     );
 
     return total > 0 ? total : null;
+  }
+
+  Future<List<EventHandLedgerEntry>> _loadBonusLedger(String eventId) async {
+    final repository = _sessionRepository;
+    if (repository == null) {
+      return const [];
+    }
+
+    try {
+      return await repository.loadEventHandLedger(eventId);
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<void> completeEvent() async {

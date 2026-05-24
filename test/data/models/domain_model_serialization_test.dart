@@ -116,6 +116,10 @@ void main() {
         'seat_index': 2,
         'assignment_round': 1,
         'status': 'active',
+        'assignment_type': 'random',
+        'bonus_round_id': null,
+        'bonus_table_role': null,
+        'seed_rank': null,
       });
     });
   });

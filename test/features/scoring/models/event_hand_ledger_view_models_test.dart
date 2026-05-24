@@ -95,6 +95,53 @@ void main() {
       expect(rows.single.hasDataIssue, isTrue);
       expect(rows.single.resultSummary, 'needs review');
     });
+
+    test('keeps hand summary and marks bonus round hand rows', () {
+      final rows = buildEventHandLedgerViewModels([
+        EventHandLedgerEntry.fromJson(_rowJson(
+          handNumber: 11,
+          bonusRoundId: 'bonus_01',
+          bonusTableRole: 'table_of_champions',
+        )),
+      ]);
+
+      expect(rows.single.resultSummary, '7 fan discard');
+      expect(rows.single.isBonusRound, isTrue);
+      expect(rows.single.cells.map((cell) => cell.pointsLabel), [
+        '-96',
+        '0',
+        '0',
+        '+96',
+      ]);
+    });
+
+    test('formats finals champion adjustment rows', () {
+      final rows = buildEventHandLedgerViewModels([
+        EventHandLedgerEntry.fromJson({
+          'event_id': 'evt_01',
+          'entered_at': '2026-04-24T22:15:00-07:00',
+          'ledger_row_type': 'adjustment',
+          'adjustment_id': 'adj_01',
+          'adjustment_type': 'finals_champion_award',
+          'adjustment_amount_points': 37,
+          'adjustment_event_guest_id': 'gst_01',
+          'adjustment_display_name': 'Alice Wong',
+          'adjustment_context_json': {
+            'champion_bonus_score_points': 24,
+            'champion_top_up_points': 13,
+          },
+          'cells': const [],
+        }),
+      ]);
+
+      expect(rows.single.handLabel, 'Champion award');
+      expect(
+        rows.single.resultSummary,
+        'Bonus +24 · Top +13',
+      );
+      expect(rows.single.cells.single.displayName, 'Alice');
+      expect(rows.single.cells.single.pointsLabel, '+37');
+    });
   });
 }
 
@@ -110,6 +157,8 @@ Map<String, Object?> _rowJson({
   int? penaltySeatIndex,
   bool hasSettlements = true,
   List<int> deltas = const [-96, 0, 0, 96],
+  String? bonusRoundId,
+  String? bonusTableRole,
 }) {
   return {
     'event_id': 'evt_01',
@@ -126,6 +175,9 @@ Map<String, Object?> _rowJson({
     'fan_count': fanCount,
     'penalty_seat_index': penaltySeatIndex,
     'has_settlements': hasSettlements,
+    'ledger_row_type': 'hand',
+    'bonus_round_id': bonusRoundId,
+    'bonus_table_role': bonusTableRole,
     'cells': [
       _cellJson('east', 0, 'gst_east', 'Estevon Jackson', deltas[0]),
       _cellJson('south', 1, 'gst_south', 'Giang Pham', deltas[1]),
