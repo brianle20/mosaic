@@ -635,9 +635,9 @@ void main() {
     );
     await controller.load('evt_01');
 
-    final started = await controller.startTournament();
+    final assignments = await controller.startTournament();
 
-    expect(started, isTrue);
+    expect(assignments, isEmpty);
     expect(controller.event?.currentScoringPhase, EventScoringPhase.tournament);
     expect(controller.lifecycleError, isNull);
     expect(operations, [
@@ -687,9 +687,9 @@ void main() {
         },
       ),
     );
-    final started = await controller.startTournament();
+    final assignments = await controller.startTournament();
 
-    expect(started, isTrue);
+    expect(assignments, isEmpty);
     expect(generatedAssignments, isTrue);
     expect(controller.lifecycleError, isNull);
   });

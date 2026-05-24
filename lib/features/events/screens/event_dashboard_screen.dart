@@ -288,15 +288,18 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       return;
     }
 
-    final started = await _controller.startTournament();
-    if (!mounted || !started) {
+    final assignments = await _controller.startTournament();
+    if (!mounted || assignments == null) {
       _scrollToTop();
       return;
     }
 
     await Navigator.of(context).pushNamed(
       AppRouter.seatingAssignmentsRoute,
-      arguments: SeatingAssignmentsArgs(eventId: event.id),
+      arguments: SeatingAssignmentsArgs(
+        eventId: event.id,
+        initialAssignments: assignments,
+      ),
     );
     await _reloadDashboardAfterReturn(event.id);
   }

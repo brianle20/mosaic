@@ -313,6 +313,36 @@ void main() {
     expect(find.text('Clear Assignments'), findsOneWidget);
   });
 
+  testWidgets('renders initial assignments before loading remote seating',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          seatingRepository: _FakeSeatingRepository(),
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: const _FakeSessionRepository(),
+          initialAssignments: [
+            _assignment(
+              id: 'a1',
+              tableId: 'tbl_01',
+              tableLabel: 'Table 1',
+              displayName: 'Ava East',
+              seatIndex: 0,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(find.text('Table 1'), findsOneWidget);
+    expect(find.text('Ava East'), findsOneWidget);
+    expect(find.text('Generate random seating for checked-in players.'),
+        findsNothing);
+  });
+
   testWidgets('regenerate confirms before replacing displayed assignments',
       (tester) async {
     final repository = _FakeSeatingRepository(

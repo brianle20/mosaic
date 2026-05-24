@@ -36,6 +36,7 @@ class _EventRepository extends ThrowingEventRepository {
     this.onFinalize,
     this.onStart,
     this.onSetOperationalFlags,
+    this.onUpdateScoringPhase,
     this.onCancel,
     this.onRevertToDraft,
     this.onDelete,
@@ -49,7 +50,7 @@ class _EventRepository extends ThrowingEventRepository {
   final Future<EventRecord> Function(String eventId)? onRevertToDraft;
   final Future<void> Function(String eventId)? onDelete;
   final Future<EventRecord> Function(String eventId, EventScoringPhase phase)?
-      onUpdateScoringPhase = null;
+      onUpdateScoringPhase;
   final Future<EventRecord> Function(
     String eventId,
     bool checkinOpen,
@@ -317,7 +318,11 @@ class _ActivityRepository extends ThrowingActivityRepository {
 }
 
 class _SeatingRepository extends ThrowingSeatingRepository {
-  const _SeatingRepository();
+  const _SeatingRepository({
+    this.generatedAssignments = const [],
+  });
+
+  final List<SeatingAssignmentRecord> generatedAssignments;
 
   @override
   Future<List<SeatingAssignmentRecord>> clearAssignments(
@@ -328,7 +333,7 @@ class _SeatingRepository extends ThrowingSeatingRepository {
   Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
     String eventId,
   ) async =>
-      const [];
+      generatedAssignments;
 
   @override
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
@@ -2312,6 +2317,77 @@ void main() {
 
     expect(find.text('Start Tournament'), findsOneWidget);
     expect(find.text('Pause Scoring'), findsOneWidget);
+  });
+
+  testWidgets('start tournament opens seating with generated assignments',
+      (tester) async {
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'scoring_open': true,
+      'current_scoring_phase': 'qualification',
+    });
+    final generatedAssignments = [
+      SeatingAssignmentRecord(
+        id: 'asg_01',
+        eventId: event.id,
+        eventTableId: 'tbl_01',
+        tableLabel: 'Table 1',
+        eventGuestId: 'gst_01',
+        displayName: 'Ava East',
+        seatIndex: 0,
+        assignmentRound: 1,
+        status: 'active',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: EventDashboardArgs(eventId: event.id),
+          eventRepository: _EventRepository(
+            event,
+            onUpdateScoringPhase: (eventId, phase) async {
+              return EventRecord.fromJson({
+                ...event.toJson(),
+                'current_scoring_phase': eventScoringPhaseToJson(phase),
+              });
+            },
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          seatingRepository: _SeatingRepository(
+            generatedAssignments: generatedAssignments,
+          ),
+          sessionRepository: const _SessionRepository(),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.seatingAssignmentsRoute) {
+            final args = settings.arguments! as SeatingAssignmentsArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => SeatingAssignmentScreen(
+                eventId: args.eventId,
+                seatingRepository: const _SeatingRepository(),
+                guestRepository: _GuestRepository(),
+                sessionRepository: const _SessionRepository(),
+                initialAssignments: args.initialAssignments,
+              ),
+              settings: settings,
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Start Tournament'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SeatingAssignmentScreen), findsOneWidget);
+    expect(find.text('Table 1'), findsOneWidget);
+    expect(find.text('Ava East'), findsOneWidget);
+    expect(find.text('Generate random seating for checked-in players.'),
+        findsNothing);
   });
 
   testWidgets('completed event shows Finalize Event action', (tester) async {

@@ -13,9 +13,11 @@ class SeatingAssignmentController extends ChangeNotifier {
     required SeatingRepository seatingRepository,
     required GuestRepository guestRepository,
     required SessionRepository sessionRepository,
+    List<SeatingAssignmentRecord> initialAssignments = const [],
   })  : _seatingRepository = seatingRepository,
         _guestRepository = guestRepository,
-        _sessionRepository = sessionRepository;
+        _sessionRepository = sessionRepository,
+        assignments = initialAssignments;
 
   final SeatingRepository _seatingRepository;
   final GuestRepository _guestRepository;
@@ -25,7 +27,7 @@ class SeatingAssignmentController extends ChangeNotifier {
   bool isSubmitting = false;
   bool hasLiveSessions = false;
   String? error;
-  List<SeatingAssignmentRecord> assignments = const [];
+  List<SeatingAssignmentRecord> assignments;
   List<EventGuestRecord> eligibleGuests = const [];
   List<EventGuestRecord> unassignedGuests = const [];
 
@@ -63,7 +65,9 @@ class SeatingAssignmentController extends ChangeNotifier {
     final cachedAssignments = await _seatingRepository.readCachedAssignments(
       eventId,
     );
-    assignments = cachedAssignments;
+    if (assignments.isEmpty) {
+      assignments = cachedAssignments;
+    }
     notifyListeners();
 
     try {
@@ -72,7 +76,9 @@ class SeatingAssignmentController extends ChangeNotifier {
       );
       final loadedEligibleGuests = await _loadEligibleGuests(eventId);
       final loadedHasLiveSessions = await _loadHasLiveSessions(eventId);
-      assignments = loadedAssignments;
+      if (loadedAssignments.isNotEmpty || assignments.isEmpty) {
+        assignments = loadedAssignments;
+      }
       eligibleGuests = loadedEligibleGuests;
       hasLiveSessions = loadedHasLiveSessions;
       _updateUnassignedGuests();

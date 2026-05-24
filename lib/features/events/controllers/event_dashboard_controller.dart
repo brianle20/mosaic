@@ -5,6 +5,7 @@ import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/table_scan_models.dart';
@@ -447,18 +448,18 @@ class EventDashboardController extends ChangeNotifier {
     _seatingRepository = seatingRepository ?? _seatingRepository;
   }
 
-  Future<bool> startTournament() async {
+  Future<List<SeatingAssignmentRecord>?> startTournament() async {
     final currentEvent = event;
     final sessionRepository = _sessionRepository;
     final seatingRepository = _seatingRepository;
     if (currentEvent == null || isSubmittingLifecycle) {
-      return false;
+      return null;
     }
     if (sessionRepository == null || seatingRepository == null) {
       lifecycleError =
           'Session and seating setup are required to start tournament play.';
       notifyListeners();
-      return false;
+      return null;
     }
 
     isSubmittingLifecycle = true;
@@ -487,10 +488,11 @@ class EventDashboardController extends ChangeNotifier {
       );
       switchedToTournament = true;
 
-      await seatingRepository.generateRandomAssignments(currentEvent.id);
+      final assignments =
+          await seatingRepository.generateRandomAssignments(currentEvent.id);
       isSubmittingLifecycle = false;
       notifyListeners();
-      return true;
+      return assignments;
     } catch (exception) {
       if (switchedToTournament) {
         try {
@@ -505,7 +507,7 @@ class EventDashboardController extends ChangeNotifier {
       lifecycleError = _formatLifecycleError(exception);
       isSubmittingLifecycle = false;
       notifyListeners();
-      return false;
+      return null;
     }
   }
 

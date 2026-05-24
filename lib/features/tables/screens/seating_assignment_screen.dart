@@ -14,12 +14,14 @@ class SeatingAssignmentScreen extends StatefulWidget {
     required this.seatingRepository,
     required this.guestRepository,
     required this.sessionRepository,
+    this.initialAssignments = const [],
   });
 
   final String eventId;
   final SeatingRepository seatingRepository;
   final GuestRepository guestRepository;
   final SessionRepository sessionRepository;
+  final List<SeatingAssignmentRecord> initialAssignments;
 
   @override
   State<SeatingAssignmentScreen> createState() =>
@@ -36,6 +38,7 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
       seatingRepository: widget.seatingRepository,
       guestRepository: widget.guestRepository,
       sessionRepository: widget.sessionRepository,
+      initialAssignments: widget.initialAssignments,
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/screens/guest_detail_screen.dart';
 import 'package:mosaic/features/activity/screens/activity_screen.dart';
@@ -20,7 +22,6 @@ import 'package:mosaic/features/tables/screens/table_form_screen.dart';
 import 'package:mosaic/features/tables/screens/start_session_screen.dart';
 import 'package:mosaic/features/tables/screens/tables_overview_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
-import 'package:mosaic/data/models/table_models.dart';
 
 class AppRouter {
   const AppRouter({
@@ -253,6 +254,7 @@ class AppRouter {
             seatingRepository: seatingRepository,
             guestRepository: guestRepository,
             sessionRepository: sessionRepository,
+            initialAssignments: args.initialAssignments,
           ),
           settings: settings,
         );
@@ -376,9 +378,11 @@ class StartSessionArgs {
 class SeatingAssignmentsArgs {
   const SeatingAssignmentsArgs({
     required this.eventId,
+    this.initialAssignments = const [],
   });
 
   final String eventId;
+  final List<SeatingAssignmentRecord> initialAssignments;
 }
 
 class SessionDetailArgs {
