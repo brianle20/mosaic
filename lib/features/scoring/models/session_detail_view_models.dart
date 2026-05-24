@@ -1,3 +1,4 @@
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
@@ -10,6 +11,7 @@ class SessionDetailViewModel {
     required this.handCountLabel,
     required this.currentEastLabel,
     required this.progressLabel,
+    required this.showRoundTimer,
     required this.roundTimeLabel,
     required this.isRoundExpired,
     required this.isRoundEndingSoon,
@@ -25,6 +27,7 @@ class SessionDetailViewModel {
   final String handCountLabel;
   final String currentEastLabel;
   final String progressLabel;
+  final bool showRoundTimer;
   final String roundTimeLabel;
   final bool isRoundExpired;
   final bool isRoundEndingSoon;
@@ -72,10 +75,13 @@ SessionDetailViewModel buildSessionDetailViewModel({
   DateTime? now,
 }) {
   final currentEastSeatIndex = detail.session.currentDealerSeatIndex;
-  final roundTime = RoundTimerState.fromStartedAt(
-    startedAt: detail.session.startedAt,
-    now: _roundTimerSnapshotTime(detail.session, now),
-  );
+  final showRoundTimer = _hasRoundTimer(detail.session);
+  final roundTime = showRoundTimer
+      ? RoundTimerState.fromStartedAt(
+          startedAt: detail.session.startedAt,
+          now: _roundTimerSnapshotTime(detail.session, now),
+        )
+      : null;
   final currentEastName = _guestNameForSeat(
     detail,
     guestNamesById,
@@ -92,9 +98,10 @@ SessionDetailViewModel buildSessionDetailViewModel({
     handCountLabel: _handCountLabel(recordedHandCount),
     currentEastLabel: 'East: ${_firstName(currentEastName)}',
     progressLabel: _progressLabel(detail),
-    roundTimeLabel: roundTime.label,
-    isRoundExpired: roundTime.isExpired,
-    isRoundEndingSoon: roundTime.isEndingSoon,
+    showRoundTimer: showRoundTimer,
+    roundTimeLabel: roundTime?.label ?? '',
+    isRoundExpired: roundTime?.isExpired ?? false,
+    isRoundEndingSoon: roundTime?.isEndingSoon ?? false,
     seats: detail.seats
         .map(
           (seat) => SessionSeatViewModel(
@@ -132,6 +139,11 @@ SessionDetailViewModel buildSessionDetailViewModel({
         .toList(growable: false),
     emptyHandHistoryLabel: 'No hands recorded yet.',
   );
+}
+
+bool _hasRoundTimer(TableSessionRecord session) {
+  return session.scoringPhase == EventScoringPhase.tournament ||
+      session.scoringPhase == EventScoringPhase.bonus;
 }
 
 DateTime? _roundTimerSnapshotTime(TableSessionRecord session, DateTime? now) {

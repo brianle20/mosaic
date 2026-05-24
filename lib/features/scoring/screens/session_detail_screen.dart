@@ -296,18 +296,20 @@ class _SessionHeader extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            'Round Time',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: 6),
-          StatusChip(
-            label: viewModel.roundTimeLabel,
-            tone: _roundTimeTone(viewModel),
-          ),
+          if (viewModel.showRoundTimer) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Round Time',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            StatusChip(
+              label: viewModel.roundTimeLabel,
+              tone: _roundTimeTone(viewModel),
+            ),
+          ],
         ],
       ),
     );

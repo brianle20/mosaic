@@ -271,11 +271,13 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                       label: _liveStatusLabel(summary.status),
                       tone: _liveStatusTone(summary.status),
                     ),
-                    const SizedBox(height: 6),
-                    StatusChip(
-                      label: summary.roundTimeLabel,
-                      tone: _roundTimeTone(summary),
-                    ),
+                    if (summary.showRoundTimer) ...[
+                      const SizedBox(height: 6),
+                      StatusChip(
+                        label: summary.roundTimeLabel,
+                        tone: _roundTimeTone(summary),
+                      ),
+                    ],
                   ],
                 ),
               ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/start_session_controller.dart';
@@ -16,6 +17,7 @@ class StartSessionScreen extends StatefulWidget {
     required this.seatingRepository,
     required this.sessionRepository,
     required this.nfcService,
+    this.scoringPhase = EventScoringPhase.qualification,
     this.preverifiedTableTagUid,
   });
 
@@ -25,6 +27,7 @@ class StartSessionScreen extends StatefulWidget {
   final SeatingRepository seatingRepository;
   final SessionRepository sessionRepository;
   final NfcService nfcService;
+  final EventScoringPhase scoringPhase;
   final String? preverifiedTableTagUid;
 
   @override
@@ -40,6 +43,7 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
     super.initState();
     _controller = StartSessionController(
       table: widget.table,
+      scoringPhase: widget.scoringPhase,
       guestRepository: widget.guestRepository,
       seatingRepository: widget.seatingRepository,
       sessionRepository: widget.sessionRepository,

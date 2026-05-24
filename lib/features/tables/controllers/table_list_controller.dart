@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -188,16 +189,18 @@ class TableListController extends ChangeNotifier {
 
     final detail = sessionDetailsBySessionId[session.id];
     if (detail == null) {
-      final roundTime = _roundTimeFor(session);
+      final showRoundTimer = _hasRoundTimer(session);
+      final roundTime = showRoundTimer ? _roundTimeFor(session) : null;
       return LiveTableSummary(
         sessionId: session.id,
         status: session.status,
         seats: _fallbackSeats(session),
         handCount: session.handCount,
         progressLabel: _progressLabel(session.handCount),
-        roundTimeLabel: roundTime.label,
-        isRoundExpired: roundTime.isExpired,
-        isRoundEndingSoon: roundTime.isEndingSoon,
+        showRoundTimer: showRoundTimer,
+        roundTimeLabel: roundTime?.label ?? '',
+        isRoundExpired: roundTime?.isExpired ?? false,
+        isRoundEndingSoon: roundTime?.isEndingSoon ?? false,
         lastHand: const LastHandSummary(title: 'No scores yet'),
       );
     }
@@ -208,7 +211,8 @@ class TableListController extends ChangeNotifier {
       ..sort((left, right) => left.handNumber.compareTo(right.handNumber));
     final latestHand = recordedHands.isEmpty ? null : recordedHands.last;
     final handCount = recordedHands.length;
-    final roundTime = _roundTimeFor(detail.session);
+    final showRoundTimer = _hasRoundTimer(detail.session);
+    final roundTime = showRoundTimer ? _roundTimeFor(detail.session) : null;
 
     return LiveTableSummary(
       sessionId: session.id,
@@ -216,11 +220,17 @@ class TableListController extends ChangeNotifier {
       seats: _seatSummaries(detail),
       handCount: handCount,
       progressLabel: _progressLabel(handCount),
-      roundTimeLabel: roundTime.label,
-      isRoundExpired: roundTime.isExpired,
-      isRoundEndingSoon: roundTime.isEndingSoon,
+      showRoundTimer: showRoundTimer,
+      roundTimeLabel: roundTime?.label ?? '',
+      isRoundExpired: roundTime?.isExpired ?? false,
+      isRoundEndingSoon: roundTime?.isEndingSoon ?? false,
       lastHand: _lastHandSummary(detail, latestHand),
     );
+  }
+
+  bool _hasRoundTimer(TableSessionRecord session) {
+    return session.scoringPhase == EventScoringPhase.tournament ||
+        session.scoringPhase == EventScoringPhase.bonus;
   }
 
   RoundTimerState _roundTimeFor(TableSessionRecord session) {

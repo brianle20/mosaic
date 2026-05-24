@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
@@ -164,9 +165,15 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   bool get _roundExpired =>
       widget.initialHand == null &&
+      _sessionHasRoundTimer &&
       RoundTimerState.fromStartedAt(
         startedAt: widget.sessionDetail.session.startedAt,
       ).isExpired;
+
+  bool get _sessionHasRoundTimer =>
+      widget.sessionDetail.session.scoringPhase ==
+          EventScoringPhase.tournament ||
+      widget.sessionDetail.session.scoringPhase == EventScoringPhase.bonus;
 
   Future<void> _submit() async {
     if (!_draft.isValid) {
@@ -395,18 +402,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
               ),
             ],
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _fanCountController,
-              decoration: const InputDecoration(labelText: 'Fan Count'),
-              keyboardType: TextInputType.number,
-              onChanged: (_) => setState(() {}),
-            ),
-            if (_draft.fanCountError != null) ...[
-              const SizedBox(height: 6),
-              Text(_draft.fanCountError!),
-            ],
-            const SizedBox(height: 16),
-            if (_winType == HandWinType.discard)
+            if (_winType == HandWinType.discard) ...[
               DropdownButtonFormField<int>(
                 initialValue: _discarderSeatIndex,
                 decoration: const InputDecoration(labelText: 'Discarder'),
@@ -417,9 +413,21 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                   });
                 },
               ),
-            if (_draft.discarderSeatError != null) ...[
+              if (_draft.discarderSeatError != null) ...[
+                const SizedBox(height: 6),
+                Text(_draft.discarderSeatError!),
+              ],
+              const SizedBox(height: 16),
+            ],
+            TextFormField(
+              controller: _fanCountController,
+              decoration: const InputDecoration(labelText: 'Fan Count'),
+              keyboardType: TextInputType.number,
+              onChanged: (_) => setState(() {}),
+            ),
+            if (_draft.fanCountError != null) ...[
               const SizedBox(height: 6),
-              Text(_draft.discarderSeatError!),
+              Text(_draft.fanCountError!),
             ],
           ],
           if (_draft.washoutFieldError != null) ...[

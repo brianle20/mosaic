@@ -7,13 +7,17 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
 import 'package:mosaic/features/checkin/screens/add_cover_entry_screen.dart';
 import 'package:mosaic/features/guests/controllers/guest_roster_controller.dart';
-import 'package:mosaic/features/guests/widgets/guest_quick_action_bar.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 enum _GuestRosterOverflowAction {
   markPaidManually,
+  addCoverEntry,
+  markQualifying,
+  markQualified,
+  moveToOpenPlayOnly,
+  withdraw,
 }
 
 enum _GuestRosterCheckInFilter {
@@ -469,8 +473,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   Widget _buildGuestCard(BuildContext context, EventGuestRecord guest) {
-    final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
-
     return Card(
       child: InkWell(
         onTap: () => _openGuestDetail(guest),
@@ -493,8 +495,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                           ),
                     ),
                   ),
-                  if (!guest.isEligibleForPlayerTagAssignment)
-                    _buildOverflowMenu(guest),
+                  if (_hasOverflowActions(guest)) _buildOverflowMenu(guest),
                 ],
               ),
               const SizedBox(height: _guestCardSectionGap),
@@ -507,16 +508,8 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                     tone: _coverStatusTone(guest.coverStatus),
                   ),
                   StatusChip(
-                    label: _attendanceLabel(guest.attendanceStatus),
-                    tone: guest.isCheckedIn
-                        ? StatusChipTone.success
-                        : StatusChipTone.neutral,
-                  ),
-                  StatusChip(
-                    label: hasTag ? 'Tag Assigned' : 'Tag Unassigned',
-                    tone: hasTag
-                        ? StatusChipTone.success
-                        : StatusChipTone.warning,
+                    label: _tournamentStatusLabel(guest.tournamentStatus),
+                    tone: _tournamentStatusTone(guest.tournamentStatus),
                   ),
                 ],
               ),
@@ -534,49 +527,26 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     );
   }
 
-  List<Widget> _quickActionsForGuest(EventGuestRecord guest) {
+  Widget? _primaryActionForGuest(EventGuestRecord guest) {
     final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
     final isSubmitting = _controller.isSubmittingGuest(guest.id);
-    final actions = <Widget>[];
 
     if (!guest.isCheckedIn) {
-      actions.add(
-        FilledButton(
-          onPressed: isSubmitting ? null : () => _checkInAndAssign(guest),
-          child: const Text('Check In & Tag'),
-        ),
-      );
-    } else if (!hasTag) {
-      actions.add(
-        FilledButton(
-          onPressed: isSubmitting ? null : () => _assignTag(guest),
-          child: const Text('Assign Tag'),
-        ),
+      return FilledButton(
+        onPressed: isSubmitting ? null : () => _checkInAndAssign(guest),
+        child: const Text('Check In & Tag'),
       );
     }
 
-    if (guest.isEligibleForPlayerTagAssignment) {
-      for (final action in _tournamentActionsForGuest(guest)) {
-        actions.add(action);
-      }
-      actions.add(
-        TextButton(
-          onPressed: isSubmitting ? null : () => _addCoverEntry(guest),
-          child: const Text('Add Cover Entry'),
-        ),
+    if (!hasTag) {
+      return FilledButton(
+        onPressed: isSubmitting ? null : () => _assignTag(guest),
+        child: const Text('Assign Tag'),
       );
     }
 
-    return actions;
-  }
-
-  List<Widget> _tournamentActionsForGuest(EventGuestRecord guest) {
-    final isSubmitting = _controller.isSubmittingGuest(guest.id);
-    final actions = <Widget>[];
-
-    if (guest.tournamentStatus != EventTournamentStatus.qualifying) {
-      actions.add(
-        TextButton(
+    return switch (guest.tournamentStatus) {
+      EventTournamentStatus.openPlayOnly => FilledButton(
           onPressed: isSubmitting
               ? null
               : () => _updateTournamentStatus(
@@ -585,11 +555,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                   ),
           child: const Text('Mark Qualifying'),
         ),
-      );
-    }
-    if (guest.tournamentStatus != EventTournamentStatus.qualified) {
-      actions.add(
-        TextButton(
+      EventTournamentStatus.qualifying => FilledButton(
           onPressed: isSubmitting
               ? null
               : () => _updateTournamentStatus(
@@ -598,36 +564,98 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                   ),
           child: const Text('Mark Qualified'),
         ),
-      );
+      EventTournamentStatus.qualified => null,
+      EventTournamentStatus.withdrawn => null,
+    };
+  }
+
+  bool _hasOverflowActions(EventGuestRecord guest) {
+    if (!guest.isEligibleForPlayerTagAssignment) {
+      return true;
     }
-    if (guest.tournamentStatus != EventTournamentStatus.openPlayOnly) {
-      actions.add(
-        TextButton(
-          onPressed: isSubmitting
-              ? null
-              : () => _updateTournamentStatus(
-                    guest,
-                    EventTournamentStatus.openPlayOnly,
-                  ),
-          child: const Text('Move to Open Play Only'),
-        ),
-      );
+
+    return _overflowActionsForGuest(guest).isNotEmpty;
+  }
+
+  List<_GuestRosterOverflowAction> _overflowActionsForGuest(
+    EventGuestRecord guest,
+  ) {
+    if (!guest.isEligibleForPlayerTagAssignment) {
+      return const [_GuestRosterOverflowAction.markPaidManually];
     }
-    if (guest.tournamentStatus != EventTournamentStatus.withdrawn) {
-      actions.add(
-        TextButton(
-          onPressed: isSubmitting
-              ? null
-              : () => _updateTournamentStatus(
-                    guest,
-                    EventTournamentStatus.withdrawn,
-                  ),
-          child: const Text('Withdraw'),
-        ),
-      );
+
+    final actions = <_GuestRosterOverflowAction>[
+      _GuestRosterOverflowAction.addCoverEntry,
+    ];
+
+    switch (guest.tournamentStatus) {
+      case EventTournamentStatus.openPlayOnly:
+        actions.addAll(const [
+          _GuestRosterOverflowAction.markQualified,
+          _GuestRosterOverflowAction.withdraw,
+        ]);
+      case EventTournamentStatus.qualifying:
+        actions.addAll(const [
+          _GuestRosterOverflowAction.moveToOpenPlayOnly,
+          _GuestRosterOverflowAction.withdraw,
+        ]);
+      case EventTournamentStatus.qualified:
+        actions.addAll(const [
+          _GuestRosterOverflowAction.moveToOpenPlayOnly,
+          _GuestRosterOverflowAction.withdraw,
+        ]);
+      case EventTournamentStatus.withdrawn:
+        actions.addAll(const [
+          _GuestRosterOverflowAction.markQualifying,
+          _GuestRosterOverflowAction.markQualified,
+          _GuestRosterOverflowAction.moveToOpenPlayOnly,
+        ]);
     }
 
     return actions;
+  }
+
+  String _overflowActionLabel(_GuestRosterOverflowAction action) {
+    return switch (action) {
+      _GuestRosterOverflowAction.markPaidManually => 'Mark Paid Manually',
+      _GuestRosterOverflowAction.addCoverEntry => 'Add Cover Entry',
+      _GuestRosterOverflowAction.markQualifying => 'Mark Qualifying',
+      _GuestRosterOverflowAction.markQualified => 'Mark Qualified',
+      _GuestRosterOverflowAction.moveToOpenPlayOnly => 'Move to Open Play Only',
+      _GuestRosterOverflowAction.withdraw => 'Withdraw',
+    };
+  }
+
+  void _handleOverflowAction(
+    EventGuestRecord guest,
+    _GuestRosterOverflowAction action,
+  ) {
+    switch (action) {
+      case _GuestRosterOverflowAction.markPaidManually:
+        _markPaid(guest);
+      case _GuestRosterOverflowAction.addCoverEntry:
+        _addCoverEntry(guest);
+      case _GuestRosterOverflowAction.markQualifying:
+        _updateTournamentStatus(guest, EventTournamentStatus.qualifying);
+      case _GuestRosterOverflowAction.markQualified:
+        _updateTournamentStatus(guest, EventTournamentStatus.qualified);
+      case _GuestRosterOverflowAction.moveToOpenPlayOnly:
+        _updateTournamentStatus(guest, EventTournamentStatus.openPlayOnly);
+      case _GuestRosterOverflowAction.withdraw:
+        _updateTournamentStatus(guest, EventTournamentStatus.withdrawn);
+    }
+  }
+
+  Widget _buildPrimaryActionForGuest(EventGuestRecord guest) {
+    final primaryAction = _primaryActionForGuest(guest);
+    if (primaryAction == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: primaryAction,
+    );
   }
 
   Widget _buildQuickActionsForGuest(EventGuestRecord guest) {
@@ -656,13 +684,13 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       );
     }
 
-    return GuestQuickActionBar(
-      children: _quickActionsForGuest(guest),
-    );
+    return _buildPrimaryActionForGuest(guest);
   }
 
   Widget _buildOverflowMenu(EventGuestRecord guest) {
     final isSubmitting = _controller.isSubmittingGuest(guest.id);
+    final actions = _overflowActionsForGuest(guest);
+
     return SizedBox.square(
       dimension: 32,
       child: PopupMenuButton<_GuestRosterOverflowAction>(
@@ -671,17 +699,13 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         iconSize: 20,
         splashRadius: 18,
         tooltip: 'More actions for ${guest.displayName}',
-        onSelected: (action) {
-          switch (action) {
-            case _GuestRosterOverflowAction.markPaidManually:
-              _markPaid(guest);
-          }
-        },
-        itemBuilder: (context) => const [
-          PopupMenuItem(
-            value: _GuestRosterOverflowAction.markPaidManually,
-            child: Text('Mark Paid Manually'),
-          ),
+        onSelected: (action) => _handleOverflowAction(guest, action),
+        itemBuilder: (context) => [
+          for (final action in actions)
+            PopupMenuItem(
+              value: action,
+              child: Text(_overflowActionLabel(action)),
+            ),
         ],
         icon: const Icon(Icons.more_horiz),
       ),
@@ -709,15 +733,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     );
   }
 
-  String _attendanceLabel(AttendanceStatus status) {
-    return switch (status) {
-      AttendanceStatus.expected => 'Expected',
-      AttendanceStatus.checkedIn => 'Checked In',
-      AttendanceStatus.checkedOut => 'Checked Out',
-      AttendanceStatus.noShow => 'No Show',
-    };
-  }
-
   String _coverStatusLabel(CoverStatus status) {
     return switch (status) {
       CoverStatus.unpaid => 'Unpaid',
@@ -734,6 +749,15 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       EventTournamentStatus.qualifying => 'Qualifying',
       EventTournamentStatus.qualified => 'Qualified',
       EventTournamentStatus.withdrawn => 'Withdrawn',
+    };
+  }
+
+  StatusChipTone _tournamentStatusTone(EventTournamentStatus status) {
+    return switch (status) {
+      EventTournamentStatus.openPlayOnly => StatusChipTone.neutral,
+      EventTournamentStatus.qualifying => StatusChipTone.warning,
+      EventTournamentStatus.qualified => StatusChipTone.success,
+      EventTournamentStatus.withdrawn => StatusChipTone.neutral,
     };
   }
 

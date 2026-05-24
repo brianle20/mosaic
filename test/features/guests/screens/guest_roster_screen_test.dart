@@ -296,6 +296,26 @@ class _FakeNfcService implements NfcService {
   }
 }
 
+GuestTagAssignmentSummary _tagAssignment({
+  required String guestId,
+  String uid = 'FASTDONE',
+}) {
+  return GuestTagAssignmentSummary.fromJson({
+    'assignment_id': 'asg_$guestId',
+    'event_id': 'evt_01',
+    'event_guest_id': guestId,
+    'status': 'assigned',
+    'assigned_at': '2026-04-24T19:15:00-07:00',
+    'nfc_tag': {
+      'id': 'tag_$guestId',
+      'uid_hex': uid,
+      'uid_fingerprint': uid,
+      'default_tag_type': 'player',
+      'status': 'active',
+    },
+  });
+}
+
 EventGuestRecord _guest({
   required String id,
   required String name,
@@ -434,20 +454,7 @@ void main() {
         ),
       ],
       activeAssignments: {
-        'gst_done': GuestTagAssignmentSummary.fromJson(const {
-          'assignment_id': 'asg_done',
-          'event_id': 'evt_01',
-          'event_guest_id': 'gst_done',
-          'status': 'assigned',
-          'assigned_at': '2026-04-24T19:15:00-07:00',
-          'nfc_tag': {
-            'id': 'tag_done',
-            'uid_hex': 'FASTDONE',
-            'uid_fingerprint': 'FASTDONE',
-            'default_tag_type': 'player',
-            'status': 'active',
-          },
-        }),
+        'gst_done': _tagAssignment(guestId: 'gst_done'),
       },
     );
 
@@ -461,7 +468,18 @@ void main() {
     expect(find.text('Mark Comped'), findsOneWidget);
     expect(find.text('Check In & Tag'), findsOneWidget);
     expect(find.text('Assign Tag'), findsOneWidget);
-    expect(find.text('Add Cover Entry'), findsAtLeastNWidgets(3));
+    expect(find.text('Add Cover Entry'), findsOneWidget);
+    expect(find.text('Open Play Only'), findsAtLeastNWidgets(1));
+    expect(find.text('Mark Qualifying', skipOffstage: false), findsOneWidget);
+    expect(find.text('Mark Qualified'), findsNothing);
+    expect(find.text('Withdraw'), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Checked In',
+      ),
+      findsNothing,
+    );
+    expect(find.text('Tag Assigned'), findsNothing);
     expect(
       find.text('Ready to Play - UID FASTDONE', skipOffstage: false),
       findsOneWidget,
@@ -507,6 +525,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Mark Paid Manually'), findsOneWidget);
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -600));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('More actions for Gia'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mark Qualified'), findsOneWidget);
+    expect(find.text('Withdraw'), findsOneWidget);
+    expect(find.text('Add Cover Entry'), findsAtLeastNWidgets(2));
   });
 
   testWidgets('groups guests by check-in status', (tester) async {
@@ -645,10 +674,10 @@ void main() {
     await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
     await tester.pumpAndSettle();
 
-    expect(find.text('Qualifying'), findsOneWidget);
-    expect(find.text('Qualified'), findsOneWidget);
-    expect(find.text('Open Play Only'), findsOneWidget);
-    expect(find.text('Withdrawn'), findsOneWidget);
+    expect(find.text('Qualifying'), findsAtLeastNWidgets(1));
+    expect(find.text('Qualified'), findsAtLeastNWidgets(1));
+    expect(find.text('Open Play Only'), findsAtLeastNWidgets(1));
+    expect(find.text('Withdrawn'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.text('Qualified').first);
     await tester.pumpAndSettle();
@@ -665,7 +694,7 @@ void main() {
     expect(find.text('Quincy Qualified'), findsNothing);
   });
 
-  testWidgets('qualification quick actions update tournament status', (
+  testWidgets('event-day primary tournament action advances status', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(800, 1000);
@@ -677,13 +706,24 @@ void main() {
       _guest(
         id: 'gst_01',
         name: 'Alice Wong',
-        attendanceStatus: AttendanceStatus.expected,
+        attendanceStatus: AttendanceStatus.checkedIn,
         coverStatus: CoverStatus.paid,
       ),
-    ]);
+    ], activeAssignments: {
+      'gst_01': _tagAssignment(guestId: 'gst_01', uid: 'ALICE01'),
+    });
 
     await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
     await tester.pumpAndSettle();
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Open Play Only',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Mark Qualifying'), findsOneWidget);
+    expect(find.text('Mark Qualified'), findsNothing);
 
     await tester.tap(find.text('Mark Qualifying'));
     await tester.pumpAndSettle();
@@ -691,11 +731,62 @@ void main() {
       repository.statusUpdates['gst_01'],
       EventTournamentStatus.qualifying,
     );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Qualifying',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Mark Qualified'), findsOneWidget);
+    expect(find.text('Mark Qualifying'), findsNothing);
+
+    await tester.tap(find.text('Mark Qualified'));
+    await tester.pumpAndSettle();
+    expect(repository.statusUpdates['gst_01'], EventTournamentStatus.qualified);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Qualified',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Mark Qualified'), findsNothing);
+  });
+
+  testWidgets('secondary tournament actions live behind the row menu', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+      ),
+    ], activeAssignments: {
+      'gst_01': _tagAssignment(guestId: 'gst_01', uid: 'ALICE01'),
+    });
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mark Qualified'), findsNothing);
+    expect(find.text('Move to Open Play Only'), findsNothing);
+    expect(find.text('Withdraw'), findsNothing);
+
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Mark Qualified'));
     await tester.pumpAndSettle();
     expect(repository.statusUpdates['gst_01'], EventTournamentStatus.qualified);
 
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Move to Open Play Only'));
     await tester.pumpAndSettle();
     expect(
@@ -703,6 +794,8 @@ void main() {
       EventTournamentStatus.openPlayOnly,
     );
 
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Withdraw'));
     await tester.pumpAndSettle();
     expect(repository.statusUpdates['gst_01'], EventTournamentStatus.withdrawn);
@@ -992,13 +1085,7 @@ void main() {
     await tester.tap(find.text('Check In & Tag'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is StatusChip && widget.label == 'Checked In',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Tag Assigned'), findsOneWidget);
+    expect(find.text('Ready to Play - UID FASTTAG01'), findsOneWidget);
     expect(find.text('Alice Wong is checked in and tagged.'), findsOneWidget);
   });
 
@@ -1018,7 +1105,6 @@ void main() {
     await tester.tap(find.text('Assign Tag'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Tag Assigned'), findsOneWidget);
     expect(find.text('Ready to Play - UID FASTTAG01'), findsOneWidget);
     expect(find.text('Player tag assigned to Alice Wong.'), findsOneWidget);
   });

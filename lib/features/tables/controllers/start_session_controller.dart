@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -10,6 +11,7 @@ import 'package:mosaic/features/tables/models/start_session_scan_state.dart';
 class StartSessionController extends ChangeNotifier {
   StartSessionController({
     required this.table,
+    this.scoringPhase = EventScoringPhase.tournament,
     required GuestRepository guestRepository,
     required SeatingRepository seatingRepository,
     required SessionRepository sessionRepository,
@@ -22,6 +24,7 @@ class StartSessionController extends ChangeNotifier {
             : StartSessionScanState.withTableTag(preverifiedTableTagUid);
 
   final EventTableRecord table;
+  final EventScoringPhase scoringPhase;
   final GuestRepository _guestRepository;
   final SeatingRepository _seatingRepository;
   final SessionRepository _sessionRepository;
@@ -55,9 +58,9 @@ class StartSessionController extends ChangeNotifier {
         for (final guest in guests) guest.id: guest,
       };
       assignmentsByGuestId = assignments;
-      expectedAssignmentsBySeatIndex = _expectedAssignmentsForTable(
-        seatingAssignments,
-      );
+      expectedAssignmentsBySeatIndex = _shouldUseAssignedSeating
+          ? _expectedAssignmentsForTable(seatingAssignments)
+          : const {};
     } catch (exception) {
       error = exception.toString();
     }
@@ -90,8 +93,9 @@ class StartSessionController extends ChangeNotifier {
   List<ResolvedSeat> get resolvedSeats {
     if (hasAssignedTableSeating) {
       return [
-        for (final entry in expectedAssignmentsBySeatIndex.entries.toList()
-          ..sort((left, right) => left.key.compareTo(right.key)))
+        for (final entry
+            in expectedAssignmentsBySeatIndex.entries.toList()
+              ..sort((left, right) => left.key.compareTo(right.key)))
           ResolvedSeat(
             seatLabel: seatWindForIndex(entry.key).name,
             guestName: entry.value.displayName,
@@ -230,6 +234,9 @@ class StartSessionController extends ChangeNotifier {
         assignment.seatIndex: assignment,
     };
   }
+
+  bool get _shouldUseAssignedSeating =>
+      scoringPhase != EventScoringPhase.qualification;
 }
 
 class ResolvedSeat {

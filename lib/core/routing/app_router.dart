@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/screens/guest_detail_screen.dart';
@@ -163,6 +164,7 @@ class AppRouter {
             seatingRepository: seatingRepository,
             sessionRepository: sessionRepository,
             nfcService: nfcService,
+            scoringPhase: args.scoringPhase,
             preverifiedTableTagUid: args.preverifiedTableTagUid,
           ),
           settings: settings,
@@ -358,11 +360,13 @@ class StartSessionArgs {
   const StartSessionArgs({
     required this.eventId,
     required this.table,
+    this.scoringPhase = EventScoringPhase.qualification,
     this.preverifiedTableTagUid,
   });
 
   final String eventId;
   final EventTableRecord table;
+  final EventScoringPhase scoringPhase;
   final String? preverifiedTableTagUid;
 }
 

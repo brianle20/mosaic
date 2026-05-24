@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -417,6 +418,7 @@ void main() {
     final session = _session(
       id: 'ses_01',
       tableId: 'tbl_01',
+      scoringPhase: EventScoringPhase.tournament,
       startedAt: '2026-05-20T12:10:00Z',
     );
 
@@ -435,6 +437,44 @@ void main() {
 
     final summary = controller.cards.single.liveSummary!;
     expect(summary.roundTimeLabel, '25:00');
+    expect(summary.isRoundExpired, isFalse);
+    expect(summary.isRoundEndingSoon, isFalse);
+  });
+
+  test('hides round timer labels for qualification table cards', () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_01',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final session = _session(
+      id: 'ses_01',
+      tableId: 'tbl_01',
+      scoringPhase: EventScoringPhase.qualification,
+      startedAt: '2026-05-20T12:00:00Z',
+    );
+
+    final controller = TableListController(
+      tableRepository: _FakeTableRepository(cachedTables: [table]),
+      sessionRepository: _FakeSessionRepository(
+        cachedSessions: [session],
+        cachedDetails: {'ses_01': _detail(session)},
+        loadedDetails: {'ses_01': _detail(session)},
+      ),
+      guestRepository: _FakeGuestRepository(const []),
+      now: () => DateTime.parse('2026-05-20T13:01:00Z'),
+    );
+
+    await controller.load('evt_01');
+
+    final summary = controller.cards.single.liveSummary!;
+    expect(summary.showRoundTimer, isFalse);
+    expect(summary.roundTimeLabel, isEmpty);
     expect(summary.isRoundExpired, isFalse);
     expect(summary.isRoundEndingSoon, isFalse);
   });
@@ -718,6 +758,7 @@ TableSessionRecord _session({
   int sessionNumberForTable = 1,
   int currentDealerSeatIndex = 0,
   int handCount = 0,
+  EventScoringPhase scoringPhase = EventScoringPhase.qualification,
   String startedAt = '2026-04-24T19:00:00-07:00',
 }) {
   return TableSessionRecord.fromJson({
@@ -729,6 +770,7 @@ TableSessionRecord _session({
     'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
     'rotation_policy_config_json': const {},
     'status': status,
+    'scoring_phase': eventScoringPhaseToJson(scoringPhase),
     'initial_east_seat_index': 0,
     'current_dealer_seat_index': currentDealerSeatIndex,
     'dealer_pass_count': 0,

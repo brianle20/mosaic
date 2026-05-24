@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -271,6 +272,7 @@ SessionDetailRecord _buildDetail(
   SessionStatus status, {
   bool hasHands = true,
   String startedAt = '2026-04-24T19:00:00-07:00',
+  EventScoringPhase scoringPhase = EventScoringPhase.qualification,
   List<Map<String, Object?>>? hands,
 }) {
   return SessionDetailRecord.fromJson({
@@ -290,6 +292,7 @@ SessionDetailRecord _buildDetail(
         SessionStatus.endedEarly => 'ended_early',
         SessionStatus.aborted => 'aborted',
       },
+      'scoring_phase': eventScoringPhaseToJson(scoringPhase),
       'initial_east_seat_index': 0,
       'current_dealer_seat_index': 1,
       'dealer_pass_count': 1,
@@ -410,6 +413,7 @@ void main() {
           sessionRepository: _FakeSessionRepository(
             detail: _buildDetail(
               SessionStatus.active,
+              scoringPhase: EventScoringPhase.tournament,
               startedAt: startedAt,
             ),
           ),
@@ -467,6 +471,7 @@ void main() {
           sessionRepository: _FakeSessionRepository(
             detail: _buildDetail(
               SessionStatus.active,
+              scoringPhase: EventScoringPhase.tournament,
               startedAt: DateTime.now()
                   .subtract(const Duration(minutes: 40))
                   .toIso8601String(),
@@ -486,6 +491,31 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('qualification session hides round timer', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: _buildDetail(
+              SessionStatus.active,
+              scoringPhase: EventScoringPhase.qualification,
+              startedAt: DateTime.now()
+                  .subtract(const Duration(minutes: 61))
+                  .toIso8601String(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Round Time'), findsNothing);
+    expect(find.text('Time expired'), findsNothing);
   });
 
   testWidgets('active session blocks hand entry when scoring is paused',

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -197,6 +198,7 @@ class _PassiveNfcService implements NfcService, PassiveNfcService {
 void main() {
   SessionDetailRecord buildDetail({
     int currentDealerSeatIndex = 0,
+    EventScoringPhase scoringPhase = EventScoringPhase.qualification,
     String? startedAt,
   }) {
     return SessionDetailRecord.fromJson({
@@ -209,6 +211,7 @@ void main() {
         'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'rotation_policy_config_json': {},
         'status': 'active',
+        'scoring_phase': eventScoringPhaseToJson(scoringPhase),
         'initial_east_seat_index': 0,
         'current_dealer_seat_index': currentDealerSeatIndex,
         'dealer_pass_count': 0,
@@ -334,6 +337,29 @@ void main() {
     expect(find.text('Bob Lee (South)'), findsOneWidget);
   });
 
+  testWidgets('discarder selector appears before fan count for discard wins',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: _RecordingSessionRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+
+    final discarderTop = tester.getTopLeft(find.text('Discarder')).dy;
+    final fanCountTop =
+        tester.getTopLeft(find.widgetWithText(TextFormField, 'Fan Count')).dy;
+
+    expect(discarderTop, lessThan(fanCountTop));
+  });
+
   testWidgets('player labels use current dealer as east', (tester) async {
     final repository = _RecordingSessionRepository();
 
@@ -400,6 +426,7 @@ void main() {
       MaterialApp(
         home: HandEntryScreen(
           sessionDetail: buildDetail(
+            scoringPhase: EventScoringPhase.tournament,
             startedAt: DateTime.now()
                 .subtract(const Duration(minutes: 61))
                 .toIso8601String(),
@@ -426,6 +453,27 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.recordedInput, isNotNull);
+  });
+
+  testWidgets('expired qualification session does not show round warning',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(
+            scoringPhase: EventScoringPhase.qualification,
+            startedAt: DateTime.now()
+                .subtract(const Duration(minutes: 61))
+                .toIso8601String(),
+          ),
+          guestNamesById: seatNames,
+          sessionRepository: _RecordingSessionRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Round time has expired.'), findsNothing);
   });
 
   testWidgets('draw requires dealer waiting state before saving',

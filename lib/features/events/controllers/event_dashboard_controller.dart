@@ -2,6 +2,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -63,6 +64,9 @@ class EventDashboardController extends ChangeNotifier {
   String? tableScanError;
   EventRecord? event;
   int guestCount = 0;
+  int checkedInGuestCount = 0;
+  int qualifyingGuestCount = 0;
+  int qualifiedGuestCount = 0;
   int tableCount = 0;
   int? prizePoolCents;
   String leaderLabel = 'No scores';
@@ -89,7 +93,7 @@ class EventDashboardController extends ChangeNotifier {
     lifecycleError = null;
     tableScanError = null;
     event = cachedEvent;
-    guestCount = cachedGuests.length;
+    _updateGuestSummaries(cachedGuests);
     tableCount = cachedTables?.length ?? 0;
     leaderLabel = _formatLeader(cachedLeaderboard);
     qualificationLeaderboard = const [];
@@ -110,7 +114,7 @@ class EventDashboardController extends ChangeNotifier {
 
     try {
       final remoteGuests = await _guestRepository.listGuests(eventId);
-      guestCount = remoteGuests.length;
+      _updateGuestSummaries(remoteGuests);
     } catch (exception) {
       if (event == null && guestCount == 0) {
         error ??= exception.toString();
@@ -153,6 +157,21 @@ class EventDashboardController extends ChangeNotifier {
 
     isLoading = false;
     notifyListeners();
+  }
+
+  void _updateGuestSummaries(List<EventGuestRecord> guests) {
+    guestCount = guests.length;
+    checkedInGuestCount = guests.where((guest) => guest.isCheckedIn).length;
+    qualifyingGuestCount = guests
+        .where(
+          (guest) => guest.tournamentStatus == EventTournamentStatus.qualifying,
+        )
+        .length;
+    qualifiedGuestCount = guests
+        .where(
+          (guest) => guest.tournamentStatus == EventTournamentStatus.qualified,
+        )
+        .length;
   }
 
   String _formatLeader(List<LeaderboardEntry>? entries) {

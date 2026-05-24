@@ -168,6 +168,27 @@ class _EventRepository extends ThrowingEventRepository {
 }
 
 class _GuestRepository extends ThrowingGuestRepository {
+  const _GuestRepository({
+    this.guests = const [],
+    this.qualificationRows = const [
+      QualificationLeaderboardRow(
+        eventGuestId: 'gst_alice',
+        guestProfileId: 'prf_alice',
+        fullName: 'Alice Wong',
+        tournamentStatus: EventTournamentStatus.qualifying,
+        qualificationPoints: 72,
+        handsPlayed: 9,
+        wins: 3,
+        selfDrawWins: 1,
+        discardWins: 2,
+        rank: 1,
+      ),
+    ],
+  });
+
+  final List<EventGuestRecord> guests;
+  final List<QualificationLeaderboardRow> qualificationRows;
+
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
     String guestId,
@@ -203,7 +224,7 @@ class _GuestRepository extends ThrowingGuestRepository {
   Future<GuestDetailRecord?> getGuestDetail(String guestId) async => null;
 
   @override
-  Future<List<EventGuestRecord>> listGuests(String eventId) async => const [];
+  Future<List<EventGuestRecord>> listGuests(String eventId) async => guests;
 
   @override
   Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
@@ -213,29 +234,14 @@ class _GuestRepository extends ThrowingGuestRepository {
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
-      const [];
+      guests;
 
   @override
   Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
     required String eventId,
-  }) async {
-    return const [
-      QualificationLeaderboardRow(
-        eventGuestId: 'gst_alice',
-        guestProfileId: 'prf_alice',
-        fullName: 'Alice Wong',
-        tournamentStatus: EventTournamentStatus.qualifying,
-        qualificationPoints: 72,
-        handsPlayed: 9,
-        wins: 3,
-        selfDrawWins: 1,
-        discardWins: 2,
-        rank: 1,
-      ),
-    ];
-  }
+  }) async =>
+      qualificationRows;
 
-  @override
   @override
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
     String guestId,
@@ -691,6 +697,31 @@ LeaderboardEntry _leaderboardEntry({
     discardWins: 1,
     rank: rank,
   );
+}
+
+EventGuestRecord _dashboardGuest({
+  required String id,
+  required String name,
+  required AttendanceStatus attendanceStatus,
+  required EventTournamentStatus tournamentStatus,
+}) {
+  return EventGuestRecord.fromJson({
+    'id': id,
+    'event_id': 'evt_04',
+    'display_name': name,
+    'normalized_name': name.toLowerCase(),
+    'attendance_status': switch (attendanceStatus) {
+      AttendanceStatus.expected => 'expected',
+      AttendanceStatus.checkedIn => 'checked_in',
+      AttendanceStatus.checkedOut => 'checked_out',
+      AttendanceStatus.noShow => 'no_show',
+    },
+    'cover_status': 'paid',
+    'cover_amount_cents': 2000,
+    'is_comped': false,
+    'has_scored_play': false,
+    'tournament_status': eventTournamentStatusToJson(tournamentStatus),
+  });
 }
 
 EventHandLedgerEntry _championAwardEntry() {
@@ -1920,13 +1951,95 @@ void main() {
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 
-    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Start Qualification'), findsOneWidget);
     expect(find.text('Scan Table'), findsOneWidget);
 
-    final openScoringTop = tester.getTopLeft(find.text('Open Scoring')).dy;
+    final openScoringTop =
+        tester.getTopLeft(find.text('Start Qualification')).dy;
     final scanTableTop = tester.getTopLeft(find.text('Scan Table')).dy;
 
     expect(openScoringTop, lessThan(scanTableTop));
+  });
+
+  testWidgets('qualification setup dashboard shows event-day next step',
+      (tester) async {
+    final eventRepository = _EventRepository(
+      activeCheckinOnlyEvent,
+      onSetOperationalFlags: (_, checkinOpen, scoringOpen) async {
+        return EventRecord.fromJson({
+          ...activeCheckinOnlyEvent.toJson(),
+          'checkin_open': checkinOpen,
+          'scoring_open': scoringOpen,
+        });
+      },
+    );
+    final guests = [
+      _dashboardGuest(
+        id: 'gst_an',
+        name: 'An Le',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
+      ),
+      _dashboardGuest(
+        id: 'gst_amy',
+        name: 'Amy Wong',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _dashboardGuest(
+        id: 'gst_brian',
+        name: 'Brian Le',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+      _dashboardGuest(
+        id: 'gst_pending',
+        name: 'Pending Guest',
+        attendanceStatus: AttendanceStatus.expected,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_04'),
+          eventRepository: eventRepository,
+          guestRepository: _GuestRepository(
+            guests: guests,
+            qualificationRows: const [],
+          ),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository:
+              _TableRepository(resolvedTable: _table(eventId: 'evt_04')),
+          sessionRepository: const _SessionRepository(),
+          nfcService: _NfcService(tableScanResult: _tableScanResult()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start Qualification'), findsOneWidget);
+    expect(find.text('Open Scoring'), findsNothing);
+    expect(find.text('Qualification'), findsAtLeastNWidgets(1));
+    expect(find.text('Checked In'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+    expect(find.text('Qualifying'), findsOneWidget);
+    expect(find.text('1'), findsNWidgets(2));
+    expect(find.text('Qualified'), findsOneWidget);
+    expect(find.text('Live Operations'), findsNothing);
+    expect(
+      find.text(
+          'Start qualification when hosts are ready to log open-play games.'),
+      findsOneWidget,
+    );
+    expect(find.text('Prize Pool'), findsNothing);
+    expect(find.text('Leader'), findsNothing);
+
+    await tester.tap(find.text('Start Qualification'));
+    await tester.pumpAndSettle();
+
+    expect(eventRepository.event.scoringOpen, isTrue);
   });
 
   testWidgets('active event shows Complete Event action', (tester) async {
@@ -2148,7 +2261,7 @@ void main() {
     expect(find.text('Check-In Open'), findsOneWidget);
     expect(find.text('Scoring Not Open'), findsOneWidget);
     expect(find.text('Close Check-In'), findsNothing);
-    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Start Qualification'), findsOneWidget);
   });
 
   testWidgets('active event exposes operational flag actions', (tester) async {
@@ -2173,15 +2286,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Live Operations'), findsOneWidget);
+    expect(find.text('Qualification'), findsAtLeastNWidgets(1));
     expect(find.text('Check-In Open'), findsOneWidget);
     expect(find.text('Scoring Not Open'), findsOneWidget);
     expect(find.text('Close Check-In'), findsNothing);
-    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Start Qualification'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Open Scoring'));
+    await tester.ensureVisible(find.text('Start Qualification'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Open Scoring'));
+    await tester.tap(find.text('Start Qualification'));
     await tester.pumpAndSettle();
 
     await tester.drag(find.byType(ListView), const Offset(0, 400));
@@ -2296,7 +2409,7 @@ void main() {
 
     await tester.drag(find.byType(ListView), const Offset(0, -240));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Open Scoring'));
+    await tester.tap(find.text('Start Qualification'));
     await tester.pumpAndSettle();
 
     expect(

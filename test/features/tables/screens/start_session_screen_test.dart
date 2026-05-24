@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -444,6 +445,7 @@ void main() {
             'default_rotation_policy_config_json': {},
             'status': 'active',
           }),
+          scoringPhase: EventScoringPhase.tournament,
           guestRepository: _FakeGuestRepository(
             guests: buildGuests(),
             assignments: buildAssignments(),
@@ -544,6 +546,7 @@ void main() {
             'default_rotation_policy_config_json': {},
             'status': 'active',
           }),
+          scoringPhase: EventScoringPhase.tournament,
           guestRepository: _FakeGuestRepository(
             guests: buildGuests(),
             assignments: buildAssignments(),
@@ -787,6 +790,17 @@ void main() {
             ),
           ]),
         ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            return MaterialPageRoute<void>(
+              builder: (context) => const Scaffold(
+                body: Text('Opened Session Detail'),
+              ),
+            );
+          }
+
+          return null;
+        },
       ),
     );
     await tester.pumpAndSettle();
@@ -822,6 +836,7 @@ void main() {
             'default_rotation_policy_config_json': {},
             'status': 'active',
           }),
+          scoringPhase: EventScoringPhase.tournament,
           guestRepository: _FakeGuestRepository(
             guests: buildGuests(),
             assignments: buildAssignments(),
@@ -836,6 +851,17 @@ void main() {
             ),
           ]),
         ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            return MaterialPageRoute<void>(
+              builder: (context) => const Scaffold(
+                body: Text('Opened Session Detail'),
+              ),
+            );
+          }
+
+          return null;
+        },
       ),
     );
     await tester.pumpAndSettle();
@@ -846,6 +872,92 @@ void main() {
     expect(find.text('Review assigned seating'), findsOneWidget);
     expect(find.text('Alice Wong'), findsOneWidget);
     expect(find.text('Scan East Player Tag'), findsNothing);
+  });
+
+  testWidgets('ignores seating assignments during qualification',
+      (tester) async {
+    final sessionRepository = _FakeSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StartSessionScreen(
+          eventId: 'evt_01',
+          table: EventTableRecord.fromJson(const {
+            'id': 'tbl_01',
+            'event_id': 'evt_01',
+            'label': 'Table 1',
+            'mode': 'points',
+            'display_order': 1,
+            'default_ruleset_id': 'HK_STANDARD',
+            'default_rotation_policy_type':
+                'dealer_cycle_return_to_initial_east',
+            'default_rotation_policy_config_json': {},
+            'status': 'active',
+          }),
+          scoringPhase: EventScoringPhase.qualification,
+          preverifiedTableTagUid: 'TABLE-001',
+          guestRepository: _FakeGuestRepository(
+            guests: buildGuests(),
+            assignments: buildAssignments(),
+          ),
+          sessionRepository: sessionRepository,
+          seatingRepository: _FakeSeatingRepository(_tableAssignments()),
+          nfcService: _QueuedNfcService([
+            const TagScanResult(
+              rawUid: 'PLAYER-EAST',
+              normalizedUid: 'PLAYER-EAST',
+              isManualEntry: true,
+            ),
+            const TagScanResult(
+              rawUid: 'PLAYER-SOUTH',
+              normalizedUid: 'PLAYER-SOUTH',
+              isManualEntry: true,
+            ),
+            const TagScanResult(
+              rawUid: 'PLAYER-WEST',
+              normalizedUid: 'PLAYER-WEST',
+              isManualEntry: true,
+            ),
+            const TagScanResult(
+              rawUid: 'PLAYER-NORTH',
+              normalizedUid: 'PLAYER-NORTH',
+              isManualEntry: true,
+            ),
+          ]),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            return MaterialPageRoute<void>(
+              builder: (context) => const Scaffold(
+                body: Text('Opened Session Detail'),
+              ),
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Scan East Player Tag'), findsOneWidget);
+    expect(find.text('Review assigned seating'), findsNothing);
+
+    await tester.tap(find.text('Scan Next Tag'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scan Next Tag'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scan Next Tag'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Scan Next Tag'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Confirm Start Session'));
+    await tester.pumpAndSettle();
+
+    expect(sessionRepository.startedInput, isNotNull);
+    expect(sessionRepository.startedAssignedInput, isNull);
+    expect(sessionRepository.startedInput!.eastPlayerUid, 'PLAYER-EAST');
   });
 
   testWidgets('starts assigned table without scanning player tags',
@@ -869,6 +981,7 @@ void main() {
             'default_rotation_policy_config_json': {},
             'status': 'active',
           }),
+          scoringPhase: EventScoringPhase.tournament,
           preverifiedTableTagUid: 'TABLE-001',
           guestRepository: _FakeGuestRepository(
             guests: buildGuests(),
@@ -904,7 +1017,8 @@ void main() {
 
     expect(sessionRepository.startedInput, isNull);
     expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
-    expect(sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
+    expect(
+        sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
     expect(openedArgs?.sessionId, 'ses_01');
   });
 }

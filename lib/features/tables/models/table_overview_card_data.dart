@@ -23,6 +23,7 @@ class LiveTableSummary {
     required this.seats,
     required this.handCount,
     required this.progressLabel,
+    required this.showRoundTimer,
     required this.roundTimeLabel,
     required this.isRoundExpired,
     required this.isRoundEndingSoon,
@@ -34,6 +35,7 @@ class LiveTableSummary {
   final List<SeatSummary> seats;
   final int handCount;
   final String progressLabel;
+  final bool showRoundTimer;
   final String roundTimeLabel;
   final bool isRoundExpired;
   final bool isRoundEndingSoon;

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/features/scoring/models/session_detail_view_models.dart';
 
@@ -77,19 +78,42 @@ void main() {
 
     test('builds round timer label with countdown time', () {
       final viewModel = buildSessionDetailViewModel(
-        detail: _detail(startedAt: '2026-05-20T12:20:00Z'),
+        detail: _detail(
+          scoringPhase: EventScoringPhase.tournament,
+          startedAt: '2026-05-20T12:20:00Z',
+        ),
         guestNamesById: _guestNamesById,
         now: DateTime.parse('2026-05-20T13:00:00Z'),
       );
 
+      expect(viewModel.showRoundTimer, isTrue);
       expect(viewModel.roundTimeLabel, '20:00');
+      expect(viewModel.isRoundExpired, isFalse);
+      expect(viewModel.isRoundEndingSoon, isFalse);
+    });
+
+    test('hides round timer for qualification sessions', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(
+          scoringPhase: EventScoringPhase.qualification,
+          startedAt: '2026-05-20T12:00:00Z',
+        ),
+        guestNamesById: _guestNamesById,
+        now: DateTime.parse('2026-05-20T13:01:00Z'),
+      );
+
+      expect(viewModel.showRoundTimer, isFalse);
+      expect(viewModel.roundTimeLabel, isEmpty);
       expect(viewModel.isRoundExpired, isFalse);
       expect(viewModel.isRoundEndingSoon, isFalse);
     });
 
     test('builds ending soon timer label under five minutes', () {
       final viewModel = buildSessionDetailViewModel(
-        detail: _detail(startedAt: '2026-05-20T12:55:30Z'),
+        detail: _detail(
+          scoringPhase: EventScoringPhase.tournament,
+          startedAt: '2026-05-20T12:55:30Z',
+        ),
         guestNamesById: _guestNamesById,
         now: DateTime.parse('2026-05-20T13:51:00Z'),
       );
@@ -101,7 +125,10 @@ void main() {
 
     test('builds expired timer label after one hour', () {
       final viewModel = buildSessionDetailViewModel(
-        detail: _detail(startedAt: '2026-05-20T12:00:00Z'),
+        detail: _detail(
+          scoringPhase: EventScoringPhase.tournament,
+          startedAt: '2026-05-20T12:00:00Z',
+        ),
         guestNamesById: _guestNamesById,
         now: DateTime.parse('2026-05-20T13:01:00Z'),
       );
@@ -114,6 +141,7 @@ void main() {
     test('freezes round timer label when a session ended early', () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(
+          scoringPhase: EventScoringPhase.tournament,
           status: 'ended_early',
           startedAt: '2026-05-20T12:00:00Z',
           endedAt: '2026-05-20T12:25:00Z',
@@ -217,6 +245,7 @@ SessionDetailRecord _detail({
   String? tableLabel = 'Table 7',
   String status = 'active',
   int currentDealerSeatIndex = 1,
+  EventScoringPhase scoringPhase = EventScoringPhase.qualification,
   String startedAt = '2026-04-24T19:00:00-07:00',
   String? endedAt,
   List<Map<String, Object?>>? hands,
@@ -233,6 +262,7 @@ SessionDetailRecord _detail({
       'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
       'rotation_policy_config_json': {},
       'status': status,
+      'scoring_phase': eventScoringPhaseToJson(scoringPhase),
       'initial_east_seat_index': 0,
       'current_dealer_seat_index': currentDealerSeatIndex,
       'dealer_pass_count': 1,

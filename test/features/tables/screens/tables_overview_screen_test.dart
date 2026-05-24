@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -558,6 +559,7 @@ void main() {
     final session = _session(
       id: 'ses_01',
       tableId: 'tbl_points',
+      scoringPhase: EventScoringPhase.tournament,
       startedAt: DateTime.now()
           .subtract(const Duration(minutes: 61))
           .toIso8601String(),
@@ -581,6 +583,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Time expired'), findsOneWidget);
+  });
+
+  testWidgets('qualification live table hides round timer', (tester) async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_points',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final session = _session(
+      id: 'ses_01',
+      tableId: 'tbl_points',
+      scoringPhase: EventScoringPhase.qualification,
+      startedAt: DateTime.now()
+          .subtract(const Duration(minutes: 61))
+          .toIso8601String(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(
+            sessions: [session],
+            details: {'ses_01': _detail(session)},
+          ),
+          guestRepository: _FakeGuestRepository(const []),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Time expired'), findsNothing);
+    expect(find.text('59:00'), findsNothing);
   });
 
   testWidgets('paused table keeps birdseye summary and view action',
@@ -939,6 +982,7 @@ TableSessionRecord _session({
   int sessionNumberForTable = 1,
   int currentDealerSeatIndex = 0,
   int handCount = 0,
+  EventScoringPhase scoringPhase = EventScoringPhase.qualification,
   String startedAt = '2026-04-24T19:00:00-07:00',
 }) {
   return TableSessionRecord.fromJson({
@@ -950,6 +994,7 @@ TableSessionRecord _session({
     'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
     'rotation_policy_config_json': const {},
     'status': status,
+    'scoring_phase': eventScoringPhaseToJson(scoringPhase),
     'initial_east_seat_index': 0,
     'current_dealer_seat_index': currentDealerSeatIndex,
     'dealer_pass_count': 0,

@@ -178,6 +178,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
           arguments: StartSessionArgs(
             eventId: widget.args.eventId,
             table: table,
+            scoringPhase: _controller.event?.currentScoringPhase ??
+                EventScoringPhase.qualification,
             preverifiedTableTagUid: preverifiedTableTagUid,
           ),
         );
@@ -705,6 +707,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         lifecycleStatus != EventLifecycleStatus.completed &&
             lifecycleStatus != EventLifecycleStatus.finalized &&
             lifecycleStatus != EventLifecycleStatus.cancelled;
+    final showQualificationSetup = _usesQualificationSetupDashboard(event);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -751,18 +754,29 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 scoringOpen: event.scoringOpen,
               ),
               const SizedBox(height: 14),
-              _LiveMetricsRow(
-                guestCount: _controller.guestCount,
-                tableCount: _controller.tableCount,
-                prizePoolLabel: _formatPrizePoolValue(
-                  _controller.prizePoolCents,
+              if (showQualificationSetup)
+                _QualificationSetupMetricsRow(
+                  guestCount: _controller.guestCount,
+                  checkedInCount: _controller.checkedInGuestCount,
+                  qualifyingCount: _controller.qualifyingGuestCount,
+                  qualifiedCount: _controller.qualifiedGuestCount,
+                  onGuests: _openGuests,
+                  onQualifying: _openGuests,
+                  onQualified: _openGuests,
+                )
+              else
+                _LiveMetricsRow(
+                  guestCount: _controller.guestCount,
+                  tableCount: _controller.tableCount,
+                  prizePoolLabel: _formatPrizePoolValue(
+                    _controller.prizePoolCents,
+                  ),
+                  leaderLabel: _controller.leaderLabel,
+                  onGuests: _openGuests,
+                  onTables: _openTables,
+                  onPrizes: _openPrizes,
+                  onLeaderboard: _openLeaderboard,
                 ),
-                leaderLabel: _controller.leaderLabel,
-                onGuests: _openGuests,
-                onTables: _openTables,
-                onPrizes: _openPrizes,
-                onLeaderboard: _openLeaderboard,
-              ),
               if (_controller.bonusRoundResults.hasResults) ...[
                 const SizedBox(height: 12),
                 _BonusRoundResultsPanel(summary: _controller.bonusRoundResults),
@@ -798,6 +812,16 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 _LiveOperationsStrip(
                   isSubmitting: _controller.isSubmittingLifecycle,
                   scoringOpen: event.scoringOpen,
+                  title: showQualificationSetup
+                      ? 'Qualification'
+                      : 'Live Operations',
+                  openMessage: event.currentScoringPhase ==
+                          EventScoringPhase.qualification
+                      ? 'Qualification scoring is open for hosts.'
+                      : 'Scoring and check-in are open for hosts.',
+                  closedMessage: showQualificationSetup
+                      ? 'Start qualification when hosts are ready to log open-play games.'
+                      : 'Open scoring when hosts are ready to start rounds.',
                   onToggleScoring: event.scoringOpen
                       ? () => _controller.setOperationalFlags(
                             checkinOpen: event.checkinOpen,
@@ -850,6 +874,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.draft => 'Open Check-In',
       EventLifecycleStatus.active when event.scoringOpen => 'Scan Table',
+      EventLifecycleStatus.active
+          when _usesQualificationSetupDashboard(event) =>
+        'Start Qualification',
       EventLifecycleStatus.active => 'Open Scoring',
       EventLifecycleStatus.completed => 'Finalize Event',
       EventLifecycleStatus.finalized => 'View Leaderboard',
@@ -861,6 +888,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.draft => Icons.how_to_reg,
       EventLifecycleStatus.active when event.scoringOpen => Icons.nfc,
+      EventLifecycleStatus.active
+          when _usesQualificationSetupDashboard(event) =>
+        Icons.play_arrow,
       EventLifecycleStatus.active => Icons.play_arrow,
       EventLifecycleStatus.completed => Icons.verified,
       EventLifecycleStatus.finalized => Icons.leaderboard,
@@ -904,6 +934,12 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       EventLifecycleStatus.finalized => _openLeaderboard,
       EventLifecycleStatus.cancelled => _openActivity,
     };
+  }
+
+  bool _usesQualificationSetupDashboard(EventRecord event) {
+    return event.lifecycleStatus == EventLifecycleStatus.active &&
+        !event.scoringOpen &&
+        event.currentScoringPhase == EventScoringPhase.qualification;
   }
 }
 
@@ -1250,15 +1286,88 @@ class _LiveMetricsRow extends StatelessWidget {
   }
 }
 
+class _QualificationSetupMetricsRow extends StatelessWidget {
+  const _QualificationSetupMetricsRow({
+    required this.guestCount,
+    required this.checkedInCount,
+    required this.qualifyingCount,
+    required this.qualifiedCount,
+    required this.onGuests,
+    required this.onQualifying,
+    required this.onQualified,
+  });
+
+  final int guestCount;
+  final int checkedInCount;
+  final int qualifyingCount;
+  final int qualifiedCount;
+  final VoidCallback onGuests;
+  final VoidCallback onQualifying;
+  final VoidCallback onQualified;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: MetricTile(
+                label: 'Guests',
+                value: guestCount.toString(),
+                onTap: onGuests,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: MetricTile(
+                label: 'Checked In',
+                value: checkedInCount.toString(),
+                onTap: onGuests,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: MetricTile(
+                label: 'Qualifying',
+                value: qualifyingCount.toString(),
+                onTap: onQualifying,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: MetricTile(
+                label: 'Qualified',
+                value: qualifiedCount.toString(),
+                onTap: onQualified,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _LiveOperationsStrip extends StatelessWidget {
   const _LiveOperationsStrip({
     required this.isSubmitting,
     required this.scoringOpen,
+    required this.title,
+    required this.openMessage,
+    required this.closedMessage,
     required this.onToggleScoring,
   });
 
   final bool isSubmitting;
   final bool scoringOpen;
+  final String title;
+  final String openMessage;
+  final String closedMessage;
   final VoidCallback? onToggleScoring;
 
   @override
@@ -1278,16 +1387,14 @@ class _LiveOperationsStrip extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Live Operations',
+                  title,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  scoringOpen
-                      ? 'Scoring and check-in are open for hosts.'
-                      : 'Open scoring when hosts are ready to start rounds.',
+                  scoringOpen ? openMessage : closedMessage,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),

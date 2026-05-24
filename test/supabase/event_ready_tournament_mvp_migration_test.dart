@@ -82,6 +82,10 @@ void main() {
       migrationsSql,
       'public.start_assigned_table_session',
     );
+    final seatingValidationSql = _extractFunction(
+      migrationsSql,
+      'app_private.validate_random_seating_assignment',
+    );
 
     expect(startSessionSql, contains('current_scoring_phase'));
     expect(startSessionSql, contains('effective_scoring_phase'));
@@ -92,9 +96,19 @@ void main() {
         'case when bonus_assignment_row.id is null then effective_scoring_phase else',
       ),
     );
+    expect(seatingValidationSql, contains('current_scoring_phase'));
+    expect(
+      seatingValidationSql,
+      contains("event_row.current_scoring_phase = 'qualification'"),
+    );
     expect(
       assignedStartSessionSql,
-      contains('create or replace function public.start_assigned_table_session'),
+      contains(
+          'create or replace function public.start_assigned_table_session'),
+    );
+    expect(
+      assignedStartSessionSql,
+      contains('Assigned seating is only available after qualification.'),
     );
     expect(assignedStartSessionSql, contains('scanned_table_uid text'));
     expect(
@@ -116,6 +130,23 @@ void main() {
     expect(refreshTotalsSql, contains("session.scoring_phase = 'tournament'"));
     expect(refreshTotalsSql, isNot(contains('session.bonus_round_id is null')));
     expect(refreshTotalsSql, contains('finals_champion_award'));
+  });
+
+  test('round time completion only applies to tournament and bonus sessions',
+      () {
+    final recalculateSessionSql = _extractFunction(
+      migrationsSql,
+      'app_private.recalculate_session_unowned',
+    );
+
+    expect(
+      recalculateSessionSql,
+      contains("session_row.scoring_phase in ('tournament', 'bonus')"),
+    );
+    expect(
+      recalculateSessionSql,
+      contains('session_row.started_at + round_time_limit_duration'),
+    );
   });
 
   test('official leaderboard uses qualified tournament participants', () {
