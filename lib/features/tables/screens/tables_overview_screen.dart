@@ -121,7 +121,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       arguments: StartSessionArgs(
         eventId: widget.eventId,
         table: table,
-        scoringPhase: widget.scoringPhase,
+        scoringPhase: _controller.effectiveScoringPhase,
         allowAssignedTableEntry: true,
       ),
     );
@@ -134,7 +134,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       arguments: StartSessionArgs(
         eventId: widget.eventId,
         table: table,
-        scoringPhase: widget.scoringPhase,
+        scoringPhase: _controller.effectiveScoringPhase,
       ),
     );
     await _controller.load(widget.eventId);
@@ -287,7 +287,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
             ],
             if (_controller.currentRoundCards.isNotEmpty) ...[
               _buildSectionHeader(
-                widget.scoringPhase == EventScoringPhase.bonus
+                _controller.effectiveScoringPhase == EventScoringPhase.bonus
                     ? 'Finals Tables'
                     : 'Current Round',
               ),
@@ -379,7 +379,8 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
           ),
           if (!widget.readOnly &&
               widget.scoringOpen &&
-              widget.scoringPhase == EventScoringPhase.tournament &&
+              _controller.effectiveScoringPhase ==
+                  EventScoringPhase.tournament &&
               summary.isComplete) ...[
             const SizedBox(height: 12),
             SizedBox(
@@ -434,7 +435,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   }
 
   String _roundProgressLabel(TournamentRoundSummary summary) {
-    final noun = widget.scoringPhase == EventScoringPhase.bonus
+    final noun = _controller.effectiveScoringPhase == EventScoringPhase.bonus
         ? 'finals ${summary.assignedTableCount == 1 ? 'table' : 'tables'}'
         : summary.assignedTableCount == 1
             ? 'table'
@@ -444,7 +445,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   }
 
   String _currentBoardTitle(TournamentRoundRecord? round) {
-    if (widget.scoringPhase == EventScoringPhase.bonus) {
+    if (_controller.effectiveScoringPhase == EventScoringPhase.bonus) {
       return 'Finals';
     }
     return round == null ? 'Tournament Round' : 'Round ${round.roundNumber}';

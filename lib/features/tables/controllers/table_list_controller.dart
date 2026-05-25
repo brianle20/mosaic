@@ -31,6 +31,7 @@ class TableListController extends ChangeNotifier {
   final EventScoringPhase scoringPhase;
   final DateTime Function() _now;
 
+  late EventScoringPhase effectiveScoringPhase = scoringPhase;
   bool isLoading = true;
   bool isStartingNextRound = false;
   bool isUpdatingTimers = false;
@@ -70,7 +71,11 @@ class TableListController extends ChangeNotifier {
     sessionsByTableId = _sessionsByTable(cachedSessions);
     guestNamesById = _guestNamesById(cachedGuests);
     bonusAssignments = cachedBonusAssignments;
-    tournamentRoundSummary = scoringPhase == EventScoringPhase.bonus
+    effectiveScoringPhase = _resolveEffectiveScoringPhase(
+      sessions: cachedSessions,
+      activeBonusAssignments: cachedBonusAssignments,
+    );
+    tournamentRoundSummary = effectiveScoringPhase == EventScoringPhase.bonus
         ? _buildBonusRoundSummary()
         : cachedRoundSummary ?? TournamentRoundSummary.empty();
     sessionDetailsBySessionId =
@@ -105,8 +110,12 @@ class TableListController extends ChangeNotifier {
       }
     }
 
-    if (scoringPhase == EventScoringPhase.bonus) {
-      bonusAssignments = await _loadBonusAssignments(eventId);
+    bonusAssignments = await _loadBonusAssignments(eventId);
+    effectiveScoringPhase = _resolveEffectiveScoringPhase(
+      sessions: sessionsByTableId.values.expand((sessions) => sessions),
+      activeBonusAssignments: bonusAssignments,
+    );
+    if (effectiveScoringPhase == EventScoringPhase.bonus) {
       tournamentRoundSummary = _buildBonusRoundSummary();
     } else {
       tournamentRoundSummary = await _loadTournamentRoundSummary(eventId);
@@ -322,7 +331,7 @@ class TableListController extends ChangeNotifier {
           liveSummary: _liveSummaryFor(
             table,
             matchScoringPhase: currentRoundTablesById.containsKey(table.id)
-                ? scoringPhase
+                ? effectiveScoringPhase
                 : null,
           ),
           currentRoundSummary: currentRoundTablesById[table.id],
@@ -332,10 +341,11 @@ class TableListController extends ChangeNotifier {
           assignmentTitle: _assignmentTitle(
             bonusAssignmentsByTableId[table.id],
           ),
-          assignmentSubtitle: scoringPhase == EventScoringPhase.bonus &&
-                  currentRoundTablesById.containsKey(table.id)
-              ? table.label
-              : null,
+          assignmentSubtitle:
+              effectiveScoringPhase == EventScoringPhase.bonus &&
+                      currentRoundTablesById.containsKey(table.id)
+                  ? table.label
+                  : null,
         ),
     ];
   }
@@ -349,7 +359,7 @@ class TableListController extends ChangeNotifier {
   }
 
   String? _assignmentTitle(List<SeatingAssignmentRecord>? assignments) {
-    if (scoringPhase != EventScoringPhase.bonus ||
+    if (effectiveScoringPhase != EventScoringPhase.bonus ||
         assignments == null ||
         assignments.isEmpty) {
       return null;
@@ -378,10 +388,6 @@ class TableListController extends ChangeNotifier {
   Future<List<SeatingAssignmentRecord>> _readCachedBonusAssignments(
     String eventId,
   ) async {
-    if (scoringPhase != EventScoringPhase.bonus) {
-      return const [];
-    }
-
     try {
       final assignments =
           await _seatingRepository?.readCachedAssignments(eventId) ?? const [];
@@ -420,6 +426,24 @@ class TableListController extends ChangeNotifier {
         }
         return left.seatIndex.compareTo(right.seatIndex);
       });
+  }
+
+  EventScoringPhase _resolveEffectiveScoringPhase({
+    required Iterable<TableSessionRecord> sessions,
+    required List<SeatingAssignmentRecord> activeBonusAssignments,
+  }) {
+    if (scoringPhase == EventScoringPhase.bonus ||
+        activeBonusAssignments.isNotEmpty) {
+      return EventScoringPhase.bonus;
+    }
+
+    final hasLiveBonusSession = sessions.any(
+      (session) =>
+          session.scoringPhase == EventScoringPhase.bonus &&
+          (session.status == SessionStatus.active ||
+              session.status == SessionStatus.paused),
+    );
+    return hasLiveBonusSession ? EventScoringPhase.bonus : scoringPhase;
   }
 
   TournamentRoundSummary _buildBonusRoundSummary() {

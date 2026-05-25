@@ -1484,6 +1484,58 @@ void main() {
     expect(find.text('Enter Table'), findsOneWidget);
   });
 
+  testWidgets('active finals assignments override stale tournament phase',
+      (tester) async {
+    final table = _table('tbl_champions', 'Table 1');
+    final session = _session(
+      id: 'ses_bonus',
+      tableId: table.id,
+      scoringPhase: EventScoringPhase.bonus,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          scoringPhase: EventScoringPhase.tournament,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(sessions: [session]),
+          guestRepository: _FakeGuestRepository(const []),
+          seatingRepository: _FakeSeatingRepository(
+            summary: _roundSummary(),
+            assignments: [
+              _bonusAssignment(
+                table: table,
+                seatIndex: 0,
+                displayName: 'Seed Four',
+                seedRank: 4,
+              ),
+              _bonusAssignment(
+                table: table,
+                seatIndex: 1,
+                displayName: 'Seed Three',
+                seedRank: 3,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Finals'), findsOneWidget);
+    expect(find.text('Round 2'), findsNothing);
+    expect(find.text('Finals Tables'), findsOneWidget);
+    expect(find.text('Table of Champions'), findsOneWidget);
+    expect(find.text('In Progress'), findsWidgets);
+    expect(find.text('Ready'), findsNothing);
+    expect(
+        find.text('Scan this table from the event dashboard to start seating.'),
+        findsNothing);
+  });
+
   testWidgets('finals enter table opens assigned bonus start flow',
       (tester) async {
     final table = _table('tbl_champions', 'Table 1');

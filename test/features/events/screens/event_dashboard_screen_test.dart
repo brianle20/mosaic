@@ -2633,6 +2633,70 @@ void main() {
     expect(openedArgs?.scoringPhase, EventScoringPhase.bonus);
   });
 
+  testWidgets('dashboard opens finals tables when event phase is stale',
+      (tester) async {
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'scoring_open': true,
+      'current_scoring_phase': 'tournament',
+    });
+    TablesOverviewArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: EventDashboardArgs(eventId: event.id),
+          eventRepository: _EventRepository(event),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository:
+              _TableRepository(tables: [_table(eventId: event.id)]),
+          sessionRepository: const _SessionRepository(),
+          seatingRepository: _SeatingRepository(
+            roundSummary: _roundSummary(
+              roundNumber: 2,
+              assignedTableCount: 0,
+            ),
+            assignments: [
+              _bonusAssignment(eventId: event.id),
+              _bonusAssignment(
+                id: 'bonus_asg_02',
+                eventId: event.id,
+                guestId: 'gst_02',
+                displayName: 'Ben South',
+                seatIndex: 1,
+              ),
+            ],
+          ),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedArgs = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(
+                body: Text('Opened Finals Tables'),
+              ),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Finals Live'), findsOneWidget);
+    expect(find.text('Finals'), findsOneWidget);
+    expect(find.text('0 of 1 finals tables complete'), findsOneWidget);
+    expect(find.text('Open Finals Tables'), findsOneWidget);
+    expect(find.text('Round 2'), findsNothing);
+
+    await tester.tap(find.text('Open Finals Tables'));
+    await tester.pumpAndSettle();
+
+    expect(openedArgs?.eventId, event.id);
+    expect(openedArgs?.scoringPhase, EventScoringPhase.bonus);
+  });
+
   testWidgets('tournament dashboard starts next round when complete',
       (tester) async {
     _SeatingRepository.generatedTournamentRoundCount = 0;

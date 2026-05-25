@@ -82,6 +82,13 @@ class EventDashboardController extends ChangeNotifier {
       TournamentRoundSummary.empty();
   TournamentRoundSummary finalsRoundSummary = TournamentRoundSummary.empty();
 
+  EventScoringPhase? get effectiveScoringPhase {
+    if (finalsRoundSummary.hasCurrentRound) {
+      return EventScoringPhase.bonus;
+    }
+    return event?.currentScoringPhase;
+  }
+
   Future<void> load(String eventId) async {
     final requestToken = _beginStateRequest();
     final cachedEvent = (await _eventRepository.readCachedEvents())
@@ -100,9 +107,7 @@ class EventDashboardController extends ChangeNotifier {
     final cachedTournamentRoundSummary =
         await _readCachedTournamentRoundSummary(eventId);
     final cachedFinalsRoundSummary =
-        cachedEvent?.currentScoringPhase == EventScoringPhase.bonus
-            ? await _readCachedFinalsRoundSummary(eventId)
-            : TournamentRoundSummary.empty();
+        await _readCachedFinalsRoundSummary(eventId);
     if (!_isCurrentStateRequest(requestToken)) {
       return;
     }
@@ -120,8 +125,9 @@ class EventDashboardController extends ChangeNotifier {
       ledgerEntries: cachedLedger ?? const [],
       leaderboardEntries: cachedLeaderboard ?? const [],
     );
-    tournamentRoundSummary =
-        cachedEvent?.currentScoringPhase == EventScoringPhase.tournament
+    tournamentRoundSummary = cachedFinalsRoundSummary.hasCurrentRound
+        ? TournamentRoundSummary.empty()
+        : cachedEvent?.currentScoringPhase == EventScoringPhase.tournament
             ? cachedTournamentRoundSummary
             : TournamentRoundSummary.empty();
     finalsRoundSummary = cachedFinalsRoundSummary;
@@ -202,14 +208,13 @@ class EventDashboardController extends ChangeNotifier {
         currentScoringPhase == EventScoringPhase.tournament
             ? await _loadTournamentRoundSummary(eventId)
             : TournamentRoundSummary.empty();
-    final loadedFinalsRoundSummary =
-        currentScoringPhase == EventScoringPhase.bonus
-            ? await _loadFinalsRoundSummary(eventId)
-            : TournamentRoundSummary.empty();
+    final loadedFinalsRoundSummary = await _loadFinalsRoundSummary(eventId);
     if (!_isCurrentStateRequest(requestToken)) {
       return;
     }
-    tournamentRoundSummary = loadedTournamentRoundSummary;
+    tournamentRoundSummary = loadedFinalsRoundSummary.hasCurrentRound
+        ? TournamentRoundSummary.empty()
+        : loadedTournamentRoundSummary;
     finalsRoundSummary = loadedFinalsRoundSummary;
 
     try {

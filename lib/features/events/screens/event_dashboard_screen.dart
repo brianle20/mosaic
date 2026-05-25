@@ -126,7 +126,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventId: event.id,
         eventTitle: event.title,
         scoringOpen: event.scoringOpen,
-        scoringPhase: event.currentScoringPhase,
+        scoringPhase:
+            _controller.effectiveScoringPhase ?? event.currentScoringPhase,
         readOnly: event.lifecycleStatus != EventLifecycleStatus.draft &&
             event.lifecycleStatus != EventLifecycleStatus.active,
       ),
@@ -191,7 +192,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
           arguments: StartSessionArgs(
             eventId: widget.args.eventId,
             table: table,
-            scoringPhase: _controller.event?.currentScoringPhase ??
+            scoringPhase: _controller.effectiveScoringPhase ??
+                _controller.event?.currentScoringPhase ??
                 EventScoringPhase.qualification,
             preverifiedTableTagUid: preverifiedTableTagUid,
           ),
@@ -802,6 +804,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
   Widget _buildLiveConsole(BuildContext context, EventRecord event) {
     final colorScheme = Theme.of(context).colorScheme;
+    final scoringPhase =
+        _controller.effectiveScoringPhase ?? event.currentScoringPhase;
     final canScanTables = widget.tableRepository != null &&
         widget.sessionRepository != null &&
         widget.nfcService != null;
@@ -816,11 +820,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     final showTournamentCommandCenter =
         lifecycleStatus == EventLifecycleStatus.active &&
             event.scoringOpen &&
-            event.currentScoringPhase == EventScoringPhase.tournament;
+            scoringPhase == EventScoringPhase.tournament;
     final showFinalsCommandCenter =
         lifecycleStatus == EventLifecycleStatus.active &&
             event.scoringOpen &&
-            event.currentScoringPhase == EventScoringPhase.bonus;
+            scoringPhase == EventScoringPhase.bonus;
     final showRoundCommandCenter =
         showTournamentCommandCenter || showFinalsCommandCenter;
 
@@ -903,7 +907,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               const SizedBox(height: 16),
               if (showRoundCommandCenter)
                 _TournamentRoundCommandCenter(
-                  scoringPhase: event.currentScoringPhase,
+                  scoringPhase: scoringPhase,
                   summary: showFinalsCommandCenter
                       ? _controller.finalsRoundSummary
                       : _controller.tournamentRoundSummary,
