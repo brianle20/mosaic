@@ -465,39 +465,23 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   }
 
   Widget _buildCurrentRoundLiveMeta(LiveTableSummary summary) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final dealer = _currentDealerSeat(summary);
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        StatusChip(
+          label: summary.roundWindLabel,
+          tone: StatusChipTone.info,
+        ),
         if (summary.showRoundTimer)
           StatusChip(
             label: summary.roundTimeLabel,
             tone: _roundTimeTone(summary),
           ),
-        if (dealer != null)
-          Text(
-            '${dealer.windLabel} · ${dealer.guestName}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
+        StatusChip(label: summary.dealerLabel),
       ],
     );
-  }
-
-  SeatSummary? _currentDealerSeat(LiveTableSummary summary) {
-    for (final seat in summary.seats) {
-      if (seat.isDealer) {
-        return seat;
-      }
-    }
-    return null;
   }
 
   Widget _buildTableCard(TableOverviewCardData cardData) {

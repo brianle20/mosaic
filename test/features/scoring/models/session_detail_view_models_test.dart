@@ -5,7 +5,7 @@ import 'package:mosaic/features/scoring/models/session_detail_view_models.dart';
 
 void main() {
   group('buildSessionDetailViewModel', () {
-    test('builds title, context, status, hand count, and current East chip',
+    test('builds title, context, status, hand count, and wind chips',
         () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(),
@@ -16,7 +16,29 @@ void main() {
       expect(viewModel.contextLabel, startsWith('Current session'));
       expect(viewModel.statusLabel, 'Active');
       expect(viewModel.handCountLabel, 'Hand 1');
-      expect(viewModel.currentEastLabel, 'East: Giang');
+      expect(viewModel.roundWindLabel, 'Round Wind: East');
+      expect(viewModel.dealerLabel, 'Dealer: Giang');
+    });
+
+    test('advances round wind after each full dealer rotation cycle', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(
+          currentDealerSeatIndex: 0,
+          hands: [
+            for (var index = 0; index < 4; index += 1)
+              _washoutHand(
+                id: 'hand_${index + 1}',
+                handNumber: index + 1,
+                dealerRotated: true,
+              ),
+          ],
+          settlements: const [],
+        ),
+        guestNamesById: _guestNamesById,
+      );
+
+      expect(viewModel.roundWindLabel, 'Round Wind: South');
+      expect(viewModel.dealerLabel, 'Dealer: Estevon');
     });
 
     test('falls back to default table session title without a table label', () {
@@ -334,6 +356,7 @@ Map<String, Object?> _discardWinHand({
 Map<String, Object?> _washoutHand({
   String id = 'hand_02',
   int handNumber = 1,
+  bool dealerRotated = false,
 }) {
   return {
     'id': id,
@@ -341,8 +364,8 @@ Map<String, Object?> _washoutHand({
     'hand_number': handNumber,
     'result_type': 'washout',
     'east_seat_index_before_hand': 1,
-    'east_seat_index_after_hand': 1,
-    'dealer_rotated': false,
+    'east_seat_index_after_hand': dealerRotated ? 2 : 1,
+    'dealer_rotated': dealerRotated,
     'session_completed_after_hand': false,
     'status': 'recorded',
     'entered_by_user_id': 'usr_01',

@@ -380,6 +380,8 @@ void main() {
     final liveSummary = controller.cards.single.liveSummary!;
     expect(liveSummary.sessionId, 'ses_01');
     expect(liveSummary.status, SessionStatus.active);
+    expect(liveSummary.roundWindLabel, 'Round Wind: East');
+    expect(liveSummary.dealerLabel, 'Dealer: Chris Lee');
     expect(liveSummary.progressLabel, 'Hand 3');
     expect(liveSummary.lastHand.title, 'Ben Wong self-draw');
     expect(

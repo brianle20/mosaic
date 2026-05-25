@@ -392,6 +392,8 @@ void main() {
     expect(find.text('Session Detail'), findsNothing);
     expect(find.text('Current East'), findsNothing);
     expect(find.text('SOUTH · CURRENT EAST'), findsNothing);
+    expect(find.text('Round Wind: East'), findsOneWidget);
+    expect(find.text('Dealer: Bob'), findsOneWidget);
     expect(find.text('SOUTH'), findsOneWidget);
     expect(find.text('Dealer'), findsOneWidget);
     expect(find.text('Record Hand'), findsOneWidget);

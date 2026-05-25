@@ -29,6 +29,8 @@ class LiveTableSummary {
     required this.status,
     required this.seats,
     required this.handCount,
+    required this.roundWindLabel,
+    required this.dealerLabel,
     required this.progressLabel,
     required this.showRoundTimer,
     required this.roundTimeLabel,
@@ -41,6 +43,8 @@ class LiveTableSummary {
   final SessionStatus status;
   final List<SeatSummary> seats;
   final int handCount;
+  final String roundWindLabel;
+  final String dealerLabel;
   final String progressLabel;
   final bool showRoundTimer;
   final String roundTimeLabel;

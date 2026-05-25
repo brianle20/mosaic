@@ -298,6 +298,8 @@ class TableListController extends ChangeNotifier {
         status: session.status,
         seats: _fallbackSeats(session),
         handCount: session.handCount,
+        roundWindLabel: 'Round Wind: East',
+        dealerLabel: 'Dealer: Unassigned',
         progressLabel: _progressLabel(session.handCount),
         showRoundTimer: showRoundTimer,
         roundTimeLabel: roundTime?.label ?? '',
@@ -321,6 +323,9 @@ class TableListController extends ChangeNotifier {
       status: session.status,
       seats: _seatSummaries(detail),
       handCount: handCount,
+      roundWindLabel: 'Round Wind: ${_roundWindLabel(detail.hands)}',
+      dealerLabel:
+          'Dealer: ${_guestNameForSeat(detail, detail.session.currentDealerSeatIndex)}',
       progressLabel: _progressLabel(handCount),
       showRoundTimer: showRoundTimer,
       roundTimeLabel: roundTime?.label ?? '',
@@ -426,6 +431,20 @@ class TableListController extends ChangeNotifier {
       return 'No hands recorded';
     }
     return 'Hand $handCount';
+  }
+
+  String _roundWindLabel(List<HandResultRecord> hands) {
+    final dealerRotationCount = hands
+        .where(
+          (hand) =>
+              hand.status == HandResultStatus.recorded && hand.dealerRotated,
+        )
+        .length;
+    final windCycle = dealerRotationCount ~/ 4;
+    const winds = ['East', 'South', 'West'];
+    final cappedWindCycle =
+        windCycle >= winds.length ? winds.length - 1 : windCycle;
+    return winds[cappedWindCycle];
   }
 
   String _windLabel(int seatIndex, int currentDealerSeatIndex) {

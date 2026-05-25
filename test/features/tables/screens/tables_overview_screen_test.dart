@@ -1003,7 +1003,8 @@ void main() {
     expect(find.text('Chris Lee, Dana Park'), findsOneWidget);
     expect(find.text('Hand 2'), findsOneWidget);
     expect(find.text('59:00'), findsOneWidget);
-    expect(find.text('East · Alice Chen'), findsOneWidget);
+    expect(find.text('Round Wind: East'), findsOneWidget);
+    expect(find.text('Dealer: Alice Chen'), findsOneWidget);
     expect(find.text('Enter Table'), findsOneWidget);
     expect(find.text('Open Session'), findsOneWidget);
 
@@ -1074,7 +1075,8 @@ void main() {
     expect(find.text('Open Session'), findsOneWidget);
     expect(find.text('View Session'), findsNothing);
     expect(find.text('59:00'), findsOneWidget);
-    expect(find.text('East · Ben Wong'), findsOneWidget);
+    expect(find.text('Round Wind: East'), findsOneWidget);
+    expect(find.text('Dealer: Ben Wong'), findsOneWidget);
   });
 
   testWidgets('enter table fallback opens assigned tournament start flow',

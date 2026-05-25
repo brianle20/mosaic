@@ -291,9 +291,10 @@ class _SessionHeader extends StatelessWidget {
               ),
               StatusChip(label: viewModel.handCountLabel),
               StatusChip(
-                label: viewModel.currentEastLabel,
+                label: viewModel.roundWindLabel,
                 tone: StatusChipTone.info,
               ),
+              StatusChip(label: viewModel.dealerLabel),
             ],
           ),
           if (viewModel.showRoundTimer) ...[
