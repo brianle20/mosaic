@@ -168,6 +168,8 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       _sessionHasRoundTimer &&
       RoundTimerState.fromStartedAt(
         startedAt: widget.sessionDetail.session.startedAt,
+        pausedAt: widget.sessionDetail.session.roundTimerPausedAt,
+        pausedSeconds: widget.sessionDetail.session.roundTimerPausedSeconds,
       ).isExpired;
 
   bool get _sessionHasRoundTimer =>

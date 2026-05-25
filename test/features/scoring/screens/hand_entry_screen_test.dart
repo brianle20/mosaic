@@ -200,6 +200,7 @@ void main() {
     int currentDealerSeatIndex = 0,
     EventScoringPhase scoringPhase = EventScoringPhase.qualification,
     String? startedAt,
+    int roundTimerPausedSeconds = 0,
   }) {
     return SessionDetailRecord.fromJson({
       'session': {
@@ -219,6 +220,7 @@ void main() {
         'hand_count': 0,
         'started_at': startedAt ?? DateTime.now().toIso8601String(),
         'started_by_user_id': 'usr_01',
+        'round_timer_paused_seconds': roundTimerPausedSeconds,
       },
       'seats': [
         {
@@ -453,6 +455,27 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.recordedInput, isNotNull);
+  });
+
+  testWidgets('round warning respects paused timer time', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(
+            scoringPhase: EventScoringPhase.tournament,
+            startedAt: DateTime.now()
+                .subtract(const Duration(minutes: 80))
+                .toIso8601String(),
+            roundTimerPausedSeconds: const Duration(minutes: 30).inSeconds,
+          ),
+          guestNamesById: seatNames,
+          sessionRepository: _RecordingSessionRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Round time has expired.'), findsNothing);
   });
 
   testWidgets('expired qualification session does not show round warning',
