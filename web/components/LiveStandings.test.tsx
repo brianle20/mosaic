@@ -235,6 +235,69 @@ describe("LiveStandings", () => {
     vi.useRealTimers();
   });
 
+  it("renders finals leaderboards above tournament standings", () => {
+    render(
+      <LiveStandings
+        eventId="event-1"
+        initialSnapshot={{
+          eventTitle: "Mosaic May Tournament",
+          leaderboard: [
+            {
+              eventGuestId: "guest-3",
+              publicDisplayName: "Caren W.",
+              totalPoints: 400,
+              handsPlayed: 5,
+              wins: 2,
+              selfDrawWins: 1,
+              discardWins: 1,
+              discardLosses: 0,
+              rank: 1,
+            },
+          ],
+          bonusResults: [],
+          finalsLeaderboards: [
+            {
+              tableRole: "table_of_champions",
+              title: "Table of Champions",
+              tableLabel: "Table 1",
+              hasScores: true,
+              rows: [
+                {
+                  eventGuestId: "guest-1",
+                  publicDisplayName: "Alice C.",
+                  seatIndex: 0,
+                  totalPoints: 128,
+                  handsPlayed: 3,
+                  wins: 2,
+                  rank: 1,
+                },
+                {
+                  eventGuestId: "guest-2",
+                  publicDisplayName: "Brian L.",
+                  seatIndex: 1,
+                  totalPoints: 64,
+                  handsPlayed: 3,
+                  wins: 1,
+                  rank: 2,
+                },
+              ],
+            },
+          ],
+          updatedAt: "2026-05-24T12:00:00.000Z",
+        }}
+        supabaseClient={createSupabaseClient().client}
+        fetchStandings={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Finals Leaderboards" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Table of Champions" })).toBeVisible();
+    expect(screen.getByText("Table 1")).toBeVisible();
+    expect(screen.getByText("Alice C.")).toBeVisible();
+    expect(screen.getByText("+128")).toBeVisible();
+    expect(screen.getByText("3 hands · 2 wins")).toBeVisible();
+  });
+
   it("resets visible standings and ignores stale refreshes when event changes", async () => {
     vi.useFakeTimers();
     vi.spyOn(Math, "random").mockReturnValue(0);

@@ -403,6 +403,48 @@ void main() {
     expect(publicBonusSql, _doesNotExposePrivateGuestData);
   });
 
+  test('public finals leaderboard RPC exposes table-scoped public standings',
+      () {
+    final publicFinalsSql = _extractFunction(
+      migrationsSql,
+      'public.get_public_event_finals_leaderboard',
+    );
+    final snapshotSql = _extractFunction(
+      migrationsSql,
+      'app_private.build_public_event_standings_snapshot',
+    );
+
+    expect(
+      publicFinalsSql,
+      contains(
+          'create or replace function public.get_public_event_finals_leaderboard'),
+    );
+    expect(publicFinalsSql, contains('bonus_table_role'));
+    expect(publicFinalsSql, contains('event_table.label as table_label'));
+    expect(
+        publicFinalsSql, contains('join public.event_tables as event_table'));
+    expect(publicFinalsSql, contains('public_display_name'));
+    expect(publicFinalsSql, contains('seat_index'));
+    expect(publicFinalsSql, contains('total_points'));
+    expect(publicFinalsSql, contains('hands_played'));
+    expect(publicFinalsSql, contains('wins'));
+    expect(publicFinalsSql, contains("assignment.assignment_type = 'bonus'"));
+    expect(publicFinalsSql, contains("session.scoring_phase = 'bonus'"));
+    expect(
+      publicFinalsSql,
+      contains('partition by finals_scores.bonus_table_role'),
+    );
+    expect(snapshotSql, contains('finalsLeaderboards'));
+    expect(snapshotSql, contains('public.get_public_event_finals_leaderboard'));
+    expect(
+      migrationsSql,
+      contains(
+        'grant execute on function public.get_public_event_finals_leaderboard(uuid) to anon, authenticated',
+      ),
+    );
+    expect(publicFinalsSql, _doesNotExposePrivateGuestData);
+  });
+
   test('bonus ranking uses qualified tournament participants', () {
     final bonusSeatingSql = _extractFunction(
       migrationsSql,

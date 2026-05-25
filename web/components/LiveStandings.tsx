@@ -8,6 +8,7 @@ import {
   mapPublicStandingsSnapshotPayload,
   type PublicStandingsClient,
   type PublicLeaderboardRow,
+  type PublicFinalsLeaderboardTable,
   type PublicStandingsSnapshot,
 } from "../lib/public-standings";
 import { createPublicSupabaseClient } from "../lib/supabase";
@@ -59,6 +60,33 @@ function snapshotFromRealtimePayload(
 
 function createRealtimeClient(): SupabaseRealtimeClient {
   return createPublicSupabaseClient() as unknown as SupabaseRealtimeClient;
+}
+
+function signedPoints(points: number): string {
+  if (points > 0) {
+    return `+${points.toLocaleString()}`;
+  }
+  return points.toLocaleString();
+}
+
+function pluralize(count: number, singular: string): string {
+  return `${count.toLocaleString()} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function seatLabel(seatIndex: number): string {
+  if (seatIndex === 0) {
+    return "East";
+  }
+  if (seatIndex === 1) {
+    return "South";
+  }
+  if (seatIndex === 2) {
+    return "West";
+  }
+  if (seatIndex === 3) {
+    return "North";
+  }
+  return `Seat ${seatIndex + 1}`;
 }
 
 function getScoreChanges(
@@ -279,6 +307,8 @@ export function LiveStandings({
         </section>
       ) : null}
 
+      <FinalsLeaderboards tables={snapshot.finalsLeaderboards ?? []} />
+
       <StandingsTable rows={snapshot.leaderboard} scoreChanges={scoreChanges} />
 
       {status === "refreshing" ? <p className="status-line">Refreshing standings...</p> : null}
@@ -288,5 +318,50 @@ export function LiveStandings({
         </p>
       ) : null}
     </main>
+  );
+}
+
+function FinalsLeaderboards({ tables }: { tables: PublicFinalsLeaderboardTable[] }) {
+  if (tables.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="finals-leaderboards" aria-labelledby="finals-leaderboards-heading">
+      <h2 id="finals-leaderboards-heading" className="section-heading">
+        Finals Leaderboards
+      </h2>
+      <div className="finals-leaderboard-grid">
+        {tables.map((table) => (
+          <article
+            key={`${table.tableRole}-${table.tableLabel}`}
+            className="finals-leaderboard-card"
+          >
+            <header>
+              <h3>{table.title}</h3>
+              <p>{table.tableLabel}</p>
+            </header>
+            <div className="finals-row-list">
+              {table.rows.map((row) => (
+                <div className="finals-row" key={row.eventGuestId}>
+                  <span className="finals-rank">
+                    {table.hasScores ? `#${row.rank}` : seatLabel(row.seatIndex)}
+                  </span>
+                  <span className="finals-player">
+                    <strong>{row.publicDisplayName}</strong>
+                    <small>
+                      {pluralize(row.handsPlayed, "hand")} · {pluralize(row.wins, "win")}
+                    </small>
+                  </span>
+                  <span className={`finals-points ${row.totalPoints < 0 ? "negative" : "positive"}`}>
+                    {signedPoints(row.totalPoints)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }

@@ -74,6 +74,7 @@ describe("public standings data mapping", () => {
     expect(result.eventTitle).toBe("Mosaic May Tournament");
     expect(result.leaderboard).toEqual([]);
     expect(result.bonusResults).toEqual([]);
+    expect(result.finalsLeaderboards).toEqual([]);
     expect(rpc).toHaveBeenCalledWith("get_public_event_summary", {
       target_event_id: "event-1",
     });
@@ -81,6 +82,9 @@ describe("public standings data mapping", () => {
       target_event_id: "event-1",
     });
     expect(rpc).toHaveBeenCalledWith("get_public_event_bonus_results", {
+      target_event_id: "event-1",
+    });
+    expect(rpc).toHaveBeenCalledWith("get_public_event_finals_leaderboard", {
       target_event_id: "event-1",
     });
   });
@@ -94,6 +98,7 @@ describe("public standings data mapping", () => {
           eventTitle: "FV Mahjong 1",
           leaderboard: [],
           bonusResults: [],
+          finalsLeaderboards: [],
           updatedAt: "2026-05-24T12:01:00.000Z",
         },
         updated_at: "2026-05-24T12:01:01.000Z",
@@ -135,6 +140,25 @@ describe("public standings data mapping", () => {
             },
           ],
           bonusResults: [],
+          finalsLeaderboards: [
+            {
+              tableRole: "table_of_champions",
+              title: "Table of Champions",
+              tableLabel: "Table 1",
+              hasScores: true,
+              rows: [
+                {
+                  eventGuestId: "guest-2",
+                  publicDisplayName: "Brian L.",
+                  seatIndex: 1,
+                  totalPoints: 64,
+                  handsPlayed: 2,
+                  wins: 1,
+                  rank: 1,
+                },
+              ],
+            },
+          ],
           updatedAt: "2026-05-24T12:01:00.000Z",
         },
         updated_at: "2026-05-24T12:01:01.000Z",
@@ -170,6 +194,25 @@ describe("public standings data mapping", () => {
         },
       ],
       bonusResults: [],
+      finalsLeaderboards: [
+        {
+          tableRole: "table_of_champions",
+          title: "Table of Champions",
+          tableLabel: "Table 1",
+          hasScores: true,
+          rows: [
+            {
+              eventGuestId: "guest-2",
+              publicDisplayName: "Brian L.",
+              seatIndex: 1,
+              totalPoints: 64,
+              handsPlayed: 2,
+              wins: 1,
+              rank: 1,
+            },
+          ],
+        },
+      ],
       updatedAt: "2026-05-24T12:01:00.000Z",
     });
   });
@@ -201,6 +244,24 @@ describe("public standings data mapping", () => {
               pointsDelta: "384",
             },
           ],
+          finalsLeaderboards: [
+            {
+              tableRole: "table_of_redemption",
+              title: "  Table of Redemption  ",
+              tableLabel: "  Table 2  ",
+              rows: [
+                {
+                  eventGuestId: "guest-3",
+                  publicDisplayName: "  Dana P.  ",
+                  seatIndex: "2",
+                  totalPoints: "-16",
+                  handsPlayed: "3",
+                  wins: "1",
+                  rank: "2",
+                },
+              ],
+            },
+          ],
         },
         "2026-05-24T12:02:00.000Z",
       ),
@@ -228,8 +289,124 @@ describe("public standings data mapping", () => {
           pointsDelta: 384,
         },
       ],
+      finalsLeaderboards: [
+        {
+          tableRole: "table_of_redemption",
+          title: "Table of Redemption",
+          tableLabel: "Table 2",
+          hasScores: true,
+          rows: [
+            {
+              eventGuestId: "guest-3",
+              publicDisplayName: "Dana P.",
+              seatIndex: 2,
+              totalPoints: -16,
+              handsPlayed: 3,
+              wins: 1,
+              rank: 2,
+            },
+          ],
+        },
+      ],
       updatedAt: "2026-05-24T12:02:00.000Z",
     });
+  });
+
+  it("groups public finals leaderboard RPC rows into finals tables", async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: [{ event_id: "event-1", title: "Mosaic May Tournament" }],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            bonus_table_role: "table_of_champions",
+            table_label: "Table 1",
+            event_guest_id: "guest-1",
+            public_display_name: "Alice C.",
+            seat_index: 0,
+            total_points: 128,
+            hands_played: 3,
+            wins: 2,
+            rank: 1,
+          },
+          {
+            bonus_table_role: "table_of_champions",
+            table_label: "Table 1",
+            event_guest_id: "guest-2",
+            public_display_name: "Brian L.",
+            seat_index: 1,
+            total_points: 64,
+            hands_played: 3,
+            wins: 1,
+            rank: 2,
+          },
+          {
+            bonus_table_role: "table_of_redemption",
+            table_label: "Table 2",
+            event_guest_id: "guest-3",
+            public_display_name: "Caren W.",
+            seat_index: 0,
+            total_points: 0,
+            hands_played: 0,
+            wins: 0,
+            rank: 1,
+          },
+        ],
+        error: null,
+      });
+
+    const result = await fetchPublicStandings({ rpc }, "event-1");
+
+    expect(result.finalsLeaderboards).toEqual([
+      {
+        tableRole: "table_of_champions",
+        title: "Table of Champions",
+        tableLabel: "Table 1",
+        hasScores: true,
+        rows: [
+          {
+            eventGuestId: "guest-1",
+            publicDisplayName: "Alice C.",
+            seatIndex: 0,
+            totalPoints: 128,
+            handsPlayed: 3,
+            wins: 2,
+            rank: 1,
+          },
+          {
+            eventGuestId: "guest-2",
+            publicDisplayName: "Brian L.",
+            seatIndex: 1,
+            totalPoints: 64,
+            handsPlayed: 3,
+            wins: 1,
+            rank: 2,
+          },
+        ],
+      },
+      {
+        tableRole: "table_of_redemption",
+        title: "Table of Redemption",
+        tableLabel: "Table 2",
+        hasScores: false,
+        rows: [
+          {
+            eventGuestId: "guest-3",
+            publicDisplayName: "Caren W.",
+            seatIndex: 0,
+            totalPoints: 0,
+            handsPlayed: 0,
+            wins: 0,
+            rank: 1,
+          },
+        ],
+      },
+    ]);
   });
 
   it("maps public bonus result RPC rows", () => {

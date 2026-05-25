@@ -20,6 +20,19 @@ export type PublicBonusResultRpcRow = {
   [key: string]: unknown;
 };
 
+export type PublicFinalsLeaderboardRpcRow = {
+  bonus_table_role: string | null;
+  table_label: string | null;
+  event_guest_id: string;
+  public_display_name: string | null;
+  seat_index: number | null;
+  total_points: number | null;
+  hands_played: number | null;
+  wins: number | null;
+  rank: number | null;
+  [key: string]: unknown;
+};
+
 export type PublicEventSummaryRpcRow = {
   event_id: string;
   public_slug?: string | null;
@@ -58,12 +71,31 @@ export type PublicBonusResult = {
   pointsDelta: number;
 };
 
+export type PublicFinalsLeaderboardRow = {
+  eventGuestId: string;
+  publicDisplayName: string;
+  seatIndex: number;
+  totalPoints: number;
+  handsPlayed: number;
+  wins: number;
+  rank: number;
+};
+
+export type PublicFinalsLeaderboardTable = {
+  tableRole: string;
+  title: string;
+  tableLabel: string;
+  hasScores: boolean;
+  rows: PublicFinalsLeaderboardRow[];
+};
+
 export type PublicStandingsSnapshot = {
   eventId?: string;
   eventSlug?: string | null;
   eventTitle: string;
   leaderboard: PublicLeaderboardRow[];
   bonusResults: PublicBonusResult[];
+  finalsLeaderboards?: PublicFinalsLeaderboardTable[];
   updatedAt: string | null;
 };
 
@@ -73,6 +105,7 @@ export type PublicStandingsRpcClient = {
       | "get_public_event_summary"
       | "get_public_event_leaderboard"
       | "get_public_event_bonus_results"
+      | "get_public_event_finals_leaderboard"
       | "resolve_public_event_id",
     args: { target_event_id: string } | { target_public_slug: string },
   ) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>;
@@ -169,6 +202,62 @@ function mapSnapshotBonusResult(row: unknown): PublicBonusResult {
   };
 }
 
+function mapSnapshotFinalsLeaderboardRow(row: unknown): PublicFinalsLeaderboardRow {
+  const record = asRecord(row) ?? {};
+
+  return {
+    eventGuestId: readString(record.eventGuestId, ""),
+    publicDisplayName: readString(record.publicDisplayName, "Player"),
+    seatIndex: readNumber(record.seatIndex),
+    totalPoints: readNumber(record.totalPoints),
+    handsPlayed: readNumber(record.handsPlayed),
+    wins: readNumber(record.wins),
+    rank: readNumber(record.rank),
+  };
+}
+
+function finalsTitleForRole(role: string): string {
+  if (role === "table_of_champions") {
+    return "Table of Champions";
+  }
+  if (role === "table_of_redemption") {
+    return "Table of Redemption";
+  }
+  return "Finals Table";
+}
+
+function finalsRoleSort(role: string): number {
+  if (role === "table_of_champions") {
+    return 0;
+  }
+  if (role === "table_of_redemption") {
+    return 1;
+  }
+  return 2;
+}
+
+function mapSnapshotFinalsLeaderboardTable(
+  table: unknown,
+): PublicFinalsLeaderboardTable {
+  const record = asRecord(table) ?? {};
+  const rows = Array.isArray(record.rows)
+    ? record.rows.map(mapSnapshotFinalsLeaderboardRow)
+    : [];
+  const tableRole = readString(record.tableRole, "");
+  const hasScores =
+    typeof record.hasScores === "boolean"
+      ? record.hasScores
+      : rows.some((row) => row.handsPlayed > 0);
+
+  return {
+    tableRole,
+    title: readString(record.title, finalsTitleForRole(tableRole)),
+    tableLabel: readString(record.tableLabel, "Finals table"),
+    hasScores,
+    rows,
+  };
+}
+
 export function mapPublicStandingsSnapshotPayload(
   payload: unknown,
   updatedAt: string | null,
@@ -178,6 +267,9 @@ export function mapPublicStandingsSnapshotPayload(
   const record = asRecord(payload) ?? {};
   const leaderboard = Array.isArray(record.leaderboard) ? record.leaderboard : [];
   const bonusResults = Array.isArray(record.bonusResults) ? record.bonusResults : [];
+  const finalsLeaderboards = Array.isArray(record.finalsLeaderboards)
+    ? record.finalsLeaderboards
+    : [];
   const payloadUpdatedAt =
     typeof record.updatedAt === "string" && record.updatedAt.trim().length > 0
       ? record.updatedAt
@@ -187,6 +279,7 @@ export function mapPublicStandingsSnapshotPayload(
     eventTitle: readString(record.eventTitle, "Mosaic tournament"),
     leaderboard: leaderboard.map(mapSnapshotLeaderboardRow),
     bonusResults: bonusResults.map(mapSnapshotBonusResult),
+    finalsLeaderboards: finalsLeaderboards.map(mapSnapshotFinalsLeaderboardTable),
     updatedAt: payloadUpdatedAt ?? updatedAt,
   };
 
@@ -264,6 +357,75 @@ export function mapBonusResultRow(row: PublicBonusResultRpcRow): PublicBonusResu
   };
 }
 
+function mapFinalsLeaderboardRow(
+  row: PublicFinalsLeaderboardRpcRow,
+): PublicFinalsLeaderboardRow {
+  return {
+    eventGuestId: row.event_guest_id,
+    publicDisplayName: row.public_display_name?.trim() || "Player",
+    seatIndex: Number(row.seat_index ?? 0),
+    totalPoints: Number(row.total_points ?? 0),
+    handsPlayed: Number(row.hands_played ?? 0),
+    wins: Number(row.wins ?? 0),
+    rank: Number(row.rank ?? 0),
+  };
+}
+
+export function mapFinalsLeaderboardRows(
+  rows: PublicFinalsLeaderboardRpcRow[],
+): PublicFinalsLeaderboardTable[] {
+  const tablesByKey = new Map<
+    string,
+    {
+      tableRole: string;
+      tableLabel: string;
+      rows: PublicFinalsLeaderboardRow[];
+    }
+  >();
+
+  for (const row of rows) {
+    const tableRole = row.bonus_table_role?.trim() || "";
+    const tableLabel = row.table_label?.trim() || "Finals table";
+    const key = `${tableRole}\u0000${tableLabel}`;
+    const table = tablesByKey.get(key) ?? {
+      tableRole,
+      tableLabel,
+      rows: [],
+    };
+    table.rows.push(mapFinalsLeaderboardRow(row));
+    tablesByKey.set(key, table);
+  }
+
+  return Array.from(tablesByKey.values())
+    .map((table) => {
+      const hasScores = table.rows.some((row) => row.handsPlayed > 0);
+      const sortedRows = [...table.rows].sort((left, right) => {
+        if (!hasScores) {
+          return left.seatIndex - right.seatIndex;
+        }
+        const rankCompare = left.rank - right.rank;
+        if (rankCompare !== 0) {
+          return rankCompare;
+        }
+        return left.publicDisplayName.localeCompare(right.publicDisplayName);
+      });
+      return {
+        tableRole: table.tableRole,
+        title: finalsTitleForRole(table.tableRole),
+        tableLabel: table.tableLabel,
+        hasScores,
+        rows: sortedRows,
+      };
+    })
+    .sort((left, right) => {
+      const roleCompare = finalsRoleSort(left.tableRole) - finalsRoleSort(right.tableRole);
+      if (roleCompare !== 0) {
+        return roleCompare;
+      }
+      return left.tableLabel.localeCompare(right.tableLabel);
+    });
+}
+
 function looksLikeEventId(value: string): boolean {
   return (
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -325,10 +487,13 @@ export async function fetchPublicStandings(
   const eventId = eventResolution?.event_id ?? eventRef;
   const eventSlug = eventResolution?.public_slug ?? null;
 
-  const [summaryResult, leaderboardResult, bonusResult] = await Promise.all([
+  const [summaryResult, leaderboardResult, bonusResult, finalsResult] = await Promise.all([
     Promise.resolve(client.rpc("get_public_event_summary", { target_event_id: eventId })),
     Promise.resolve(client.rpc("get_public_event_leaderboard", { target_event_id: eventId })),
     Promise.resolve(client.rpc("get_public_event_bonus_results", { target_event_id: eventId })),
+    Promise.resolve(
+      client.rpc("get_public_event_finals_leaderboard", { target_event_id: eventId }),
+    ),
   ]);
 
   if (summaryResult.error) {
@@ -343,6 +508,12 @@ export async function fetchPublicStandings(
     throw new Error(bonusResult.error.message ?? "Unable to load public bonus results.");
   }
 
+  if (finalsResult.error) {
+    throw new Error(
+      finalsResult.error.message ?? "Unable to load public finals leaderboards.",
+    );
+  }
+
   const eventSummary = (summaryResult.data?.[0] ?? null) as PublicEventSummaryRpcRow | null;
 
   return {
@@ -354,6 +525,9 @@ export async function fetchPublicStandings(
     ),
     bonusResults: (bonusResult.data ?? []).map((row) =>
       mapBonusResultRow(row as PublicBonusResultRpcRow),
+    ),
+    finalsLeaderboards: mapFinalsLeaderboardRows(
+      (finalsResult.data ?? []) as PublicFinalsLeaderboardRpcRow[],
     ),
     updatedAt: new Date().toISOString(),
   };
