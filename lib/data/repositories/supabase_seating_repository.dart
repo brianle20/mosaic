@@ -79,7 +79,7 @@ class SupabaseSeatingRepository implements SeatingRepository {
   ) async {
     return _loadAndCache(
       eventId,
-      'generate_tournament_round',
+      'start_tournament_round',
     );
   }
 

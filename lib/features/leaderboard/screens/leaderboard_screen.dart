@@ -13,6 +13,7 @@ class LeaderboardScreen extends StatefulWidget {
     required this.leaderboardRepository,
     this.guestRepository,
     this.sessionRepository,
+    this.seatingRepository,
     this.initialQualificationTab = false,
   });
 
@@ -20,6 +21,7 @@ class LeaderboardScreen extends StatefulWidget {
   final LeaderboardRepository leaderboardRepository;
   final GuestRepository? guestRepository;
   final SessionRepository? sessionRepository;
+  final SeatingRepository? seatingRepository;
   final bool initialQualificationTab;
 
   @override
@@ -43,6 +45,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     _controller = LeaderboardController(
       leaderboardRepository: widget.leaderboardRepository,
       sessionRepository: widget.sessionRepository,
+      seatingRepository: widget.seatingRepository,
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
@@ -141,6 +144,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                     value: _LeaderboardTab.qualification,
                     label: Text('Qualification'),
                   ),
+                  ButtonSegment(
+                    value: _LeaderboardTab.finals,
+                    label: Text('Finals'),
+                  ),
                 ],
               ),
             ),
@@ -157,6 +164,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   rows: _qualificationRows,
                   onRetry: () => _loadQualificationStandings(force: true),
                 ),
+              _LeaderboardTab.finals => _FinalsLeaderboardBody(
+                  controller: _controller,
+                  onRetry: () => _controller.load(widget.eventId),
+                ),
             },
           ),
         ],
@@ -165,7 +176,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 }
 
-enum _LeaderboardTab { tournament, qualification }
+enum _LeaderboardTab { tournament, qualification, finals }
 
 class _TournamentLeaderboardBody extends StatelessWidget {
   const _TournamentLeaderboardBody({
@@ -307,6 +318,143 @@ class _QualificationLeaderboardBody extends StatelessWidget {
   }
 }
 
+class _FinalsLeaderboardBody extends StatelessWidget {
+  const _FinalsLeaderboardBody({
+    required this.controller,
+    required this.onRetry,
+  });
+
+  final LeaderboardController controller;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final finalsTables = controller.finalsTables;
+    return AsyncBody(
+      isLoading: controller.isLoading,
+      error: controller.error,
+      onRetry: onRetry,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (finalsTables.isNotEmpty) ...[
+            const _SectionLabel('Finals Standings'),
+            const SizedBox(height: 8),
+            for (final table in finalsTables) _FinalsTableCard(table: table),
+          ],
+          if (finalsTables.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 24),
+              child: EmptyStateCard(
+                icon: Icons.emoji_events,
+                title: 'No finals standings yet',
+                message:
+                    'Begin finals to create Table of Champions and Table of Redemption standings.',
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FinalsTableCard extends StatelessWidget {
+  const _FinalsTableCard({required this.table});
+
+  final FinalsLeaderboardTable table;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              table.title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              table.tableLabel,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            for (final row in table.rows)
+              _FinalsLeaderboardLine(row: row, showRank: table.hasScores),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FinalsLeaderboardLine extends StatelessWidget {
+  const _FinalsLeaderboardLine({
+    required this.row,
+    required this.showRank,
+  });
+
+  final FinalsLeaderboardRow row;
+  final bool showRank;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 48,
+            child: Text(
+              showRank ? '#${row.rank}' : _seatLabel(row.seatIndex),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.displayName,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                Text(
+                  [
+                    _pluralize(row.handsPlayed, 'hand'),
+                    _pluralize(row.wins, 'win'),
+                  ].join(' • '),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${_signedPoints(row.points)} pts',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RankedQualificationRow {
   const _RankedQualificationRow({required this.row, required this.rank});
 
@@ -340,6 +488,23 @@ class _QualificationLeaderboardCard extends StatelessWidget {
 String _pluralize(int count, String singular) {
   final suffix = count == 1 ? '' : 's';
   return '$count $singular$suffix';
+}
+
+String _signedPoints(int points) {
+  if (points > 0) {
+    return '+$points';
+  }
+  return '$points';
+}
+
+String _seatLabel(int seatIndex) {
+  return switch (seatIndex) {
+    0 => 'East',
+    1 => 'South',
+    2 => 'West',
+    3 => 'North',
+    _ => 'Seat ${seatIndex + 1}',
+  };
 }
 
 class _BonusRoundResultsCard extends StatelessWidget {

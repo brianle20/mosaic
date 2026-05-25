@@ -10,11 +10,15 @@ class RoundTimerState {
 
   factory RoundTimerState.fromStartedAt({
     required DateTime startedAt,
+    DateTime? pausedAt,
+    int pausedSeconds = 0,
     DateTime? now,
   }) {
-    final remaining = startedAt.add(roundLimitDuration).difference(
-          now ?? DateTime.now(),
-        );
+    final snapshotTime = pausedAt ?? now ?? DateTime.now();
+    final remaining = startedAt
+        .add(roundLimitDuration)
+        .add(Duration(seconds: pausedSeconds))
+        .difference(snapshotTime);
     if (remaining <= Duration.zero) {
       return const RoundTimerState(
         label: 'Time expired',

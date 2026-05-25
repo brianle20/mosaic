@@ -329,11 +329,16 @@ void main() {
     final grantMigration = File(
       'supabase/migrations/20260524200000_grant_tournament_round_rpcs.sql',
     );
+    final startMigration = File(
+      'supabase/migrations/20260525010000_start_tournament_round_rpc.sql',
+    );
 
     expect(migration.existsSync(), isTrue);
     expect(grantMigration.existsSync(), isTrue);
+    expect(startMigration.existsSync(), isTrue);
     final sql = '${migration.readAsStringSync()}\n'
-        '${grantMigration.readAsStringSync()}';
+        '${grantMigration.readAsStringSync()}\n'
+        '${startMigration.readAsStringSync()}';
 
     expect(
       sql,
@@ -349,7 +354,42 @@ void main() {
         '  to authenticated;',
       ),
     );
+    expect(
+      sql,
+      contains(
+        'grant execute on function public.start_tournament_round(uuid)\n'
+        '  to authenticated;',
+      ),
+    );
     expect(sql, contains("select pg_notify('pgrst', 'reload schema');"));
+  });
+
+  test('start tournament round RPC ends live qualification sessions first', () {
+    final migration = File(
+      'supabase/migrations/20260525010000_start_tournament_round_rpc.sql',
+    );
+
+    expect(migration.existsSync(), isTrue);
+    final sql = migration.readAsStringSync();
+
+    expect(sql,
+        contains('create or replace function public.start_tournament_round'));
+    expect(sql, contains("session.scoring_phase = 'qualification'"));
+    expect(sql, contains("session.status in ('active', 'paused')"));
+    expect(sql, contains('perform public.end_table_session('));
+    expect(sql, contains("'tournament_started'"));
+    expect(sql, contains("current_scoring_phase = 'tournament'"));
+    expect(sql, contains('stale_rounds as ('));
+    expect(sql, contains("stale_round.status in ('seating', 'active')"));
+    expect(
+      sql,
+      contains(
+        "stale_session.status in ('active', 'paused', 'completed', 'ended_early', 'aborted')",
+      ),
+    );
+    expect(sql, contains("status = 'cancelled'"));
+    expect(sql,
+        contains('from public.generate_tournament_round(target_event_id)'));
   });
 
   test('avoids repeating the exact previous tournament seating map', () {

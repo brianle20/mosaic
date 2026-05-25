@@ -42,6 +42,8 @@ class TableSessionRecord {
     required this.startedByUserId,
     this.tournamentRoundId,
     this.assignmentRound,
+    this.roundTimerPausedAt,
+    this.roundTimerPausedSeconds = 0,
     this.endedAt,
     this.endedByUserId,
     this.endReason,
@@ -72,6 +74,9 @@ class TableSessionRecord {
       startedByUserId: _requiredString(json, 'started_by_user_id'),
       tournamentRoundId: _optionalString(json, 'tournament_round_id'),
       assignmentRound: _optionalInt(json, 'assignment_round'),
+      roundTimerPausedAt: _optionalDateTime(json, 'round_timer_paused_at'),
+      roundTimerPausedSeconds:
+          _intOrDefault(json, 'round_timer_paused_seconds', 0),
       endedAt: _optionalDateTime(json, 'ended_at'),
       endedByUserId: _optionalString(json, 'ended_by_user_id'),
       endReason: _optionalString(json, 'end_reason'),
@@ -97,6 +102,8 @@ class TableSessionRecord {
   final String startedByUserId;
   final String? tournamentRoundId;
   final int? assignmentRound;
+  final DateTime? roundTimerPausedAt;
+  final int roundTimerPausedSeconds;
   final DateTime? endedAt;
   final String? endedByUserId;
   final String? endReason;
@@ -122,6 +129,8 @@ class TableSessionRecord {
       'started_by_user_id': startedByUserId,
       'tournament_round_id': tournamentRoundId,
       'assignment_round': assignmentRound,
+      'round_timer_paused_at': roundTimerPausedAt?.toIso8601String(),
+      'round_timer_paused_seconds': roundTimerPausedSeconds,
       'ended_at': endedAt?.toIso8601String(),
       'ended_by_user_id': endedByUserId,
       'end_reason': endReason,

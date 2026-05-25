@@ -425,6 +425,42 @@ void main() {
     });
   });
 
+  group('TableSessionRecord', () {
+    test('parses round timer pause accounting', () {
+      final session = TableSessionRecord.fromJson(const {
+        'id': 'ses_01',
+        'event_id': 'evt_01',
+        'event_table_id': 'tbl_01',
+        'session_number_for_table': 1,
+        'ruleset_id': 'HK_STANDARD',
+        'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+        'rotation_policy_config_json': {},
+        'status': 'paused',
+        'scoring_phase': 'tournament',
+        'initial_east_seat_index': 0,
+        'current_dealer_seat_index': 1,
+        'dealer_pass_count': 0,
+        'completed_games_count': 0,
+        'hand_count': 2,
+        'started_at': '2026-05-24T19:00:00Z',
+        'started_by_user_id': 'usr_01',
+        'round_timer_paused_at': '2026-05-24T19:37:15Z',
+        'round_timer_paused_seconds': 180,
+      });
+
+      expect(
+        session.roundTimerPausedAt,
+        DateTime.parse('2026-05-24T19:37:15Z'),
+      );
+      expect(session.roundTimerPausedSeconds, 180);
+      expect(
+        session.toJson()['round_timer_paused_at'],
+        '2026-05-24T19:37:15.000Z',
+      );
+      expect(session.toJson()['round_timer_paused_seconds'], 180);
+    });
+  });
+
   group('HandResultRecord', () {
     test('parses derived scoring fields from JSON', () {
       final hand = HandResultRecord.fromJson(const {

@@ -393,12 +393,12 @@ class _SessionSummarySurface extends StatelessWidget {
                 if (onPause != null)
                   OutlinedButton(
                     onPressed: isSubmitting ? null : onPause,
-                    child: const Text('Pause'),
+                    child: const Text('Pause Timer'),
                   ),
                 if (onResume != null)
                   FilledButton(
                     onPressed: isSubmitting ? null : onResume,
-                    child: const Text('Resume'),
+                    child: const Text('Resume Timer'),
                   ),
                 if (onEnd != null)
                   OutlinedButton(

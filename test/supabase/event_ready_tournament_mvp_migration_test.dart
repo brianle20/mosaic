@@ -45,6 +45,29 @@ void main() {
     expect(migrationsSql, contains('bonus'));
   });
 
+  test('events get stable public slugs for spectator URLs', () {
+    expect(migrationsSql, contains('public_slug text'));
+    expect(migrationsSql, contains('events_public_slug_key'));
+    expect(
+      migrationsSql,
+      contains('app_private.generate_unique_event_public_slug'),
+    );
+    expect(
+      migrationsSql,
+      contains('events_set_public_slug_before_insert'),
+    );
+    expect(
+      migrationsSql,
+      contains('public.resolve_public_event_id'),
+    );
+    expect(
+      migrationsSql,
+      contains(
+        'grant execute on function public.resolve_public_event_id(text) to anon, authenticated',
+      ),
+    );
+  });
+
   test('historical recorded games are backfilled into tournament standings',
       () {
     expect(
@@ -258,6 +281,8 @@ void main() {
       contains('public.public_event_standings_snapshots'),
     );
     expect(migrationsSql, contains('payload jsonb not null'));
+    expect(migrationsSql, contains('public_slug text not null'));
+    expect(migrationsSql, contains('public_event_standings_snapshots_slug_idx'));
     expect(
       migrationsSql,
       contains('public_event_standings_snapshots_public_read'),
@@ -273,6 +298,10 @@ void main() {
       contains('app_private.refresh_public_event_standings_snapshot'),
     );
     expect(migrationsSql, contains('on conflict (event_id) do update'));
+    expect(
+      migrationsSql,
+      contains('public_slug = excluded.public_slug'),
+    );
     expect(
       migrationsSql,
       contains(

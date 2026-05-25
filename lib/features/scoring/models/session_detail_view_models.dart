@@ -81,6 +81,8 @@ SessionDetailViewModel buildSessionDetailViewModel({
   final roundTime = showRoundTimer
       ? RoundTimerState.fromStartedAt(
           startedAt: detail.session.startedAt,
+          pausedAt: detail.session.roundTimerPausedAt,
+          pausedSeconds: detail.session.roundTimerPausedSeconds,
           now: _roundTimerSnapshotTime(detail.session, now),
         )
       : null;

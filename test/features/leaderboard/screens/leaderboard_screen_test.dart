@@ -3,8 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/leaderboard/screens/leaderboard_screen.dart';
 
@@ -125,6 +127,62 @@ class _LedgerSessionRepository implements SessionRepository {
 
   @override
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
+    throw UnimplementedError();
+  }
+}
+
+class _SeatingRepository implements SeatingRepository {
+  const _SeatingRepository({required this.assignments});
+
+  final List<SeatingAssignmentRecord> assignments;
+
+  @override
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
+      assignments;
+
+  @override
+  Future<List<SeatingAssignmentRecord>> readCachedAssignments(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
+  Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
+    required String eventId,
+    required String championsTableId,
+    String? redemptionTableId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
+    String eventId,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
+    String eventId,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TournamentRoundSummary> loadTournamentRoundSummary(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
+    String eventId,
+  ) {
     throw UnimplementedError();
   }
 }
@@ -465,8 +523,92 @@ void main() {
     expect(find.text('Alice Wong'), findsWidgets);
     expect(find.text('121 pts total'), findsOneWidget);
     expect(find.text('Redemption winner'), findsOneWidget);
-    expect(find.text('Brian Lee'), findsOneWidget);
+    expect(find.text('Brian Lee'), findsWidgets);
     expect(find.text('Score +18'), findsOneWidget);
+  });
+
+  testWidgets('shows finals tables and standings in a Finals tab',
+      (tester) async {
+    final repository = _RecordingLeaderboardRepository(
+      entries: const [
+        LeaderboardEntry(
+          eventGuestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          totalPoints: 121,
+          handsPlayed: 6,
+          handsWon: 2,
+          selfDrawWins: 1,
+          discardWins: 1,
+          rank: 1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LeaderboardScreen(
+          eventId: 'evt_01',
+          leaderboardRepository: repository,
+          sessionRepository: _LedgerSessionRepository(
+            rows: [
+              _championsHandEntry(),
+              _redemptionHandEntry(),
+            ],
+          ),
+          seatingRepository: _SeatingRepository(
+            assignments: [
+              _bonusAssignment(
+                id: 'asg_alice',
+                guestId: 'gst_alice',
+                displayName: 'Alice Wong',
+                seatIndex: 0,
+              ),
+              _bonusAssignment(
+                id: 'asg_brian',
+                guestId: 'gst_brian',
+                displayName: 'Brian Lee',
+                seatIndex: 1,
+              ),
+              _bonusAssignment(
+                id: 'asg_carla',
+                tableId: 'tbl_02',
+                tableLabel: 'Table 2',
+                guestId: 'gst_carla',
+                displayName: 'Carla Park',
+                seatIndex: 0,
+                bonusTableRole: BonusTableRole.tableOfRedemption,
+              ),
+              _bonusAssignment(
+                id: 'asg_dan',
+                tableId: 'tbl_02',
+                tableLabel: 'Table 2',
+                guestId: 'gst_dan',
+                displayName: 'Dan Yu',
+                seatIndex: 1,
+                bonusTableRole: BonusTableRole.tableOfRedemption,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Finals'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Finals Standings'), findsOneWidget);
+    expect(find.text('Table of Champions'), findsOneWidget);
+    expect(find.text('Table 1'), findsOneWidget);
+    expect(find.text('Table of Redemption'), findsOneWidget);
+    expect(find.text('Table 2'), findsOneWidget);
+    expect(find.text('Alice Wong'), findsOneWidget);
+    expect(find.text('+24 pts'), findsOneWidget);
+    expect(find.text('Brian Lee'), findsWidgets);
+    expect(find.text('-24 pts'), findsOneWidget);
+    expect(find.text('Carla Park'), findsOneWidget);
+    expect(find.text('-6 pts'), findsWidgets);
+    expect(find.text('1 hand • 1 win'), findsWidgets);
   });
 
   testWidgets('retries after a loading error', (tester) async {
@@ -525,6 +667,57 @@ EventHandLedgerEntry _championAwardEntry() {
   });
 }
 
+EventHandLedgerEntry _championsHandEntry() {
+  return EventHandLedgerEntry.fromJson({
+    'event_id': 'evt_01',
+    'table_id': 'tbl_01',
+    'table_label': 'Table 1',
+    'session_id': 'ses_01',
+    'session_number_for_table': 1,
+    'hand_id': 'hand_champions_01',
+    'hand_number': 1,
+    'entered_at': '2026-04-24T22:10:00-07:00',
+    'result_type': 'win',
+    'status': 'recorded',
+    'win_type': 'discard',
+    'fan_count': 3,
+    'has_settlements': true,
+    'ledger_row_type': 'hand',
+    'bonus_round_id': 'bonus_01',
+    'bonus_table_role': 'table_of_champions',
+    'cells': const [
+      {
+        'wind': 'east',
+        'seat_index': 0,
+        'event_guest_id': 'gst_alice',
+        'display_name': 'Alice Wong',
+        'points_delta': 24,
+      },
+      {
+        'wind': 'south',
+        'seat_index': 1,
+        'event_guest_id': 'gst_brian',
+        'display_name': 'Brian Lee',
+        'points_delta': -24,
+      },
+      {
+        'wind': 'west',
+        'seat_index': 2,
+        'event_guest_id': 'gst_placeholder_1',
+        'display_name': 'Placeholder One',
+        'points_delta': 0,
+      },
+      {
+        'wind': 'north',
+        'seat_index': 3,
+        'event_guest_id': 'gst_placeholder_2',
+        'display_name': 'Placeholder Two',
+        'points_delta': 0,
+      },
+    ],
+  });
+}
+
 EventHandLedgerEntry _redemptionHandEntry() {
   return EventHandLedgerEntry.fromJson({
     'event_id': 'evt_01',
@@ -574,4 +767,29 @@ EventHandLedgerEntry _redemptionHandEntry() {
       },
     ],
   });
+}
+
+SeatingAssignmentRecord _bonusAssignment({
+  required String id,
+  String tableId = 'tbl_01',
+  String tableLabel = 'Table 1',
+  required String guestId,
+  required String displayName,
+  required int seatIndex,
+  BonusTableRole bonusTableRole = BonusTableRole.tableOfChampions,
+}) {
+  return SeatingAssignmentRecord(
+    id: id,
+    eventId: 'evt_01',
+    eventTableId: tableId,
+    tableLabel: tableLabel,
+    eventGuestId: guestId,
+    displayName: displayName,
+    seatIndex: seatIndex,
+    assignmentRound: 1,
+    status: 'active',
+    assignmentType: SeatingAssignmentType.bonus,
+    bonusRoundId: 'bonus_01',
+    bonusTableRole: bonusTableRole,
+  );
 }

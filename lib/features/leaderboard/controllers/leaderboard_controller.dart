@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
 
@@ -14,19 +16,57 @@ class PrizePlacementRow {
   final int placement;
 }
 
+class FinalsLeaderboardTable {
+  const FinalsLeaderboardTable({
+    required this.title,
+    required this.tableLabel,
+    required this.rows,
+    required this.hasScores,
+  });
+
+  final String title;
+  final String tableLabel;
+  final List<FinalsLeaderboardRow> rows;
+  final bool hasScores;
+}
+
+class FinalsLeaderboardRow {
+  const FinalsLeaderboardRow({
+    required this.eventGuestId,
+    required this.displayName,
+    required this.seatIndex,
+    required this.points,
+    required this.handsPlayed,
+    required this.wins,
+    required this.rank,
+  });
+
+  final String eventGuestId;
+  final String displayName;
+  final int seatIndex;
+  final int points;
+  final int handsPlayed;
+  final int wins;
+  final int rank;
+}
+
 class LeaderboardController extends ChangeNotifier {
   LeaderboardController({
     required this.leaderboardRepository,
     this.sessionRepository,
+    this.seatingRepository,
   });
 
   final LeaderboardRepository leaderboardRepository;
   final SessionRepository? sessionRepository;
+  final SeatingRepository? seatingRepository;
 
   bool isLoading = false;
   String? error;
   List<LeaderboardEntry> entries = const [];
   BonusRoundResultsSummary bonusRoundResults = const BonusRoundResultsSummary();
+  List<SeatingAssignmentRecord> finalsAssignments = const [];
+  List<EventHandLedgerEntry> bonusLedgerEntries = const [];
 
   int get minimumHandsForPrize {
     final scoredHands = entries
@@ -87,20 +127,143 @@ class LeaderboardController extends ChangeNotifier {
         .toList(growable: false);
   }
 
+  List<FinalsLeaderboardTable> get finalsTables {
+    final assignments = finalsAssignments
+        .where(
+          (assignment) =>
+              assignment.assignmentType == SeatingAssignmentType.bonus &&
+              assignment.status == 'active',
+        )
+        .toList(growable: false)
+      ..sort((left, right) {
+        final tableCompare = left.tableLabel.compareTo(right.tableLabel);
+        if (tableCompare != 0) {
+          return tableCompare;
+        }
+        return left.seatIndex.compareTo(right.seatIndex);
+      });
+    final assignmentsByTable = <String, List<SeatingAssignmentRecord>>{};
+    for (final assignment in assignments) {
+      assignmentsByTable
+          .putIfAbsent(assignment.eventTableId, () => [])
+          .add(assignment);
+    }
+
+    final tables = <FinalsLeaderboardTable>[];
+    for (final entry in assignmentsByTable.entries) {
+      final tableAssignments = entry.value;
+      final role = tableAssignments.first.bonusTableRole;
+      final totalsByGuest = {
+        for (final assignment in tableAssignments)
+          assignment.eventGuestId: _FinalsGuestAccumulator(
+            eventGuestId: assignment.eventGuestId,
+            displayName: assignment.displayName,
+            seatIndex: assignment.seatIndex,
+          ),
+      };
+
+      for (final ledgerEntry in bonusLedgerEntries) {
+        if (ledgerEntry.rowType != EventHandLedgerRowType.hand ||
+            ledgerEntry.tableId != entry.key ||
+            ledgerEntry.status != HandResultStatus.recorded ||
+            ledgerEntry.bonusTableRole != _bonusRoleJson(role)) {
+          continue;
+        }
+
+        for (final cell in ledgerEntry.cells) {
+          final accumulator = totalsByGuest[cell.eventGuestId] ??
+              _FinalsGuestAccumulator(
+                eventGuestId: cell.eventGuestId,
+                displayName: cell.displayName,
+                seatIndex: cell.seatIndex,
+              );
+          totalsByGuest[cell.eventGuestId] = accumulator.add(
+            pointsDelta: cell.pointsDelta,
+            wonHand: ledgerEntry.resultType == HandResultType.win &&
+                cell.pointsDelta > 0,
+          );
+        }
+      }
+
+      final rows = totalsByGuest.values
+          .map((accumulator) => accumulator.toRow(rank: 0))
+          .toList(growable: false);
+      final hasScores = rows.any((row) => row.handsPlayed > 0);
+      final sortedRows = [...rows]..sort((left, right) {
+          if (!hasScores) {
+            return left.seatIndex.compareTo(right.seatIndex);
+          }
+          final pointsCompare = right.points.compareTo(left.points);
+          if (pointsCompare != 0) {
+            return pointsCompare;
+          }
+          final winsCompare = right.wins.compareTo(left.wins);
+          if (winsCompare != 0) {
+            return winsCompare;
+          }
+          return left.displayName.compareTo(right.displayName);
+        });
+      tables.add(
+        FinalsLeaderboardTable(
+          title: _bonusRoleTitle(role),
+          tableLabel: tableAssignments.first.tableLabel,
+          hasScores: hasScores,
+          rows: _rankFinalsRows(sortedRows),
+        ),
+      );
+    }
+
+    tables.sort((left, right) => _finalsTableSort(left.title).compareTo(
+          _finalsTableSort(right.title),
+        ));
+    return tables;
+  }
+
+  List<FinalsLeaderboardRow> _rankFinalsRows(
+    List<FinalsLeaderboardRow> rows,
+  ) {
+    final rankedRows = <FinalsLeaderboardRow>[];
+    var rank = 0;
+    int? previousPoints;
+    for (final indexedRow in rows.indexed) {
+      final row = indexedRow.$2;
+      if (previousPoints != row.points) {
+        rank = indexedRow.$1 + 1;
+        previousPoints = row.points;
+      }
+      rankedRows.add(
+        FinalsLeaderboardRow(
+          eventGuestId: row.eventGuestId,
+          displayName: row.displayName,
+          seatIndex: row.seatIndex,
+          points: row.points,
+          handsPlayed: row.handsPlayed,
+          wins: row.wins,
+          rank: rank,
+        ),
+      );
+    }
+    return rankedRows;
+  }
+
   Future<void> load(String eventId) async {
     isLoading = true;
     error = null;
     entries = await leaderboardRepository.readCachedLeaderboard(eventId);
+    bonusLedgerEntries = await _readCachedBonusLedger(eventId);
+    finalsAssignments = await _readCachedFinalsAssignments(eventId);
     bonusRoundResults = buildBonusRoundResultsSummary(
-      ledgerEntries: await _readCachedBonusLedger(eventId),
+      ledgerEntries: bonusLedgerEntries,
       leaderboardEntries: entries,
     );
     notifyListeners();
 
     try {
       entries = await leaderboardRepository.loadLeaderboard(eventId);
+      bonusLedgerEntries = await _loadBonusLedger(eventId);
+      finalsAssignments = await _loadFinalsAssignments(eventId);
       bonusRoundResults = buildBonusRoundResultsSummary(
-        ledgerEntries: await _loadBonusLedger(eventId),
+        ledgerEntries: bonusLedgerEntries,
         leaderboardEntries: entries,
       );
     } catch (err) {
@@ -136,4 +299,99 @@ class LeaderboardController extends ChangeNotifier {
       return const [];
     }
   }
+
+  Future<List<SeatingAssignmentRecord>> _readCachedFinalsAssignments(
+    String eventId,
+  ) async {
+    final repository = seatingRepository;
+    if (repository == null) {
+      return const [];
+    }
+
+    return repository.readCachedAssignments(eventId);
+  }
+
+  Future<List<SeatingAssignmentRecord>> _loadFinalsAssignments(
+    String eventId,
+  ) async {
+    final repository = seatingRepository;
+    if (repository == null) {
+      return const [];
+    }
+
+    try {
+      return await repository.loadAssignments(eventId);
+    } catch (_) {
+      return const [];
+    }
+  }
+}
+
+@immutable
+class _FinalsGuestAccumulator {
+  const _FinalsGuestAccumulator({
+    required this.eventGuestId,
+    required this.displayName,
+    required this.seatIndex,
+    this.points = 0,
+    this.handsPlayed = 0,
+    this.wins = 0,
+  });
+
+  final String eventGuestId;
+  final String displayName;
+  final int seatIndex;
+  final int points;
+  final int handsPlayed;
+  final int wins;
+
+  _FinalsGuestAccumulator add({
+    required int pointsDelta,
+    required bool wonHand,
+  }) {
+    return _FinalsGuestAccumulator(
+      eventGuestId: eventGuestId,
+      displayName: displayName,
+      seatIndex: seatIndex,
+      points: points + pointsDelta,
+      handsPlayed: handsPlayed + 1,
+      wins: wins + (wonHand ? 1 : 0),
+    );
+  }
+
+  FinalsLeaderboardRow toRow({required int rank}) {
+    return FinalsLeaderboardRow(
+      eventGuestId: eventGuestId,
+      displayName: displayName,
+      seatIndex: seatIndex,
+      points: points,
+      handsPlayed: handsPlayed,
+      wins: wins,
+      rank: rank,
+    );
+  }
+}
+
+String _bonusRoleTitle(BonusTableRole? role) {
+  return switch (role) {
+    BonusTableRole.tableOfChampions => 'Table of Champions',
+    BonusTableRole.tableOfRedemption => 'Table of Redemption',
+    null => 'Finals Table',
+  };
+}
+
+String? _bonusRoleJson(BonusTableRole? role) {
+  return switch (role) {
+    BonusTableRole.tableOfChampions => 'table_of_champions',
+    BonusTableRole.tableOfRedemption => 'table_of_redemption',
+    null => null,
+  };
+}
+
+int _finalsTableSort(String title) {
+  return switch (title) {
+    'Table of Champions' => 0,
+    'Table of Redemption' => 1,
+    _ => 2,
+  };
 }

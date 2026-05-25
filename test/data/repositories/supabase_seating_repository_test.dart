@@ -259,7 +259,7 @@ void main() {
 
       final assignments = await repository.generateTournamentRound('evt_01');
 
-      expect(calls.single.functionName, 'generate_tournament_round');
+      expect(calls.single.functionName, 'start_tournament_round');
       expect(calls.single.params, {'target_event_id': 'evt_01'});
       expect(assignments.single.tournamentRoundId, 'rnd_01');
 

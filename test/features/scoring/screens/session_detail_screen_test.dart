@@ -399,9 +399,9 @@ void main() {
     expect(find.text('SOUTH'), findsOneWidget);
     expect(find.text('Dealer'), findsOneWidget);
     expect(find.text('Record Hand'), findsOneWidget);
-    expect(find.text('Pause'), findsOneWidget);
+    expect(find.text('Pause Timer'), findsOneWidget);
     expect(find.text('End'), findsOneWidget);
-    expect(find.text('Resume'), findsNothing);
+    expect(find.text('Resume Timer'), findsNothing);
   });
 
   testWidgets('round timer counts down while session detail is open',
@@ -569,7 +569,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Record Hand'), findsNothing);
-    expect(find.text('Pause'), findsOneWidget);
+    expect(find.text('Pause Timer'), findsOneWidget);
     expect(find.text('End'), findsOneWidget);
 
     await tester.drag(find.byType(ListView), const Offset(0, -500));
@@ -732,8 +732,8 @@ void main() {
       find.text('Hand entry is unavailable while this session is paused.'),
       findsOneWidget,
     );
-    expect(find.text('Resume'), findsOneWidget);
-    expect(find.text('Pause'), findsNothing);
+    expect(find.text('Resume Timer'), findsOneWidget);
+    expect(find.text('Pause Timer'), findsNothing);
     expect(find.text('End'), findsOneWidget);
     expect(find.text('Record Hand'), findsNothing);
   });

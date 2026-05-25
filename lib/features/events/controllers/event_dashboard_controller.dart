@@ -80,6 +80,7 @@ class EventDashboardController extends ChangeNotifier {
   BonusRoundResultsSummary bonusRoundResults = const BonusRoundResultsSummary();
   TournamentRoundSummary tournamentRoundSummary =
       TournamentRoundSummary.empty();
+  TournamentRoundSummary finalsRoundSummary = TournamentRoundSummary.empty();
 
   Future<void> load(String eventId) async {
     final requestToken = _beginStateRequest();
@@ -98,6 +99,10 @@ class EventDashboardController extends ChangeNotifier {
     );
     final cachedTournamentRoundSummary =
         await _readCachedTournamentRoundSummary(eventId);
+    final cachedFinalsRoundSummary =
+        cachedEvent?.currentScoringPhase == EventScoringPhase.bonus
+            ? await _readCachedFinalsRoundSummary(eventId)
+            : TournamentRoundSummary.empty();
     if (!_isCurrentStateRequest(requestToken)) {
       return;
     }
@@ -115,7 +120,11 @@ class EventDashboardController extends ChangeNotifier {
       ledgerEntries: cachedLedger ?? const [],
       leaderboardEntries: cachedLeaderboard ?? const [],
     );
-    tournamentRoundSummary = cachedTournamentRoundSummary;
+    tournamentRoundSummary =
+        cachedEvent?.currentScoringPhase == EventScoringPhase.tournament
+            ? cachedTournamentRoundSummary
+            : TournamentRoundSummary.empty();
+    finalsRoundSummary = cachedFinalsRoundSummary;
     prizePoolCents = _totalPrizeCents(cachedPrizePlan);
     notifyListeners();
 
@@ -188,12 +197,20 @@ class EventDashboardController extends ChangeNotifier {
       // Prize setup is a dashboard summary only; keep event loading usable.
     }
 
+    final currentScoringPhase = event?.currentScoringPhase;
     final loadedTournamentRoundSummary =
-        await _loadTournamentRoundSummary(eventId);
+        currentScoringPhase == EventScoringPhase.tournament
+            ? await _loadTournamentRoundSummary(eventId)
+            : TournamentRoundSummary.empty();
+    final loadedFinalsRoundSummary =
+        currentScoringPhase == EventScoringPhase.bonus
+            ? await _loadFinalsRoundSummary(eventId)
+            : TournamentRoundSummary.empty();
     if (!_isCurrentStateRequest(requestToken)) {
       return;
     }
     tournamentRoundSummary = loadedTournamentRoundSummary;
+    finalsRoundSummary = loadedFinalsRoundSummary;
 
     try {
       final loadedQualificationLeaderboard = await _guestRepository
@@ -330,6 +347,222 @@ class EventDashboardController extends ChangeNotifier {
     } catch (_) {
       return _readCachedTournamentRoundSummary(eventId);
     }
+  }
+
+  Future<TournamentRoundSummary> _readCachedFinalsRoundSummary(
+    String eventId,
+  ) async {
+    try {
+      final assignments =
+          await _seatingRepository?.readCachedAssignments(eventId) ?? const [];
+      final sessions =
+          await _sessionRepository?.readCachedSessions(eventId) ?? const [];
+      final tables = await _tableRepository?.readCachedTables(eventId) ??
+          const <EventTableRecord>[];
+      return _buildFinalsRoundSummary(
+        assignments: assignments,
+        sessions: sessions,
+        tables: tables,
+      );
+    } catch (_) {
+      return TournamentRoundSummary.empty();
+    }
+  }
+
+  Future<TournamentRoundSummary> _loadFinalsRoundSummary(
+    String eventId,
+  ) async {
+    try {
+      final assignments =
+          await _seatingRepository?.loadAssignments(eventId) ?? const [];
+      final sessions = await _sessionRepository?.listSessions(eventId) ??
+          const <TableSessionRecord>[];
+      final tables = await _tableRepository?.listTables(eventId) ??
+          const <EventTableRecord>[];
+      return _buildFinalsRoundSummary(
+        assignments: assignments,
+        sessions: sessions,
+        tables: tables,
+      );
+    } catch (_) {
+      return _readCachedFinalsRoundSummary(eventId);
+    }
+  }
+
+  TournamentRoundSummary _buildFinalsRoundSummary({
+    required List<SeatingAssignmentRecord> assignments,
+    required List<TableSessionRecord> sessions,
+    required List<EventTableRecord> tables,
+  }) {
+    final bonusAssignments = _activeBonusAssignments(assignments);
+    if (bonusAssignments.isEmpty) {
+      return TournamentRoundSummary.empty();
+    }
+
+    final tableOrderById = {
+      for (final table in tables) table.id: table.displayOrder,
+    };
+    final sessionsByTableId = _sessionsByTableId(sessions);
+    final groupedAssignments = _assignmentsByTableId(bonusAssignments);
+    final tableSummaries = [
+      for (final entry in groupedAssignments.entries)
+        _finalsTableSummary(
+          eventTableId: entry.key,
+          assignments: entry.value,
+          sessions: sessionsByTableId[entry.key] ?? const [],
+          tableDisplayOrder: tableOrderById[entry.key] ?? 0,
+        ),
+    ]..sort((left, right) {
+        final roleCompare = _bonusRoleSort(
+          groupedAssignments[left.eventTableId],
+        ).compareTo(
+          _bonusRoleSort(groupedAssignments[right.eventTableId]),
+        );
+        if (roleCompare != 0) {
+          return roleCompare;
+        }
+        return left.tableDisplayOrder.compareTo(right.tableDisplayOrder);
+      });
+
+    final activeCount = tableSummaries
+        .where((table) => table.status == TournamentRoundTableStatus.active)
+        .length;
+    final pausedCount = tableSummaries
+        .where((table) => table.status == TournamentRoundTableStatus.paused)
+        .length;
+    final completeCount = tableSummaries
+        .where((table) => table.status == TournamentRoundTableStatus.complete)
+        .length;
+    final notStartedCount = tableSummaries
+        .where(
+          (table) => table.status == TournamentRoundTableStatus.notStarted,
+        )
+        .length;
+    final status = completeCount >= tableSummaries.length
+        ? TournamentRoundStatus.complete
+        : activeCount + pausedCount > 0
+            ? TournamentRoundStatus.active
+            : TournamentRoundStatus.seating;
+    final assignmentRound = bonusAssignments.first.assignmentRound;
+
+    return TournamentRoundSummary(
+      round: TournamentRoundRecord(
+        id: bonusAssignments.first.bonusRoundId ?? 'bonus_$assignmentRound',
+        eventId: bonusAssignments.first.eventId,
+        roundNumber: assignmentRound,
+        scoringPhase: EventScoringPhase.bonus,
+        status: status,
+        assignmentRound: assignmentRound,
+      ),
+      assignedTableCount: tableSummaries.length,
+      completeTableCount: completeCount,
+      activeTableCount: activeCount,
+      pausedTableCount: pausedCount,
+      notStartedTableCount: notStartedCount,
+      currentRoundTables: tableSummaries,
+      otherTables: const [],
+    );
+  }
+
+  List<SeatingAssignmentRecord> _activeBonusAssignments(
+    List<SeatingAssignmentRecord> assignments,
+  ) {
+    return assignments
+        .where(
+          (assignment) =>
+              assignment.assignmentType == SeatingAssignmentType.bonus &&
+              assignment.status == 'active',
+        )
+        .toList(growable: false)
+      ..sort((left, right) {
+        final tableCompare = left.tableLabel.compareTo(right.tableLabel);
+        if (tableCompare != 0) {
+          return tableCompare;
+        }
+        return left.seatIndex.compareTo(right.seatIndex);
+      });
+  }
+
+  Map<String, List<SeatingAssignmentRecord>> _assignmentsByTableId(
+    List<SeatingAssignmentRecord> assignments,
+  ) {
+    final grouped = <String, List<SeatingAssignmentRecord>>{};
+    for (final assignment in assignments) {
+      grouped.putIfAbsent(assignment.eventTableId, () => []).add(assignment);
+    }
+    return grouped;
+  }
+
+  Map<String, List<TableSessionRecord>> _sessionsByTableId(
+    List<TableSessionRecord> sessions,
+  ) {
+    final grouped = <String, List<TableSessionRecord>>{};
+    for (final session in sessions) {
+      grouped.putIfAbsent(session.eventTableId, () => []).add(session);
+    }
+    for (final tableSessions in grouped.values) {
+      tableSessions.sort(
+        (left, right) => right.startedAt.compareTo(left.startedAt),
+      );
+    }
+    return grouped;
+  }
+
+  int _bonusRoleSort(List<SeatingAssignmentRecord>? assignments) {
+    final role = assignments == null || assignments.isEmpty
+        ? null
+        : assignments.first.bonusTableRole;
+    return switch (role) {
+      BonusTableRole.tableOfChampions => 0,
+      BonusTableRole.tableOfRedemption => 1,
+      null => 2,
+    };
+  }
+
+  TournamentRoundTableSummary _finalsTableSummary({
+    required String eventTableId,
+    required List<SeatingAssignmentRecord> assignments,
+    required List<TableSessionRecord> sessions,
+    required int tableDisplayOrder,
+  }) {
+    assignments
+        .sort((left, right) => left.seatIndex.compareTo(right.seatIndex));
+    final activeSession = sessions.firstWhereOrNull(
+      (session) =>
+          session.scoringPhase == EventScoringPhase.bonus &&
+          (session.status == SessionStatus.active ||
+              session.status == SessionStatus.paused),
+    );
+    final latestEndedSession = sessions.firstWhereOrNull(
+      (session) =>
+          session.scoringPhase == EventScoringPhase.bonus &&
+          (session.status == SessionStatus.completed ||
+              session.status == SessionStatus.endedEarly),
+    );
+    final status = switch (activeSession?.status) {
+      SessionStatus.active => TournamentRoundTableStatus.active,
+      SessionStatus.paused => TournamentRoundTableStatus.paused,
+      _ => latestEndedSession == null
+          ? TournamentRoundTableStatus.notStarted
+          : TournamentRoundTableStatus.complete,
+    };
+
+    return TournamentRoundTableSummary(
+      eventTableId: eventTableId,
+      tableLabel: assignments.first.tableLabel,
+      tableDisplayOrder: tableDisplayOrder,
+      status: status,
+      activeSessionId: activeSession?.id,
+      latestEndedSessionId: latestEndedSession?.id,
+      assignedPlayers: [
+        for (final assignment in assignments)
+          TournamentRoundAssignedPlayer(
+            eventGuestId: assignment.eventGuestId,
+            displayName: assignment.displayName,
+            seatIndex: assignment.seatIndex,
+          ),
+      ],
+    );
   }
 
   Future<void> completeEvent() async {
@@ -574,14 +807,12 @@ class EventDashboardController extends ChangeNotifier {
 
   Future<List<SeatingAssignmentRecord>?> startTournament() async {
     final currentEvent = event;
-    final sessionRepository = _sessionRepository;
     final seatingRepository = _seatingRepository;
     if (currentEvent == null || isSubmittingLifecycle) {
       return null;
     }
-    if (sessionRepository == null || seatingRepository == null) {
-      lifecycleError =
-          'Session and seating setup are required to start tournament play.';
+    if (seatingRepository == null) {
+      lifecycleError = 'Seating setup is required to start tournament play.';
       notifyListeners();
       return null;
     }
@@ -591,48 +822,21 @@ class EventDashboardController extends ChangeNotifier {
     lifecycleError = null;
     notifyListeners();
 
-    var endedQualificationSessions = false;
-    var advancedToTournament = false;
     try {
-      final sessions = await sessionRepository.listSessions(currentEvent.id);
-      final liveQualificationSessions = sessions.where(
-        (session) =>
-            session.scoringPhase == EventScoringPhase.qualification &&
-            (session.status == SessionStatus.active ||
-                session.status == SessionStatus.paused),
-      );
-      for (final session in liveQualificationSessions) {
-        await sessionRepository.endSession(
-          sessionId: session.id,
-          reason: 'tournament_started',
-        );
-        endedQualificationSessions = true;
-      }
-
-      event = await _eventRepository.updateEventScoringPhase(
-        eventId: currentEvent.id,
-        phase: EventScoringPhase.tournament,
-      );
-      advancedToTournament = true;
-
       final assignments =
           await seatingRepository.generateTournamentRound(currentEvent.id);
+      event = EventRecord.fromJson({
+        ...currentEvent.toJson(),
+        'current_scoring_phase':
+            eventScoringPhaseToJson(EventScoringPhase.tournament),
+      });
       tournamentRoundSummary =
           await _loadTournamentRoundSummary(currentEvent.id);
       isSubmittingLifecycle = false;
       notifyListeners();
       return assignments;
     } catch (exception) {
-      final formattedError = _formatLifecycleError(exception);
-      if (advancedToTournament) {
-        lifecycleError =
-            '$formattedError Tournament mode remains active; ended qualification sessions were not reopened.';
-      } else if (endedQualificationSessions) {
-        lifecycleError =
-            '$formattedError Some qualification sessions may have ended and were not reopened.';
-      } else {
-        lifecycleError = formattedError;
-      }
+      lifecycleError = _formatLifecycleError(exception);
       isSubmittingLifecycle = false;
       notifyListeners();
       return null;

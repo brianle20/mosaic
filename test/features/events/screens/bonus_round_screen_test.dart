@@ -104,6 +104,43 @@ void main() {
     expect(seatingRepository.generatedRedemptionTableId, isNull);
   });
 
+  testWidgets('returns to previous screen after finals seating is created',
+      (tester) async {
+    final seatingRepository = _SeatingRepository();
+
+    await tester.pumpWidget(
+      _BonusRoundLauncher(
+        leaderboardRepository: _LeaderboardRepository(
+          _leaderboard(count: 5, handsPlayed: 10),
+        ),
+        seatingRepository: seatingRepository,
+        tableRepository: _TableRepository(
+          tables: [_table(id: 'tbl_1', label: 'Table 1')],
+          resolvedTablesByUid: {
+            'table-1': _table(id: 'tbl_1', label: 'Table 1'),
+          },
+        ),
+        nfcService: _NfcService(['table-1']),
+      ),
+    );
+
+    await tester.tap(find.text('Open Finals Setup'));
+    await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('scanChampionsTable')));
+    await tester.tap(find.byKey(const ValueKey('scanChampionsTable')));
+    await tester.pumpAndSettle();
+    final createButton = find.widgetWithText(FilledButton, 'Begin Finals');
+    await tester.ensureVisible(createButton);
+    await tester.tap(createButton);
+    await tester.pumpAndSettle();
+
+    expect(seatingRepository.generatedChampionsTableId, 'tbl_1');
+    expect(find.text('Host Home'), findsOneWidget);
+    expect(find.text('Finals created'), findsOneWidget);
+    expect(find.byType(BonusRoundScreen), findsNothing);
+  });
+
   testWidgets('requires redemption table for six eligible players',
       (tester) async {
     final seatingRepository = _SeatingRepository();
@@ -206,6 +243,94 @@ Widget _bonusRoundApp({
       nfcService: nfcService,
     ),
   );
+}
+
+class _BonusRoundLauncher extends StatefulWidget {
+  const _BonusRoundLauncher({
+    required this.leaderboardRepository,
+    required this.seatingRepository,
+    required this.tableRepository,
+    required this.nfcService,
+  });
+
+  final LeaderboardRepository leaderboardRepository;
+  final SeatingRepository seatingRepository;
+  final TableRepository tableRepository;
+  final NfcService nfcService;
+
+  @override
+  State<_BonusRoundLauncher> createState() => _BonusRoundLauncherState();
+}
+
+class _BonusRoundLauncherState extends State<_BonusRoundLauncher> {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: _BonusRoundLauncherHome(
+        leaderboardRepository: widget.leaderboardRepository,
+        seatingRepository: widget.seatingRepository,
+        tableRepository: widget.tableRepository,
+        nfcService: widget.nfcService,
+      ),
+    );
+  }
+}
+
+class _BonusRoundLauncherHome extends StatefulWidget {
+  const _BonusRoundLauncherHome({
+    required this.leaderboardRepository,
+    required this.seatingRepository,
+    required this.tableRepository,
+    required this.nfcService,
+  });
+
+  final LeaderboardRepository leaderboardRepository;
+  final SeatingRepository seatingRepository;
+  final TableRepository tableRepository;
+  final NfcService nfcService;
+
+  @override
+  State<_BonusRoundLauncherHome> createState() =>
+      _BonusRoundLauncherHomeState();
+}
+
+class _BonusRoundLauncherHomeState extends State<_BonusRoundLauncherHome> {
+  String _resultLabel = 'No result';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        children: [
+          const Text('Host Home'),
+          Text(_resultLabel),
+          ElevatedButton(
+            onPressed: () async {
+              final created = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) => BonusRoundScreen(
+                    eventId: 'evt_01',
+                    leaderboardRepository: widget.leaderboardRepository,
+                    tableRepository: widget.tableRepository,
+                    sessionRepository: const _SessionRepository(),
+                    seatingRepository: widget.seatingRepository,
+                    nfcService: widget.nfcService,
+                  ),
+                ),
+              );
+              if (!mounted) {
+                return;
+              }
+              setState(() {
+                _resultLabel = created == true ? 'Finals created' : 'No result';
+              });
+            },
+            child: const Text('Open Finals Setup'),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 List<LeaderboardEntry> _leaderboard({

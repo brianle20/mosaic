@@ -126,6 +126,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventId: event.id,
         eventTitle: event.title,
         scoringOpen: event.scoringOpen,
+        scoringPhase: event.currentScoringPhase,
         readOnly: event.lifecycleStatus != EventLifecycleStatus.draft &&
             event.lifecycleStatus != EventLifecycleStatus.active,
       ),
@@ -816,6 +817,12 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         lifecycleStatus == EventLifecycleStatus.active &&
             event.scoringOpen &&
             event.currentScoringPhase == EventScoringPhase.tournament;
+    final showFinalsCommandCenter =
+        lifecycleStatus == EventLifecycleStatus.active &&
+            event.scoringOpen &&
+            event.currentScoringPhase == EventScoringPhase.bonus;
+    final showRoundCommandCenter =
+        showTournamentCommandCenter || showFinalsCommandCenter;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -857,7 +864,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               _LiveStatusRow(
                 phaseLabel: _eventPhaseLabel(event),
                 phaseTone: _eventPhaseTone(lifecycleStatus),
-                showPhase: !showTournamentCommandCenter &&
+                showPhase: !showRoundCommandCenter &&
                     (lifecycleStatus != EventLifecycleStatus.active ||
                         event.scoringOpen),
                 showOperationalFlags:
@@ -894,9 +901,12 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 _BonusRoundResultsPanel(summary: _controller.bonusRoundResults),
               ],
               const SizedBox(height: 16),
-              if (showTournamentCommandCenter)
+              if (showRoundCommandCenter)
                 _TournamentRoundCommandCenter(
-                  summary: _controller.tournamentRoundSummary,
+                  scoringPhase: event.currentScoringPhase,
+                  summary: showFinalsCommandCenter
+                      ? _controller.finalsRoundSummary
+                      : _controller.tournamentRoundSummary,
                   isBusy: _controller.isSubmittingLifecycle,
                   onOpenTables: _openTables,
                   onStartNextRound: _startNextTournamentRound,
@@ -1080,6 +1090,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
 class _TournamentRoundCommandCenter extends StatelessWidget {
   const _TournamentRoundCommandCenter({
+    required this.scoringPhase,
     required this.summary,
     required this.isBusy,
     required this.onOpenTables,
@@ -1088,6 +1099,7 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
     required this.onBeginFinals,
   });
 
+  final EventScoringPhase scoringPhase;
   final TournamentRoundSummary summary;
   final bool isBusy;
   final VoidCallback onOpenTables;
@@ -1099,34 +1111,49 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final round = summary.round;
-    final title =
-        round == null ? 'Tournament Round' : 'Round ${round.roundNumber}';
+    final isFinals = scoringPhase == EventScoringPhase.bonus;
+    final title = isFinals
+        ? 'Finals'
+        : round == null
+            ? 'Tournament Round'
+            : 'Round ${round.roundNumber}';
+    final tableNoun = isFinals ? 'finals tables' : 'tables';
     final progress = round == null
-        ? 'No tournament round generated'
-        : '${summary.completeTableCount} of ${summary.assignedTableCount} tables complete';
+        ? isFinals
+            ? 'No finals tables assigned'
+            : 'No tournament round generated'
+        : '${summary.completeTableCount} of ${summary.assignedTableCount} $tableNoun complete';
     final remainingTables = summary.activeTableCount +
         summary.pausedTableCount +
         summary.notStartedTableCount;
-    final detail = round == null
-        ? 'Generate a round to assign players.'
-        : summary.isComplete
-            ? 'Ready to start next round'
-            : '$remainingTables ${remainingTables == 1 ? 'table' : 'tables'} still in progress';
-    final actionLabel = round == null
-        ? 'Generate Tournament Round'
-        : summary.isComplete
-            ? 'Start Next Round'
-            : 'Open Tables';
-    final actionIcon = round == null
-        ? Icons.shuffle
-        : summary.isComplete
-            ? Icons.skip_next
-            : Icons.table_bar;
-    final callback = round == null
-        ? onGenerateRound
-        : summary.isComplete
-            ? onStartNextRound
-            : onOpenTables;
+    final detail = isFinals
+        ? _finalsDetail(round)
+        : round == null
+            ? 'Generate a round to assign players.'
+            : summary.isComplete
+                ? 'Ready to start next round'
+                : '$remainingTables ${remainingTables == 1 ? 'table' : 'tables'} still in progress';
+    final actionLabel = isFinals
+        ? 'Open Finals Tables'
+        : round == null
+            ? 'Generate Tournament Round'
+            : summary.isComplete
+                ? 'Start Next Round'
+                : 'Open Tables';
+    final actionIcon = isFinals
+        ? Icons.table_bar
+        : round == null
+            ? Icons.shuffle
+            : summary.isComplete
+                ? Icons.skip_next
+                : Icons.table_bar;
+    final callback = isFinals
+        ? onOpenTables
+        : round == null
+            ? onGenerateRound
+            : summary.isComplete
+                ? onStartNextRound
+                : onOpenTables;
 
     return Container(
       width: double.infinity,
@@ -1139,7 +1166,10 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          StatusChip(label: 'Tournament Live', tone: StatusChipTone.success),
+          StatusChip(
+            label: isFinals ? 'Finals Live' : 'Tournament Live',
+            tone: StatusChipTone.success,
+          ),
           const SizedBox(height: 10),
           Text(
             title,
@@ -1170,7 +1200,7 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
               label: Text(actionLabel),
             ),
           ),
-          if (round != null && summary.isComplete) ...[
+          if (!isFinals && round != null && summary.isComplete) ...[
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
@@ -1184,6 +1214,32 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _finalsDetail(TournamentRoundRecord? round) {
+    if (round == null) {
+      return 'Open finals tables to review seating.';
+    }
+    if (summary.isComplete) {
+      return 'Ready to complete event';
+    }
+
+    final parts = <String>[
+      if (summary.activeTableCount > 0)
+        _pluralize(summary.activeTableCount, 'finals table', 'in progress'),
+      if (summary.pausedTableCount > 0)
+        _pluralize(summary.pausedTableCount, 'finals table', 'paused'),
+      if (summary.notStartedTableCount > 0)
+        _pluralize(summary.notStartedTableCount, 'finals table', 'not started'),
+    ];
+    if (parts.isEmpty) {
+      return 'Finals tables still in progress';
+    }
+    return parts.join(' • ');
+  }
+
+  String _pluralize(int count, String noun, String suffix) {
+    return '$count $noun${count == 1 ? '' : 's'} $suffix';
   }
 }
 
@@ -1568,9 +1624,7 @@ class _EventOptionsSection extends StatelessWidget {
 
   bool get _showsSeatingPrepAction {
     return switch (lifecycleStatus) {
-      EventLifecycleStatus.draft ||
-      EventLifecycleStatus.completed =>
-        true,
+      EventLifecycleStatus.draft || EventLifecycleStatus.completed => true,
       EventLifecycleStatus.active ||
       EventLifecycleStatus.finalized ||
       EventLifecycleStatus.cancelled =>

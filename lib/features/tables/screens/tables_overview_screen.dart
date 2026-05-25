@@ -20,6 +20,7 @@ class TablesOverviewScreen extends StatefulWidget {
     required this.eventId,
     required this.eventTitle,
     required this.scoringOpen,
+    this.scoringPhase = EventScoringPhase.tournament,
     this.readOnly = false,
     required this.tableRepository,
     required this.sessionRepository,
@@ -31,6 +32,7 @@ class TablesOverviewScreen extends StatefulWidget {
   final String eventId;
   final String eventTitle;
   final bool scoringOpen;
+  final EventScoringPhase scoringPhase;
   final bool readOnly;
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
@@ -46,6 +48,9 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   late final TableListController _controller;
   Timer? _roundTimer;
 
+  bool get _isQualificationPhase =>
+      widget.scoringPhase == EventScoringPhase.qualification;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +59,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       sessionRepository: widget.sessionRepository,
       guestRepository: widget.guestRepository,
       seatingRepository: widget.seatingRepository,
+      scoringPhase: widget.scoringPhase,
       now: widget.now,
     )
       ..addListener(_handleUpdate)
@@ -115,8 +121,20 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       arguments: StartSessionArgs(
         eventId: widget.eventId,
         table: table,
-        scoringPhase: EventScoringPhase.tournament,
+        scoringPhase: widget.scoringPhase,
         allowAssignedTableEntry: true,
+      ),
+    );
+    await _controller.load(widget.eventId);
+  }
+
+  Future<void> _enterReadyTable(EventTableRecord table) async {
+    await Navigator.of(context).pushNamed(
+      AppRouter.startSessionRoute,
+      arguments: StartSessionArgs(
+        eventId: widget.eventId,
+        table: table,
+        scoringPhase: widget.scoringPhase,
       ),
     );
     await _controller.load(widget.eventId);
@@ -139,6 +157,30 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       );
       await _controller.load(widget.eventId);
     }
+  }
+
+  Future<void> _openBonusRound() async {
+    await Navigator.of(context).pushNamed(
+      AppRouter.bonusRoundRoute,
+      arguments: BonusRoundArgs(eventId: widget.eventId),
+    );
+    await _controller.load(widget.eventId);
+  }
+
+  Future<void> _pauseSessionTimer(String sessionId) async {
+    await _controller.pauseSessionTimer(widget.eventId, sessionId);
+  }
+
+  Future<void> _resumeSessionTimer(String sessionId) async {
+    await _controller.resumeSessionTimer(widget.eventId, sessionId);
+  }
+
+  Future<void> _pauseAllRoundTimers() async {
+    await _controller.pauseAllRoundTimers(widget.eventId);
+  }
+
+  Future<void> _resumeAllRoundTimers() async {
+    await _controller.resumeAllRoundTimers(widget.eventId);
   }
 
   Future<void> _openSessionHistory(EventTableRecord table) async {
@@ -238,11 +280,17 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
             ],
             const SizedBox(height: 16),
             if (_controller.tournamentRoundSummary.hasCurrentRound) ...[
-              _buildCurrentRoundStatusBoard(_controller.tournamentRoundSummary),
+              _buildCurrentRoundStatusBoard(
+                _controller.tournamentRoundSummary,
+              ),
               const SizedBox(height: 16),
             ],
             if (_controller.currentRoundCards.isNotEmpty) ...[
-              _buildSectionHeader('Current Round'),
+              _buildSectionHeader(
+                widget.scoringPhase == EventScoringPhase.bonus
+                    ? 'Finals Tables'
+                    : 'Current Round',
+              ),
               const SizedBox(height: 8),
               for (final cardData in _controller.currentRoundCards)
                 _buildCurrentRoundTableCard(cardData),
@@ -286,9 +334,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
             children: [
               Expanded(
                 child: Text(
-                  round == null
-                      ? 'Tournament Round'
-                      : 'Round ${round.roundNumber}',
+                  _currentBoardTitle(round),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
                       ),
@@ -331,7 +377,10 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                   fontWeight: FontWeight.w600,
                 ),
           ),
-          if (!widget.readOnly && widget.scoringOpen && summary.isComplete) ...[
+          if (!widget.readOnly &&
+              widget.scoringOpen &&
+              widget.scoringPhase == EventScoringPhase.tournament &&
+              summary.isComplete) ...[
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -342,6 +391,42 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 label: const Text('Start Next Round'),
               ),
             ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed:
+                    _controller.isStartingNextRound ? null : _openBonusRound,
+                icon: const Icon(Icons.emoji_events),
+                label: const Text('Begin Finals'),
+              ),
+            ),
+          ] else if (!widget.readOnly &&
+              widget.scoringOpen &&
+              summary.hasCurrentRound) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                if (summary.activeTableCount > 0)
+                  OutlinedButton.icon(
+                    onPressed: _controller.isUpdatingTimers
+                        ? null
+                        : _pauseAllRoundTimers,
+                    icon: const Icon(Icons.pause),
+                    label: const Text('Pause All Timers'),
+                  ),
+                if (summary.pausedTableCount > 0)
+                  FilledButton.icon(
+                    onPressed: _controller.isUpdatingTimers
+                        ? null
+                        : _resumeAllRoundTimers,
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Resume All Timers'),
+                  ),
+              ],
+            ),
           ],
         ],
       ),
@@ -349,9 +434,20 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   }
 
   String _roundProgressLabel(TournamentRoundSummary summary) {
-    final tableLabel = summary.assignedTableCount == 1 ? 'table' : 'tables';
+    final noun = widget.scoringPhase == EventScoringPhase.bonus
+        ? 'finals ${summary.assignedTableCount == 1 ? 'table' : 'tables'}'
+        : summary.assignedTableCount == 1
+            ? 'table'
+            : 'tables';
     return '${summary.completeTableCount} / '
-        '${summary.assignedTableCount} $tableLabel complete';
+        '${summary.assignedTableCount} $noun complete';
+  }
+
+  String _currentBoardTitle(TournamentRoundRecord? round) {
+    if (widget.scoringPhase == EventScoringPhase.bonus) {
+      return 'Finals';
+    }
+    return round == null ? 'Tournament Round' : 'Round ${round.roundNumber}';
   }
 
   Widget _buildRoundMetric(String label, StatusChipTone tone) {
@@ -394,7 +490,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    cardData.table.label,
+                    cardData.assignmentTitle ?? cardData.table.label,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
@@ -405,6 +501,16 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 ),
               ],
             ),
+            if (cardData.assignmentSubtitle case final subtitle?) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
             const SizedBox(height: 8),
             _buildAssignedSeatRows(players),
             const SizedBox(height: 4),
@@ -420,7 +526,9 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               _buildCurrentRoundLiveMeta(cardData.liveSummary!),
             ],
             const SizedBox(height: 12),
-            Row(
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
               children: [
                 FilledButton(
                   onPressed: action == _CurrentRoundAction.enter
@@ -430,7 +538,9 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                           : () => _openSessionDetail(sessionId),
                   child: Text(_currentRoundActionLabel(action)),
                 ),
-                const Spacer(),
+                if (cardData.liveSummary case final liveSummary?)
+                  if (liveSummary.showRoundTimer)
+                    _buildTimerActionButton(liveSummary),
                 if (_controller.sessionsForTable(cardData.table.id).isNotEmpty)
                   OutlinedButton.icon(
                     onPressed: () => _openSessionHistory(cardData.table),
@@ -620,13 +730,16 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
             const SizedBox(height: 12),
             _buildLastResultSummary(summary.lastHand),
             const SizedBox(height: 14),
-            Row(
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 FilledButton(
                   onPressed: () => _openSessionDetail(summary.sessionId),
                   child: const Text('View Session'),
                 ),
-                const Spacer(),
+                if (summary.showRoundTimer) _buildTimerActionButton(summary),
                 PopupMenuButton<String>(
                   tooltip: 'Table options',
                   icon: const Icon(Icons.more_vert),
@@ -667,6 +780,35 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTimerActionButton(LiveTableSummary summary) {
+    final isPaused = summary.status == SessionStatus.paused;
+    final isActive = summary.status == SessionStatus.active;
+    if (!isActive && !isPaused) {
+      return const SizedBox.shrink();
+    }
+
+    final onPressed = _controller.isUpdatingTimers
+        ? null
+        : isPaused
+            ? () => _resumeSessionTimer(summary.sessionId)
+            : () => _pauseSessionTimer(summary.sessionId);
+    final label = isPaused ? 'Resume Timer' : 'Pause Timer';
+    final icon = isPaused ? Icons.play_arrow : Icons.pause;
+    if (isPaused) {
+      return FilledButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
+      );
+    }
+
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon),
+      label: Text(label),
     );
   }
 
@@ -823,6 +965,25 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   Widget _buildReadyTableCard(EventTableRecord table) {
     final hasTag = table.nfcTagId != null;
     final hasSessionHistory = _controller.sessionsForTable(table.id).isNotEmpty;
+    final statusLabel = widget.readOnly
+        ? 'Locked'
+        : hasTag || _isQualificationPhase
+            ? 'Ready'
+            : 'Needs Tag';
+    final statusTone = widget.readOnly
+        ? StatusChipTone.neutral
+        : hasTag || _isQualificationPhase
+            ? StatusChipTone.success
+            : StatusChipTone.warning;
+    final readyCopy = widget.readOnly
+        ? 'This table is locked with the finalized event.'
+        : _isQualificationPhase
+            ? widget.scoringOpen
+                ? 'Ready for qualification play. Enter the table to record qualifier hands.'
+                : 'Open scoring before recording qualifier hands at this table.'
+            : hasTag
+                ? 'Scan this table from the event dashboard to start seating.'
+                : 'Bind this table tag before live seating.';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: AppListSurface(
@@ -840,26 +1001,14 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                   ),
                 ),
                 StatusChip(
-                  label: widget.readOnly
-                      ? 'Locked'
-                      : hasTag
-                          ? 'Ready'
-                          : 'Needs Tag',
-                  tone: widget.readOnly
-                      ? StatusChipTone.neutral
-                      : hasTag
-                          ? StatusChipTone.success
-                          : StatusChipTone.warning,
+                  label: statusLabel,
+                  tone: statusTone,
                 ),
               ],
             ),
             const SizedBox(height: 10),
             Text(
-              widget.readOnly
-                  ? 'This table is locked with the finalized event.'
-                  : hasTag
-                      ? 'Scan this table from the event dashboard to start seating.'
-                      : 'Bind this table tag before live seating.',
+              readyCopy,
               style: Theme.of(context).textTheme.bodySmall,
             ),
             if (!widget.readOnly || hasSessionHistory) ...[
@@ -869,6 +1018,12 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 runSpacing: 12,
                 children: [
                   if (!widget.readOnly) ...[
+                    if (_isQualificationPhase && widget.scoringOpen)
+                      FilledButton.icon(
+                        onPressed: () => _enterReadyTable(table),
+                        icon: const Icon(Icons.login),
+                        label: const Text('Enter Table'),
+                      ),
                     OutlinedButton(
                       onPressed: () => _openEditTable(table),
                       child: const Text('Edit'),

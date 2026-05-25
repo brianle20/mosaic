@@ -85,9 +85,40 @@ describe("public standings data mapping", () => {
     });
   });
 
+  it("loads public standings snapshots by event slug and exposes the resolved event id", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: {
+        event_id: "event-1",
+        public_slug: "fv-mahjong-1",
+        payload: {
+          eventTitle: "FV Mahjong 1",
+          leaderboard: [],
+          bonusResults: [],
+          updatedAt: "2026-05-24T12:01:00.000Z",
+        },
+        updated_at: "2026-05-24T12:01:01.000Z",
+      },
+      error: null,
+    });
+    const eq = vi.fn(() => ({ maybeSingle }));
+    const select = vi.fn(() => ({ eq }));
+    const from = vi.fn(() => ({ select }));
+    const rpc = vi.fn();
+
+    const result = await fetchPublicStandings({ from, rpc }, "fv-mahjong-1");
+
+    expect(select).toHaveBeenCalledWith("event_id, public_slug, payload, updated_at");
+    expect(eq).toHaveBeenCalledWith("public_slug", "fv-mahjong-1");
+    expect(rpc).not.toHaveBeenCalled();
+    expect(result.eventId).toBe("event-1");
+    expect(result.eventSlug).toBe("fv-mahjong-1");
+  });
+
   it("loads public standings from the cached snapshot before falling back to RPCs", async () => {
     const maybeSingle = vi.fn().mockResolvedValue({
       data: {
+        event_id: "event-1",
+        public_slug: "fv-mahjong-1",
         payload: {
           eventTitle: "FV Mahjong 1",
           leaderboard: [
@@ -118,10 +149,12 @@ describe("public standings data mapping", () => {
     const result = await fetchPublicStandings({ from, rpc }, "event-1");
 
     expect(from).toHaveBeenCalledWith("public_event_standings_snapshots");
-    expect(select).toHaveBeenCalledWith("payload, updated_at");
+    expect(select).toHaveBeenCalledWith("event_id, public_slug, payload, updated_at");
     expect(eq).toHaveBeenCalledWith("event_id", "event-1");
     expect(rpc).not.toHaveBeenCalled();
     expect(result).toEqual({
+      eventId: "event-1",
+      eventSlug: "fv-mahjong-1",
       eventTitle: "FV Mahjong 1",
       leaderboard: [
         {

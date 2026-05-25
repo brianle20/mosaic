@@ -271,14 +271,9 @@ class _FakeLeaderboardRepository extends ThrowingLeaderboardRepository {
 }
 
 class _FakeSessionRepository extends ThrowingSessionRepository {
-  _FakeSessionRepository(
-    this.sessions, {
-    this.onEndSession,
-  });
+  _FakeSessionRepository(this.sessions);
 
   final List<TableSessionRecord> sessions;
-  final Future<SessionDetailRecord> Function(String sessionId, String reason)?
-      onEndSession;
 
   @override
   Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
@@ -294,12 +289,8 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   Future<SessionDetailRecord> endSession({
     required String sessionId,
     required String reason,
-  }) async {
-    final handler = onEndSession;
-    if (handler == null) {
-      throw UnimplementedError();
-    }
-    return handler(sessionId, reason);
+  }) {
+    throw UnimplementedError();
   }
 }
 
@@ -343,50 +334,6 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
     String eventId,
   ) async =>
       cachedRoundSummary;
-}
-
-TableSessionRecord _tableSession({
-  required String id,
-  required SessionStatus status,
-  required EventScoringPhase scoringPhase,
-}) {
-  return TableSessionRecord.fromJson({
-    'id': id,
-    'event_id': 'evt_01',
-    'event_table_id': 'tbl_01',
-    'session_number_for_table': 1,
-    'ruleset_id': 'HK_STANDARD',
-    'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
-    'rotation_policy_config_json': {},
-    'status': switch (status) {
-      SessionStatus.active => 'active',
-      SessionStatus.paused => 'paused',
-      SessionStatus.completed => 'completed',
-      SessionStatus.endedEarly => 'ended_early',
-      SessionStatus.aborted => 'aborted',
-    },
-    'initial_east_seat_index': 0,
-    'current_dealer_seat_index': 0,
-    'dealer_pass_count': 0,
-    'completed_games_count': 0,
-    'hand_count': 0,
-    'scoring_phase': eventScoringPhaseToJson(scoringPhase),
-    'started_at': '2026-04-24T19:05:00-07:00',
-    'started_by_user_id': 'usr_01',
-  });
-}
-
-SessionDetailRecord _sessionDetail(String sessionId) {
-  return SessionDetailRecord(
-    session: _tableSession(
-      id: sessionId,
-      status: SessionStatus.endedEarly,
-      scoringPhase: EventScoringPhase.qualification,
-    ),
-    seats: const [],
-    hands: const [],
-    settlements: const [],
-  );
 }
 
 TournamentRoundSummary _roundSummary(int roundNumber) {
@@ -632,7 +579,7 @@ void main() {
         contains(scoringPhaseLiveSessionBlockedMessage));
   });
 
-  test('startTournament ends live qualification sessions and generates seating',
+  test('startTournament delegates the phase transition and generates seating',
       () async {
     final event = EventRecord.fromJson(const {
       'id': 'evt_01',
@@ -660,29 +607,6 @@ void main() {
     final controller = EventDashboardController(
       eventRepository: repository,
       guestRepository: _FakeGuestRepository(cachedGuests: const []),
-      sessionRepository: _FakeSessionRepository(
-        [
-          _tableSession(
-            id: 'ses_active_qualification',
-            status: SessionStatus.active,
-            scoringPhase: EventScoringPhase.qualification,
-          ),
-          _tableSession(
-            id: 'ses_paused_qualification',
-            status: SessionStatus.paused,
-            scoringPhase: EventScoringPhase.qualification,
-          ),
-          _tableSession(
-            id: 'ses_completed_qualification',
-            status: SessionStatus.completed,
-            scoringPhase: EventScoringPhase.qualification,
-          ),
-        ],
-        onEndSession: (sessionId, reason) async {
-          operations.add('end:$sessionId:$reason');
-          return _sessionDetail(sessionId);
-        },
-      ),
       seatingRepository: _FakeSeatingRepository(
         onGenerate: (eventId) async {
           operations.add('generate:$eventId');
@@ -697,15 +621,10 @@ void main() {
     expect(assignments, isEmpty);
     expect(controller.event?.currentScoringPhase, EventScoringPhase.tournament);
     expect(controller.lifecycleError, isNull);
-    expect(operations, [
-      'end:ses_active_qualification:tournament_started',
-      'end:ses_paused_qualification:tournament_started',
-      'phase:tournament',
-      'generate:evt_01',
-    ]);
+    expect(operations, ['generate:evt_01']);
   });
 
-  test('startTournament keeps tournament phase when round generation fails',
+  test('startTournament keeps qualification phase when generation fails',
       () async {
     final event = EventRecord.fromJson(const {
       'id': 'evt_01',
@@ -733,19 +652,6 @@ void main() {
     final controller = EventDashboardController(
       eventRepository: repository,
       guestRepository: _FakeGuestRepository(cachedGuests: const []),
-      sessionRepository: _FakeSessionRepository(
-        [
-          _tableSession(
-            id: 'ses_active_qualification',
-            status: SessionStatus.active,
-            scoringPhase: EventScoringPhase.qualification,
-          ),
-        ],
-        onEndSession: (sessionId, reason) async {
-          operations.add('end:$sessionId:$reason');
-          return _sessionDetail(sessionId);
-        },
-      ),
       seatingRepository: _FakeSeatingRepository(
         onGenerate: (eventId) async {
           operations.add('generate:$eventId');
@@ -759,20 +665,17 @@ void main() {
     final assignments = await controller.startTournament();
 
     expect(assignments, isNull);
-    expect(controller.event?.currentScoringPhase, EventScoringPhase.tournament);
+    expect(
+        controller.event?.currentScoringPhase, EventScoringPhase.qualification);
     expect(
       controller.lifecycleError,
       contains('Add or tag more tables before starting this round.'),
     );
     expect(
       controller.lifecycleError,
-      contains('Tournament mode remains active'),
+      isNot(contains('Tournament mode remains active')),
     );
-    expect(operations, [
-      'end:ses_active_qualification:tournament_started',
-      'phase:tournament',
-      'generate:evt_01',
-    ]);
+    expect(operations, ['generate:evt_01']);
   });
 
   test('startTournament can use repositories attached after controller init',
@@ -806,7 +709,6 @@ void main() {
     await controller.load('evt_01');
 
     controller.updateRuntimeRepositories(
-      sessionRepository: _FakeSessionRepository(const []),
       seatingRepository: _FakeSeatingRepository(
         onGenerate: (_) async {
           generatedAssignments = true;

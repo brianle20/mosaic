@@ -10,12 +10,16 @@ class TableOverviewCardData {
     this.liveSummary,
     this.currentRoundSummary,
     this.currentRoundHandCount = 0,
+    this.assignmentTitle,
+    this.assignmentSubtitle,
   });
 
   final EventTableRecord table;
   final LiveTableSummary? liveSummary;
   final TournamentRoundTableSummary? currentRoundSummary;
   final int currentRoundHandCount;
+  final String? assignmentTitle;
+  final String? assignmentSubtitle;
 
   bool get isLive => liveSummary != null;
 

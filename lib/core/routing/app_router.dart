@@ -138,6 +138,7 @@ class AppRouter {
             eventId: args.eventId,
             eventTitle: args.eventTitle,
             scoringOpen: args.scoringOpen,
+            scoringPhase: args.scoringPhase,
             readOnly: args.readOnly,
             tableRepository: tableRepository,
             sessionRepository: sessionRepository,
@@ -194,6 +195,7 @@ class AppRouter {
             leaderboardRepository: leaderboardRepository,
             guestRepository: guestRepository,
             sessionRepository: sessionRepository,
+            seatingRepository: seatingRepository,
             initialQualificationTab: args.initialQualificationTab,
           ),
           settings: settings,
@@ -336,12 +338,14 @@ class TablesOverviewArgs {
     required this.eventId,
     required this.eventTitle,
     required this.scoringOpen,
+    this.scoringPhase = EventScoringPhase.tournament,
     this.readOnly = false,
   });
 
   final String eventId;
   final String eventTitle;
   final bool scoringOpen;
+  final EventScoringPhase scoringPhase;
   final bool readOnly;
 }
 

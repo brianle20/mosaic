@@ -175,6 +175,9 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Finals seating created.')),
     );
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(true);
+    }
   }
 
   @override
