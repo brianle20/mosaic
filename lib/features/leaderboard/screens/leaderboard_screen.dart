@@ -137,12 +137,12 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 onSelectionChanged: (selection) => _selectTab(selection.single),
                 segments: const [
                   ButtonSegment(
-                    value: _LeaderboardTab.tournament,
-                    label: Text('Tournament'),
-                  ),
-                  ButtonSegment(
                     value: _LeaderboardTab.qualification,
                     label: Text('Qualification'),
+                  ),
+                  ButtonSegment(
+                    value: _LeaderboardTab.tournament,
+                    label: Text('Tournament'),
                   ),
                   ButtonSegment(
                     value: _LeaderboardTab.finals,

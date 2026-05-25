@@ -348,6 +348,27 @@ void main() {
     expect(find.text('#4'), findsOneWidget);
   });
 
+  testWidgets('orders leaderboard tabs by event phase', (tester) async {
+    final repository = _RecordingLeaderboardRepository(entries: const []);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LeaderboardScreen(
+          eventId: 'evt_01',
+          leaderboardRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final qualificationLeft = tester.getTopLeft(find.text('Qualification')).dx;
+    final tournamentLeft = tester.getTopLeft(find.text('Tournament')).dx;
+    final finalsLeft = tester.getTopLeft(find.text('Finals')).dx;
+
+    expect(qualificationLeft, lessThan(tournamentLeft));
+    expect(tournamentLeft, lessThan(finalsLeft));
+  });
+
   testWidgets(
       'uses local competition placement ranks for prize-eligible players',
       (tester) async {
