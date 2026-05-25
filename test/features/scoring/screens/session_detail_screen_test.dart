@@ -273,6 +273,7 @@ SessionDetailRecord _buildDetail(
   bool hasHands = true,
   String startedAt = '2026-04-24T19:00:00-07:00',
   EventScoringPhase scoringPhase = EventScoringPhase.qualification,
+  int? assignmentRound,
   List<Map<String, Object?>>? hands,
 }) {
   return SessionDetailRecord.fromJson({
@@ -293,6 +294,7 @@ SessionDetailRecord _buildDetail(
         SessionStatus.aborted => 'aborted',
       },
       'scoring_phase': eventScoringPhaseToJson(scoringPhase),
+      'assignment_round': assignmentRound,
       'initial_east_seat_index': 0,
       'current_dealer_seat_index': 1,
       'dealer_pass_count': 1,
@@ -434,6 +436,30 @@ void main() {
     now = now.add(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Time expired'), findsOneWidget);
+  });
+
+  testWidgets('tournament session shows assignment round wind before hands',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: _buildDetail(
+              SessionStatus.active,
+              hasHands: false,
+              scoringPhase: EventScoringPhase.tournament,
+              assignmentRound: 2,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Round Wind: South'), findsOneWidget);
   });
 
   testWidgets('seat grid arranges seats counter-clockwise around the table',

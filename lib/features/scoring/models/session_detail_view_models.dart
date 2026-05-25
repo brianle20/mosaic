@@ -98,7 +98,8 @@ SessionDetailViewModel buildSessionDetailViewModel({
     contextLabel: _contextLabel(detail),
     statusLabel: _statusLabel(detail.session.status),
     handCountLabel: _handCountLabel(recordedHandCount),
-    roundWindLabel: 'Round Wind: ${_roundWindLabel(detail.hands)}',
+    roundWindLabel:
+        'Round Wind: ${_roundWindLabel(detail.session, detail.hands)}',
     dealerLabel: 'Dealer: ${_firstName(currentEastName)}',
     progressLabel: _progressLabel(detail),
     showRoundTimer: showRoundTimer,
@@ -181,18 +182,25 @@ String _handCountLabel(int recordedHandCount) {
   return '$noun $recordedHandCount';
 }
 
-String _roundWindLabel(List<HandResultRecord> hands) {
+String _roundWindLabel(
+    TableSessionRecord session, List<HandResultRecord> hands) {
+  if (session.scoringPhase == EventScoringPhase.tournament &&
+      session.assignmentRound != null) {
+    return _windCycleLabel(session.assignmentRound! - 1);
+  }
+
   final dealerRotationCount = hands
       .where(
         (hand) =>
             hand.status == HandResultStatus.recorded && hand.dealerRotated,
       )
       .length;
-  final windCycle = dealerRotationCount ~/ 4;
-  const winds = ['East', 'South', 'West'];
-  final cappedWindCycle =
-      windCycle >= winds.length ? winds.length - 1 : windCycle;
-  return winds[cappedWindCycle];
+  return _windCycleLabel(dealerRotationCount ~/ 4);
+}
+
+String _windCycleLabel(int windCycle) {
+  const winds = ['East', 'South', 'West', 'North'];
+  return winds[windCycle % winds.length];
 }
 
 String _progressLabel(SessionDetailRecord detail) {

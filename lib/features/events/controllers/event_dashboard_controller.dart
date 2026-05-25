@@ -441,6 +441,31 @@ class EventDashboardController extends ChangeNotifier {
     }
   }
 
+  Future<EventRecord?> copyEventForTesting() async {
+    final currentEvent = event;
+    if (currentEvent == null || isSubmittingLifecycle) {
+      return null;
+    }
+
+    _beginHostMutation();
+    isSubmittingLifecycle = true;
+    lifecycleError = null;
+    notifyListeners();
+
+    try {
+      final copiedEvent =
+          await _eventRepository.copyEventForTesting(currentEvent.id);
+      isSubmittingLifecycle = false;
+      notifyListeners();
+      return copiedEvent;
+    } catch (exception) {
+      lifecycleError = _formatLifecycleError(exception);
+      isSubmittingLifecycle = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
   String _formatLifecycleError(Object exception) {
     final message = exception.toString();
     const statePrefix = 'Bad state: ';

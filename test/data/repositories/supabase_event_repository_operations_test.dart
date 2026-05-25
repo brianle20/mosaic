@@ -114,5 +114,62 @@ void main() {
       final cachedEvents = cache.readEvents();
       expect(cachedEvents.single.scoringOpen, isTrue);
     });
+
+    test('copyEventForTesting clones setup through RPC and refreshes cache',
+        () async {
+      final cache = await LocalCache.create();
+      await cache.saveEvents([
+        EventRecord.fromJson(const {
+          'id': 'evt_01',
+          'owner_user_id': 'usr_01',
+          'title': 'Friday Night Mahjong',
+          'timezone': 'America/Los_Angeles',
+          'starts_at': '2026-04-24T19:00:00-07:00',
+          'lifecycle_status': 'finalized',
+          'checkin_open': false,
+          'scoring_open': false,
+          'cover_charge_cents': 2000,
+          'default_ruleset_id': 'HK_STANDARD',
+          'prevailing_wind': 'east',
+        }),
+      ]);
+      final repository = SupabaseEventRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        eventMutationRunner: (functionName, params) async {
+          expect(functionName, 'copy_event_for_testing');
+          expect(params['source_event_id'], 'evt_01');
+          return {
+            'id': 'evt_copy',
+            'owner_user_id': 'usr_01',
+            'title': 'Friday Night Mahjong Copy',
+            'timezone': 'America/Los_Angeles',
+            'starts_at': '2026-04-24T19:00:00-07:00',
+            'created_at': '2026-05-24T12:00:00-07:00',
+            'lifecycle_status': 'draft',
+            'checkin_open': false,
+            'scoring_open': false,
+            'cover_charge_cents': 2000,
+            'default_ruleset_id': 'HK_STANDARD',
+            'prevailing_wind': 'east',
+            'current_scoring_phase': 'qualification',
+          };
+        },
+      );
+
+      final copiedEvent = await repository.copyEventForTesting('evt_01');
+
+      expect(copiedEvent.id, 'evt_copy');
+      expect(copiedEvent.title, 'Friday Night Mahjong Copy');
+      expect(copiedEvent.lifecycleStatus, EventLifecycleStatus.draft);
+      expect(copiedEvent.checkinOpen, isFalse);
+      expect(copiedEvent.scoringOpen, isFalse);
+      expect(copiedEvent.currentScoringPhase, EventScoringPhase.qualification);
+
+      final cachedEvent = cache.readEvent('evt_copy');
+      expect(cachedEvent, isNotNull);
+      expect(cachedEvent!.lifecycleStatus, EventLifecycleStatus.draft);
+      expect(cache.readEvents().map((event) => event.id), contains('evt_copy'));
+    });
   });
 }

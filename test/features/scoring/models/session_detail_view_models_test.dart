@@ -5,8 +5,7 @@ import 'package:mosaic/features/scoring/models/session_detail_view_models.dart';
 
 void main() {
   group('buildSessionDetailViewModel', () {
-    test('builds title, context, status, hand count, and wind chips',
-        () {
+    test('builds title, context, status, hand count, and wind chips', () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(),
         guestNamesById: _guestNamesById,
@@ -39,6 +38,20 @@ void main() {
 
       expect(viewModel.roundWindLabel, 'Round Wind: South');
       expect(viewModel.dealerLabel, 'Dealer: Estevon');
+    });
+
+    test('uses tournament assignment round before local hand rotations', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(
+          scoringPhase: EventScoringPhase.tournament,
+          assignmentRound: 4,
+          hands: const [],
+          settlements: const [],
+        ),
+        guestNamesById: _guestNamesById,
+      );
+
+      expect(viewModel.roundWindLabel, 'Round Wind: North');
     });
 
     test('falls back to default table session title without a table label', () {
@@ -268,6 +281,7 @@ SessionDetailRecord _detail({
   String status = 'active',
   int currentDealerSeatIndex = 1,
   EventScoringPhase scoringPhase = EventScoringPhase.qualification,
+  int? assignmentRound,
   String startedAt = '2026-04-24T19:00:00-07:00',
   String? endedAt,
   List<Map<String, Object?>>? hands,
@@ -285,6 +299,7 @@ SessionDetailRecord _detail({
       'rotation_policy_config_json': {},
       'status': status,
       'scoring_phase': eventScoringPhaseToJson(scoringPhase),
+      'assignment_round': assignmentRound,
       'initial_east_seat_index': 0,
       'current_dealer_seat_index': currentDealerSeatIndex,
       'dealer_pass_count': 1,

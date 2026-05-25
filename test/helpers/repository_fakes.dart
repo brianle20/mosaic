@@ -31,6 +31,10 @@ class ThrowingEventRepository implements EventRepository {
       throw UnimplementedError();
 
   @override
+  Future<EventRecord> copyEventForTesting(String eventId) =>
+      throw UnimplementedError();
+
+  @override
   Future<EventRecord> startEvent(String eventId) => throw UnimplementedError();
 
   @override

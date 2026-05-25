@@ -587,6 +587,48 @@ void main() {
         liveSummary.lastHand.detail, 'East rotates. Ready for the next hand.');
   });
 
+  test('uses tournament assignment round for live table round wind', () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_01',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final session = _session(
+      id: 'ses_01',
+      tableId: 'tbl_01',
+      scoringPhase: EventScoringPhase.tournament,
+      assignmentRound: 4,
+    );
+    final detail = _detail(session);
+
+    final controller = TableListController(
+      tableRepository: _FakeTableRepository(cachedTables: [table]),
+      sessionRepository: _FakeSessionRepository(
+        cachedSessions: [session],
+        cachedDetails: {'ses_01': detail},
+        loadedDetails: {'ses_01': detail},
+      ),
+      guestRepository: _FakeGuestRepository([
+        _guest('guest_east', 'Alice Chen'),
+        _guest('guest_south', 'Ben Wong'),
+        _guest('guest_west', 'Chris Lee'),
+        _guest('guest_north', 'Dana Park'),
+      ]),
+    );
+
+    await controller.load('evt_01');
+
+    expect(
+      controller.cards.single.liveSummary!.roundWindLabel,
+      'Round Wind: North',
+    );
+  });
+
   test('summarizes false win penalty on live table cards', () async {
     final table = EventTableRecord.fromJson(const {
       'id': 'tbl_01',
@@ -761,6 +803,7 @@ TableSessionRecord _session({
   int currentDealerSeatIndex = 0,
   int handCount = 0,
   EventScoringPhase scoringPhase = EventScoringPhase.qualification,
+  int? assignmentRound,
   String startedAt = '2026-04-24T19:00:00-07:00',
 }) {
   return TableSessionRecord.fromJson({
@@ -773,6 +816,7 @@ TableSessionRecord _session({
     'rotation_policy_config_json': const {},
     'status': status,
     'scoring_phase': eventScoringPhaseToJson(scoringPhase),
+    'assignment_round': assignmentRound,
     'initial_east_seat_index': 0,
     'current_dealer_seat_index': currentDealerSeatIndex,
     'dealer_pass_count': 0,

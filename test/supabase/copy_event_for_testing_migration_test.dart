@@ -1,0 +1,39 @@
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('copy event migration clones setup and omits live history', () {
+    final migrationFile = File(
+      'supabase/migrations/20260524220000_copy_event_for_testing.sql',
+    );
+
+    expect(migrationFile.existsSync(), isTrue);
+    final migration = migrationFile.readAsStringSync();
+
+    expect(migration, contains('copy_event_for_testing'));
+    expect(migration, contains('lifecycle_status'));
+    expect(migration, contains("'draft'"));
+    expect(migration, contains('checkin_open'));
+    expect(migration, contains('scoring_open'));
+    expect(migration, contains('false'));
+    expect(migration, contains('current_scoring_phase'));
+    expect(migration, contains("'qualification'"));
+    expect(migration, contains('insert into public.event_guests'));
+    expect(migration, contains('attendance_status'));
+    expect(migration, contains("'expected'"));
+    expect(migration, contains('tournament_status'));
+    expect(migration, contains("'open_play_only'"));
+    expect(migration, contains('checked_in_at'));
+    expect(migration, contains('null'));
+    expect(migration, contains('insert into public.event_tables'));
+    expect(migration, contains('insert into public.prize_plans'));
+    expect(migration, contains('insert into public.prize_tiers'));
+    expect(migration, isNot(contains('event_guest_tag_assignments')));
+    expect(migration, isNot(contains('table_sessions')));
+    expect(migration, isNot(contains('hand_results')));
+    expect(migration, isNot(contains('event_score_totals')));
+    expect(migration, isNot(contains('event_tournament_rounds')));
+    expect(migration, isNot(contains('prize_awards')));
+  });
+}

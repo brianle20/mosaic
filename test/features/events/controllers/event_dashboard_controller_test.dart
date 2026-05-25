@@ -23,6 +23,7 @@ class _FakeEventRepository extends ThrowingEventRepository {
   final Future<EventRecord?> Function(String eventId)? eventLoader;
   EventRecord Function(String eventId)? cancelHandler;
   EventRecord Function(String eventId)? revertToDraftHandler;
+  EventRecord Function(String eventId)? copyForTestingHandler;
   EventRecord Function(String eventId, EventScoringPhase phase)?
       scoringPhaseHandler;
   void Function(String eventId)? deleteHandler;
@@ -53,6 +54,15 @@ class _FakeEventRepository extends ThrowingEventRepository {
   @override
   Future<EventRecord> createEvent(CreateEventInput input) {
     throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> copyEventForTesting(String eventId) async {
+    final handler = copyForTestingHandler;
+    if (handler == null) {
+      throw UnimplementedError();
+    }
+    return handler(eventId);
   }
 
   @override
@@ -994,5 +1004,47 @@ void main() {
     expect(controller.event?.checkinOpen, isFalse);
     expect(controller.event?.scoringOpen, isFalse);
     expect(controller.lifecycleError, isNull);
+  });
+
+  test('copyEventForTesting returns the copied draft event', () async {
+    final activeEvent = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+    });
+    final copiedEvent = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'id': 'evt_copy',
+      'title': 'Friday Night Mahjong Copy',
+      'lifecycle_status': 'draft',
+      'checkin_open': false,
+      'scoring_open': false,
+      'current_scoring_phase': 'qualification',
+    });
+    final repository = _FakeEventRepository(cachedEvents: [activeEvent]);
+    repository.copyForTestingHandler = (eventId) {
+      expect(eventId, 'evt_01');
+      return copiedEvent;
+    };
+    final controller = EventDashboardController(
+      eventRepository: repository,
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+    );
+    await controller.load('evt_01');
+
+    final result = await controller.copyEventForTesting();
+
+    expect(result, copiedEvent);
+    expect(controller.event, activeEvent);
+    expect(controller.lifecycleError, isNull);
+    expect(controller.isSubmittingLifecycle, isFalse);
   });
 }

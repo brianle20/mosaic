@@ -298,7 +298,7 @@ class TableListController extends ChangeNotifier {
         status: session.status,
         seats: _fallbackSeats(session),
         handCount: session.handCount,
-        roundWindLabel: 'Round Wind: East',
+        roundWindLabel: 'Round Wind: ${_roundWindLabel(session, const [])}',
         dealerLabel: 'Dealer: Unassigned',
         progressLabel: _progressLabel(session.handCount),
         showRoundTimer: showRoundTimer,
@@ -323,7 +323,8 @@ class TableListController extends ChangeNotifier {
       status: session.status,
       seats: _seatSummaries(detail),
       handCount: handCount,
-      roundWindLabel: 'Round Wind: ${_roundWindLabel(detail.hands)}',
+      roundWindLabel:
+          'Round Wind: ${_roundWindLabel(detail.session, detail.hands)}',
       dealerLabel:
           'Dealer: ${_guestNameForSeat(detail, detail.session.currentDealerSeatIndex)}',
       progressLabel: _progressLabel(handCount),
@@ -433,18 +434,27 @@ class TableListController extends ChangeNotifier {
     return 'Hand $handCount';
   }
 
-  String _roundWindLabel(List<HandResultRecord> hands) {
+  String _roundWindLabel(
+    TableSessionRecord session,
+    List<HandResultRecord> hands,
+  ) {
+    if (session.scoringPhase == EventScoringPhase.tournament &&
+        session.assignmentRound != null) {
+      return _windCycleLabel(session.assignmentRound! - 1);
+    }
+
     final dealerRotationCount = hands
         .where(
           (hand) =>
               hand.status == HandResultStatus.recorded && hand.dealerRotated,
         )
         .length;
-    final windCycle = dealerRotationCount ~/ 4;
-    const winds = ['East', 'South', 'West'];
-    final cappedWindCycle =
-        windCycle >= winds.length ? winds.length - 1 : windCycle;
-    return winds[cappedWindCycle];
+    return _windCycleLabel(dealerRotationCount ~/ 4);
+  }
+
+  String _windCycleLabel(int windCycle) {
+    const winds = ['East', 'South', 'West', 'North'];
+    return winds[windCycle % winds.length];
   }
 
   String _windLabel(int seatIndex, int currentDealerSeatIndex) {

@@ -418,6 +418,43 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     _scrollToTop();
   }
 
+  Future<void> _confirmCopyEventForTesting() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Copy this event?'),
+        content: const Text(
+          'This creates a draft testing copy with guests, tables, and prize setup, but no check-ins, player tag assignments, sessions, scores, standings, or awards.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Copy'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final copiedEvent = await _controller.copyEventForTesting();
+    if (!mounted || copiedEvent == null) {
+      _scrollToTop();
+      return;
+    }
+
+    await Navigator.of(context).pushReplacementNamed(
+      AppRouter.eventDashboardRoute,
+      arguments: EventDashboardArgs(eventId: copiedEvent.id),
+    );
+  }
+
   void _scrollToTop() {
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0);
@@ -939,6 +976,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 onSeating: _openSeating,
                 onActivity: _openActivity,
                 onHandLedger: _openHandLedger,
+                onCopy: _confirmCopyEventForTesting,
                 onDelete: _confirmDeleteEvent,
                 onComplete: () => _controller.completeEvent(),
                 onFinalize: () => _controller.finalizeEvent(),
@@ -1508,6 +1546,7 @@ class _EventOptionsSection extends StatelessWidget {
     required this.onSeating,
     required this.onActivity,
     required this.onHandLedger,
+    required this.onCopy,
     required this.onDelete,
     required this.onComplete,
     required this.onFinalize,
@@ -1520,6 +1559,7 @@ class _EventOptionsSection extends StatelessWidget {
   final VoidCallback onSeating;
   final VoidCallback onActivity;
   final VoidCallback onHandLedger;
+  final VoidCallback onCopy;
   final VoidCallback onDelete;
   final VoidCallback onComplete;
   final VoidCallback onFinalize;
@@ -1561,6 +1601,10 @@ class _EventOptionsSection extends StatelessWidget {
             UtilityActionButton(
               label: 'Hand Ledger',
               onPressed: onHandLedger,
+            ),
+            UtilityActionButton(
+              label: 'Copy Event',
+              onPressed: isSubmitting ? null : onCopy,
             ),
             if (lifecycleStatus == EventLifecycleStatus.draft)
               UtilityActionButton(

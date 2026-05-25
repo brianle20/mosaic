@@ -377,9 +377,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final players = [...roundTable.assignedPlayers]
       ..sort((left, right) => left.seatIndex.compareTo(right.seatIndex));
-    final playersLabel = players.isEmpty
-        ? 'No assigned players'
-        : players.map((player) => player.displayName).join(', ');
     final sessionId =
         roundTable.activeSessionId ?? roundTable.latestEndedSessionId;
     final action = _currentRoundAction(roundTable);
@@ -409,14 +406,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              playersLabel,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
+            _buildAssignedSeatRows(players),
             const SizedBox(height: 4),
             Text(
               _sessionHandLabel(cardData.currentRoundHandCount),
@@ -453,6 +443,65 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildAssignedSeatRows(
+    List<TournamentRoundAssignedPlayer> players,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (players.isEmpty) {
+      return Text(
+        'No assigned players',
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final player in players)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 88,
+                  child: Text(
+                    _seatLabel(player.seatIndex),
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    player.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _seatLabel(int seatIndex) {
+    return switch (seatIndex) {
+      0 => 'East seat',
+      1 => 'South seat',
+      2 => 'West seat',
+      3 => 'North seat',
+      _ => 'Seat ${seatIndex + 1}',
+    };
   }
 
   bool _shouldShowCurrentRoundLiveMeta(

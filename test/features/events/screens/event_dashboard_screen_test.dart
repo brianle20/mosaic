@@ -41,6 +41,7 @@ class _EventRepository extends ThrowingEventRepository {
     this.onCancel,
     this.onRevertToDraft,
     this.onDelete,
+    this.onCopyForTesting,
   });
 
   EventRecord event;
@@ -50,6 +51,7 @@ class _EventRepository extends ThrowingEventRepository {
   final Future<EventRecord> Function(String eventId)? onCancel;
   final Future<EventRecord> Function(String eventId)? onRevertToDraft;
   final Future<void> Function(String eventId)? onDelete;
+  final Future<EventRecord> Function(String eventId)? onCopyForTesting;
   final Future<EventRecord> Function(String eventId, EventScoringPhase phase)?
       onUpdateScoringPhase;
   final Future<EventRecord> Function(
@@ -60,6 +62,16 @@ class _EventRepository extends ThrowingEventRepository {
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventRecord> copyEventForTesting(String eventId) async {
+    final handler = onCopyForTesting;
+    if (handler != null) {
+      return handler(eventId);
+    }
+
     throw UnimplementedError();
   }
 
@@ -2201,6 +2213,8 @@ void main() {
 
     expect(find.text('Delete Event'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Delete Event'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete Event'));
     await tester.pumpAndSettle();
 
@@ -2304,6 +2318,72 @@ void main() {
     expect(find.text('Start Event'), findsNothing);
     expect(find.text('Delete Event'), findsOneWidget);
     expect(find.text('Complete Event'), findsNothing);
+  });
+
+  testWidgets('event can be copied for testing after confirmation',
+      (tester) async {
+    var copiedEventId = '';
+    RouteSettings? openedSettings;
+    final copiedEvent = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'id': 'evt_copy',
+      'title': 'Friday Night Mahjong Copy',
+      'lifecycle_status': 'draft',
+      'checkin_open': false,
+      'scoring_open': false,
+      'current_scoring_phase': 'qualification',
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_01'),
+          eventRepository: _EventRepository(
+            activeEvent,
+            onCopyForTesting: (eventId) async {
+              copiedEventId = eventId;
+              return copiedEvent;
+            },
+          ),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.eventDashboardRoute) {
+            openedSettings = settings;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(
+                body: Text('Copied event dashboard'),
+              ),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Copy Event'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Copy Event'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Copy this event?'), findsOneWidget);
+    expect(
+      find.text(
+        'This creates a draft testing copy with guests, tables, and prize setup, but no check-ins, player tag assignments, sessions, scores, standings, or awards.',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Copy'));
+    await tester.pumpAndSettle();
+
+    expect(copiedEventId, 'evt_01');
+    expect(openedSettings?.name, AppRouter.eventDashboardRoute);
+    expect((openedSettings?.arguments as EventDashboardArgs?)?.eventId,
+        'evt_copy');
+    expect(find.text('Copied event dashboard'), findsOneWidget);
   });
 
   testWidgets('starting a draft event enables live controls', (tester) async {

@@ -999,19 +999,31 @@ void main() {
     expect(find.text('1 Not Started'), findsOneWidget);
     expect(find.text('1 / 3 tables complete'), findsOneWidget);
     expect(find.text('Current Round'), findsOneWidget);
-    expect(find.text('Alice Chen, Ben Wong'), findsOneWidget);
-    expect(find.text('Chris Lee, Dana Park'), findsOneWidget);
+    expect(find.text('East seat'), findsOneWidget);
+    expect(find.text('South seat'), findsOneWidget);
+    expect(find.text('Alice Chen'), findsOneWidget);
+    expect(find.text('Ben Wong'), findsOneWidget);
+    expect(find.text('Alice Chen, Ben Wong'), findsNothing);
     expect(find.text('Hand 2'), findsOneWidget);
     expect(find.text('59:00'), findsOneWidget);
     expect(find.text('Round Wind: East'), findsOneWidget);
     expect(find.text('Dealer: Alice Chen'), findsOneWidget);
-    expect(find.text('Enter Table'), findsOneWidget);
     expect(find.text('Open Session'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('Eli Ho, Fran Ng'), 300);
+    await tester.scrollUntilVisible(find.text('Chris Lee'), 300);
     await tester.pumpAndSettle();
 
-    expect(find.text('Eli Ho, Fran Ng'), findsOneWidget);
+    expect(find.text('Chris Lee'), findsOneWidget);
+    expect(find.text('Dana Park'), findsOneWidget);
+    expect(find.text('Chris Lee, Dana Park'), findsNothing);
+    expect(find.text('Enter Table'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('Eli Ho'), 300);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Eli Ho'), findsOneWidget);
+    expect(find.text('Fran Ng'), findsOneWidget);
+    expect(find.text('Eli Ho, Fran Ng'), findsNothing);
     expect(find.text('Hand 4'), findsOneWidget);
     expect(find.text('View Session'), findsOneWidget);
 

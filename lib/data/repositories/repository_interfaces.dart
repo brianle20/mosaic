@@ -35,6 +35,8 @@ abstract interface class EventRepository {
 
   Future<EventRecord> createEvent(CreateEventInput input);
 
+  Future<EventRecord> copyEventForTesting(String eventId);
+
   Future<EventRecord> startEvent(String eventId);
 
   Future<EventRecord> setOperationalFlags({
