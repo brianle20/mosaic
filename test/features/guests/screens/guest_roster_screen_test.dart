@@ -1218,6 +1218,37 @@ void main() {
     expect(find.text('Alice Wong is checked in and tagged.'), findsOneWidget);
   });
 
+  testWidgets('assigning a tag promotes open-play-only guests to qualifying', (
+    tester,
+  ) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Assign Tag'));
+    await tester.pumpAndSettle();
+
+    expect(
+        repository.statusUpdates['gst_01'], EventTournamentStatus.qualifying);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Qualifying',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Mark Qualified'), findsOneWidget);
+    expect(find.text('Mark Qualifying'), findsNothing);
+  });
+
   testWidgets('assigns a tag for an already checked-in guest', (tester) async {
     final repository = _FakeGuestRepository([
       _guest(

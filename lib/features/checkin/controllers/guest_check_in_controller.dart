@@ -93,6 +93,10 @@ class GuestCheckInController extends ChangeNotifier {
         replaceExistingAssignment: false,
         checkInBeforeAssign: !currentDetail.guest.isCheckedIn,
       );
+      if (currentDetail.guest.tournamentStatus ==
+          EventTournamentStatus.openPlayOnly) {
+        await _promoteOpenPlayOnlyGuest(guestId);
+      }
     } catch (exception) {
       actionError = exception.toString();
     }
@@ -210,5 +214,19 @@ class GuestCheckInController extends ChangeNotifier {
             guestId: guestId,
             scannedUid: scanResult.normalizedUid,
           );
+  }
+
+  Future<void> _promoteOpenPlayOnlyGuest(String guestId) async {
+    final updatedGuest =
+        await _guestRepository.updateEventGuestTournamentStatus(
+      eventGuestId: guestId,
+      status: EventTournamentStatus.qualifying,
+    );
+    final currentDetail = detail;
+    detail = GuestDetailRecord(
+      guest: updatedGuest,
+      coverEntries: currentDetail?.coverEntries ?? const [],
+      activeTagAssignment: currentDetail?.activeTagAssignment,
+    );
   }
 }

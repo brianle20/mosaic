@@ -39,9 +39,12 @@ class _FakeGuestRepository implements GuestRepository {
         guestProfileId: detail.guest.guestProfileId,
         displayName: detail.guest.displayName,
         normalizedName: detail.guest.normalizedName,
+        publicDisplayName: detail.guest.publicDisplayName,
         phoneE164: detail.guest.phoneE164,
         emailLower: detail.guest.emailLower,
+        instagramHandle: detail.guest.instagramHandle,
         attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: detail.guest.tournamentStatus,
         coverStatus: detail.guest.coverStatus,
         coverAmountCents: detail.guest.coverAmountCents,
         isComped: detail.guest.isComped,
@@ -79,9 +82,12 @@ class _FakeGuestRepository implements GuestRepository {
         guestProfileId: detail.guest.guestProfileId,
         displayName: detail.guest.displayName,
         normalizedName: detail.guest.normalizedName,
+        publicDisplayName: detail.guest.publicDisplayName,
         phoneE164: detail.guest.phoneE164,
         emailLower: detail.guest.emailLower,
+        instagramHandle: detail.guest.instagramHandle,
         attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: detail.guest.tournamentStatus,
         coverStatus: detail.guest.coverStatus,
         coverAmountCents: detail.guest.coverAmountCents,
         isComped: detail.guest.isComped,
@@ -265,8 +271,33 @@ class _FakeGuestRepository implements GuestRepository {
   Future<EventGuestRecord> updateEventGuestTournamentStatus({
     required String eventGuestId,
     required EventTournamentStatus status,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    final updatedGuest = EventGuestRecord(
+      id: detail.guest.id,
+      eventId: detail.guest.eventId,
+      guestProfileId: detail.guest.guestProfileId,
+      displayName: detail.guest.displayName,
+      normalizedName: detail.guest.normalizedName,
+      publicDisplayName: detail.guest.publicDisplayName,
+      phoneE164: detail.guest.phoneE164,
+      emailLower: detail.guest.emailLower,
+      instagramHandle: detail.guest.instagramHandle,
+      attendanceStatus: detail.guest.attendanceStatus,
+      tournamentStatus: status,
+      coverStatus: detail.guest.coverStatus,
+      coverAmountCents: detail.guest.coverAmountCents,
+      isComped: detail.guest.isComped,
+      hasScoredPlay: detail.guest.hasScoredPlay,
+      note: detail.guest.note,
+      checkedInAt: detail.guest.checkedInAt,
+      rowVersion: detail.guest.rowVersion,
+    );
+    detail = GuestDetailRecord(
+      guest: updatedGuest,
+      coverEntries: detail.coverEntries,
+      activeTagAssignment: detail.activeTagAssignment,
+    );
+    return updatedGuest;
   }
 
   @override
@@ -719,6 +750,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.lastAssignedUid, '04AABB');
+    expect(find.text('Replace Tag'), findsOneWidget);
+    expect(find.text('Tag Assigned'), findsOneWidget);
+  });
+
+  testWidgets('assigning a tag promotes open-play-only guest to qualifying', (
+    tester,
+  ) async {
+    final repository = _FakeGuestRepository(
+      GuestDetailRecord(
+        guest: EventGuestRecord.fromJson(const {
+          'id': 'gst_04',
+          'event_id': 'evt_01',
+          'display_name': 'Dee Wu',
+          'normalized_name': 'dee wu',
+          'attendance_status': 'checked_in',
+          'tournament_status': 'open_play_only',
+          'cover_status': 'paid',
+          'cover_amount_cents': 2000,
+          'is_comped': false,
+          'has_scored_play': false,
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestDetailScreen(
+          guestId: 'gst_04',
+          eventId: 'evt_01',
+          guestRepository: repository,
+          nfcService: const _FakeNfcService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Assign Tag'));
+    await tester.pumpAndSettle();
+
+    expect(repository.detail.guest.tournamentStatus,
+        EventTournamentStatus.qualifying);
     expect(find.text('Replace Tag'), findsOneWidget);
     expect(find.text('Tag Assigned'), findsOneWidget);
   });

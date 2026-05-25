@@ -392,6 +392,41 @@ void main() {
         contains('from public.generate_tournament_round(target_event_id)'));
   });
 
+  test('tournament sessions use tournament round number for round wind', () {
+    final migration = File(
+      'supabase/migrations/20260525110000_reset_tournament_session_round_wind.sql',
+    );
+
+    expect(migration.existsSync(), isTrue);
+    final sql = migration.readAsStringSync();
+
+    expect(
+      sql,
+      contains(
+        'create or replace function '
+        'app_private.set_tournament_session_round_number()',
+      ),
+    );
+    expect(sql, contains("new.scoring_phase = 'tournament'"));
+    expect(sql, contains('new.tournament_round_id is not null'));
+    expect(sql, contains('select tournament_round.round_number'));
+    expect(sql, contains('new.assignment_round := tournament_round_number;'));
+    expect(
+      sql,
+      contains(
+        'create trigger table_sessions_set_tournament_round_number',
+      ),
+    );
+    expect(
+      sql,
+      contains(
+        'update public.table_sessions as session',
+      ),
+    );
+    expect(
+        sql, contains('set assignment_round = tournament_round.round_number'));
+  });
+
   test('avoids repeating the exact previous tournament seating map', () {
     final migration = File(
       'supabase/migrations/20260524190000_tournament_round_orchestration.sql',

@@ -152,6 +152,13 @@ class GuestRosterController extends ChangeNotifier {
       );
       _mergeGuest(assignedDetail.guest);
       _mergeAssignment(guestId, assignedDetail.activeTagAssignment);
+      if (guest.tournamentStatus == EventTournamentStatus.openPlayOnly) {
+        final updated = await _guestRepository.updateEventGuestTournamentStatus(
+          eventGuestId: guestId,
+          status: EventTournamentStatus.qualifying,
+        );
+        _mergeGuest(updated);
+      }
       didAssign = true;
     });
     return didAssign;
