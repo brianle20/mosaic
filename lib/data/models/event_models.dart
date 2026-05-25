@@ -89,6 +89,7 @@ class EventRecord {
     this.description,
     this.venueName,
     this.venueAddress,
+    this.publicSlug,
     this.endsAt,
     this.rowVersion = 1,
   });
@@ -98,6 +99,7 @@ class EventRecord {
       id: _requiredString(json, 'id'),
       ownerUserId: _requiredString(json, 'owner_user_id'),
       title: _requiredString(json, 'title'),
+      publicSlug: _optionalString(json, 'public_slug'),
       description: _optionalString(json, 'description'),
       venueName: _optionalString(json, 'venue_name'),
       venueAddress: _optionalString(json, 'venue_address'),
@@ -133,6 +135,7 @@ class EventRecord {
   final String id;
   final String ownerUserId;
   final String title;
+  final String? publicSlug;
   final String? description;
   final String? venueName;
   final String? venueAddress;
@@ -155,6 +158,7 @@ class EventRecord {
       'id': id,
       'owner_user_id': ownerUserId,
       'title': title,
+      'public_slug': publicSlug,
       'description': description,
       'venue_name': venueName,
       'venue_address': venueAddress,

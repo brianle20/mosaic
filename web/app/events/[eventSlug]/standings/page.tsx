@@ -6,21 +6,23 @@ import {
 import { createPublicSupabaseClient } from "../../../../lib/supabase";
 
 type StandingsPageProps = {
-  params: Promise<{ eventId: string }>;
+  params: Promise<{ eventSlug: string }>;
 };
 
 export const dynamic = "force-dynamic";
 
 export default async function StandingsPage({ params }: StandingsPageProps) {
-  const { eventId } = await params;
+  const { eventSlug } = await params;
   let initialSnapshot;
   let loadError: string | null = null;
 
   try {
     const publicClient = createPublicSupabaseClient() as unknown as PublicStandingsClient;
-    initialSnapshot = await fetchPublicStandings(publicClient, eventId);
+    initialSnapshot = await fetchPublicStandings(publicClient, eventSlug);
   } catch (error) {
     initialSnapshot = {
+      eventId: eventSlug,
+      eventSlug,
       eventTitle: "Mosaic tournament",
       leaderboard: [],
       bonusResults: [],
@@ -36,7 +38,10 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
           {loadError}
         </div>
       ) : null}
-      <LiveStandings eventId={eventId} initialSnapshot={initialSnapshot} />
+      <LiveStandings
+        eventId={initialSnapshot.eventId ?? eventSlug}
+        initialSnapshot={initialSnapshot}
+      />
     </>
   );
 }

@@ -22,7 +22,14 @@ export type PublicBonusResultRpcRow = {
 
 export type PublicEventSummaryRpcRow = {
   event_id: string;
+  public_slug?: string | null;
   title: string | null;
+  [key: string]: unknown;
+};
+
+export type PublicEventResolutionRpcRow = {
+  event_id: string;
+  public_slug: string;
   [key: string]: unknown;
 };
 
@@ -52,6 +59,8 @@ export type PublicBonusResult = {
 };
 
 export type PublicStandingsSnapshot = {
+  eventId?: string;
+  eventSlug?: string | null;
   eventTitle: string;
   leaderboard: PublicLeaderboardRow[];
   bonusResults: PublicBonusResult[];
@@ -63,20 +72,23 @@ export type PublicStandingsRpcClient = {
     fn:
       | "get_public_event_summary"
       | "get_public_event_leaderboard"
-      | "get_public_event_bonus_results",
-    args: { target_event_id: string },
+      | "get_public_event_bonus_results"
+      | "resolve_public_event_id",
+    args: { target_event_id: string } | { target_public_slug: string },
   ) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>;
 };
 
 export type PublicStandingsSnapshotRow = {
+  event_id?: string;
+  public_slug?: string | null;
   payload: unknown;
   updated_at: string | null;
 };
 
 export type PublicStandingsSnapshotClient = {
   from: (table: "public_event_standings_snapshots") => {
-    select: (columns: "payload, updated_at") => {
-      eq: (column: "event_id", value: string) => {
+    select: (columns: "event_id, public_slug, payload, updated_at") => {
+      eq: (column: "event_id" | "public_slug", value: string) => {
         maybeSingle: () => PromiseLike<{
           data: PublicStandingsSnapshotRow | null;
           error: { message?: string } | null;
@@ -160,6 +172,8 @@ function mapSnapshotBonusResult(row: unknown): PublicBonusResult {
 export function mapPublicStandingsSnapshotPayload(
   payload: unknown,
   updatedAt: string | null,
+  eventId?: string,
+  eventSlug?: string | null,
 ): PublicStandingsSnapshot {
   const record = asRecord(payload) ?? {};
   const leaderboard = Array.isArray(record.leaderboard) ? record.leaderboard : [];
@@ -169,12 +183,22 @@ export function mapPublicStandingsSnapshotPayload(
       ? record.updatedAt
       : null;
 
-  return {
+  const snapshot: PublicStandingsSnapshot = {
     eventTitle: readString(record.eventTitle, "Mosaic tournament"),
     leaderboard: leaderboard.map(mapSnapshotLeaderboardRow),
     bonusResults: bonusResults.map(mapSnapshotBonusResult),
     updatedAt: payloadUpdatedAt ?? updatedAt,
   };
+
+  if (eventId) {
+    snapshot.eventId = eventId;
+  }
+
+  if (eventSlug !== undefined) {
+    snapshot.eventSlug = eventSlug;
+  }
+
+  return snapshot;
 }
 
 export function getMinimumHandsForPrize(rows: PublicLeaderboardRow[]): number {
@@ -240,16 +264,47 @@ export function mapBonusResultRow(row: PublicBonusResultRpcRow): PublicBonusResu
   };
 }
 
+function looksLikeEventId(value: string): boolean {
+  return (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    ) || /^event[-_]/.test(value)
+  );
+}
+
+async function resolvePublicEventId(
+  client: PublicStandingsRpcClient,
+  eventSlug: string,
+): Promise<PublicEventResolutionRpcRow> {
+  const result = await Promise.resolve(
+    client.rpc("resolve_public_event_id", { target_public_slug: eventSlug }),
+  );
+
+  if (result.error) {
+    throw new Error(result.error.message ?? "Unable to resolve public event.");
+  }
+
+  const resolution = (result.data?.[0] ?? null) as PublicEventResolutionRpcRow | null;
+  if (!resolution?.event_id) {
+    throw new Error("Public event not found.");
+  }
+
+  return resolution;
+}
+
 export async function fetchPublicStandings(
   client: PublicStandingsClient,
-  eventId: string,
+  eventRef: string,
 ): Promise<PublicStandingsSnapshot> {
+  const isEventId = looksLikeEventId(eventRef);
+
   if (typeof client.from === "function") {
+    const snapshotColumn = isEventId ? "event_id" : "public_slug";
     const snapshotResult = await Promise.resolve(
       client
         .from("public_event_standings_snapshots")
-        .select("payload, updated_at")
-        .eq("event_id", eventId)
+        .select("event_id, public_slug, payload, updated_at")
+        .eq(snapshotColumn, eventRef)
         .maybeSingle(),
     );
 
@@ -257,9 +312,18 @@ export async function fetchPublicStandings(
       return mapPublicStandingsSnapshotPayload(
         snapshotResult.data.payload,
         snapshotResult.data.updated_at,
+        snapshotResult.data.event_id,
+        snapshotResult.data.public_slug,
       );
     }
   }
+
+  const eventResolution =
+    !isEventId && typeof client.from === "function"
+      ? await resolvePublicEventId(client, eventRef)
+      : null;
+  const eventId = eventResolution?.event_id ?? eventRef;
+  const eventSlug = eventResolution?.public_slug ?? null;
 
   const [summaryResult, leaderboardResult, bonusResult] = await Promise.all([
     Promise.resolve(client.rpc("get_public_event_summary", { target_event_id: eventId })),
@@ -282,6 +346,8 @@ export async function fetchPublicStandings(
   const eventSummary = (summaryResult.data?.[0] ?? null) as PublicEventSummaryRpcRow | null;
 
   return {
+    eventId: eventSummary?.event_id ?? eventId,
+    eventSlug: eventSummary?.public_slug ?? eventSlug,
     eventTitle: eventSummary?.title?.trim() || "Mosaic tournament",
     leaderboard: (leaderboardResult.data ?? []).map((row) =>
       mapLeaderboardRow(row as PublicLeaderboardRpcRow),

@@ -58,6 +58,10 @@ void main() {
     );
     expect(
       migrationsSql,
+      contains('events_prevent_public_slug_update'),
+    );
+    expect(
+      migrationsSql,
       contains('public.resolve_public_event_id'),
     );
     expect(
@@ -281,8 +285,9 @@ void main() {
       contains('public.public_event_standings_snapshots'),
     );
     expect(migrationsSql, contains('payload jsonb not null'));
-    expect(migrationsSql, contains('public_slug text not null'));
-    expect(migrationsSql, contains('public_event_standings_snapshots_slug_idx'));
+    expect(migrationsSql, contains('alter column public_slug set not null'));
+    expect(
+        migrationsSql, contains('public_event_standings_snapshots_slug_idx'));
     expect(
       migrationsSql,
       contains('public_event_standings_snapshots_public_read'),
