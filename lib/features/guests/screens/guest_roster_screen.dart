@@ -138,20 +138,13 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     );
   }
 
-  Future<void> _checkInAndAssign(EventGuestRecord guest) async {
-    await _runQuickAction(
-      () => _controller.checkInAndAssign(
-        guestId: guest.id,
-        scanForTag: () => widget.nfcService.scanPlayerTagForAssignment(context),
-      ),
-      successMessage: '${guest.displayName} is checked in and tagged.',
-    );
-  }
-
-  Future<void> _checkInOpenPlay(EventGuestRecord guest) async {
+  Future<void> _checkInGuest(EventGuestRecord guest) async {
     await _runQuickAction(
       () => _controller.checkIn(guest.id),
-      successMessage: '${guest.displayName} is checked in for open play.',
+      successMessage:
+          guest.tournamentStatus == EventTournamentStatus.openPlayOnly
+              ? '${guest.displayName} is checked in for open play.'
+              : '${guest.displayName} is checked in.',
     );
   }
 
@@ -161,7 +154,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         guestId: guest.id,
         scanForTag: () => widget.nfcService.scanPlayerTagForAssignment(context),
       ),
-      successMessage: 'Player tag assigned to ${guest.displayName}.',
+      successMessage: guest.isCheckedIn
+          ? 'Player tag assigned to ${guest.displayName}.'
+          : '${guest.displayName} is checked in and tagged.',
     );
   }
 
@@ -539,17 +534,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     final isSubmitting = _controller.isSubmittingGuest(guest.id);
 
     if (!guest.isCheckedIn) {
-      if (guest.tournamentStatus == EventTournamentStatus.openPlayOnly) {
-        return FilledButton(
-          onPressed: isSubmitting ? null : () => _checkInOpenPlay(guest),
-          child: const Text('Check In'),
-        );
-      }
-
-      return FilledButton(
-        onPressed: isSubmitting ? null : () => _checkInAndAssign(guest),
-        child: const Text('Check In & Tag'),
-      );
+      return null;
     }
 
     if (!hasTag) {
@@ -695,6 +680,28 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
               style: _compactActionButtonStyle(),
               onPressed: isSubmitting ? null : () => _markComped(guest),
               child: _singleLineButtonLabel('Mark Comped'),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (!guest.isCheckedIn) {
+      return Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              style: _compactActionButtonStyle(),
+              onPressed: isSubmitting ? null : () => _checkInGuest(guest),
+              child: _singleLineButtonLabel('Check In'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: FilledButton(
+              style: _compactActionButtonStyle(),
+              onPressed: isSubmitting ? null : () => _assignTag(guest),
+              child: _singleLineButtonLabel('Assign Tag'),
             ),
           ),
         ],

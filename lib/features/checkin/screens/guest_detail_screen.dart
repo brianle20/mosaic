@@ -272,35 +272,37 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                       : 'This guest already has a player tag. Replace it only if needed.',
                 ),
               ),
-              if (!guest.isCheckedIn &&
-                  assignment == null &&
-                  guest.tournamentStatus == EventTournamentStatus.openPlayOnly)
-                FilledButton(
-                  onPressed: _controller.isSubmitting
-                      ? null
-                      : () => _controller.checkIn(
-                            guestId: widget.guestId,
-                          ),
-                  child: Text(
-                    _controller.isSubmitting ? 'Saving...' : 'Check In',
-                  ),
-                ),
-              if (!guest.isCheckedIn &&
-                  assignment == null &&
-                  guest.tournamentStatus != EventTournamentStatus.openPlayOnly)
-                FilledButton(
-                  onPressed: _controller.isSubmitting
-                      ? null
-                      : () => _controller.checkInAndAssign(
-                            guestId: widget.guestId,
-                            scanForTag: () => widget.nfcService
-                                .scanPlayerTagForAssignment(context),
-                          ),
-                  child: Text(
-                    _controller.isSubmitting
-                        ? 'Saving...'
-                        : 'Check In and Assign Tag',
-                  ),
+              if (!guest.isCheckedIn && assignment == null)
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _controller.isSubmitting
+                            ? null
+                            : () => _controller.checkIn(
+                                  guestId: widget.guestId,
+                                ),
+                        child: Text(
+                          _controller.isSubmitting ? 'Saving...' : 'Check In',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _controller.isSubmitting
+                            ? null
+                            : () => _controller.assignTag(
+                                  guestId: widget.guestId,
+                                  scanForTag: () => widget.nfcService
+                                      .scanPlayerTagForAssignment(context),
+                                ),
+                        child: Text(
+                          _controller.isSubmitting ? 'Saving...' : 'Assign Tag',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               if (guest.isCheckedIn && assignment == null)
                 FilledButton(

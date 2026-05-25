@@ -364,7 +364,8 @@ void main() {
     expect(repository.detailLoadCount, 2);
   });
 
-  testWidgets('shows check-in and assign action for eligible guest',
+  testWidgets(
+      'shows separate check-in and assign-tag actions for eligible guest',
       (tester) async {
     final repository = _FakeGuestRepository(
       GuestDetailRecord(
@@ -395,7 +396,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Check In and Assign Tag'), findsOneWidget);
+    expect(find.text('Check In'), findsOneWidget);
+    expect(find.text('Assign Tag'), findsOneWidget);
+    expect(find.text('Check In and Assign Tag'), findsNothing);
     expect(find.text('Tag Unassigned'), findsOneWidget);
     expect(find.text('Attendance Status'), findsOneWidget);
     expect(find.text('Cover Status'), findsOneWidget);
@@ -712,7 +715,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Check In and Assign Tag'));
+    await tester.tap(find.text('Assign Tag'));
     await tester.pumpAndSettle();
 
     expect(repository.lastAssignedUid, '04AABB');
@@ -751,7 +754,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Check In and Assign Tag'));
+    await tester.tap(find.text('Assign Tag'));
     await tester.pumpAndSettle();
 
     expect(find.text('Enter Tag UID'), findsOneWidget);

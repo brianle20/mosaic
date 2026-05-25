@@ -37,40 +37,8 @@ class GuestCheckInController extends ChangeNotifier {
   Future<void> checkInAndAssign({
     required String guestId,
     required Future<TagScanResult?> Function() scanForTag,
-  }) async {
-    if (detail == null) {
-      return;
-    }
-
-    final currentDetail = detail!;
-    if (!currentDetail.guest.isEligibleForPlayerTagAssignment) {
-      actionError =
-          'Guests must be paid or comped before receiving a player tag.';
-      notifyListeners();
-      return;
-    }
-
-    isSubmitting = true;
-    actionError = null;
-    notifyListeners();
-
-    try {
-      if (!currentDetail.guest.isCheckedIn) {
-        detail = await _guestRepository.checkInGuest(guestId);
-      }
-
-      await _scanAndAssign(
-        guestId: guestId,
-        scanForTag: scanForTag,
-        replaceExistingAssignment: false,
-      );
-    } catch (exception) {
-      actionError = exception.toString();
-    }
-
-    isSubmitting = false;
-    notifyListeners();
-  }
+  }) =>
+      assignTag(guestId: guestId, scanForTag: scanForTag);
 
   Future<void> checkIn({required String guestId}) async {
     if (detail == null) {
@@ -123,6 +91,7 @@ class GuestCheckInController extends ChangeNotifier {
         guestId: guestId,
         scanForTag: scanForTag,
         replaceExistingAssignment: false,
+        checkInBeforeAssign: !currentDetail.guest.isCheckedIn,
       );
     } catch (exception) {
       actionError = exception.toString();
@@ -157,6 +126,7 @@ class GuestCheckInController extends ChangeNotifier {
         guestId: guestId,
         scanForTag: scanForTag,
         replaceExistingAssignment: true,
+        checkInBeforeAssign: false,
       );
     } catch (exception) {
       actionError = exception.toString();
@@ -220,10 +190,15 @@ class GuestCheckInController extends ChangeNotifier {
     required String guestId,
     required Future<TagScanResult?> Function() scanForTag,
     required bool replaceExistingAssignment,
+    required bool checkInBeforeAssign,
   }) async {
     final scanResult = await scanForTag();
     if (scanResult == null) {
       return;
+    }
+
+    if (checkInBeforeAssign) {
+      detail = await _guestRepository.checkInGuest(guestId);
     }
 
     detail = replaceExistingAssignment

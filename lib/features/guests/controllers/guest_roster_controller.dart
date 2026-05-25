@@ -116,27 +116,8 @@ class GuestRosterController extends ChangeNotifier {
   Future<bool> checkInAndAssign({
     required String guestId,
     required Future<TagScanResult?> Function() scanForTag,
-  }) async {
-    var didAssign = false;
-    await _runGuestAction(guestId, () async {
-      final checkedInDetail = await _guestRepository.checkInGuest(guestId);
-      _mergeGuest(checkedInDetail.guest);
-
-      final scanResult = await scanForTag();
-      if (scanResult == null) {
-        return;
-      }
-
-      final assignedDetail = await _guestRepository.assignGuestTag(
-        guestId: guestId,
-        scannedUid: scanResult.normalizedUid,
-      );
-      _mergeGuest(assignedDetail.guest);
-      _mergeAssignment(guestId, assignedDetail.activeTagAssignment);
-      didAssign = true;
-    });
-    return didAssign;
-  }
+  }) =>
+      assignTag(guestId: guestId, scanForTag: scanForTag);
 
   Future<bool> checkIn(String guestId) async {
     await _runGuestAction(guestId, () async {
@@ -153,9 +134,16 @@ class GuestRosterController extends ChangeNotifier {
   }) async {
     var didAssign = false;
     await _runGuestAction(guestId, () async {
+      final guest = _guestById(guestId);
       final scanResult = await scanForTag();
       if (scanResult == null) {
         return;
+      }
+
+      if (!guest.isCheckedIn) {
+        final checkedInDetail = await _guestRepository.checkInGuest(guestId);
+        _mergeGuest(checkedInDetail.guest);
+        _mergeAssignment(guestId, checkedInDetail.activeTagAssignment);
       }
 
       final assignedDetail = await _guestRepository.assignGuestTag(
