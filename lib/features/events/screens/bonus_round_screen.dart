@@ -123,7 +123,7 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
                     const EmptyStateCard(
                       icon: Icons.table_bar,
                       title: 'No ready tables',
-                      message: 'Bind table tags before creating a bonus round.',
+                      message: 'Bind table tags before beginning finals.',
                     )
                   else
                     Flexible(
@@ -166,14 +166,14 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
     }
   }
 
-  Future<void> _createBonusRound() async {
+  Future<void> _beginFinals() async {
     final created = await _controller.createBonusRound(widget.eventId);
     if (!mounted || !created) {
       return;
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Bonus round seating created.')),
+      const SnackBar(content: Text('Finals seating created.')),
     );
   }
 
@@ -183,7 +183,7 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
     final actionError = _scanError ?? _controller.actionError;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Bonus Round')),
+      appBar: AppBar(title: const Text('Begin Finals')),
       body: AsyncBody(
         isLoading: _controller.isLoading,
         error: _controller.error,
@@ -208,24 +208,26 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
               onScan: () => _scanTable(BonusRoundTableRole.champions),
               onChoose: () => _chooseTable(BonusRoundTableRole.champions),
             ),
-            const SizedBox(height: 12),
-            _BonusRoundTablePanel(
-              title: 'Table of Redemption',
-              selectedTable: _controller.redemptionTable,
-              seatPreviews: _controller.redemptionSeats,
-              scanKey: const ValueKey('scanRedemptionTable'),
-              isScanning: scanningRole == BonusRoundTableRole.redemption,
-              onScan: () => _scanTable(BonusRoundTableRole.redemption),
-              onChoose: () => _chooseTable(BonusRoundTableRole.redemption),
-            ),
+            if (_controller.redemptionRequired) ...[
+              const SizedBox(height: 12),
+              _BonusRoundTablePanel(
+                title: 'Table of Redemption',
+                selectedTable: _controller.redemptionTable,
+                seatPreviews: _controller.redemptionSeats,
+                scanKey: const ValueKey('scanRedemptionTable'),
+                isScanning: scanningRole == BonusRoundTableRole.redemption,
+                onScan: () => _scanTable(BonusRoundTableRole.redemption),
+                onChoose: () => _chooseTable(BonusRoundTableRole.redemption),
+              ),
+            ],
             const SizedBox(height: 16),
             HeroActionButton(
-              label: 'Create Bonus Round',
+              label: 'Begin Finals',
               icon: Icons.emoji_events,
               enabled:
                   _controller.canCreateBonusRound && !_controller.isSubmitting,
               isBusy: _controller.isSubmitting,
-              onPressed: _createBonusRound,
+              onPressed: _beginFinals,
             ),
           ],
         ),

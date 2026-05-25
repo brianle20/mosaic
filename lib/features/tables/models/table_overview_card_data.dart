@@ -1,18 +1,25 @@
 import 'package:meta/meta.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 
 @immutable
 class TableOverviewCardData {
   const TableOverviewCardData({
     required this.table,
     this.liveSummary,
+    this.currentRoundSummary,
+    this.currentRoundHandCount = 0,
   });
 
   final EventTableRecord table;
   final LiveTableSummary? liveSummary;
+  final TournamentRoundTableSummary? currentRoundSummary;
+  final int currentRoundHandCount;
 
   bool get isLive => liveSummary != null;
+
+  bool get isCurrentRound => currentRoundSummary != null;
 }
 
 @immutable

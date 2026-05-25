@@ -19,6 +19,7 @@ class StartSessionScreen extends StatefulWidget {
     required this.nfcService,
     this.scoringPhase = EventScoringPhase.qualification,
     this.preverifiedTableTagUid,
+    this.allowAssignedTableEntry = false,
   });
 
   final String eventId;
@@ -29,6 +30,7 @@ class StartSessionScreen extends StatefulWidget {
   final NfcService nfcService;
   final EventScoringPhase scoringPhase;
   final String? preverifiedTableTagUid;
+  final bool allowAssignedTableEntry;
 
   @override
   State<StartSessionScreen> createState() => _StartSessionScreenState();
@@ -48,6 +50,7 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
       seatingRepository: widget.seatingRepository,
       sessionRepository: widget.sessionRepository,
       preverifiedTableTagUid: widget.preverifiedTableTagUid,
+      allowAssignedTableEntry: widget.allowAssignedTableEntry,
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);

@@ -138,6 +138,15 @@ class GuestRosterController extends ChangeNotifier {
     return didAssign;
   }
 
+  Future<bool> checkIn(String guestId) async {
+    await _runGuestAction(guestId, () async {
+      final checkedInDetail = await _guestRepository.checkInGuest(guestId);
+      _mergeGuest(checkedInDetail.guest);
+      _mergeAssignment(guestId, checkedInDetail.activeTagAssignment);
+    });
+    return true;
+  }
+
   Future<bool> assignTag({
     required String guestId,
     required Future<TagScanResult?> Function() scanForTag,

@@ -1,10 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/bonus_round_controller.dart';
 
@@ -37,6 +39,151 @@ void main() {
       '#6',
       '#7',
       '#8',
+    ]);
+  });
+
+  test('uses non-champion remainder players for six player redemption',
+      () async {
+    final controller = BonusRoundController(
+      leaderboardRepository: _LeaderboardRepository(_leaderboard(count: 6)),
+      tableRepository: _TableRepository([_table(id: 'tbl_1')]),
+      sessionRepository: const _SessionRepository(),
+      seatingRepository: _SeatingRepository(),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.championSeats.map((seat) => seat.seedLabel), [
+      '#4',
+      '#3',
+      '#2',
+      '#1',
+    ]);
+    expect(controller.redemptionSeats.map((seat) => seat.seedLabel), [
+      '#5',
+      '#6',
+    ]);
+  });
+
+  test('uses non-champion remainder players for seven player redemption',
+      () async {
+    final controller = BonusRoundController(
+      leaderboardRepository: _LeaderboardRepository(_leaderboard(count: 7)),
+      tableRepository: _TableRepository([_table(id: 'tbl_1')]),
+      sessionRepository: const _SessionRepository(),
+      seatingRepository: _SeatingRepository(),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.redemptionSeats.map((seat) => seat.seedLabel), [
+      '#5',
+      '#6',
+      '#7',
+    ]);
+  });
+
+  test('uses event guest id as final tied standings order key', () async {
+    const tiedEntries = [
+      LeaderboardEntry(
+        eventGuestId: 'guest_d',
+        displayName: 'Tied Player',
+        totalPoints: 10,
+        handsPlayed: 4,
+        handsWon: 1,
+        selfDrawWins: 0,
+        discardWins: 1,
+        rank: 1,
+      ),
+      LeaderboardEntry(
+        eventGuestId: 'guest_b',
+        displayName: 'Tied Player',
+        totalPoints: 10,
+        handsPlayed: 4,
+        handsWon: 1,
+        selfDrawWins: 0,
+        discardWins: 1,
+        rank: 1,
+      ),
+      LeaderboardEntry(
+        eventGuestId: 'guest_c',
+        displayName: 'Tied Player',
+        totalPoints: 10,
+        handsPlayed: 4,
+        handsWon: 1,
+        selfDrawWins: 0,
+        discardWins: 1,
+        rank: 1,
+      ),
+      LeaderboardEntry(
+        eventGuestId: 'guest_a',
+        displayName: 'Tied Player',
+        totalPoints: 10,
+        handsPlayed: 4,
+        handsWon: 1,
+        selfDrawWins: 0,
+        discardWins: 1,
+        rank: 1,
+      ),
+    ];
+    final controller = BonusRoundController(
+      leaderboardRepository: const _LeaderboardRepository(tiedEntries),
+      tableRepository: _TableRepository([_table(id: 'tbl_1')]),
+      sessionRepository: const _SessionRepository(),
+      seatingRepository: _SeatingRepository(),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.championSeats.map((seat) => seat.eventGuestId), [
+      'guest_d',
+      'guest_c',
+      'guest_b',
+      'guest_a',
+    ]);
+  });
+
+  test('uses contiguous east-first seats for two player champions finals',
+      () async {
+    final controller = BonusRoundController(
+      leaderboardRepository: _LeaderboardRepository(_leaderboard(count: 2)),
+      tableRepository: _TableRepository([_table(id: 'tbl_1')]),
+      sessionRepository: const _SessionRepository(),
+      seatingRepository: _SeatingRepository(),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.championSeats.map((seat) => seat.windLabel), [
+      'East',
+      'South',
+    ]);
+    expect(controller.championSeats.map((seat) => seat.seedLabel), [
+      '#1',
+      '#2',
+    ]);
+  });
+
+  test('uses contiguous east-first seats for three player champions finals',
+      () async {
+    final controller = BonusRoundController(
+      leaderboardRepository: _LeaderboardRepository(_leaderboard(count: 3)),
+      tableRepository: _TableRepository([_table(id: 'tbl_1')]),
+      sessionRepository: const _SessionRepository(),
+      seatingRepository: _SeatingRepository(),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.championSeats.map((seat) => seat.windLabel), [
+      'East',
+      'South',
+      'West',
+    ]);
+    expect(controller.championSeats.map((seat) => seat.seedLabel), [
+      '#1',
+      '#2',
+      '#3',
     ]);
   });
 
@@ -78,7 +225,8 @@ void main() {
     expect(seatingRepository.generatedRedemptionTableId, 'tbl_redemption');
   });
 
-  test('blocks creation while any session is active or paused', () async {
+  test('blocks creation while current tournament round session is active',
+      () async {
     final seatingRepository = _SeatingRepository();
     final controller = BonusRoundController(
       leaderboardRepository: _LeaderboardRepository(_leaderboard()),
@@ -87,9 +235,18 @@ void main() {
         _table(id: 'tbl_redemption'),
       ]),
       sessionRepository: _SessionRepository(
-        sessions: [_session(status: SessionStatus.paused)],
+        sessions: [
+          _session(
+            status: SessionStatus.paused,
+            scoringPhase: EventScoringPhase.tournament,
+            tournamentRoundId: 'round_1',
+          ),
+        ],
       ),
-      seatingRepository: seatingRepository,
+      seatingRepository: _SeatingRepository(
+        tournamentRoundSummary: _tournamentRoundSummary('round_1'),
+        onGenerateBonusRound: seatingRepository.generateBonusRoundAssignments,
+      ),
     );
     await controller.load('evt_01');
     controller.selectTable(
@@ -108,11 +265,75 @@ void main() {
     expect(seatingRepository.generatedEventId, isNull);
   });
 
-  test('requires at least eight ranked players before enabling creation',
+  test('does not block finals for active non-tournament sessions', () async {
+    final seatingRepository = _SeatingRepository();
+    final controller = BonusRoundController(
+      leaderboardRepository: _LeaderboardRepository(_leaderboard()),
+      tableRepository: _TableRepository([
+        _table(id: 'tbl_champions'),
+        _table(id: 'tbl_redemption'),
+      ]),
+      sessionRepository: _SessionRepository(
+        sessions: [
+          _session(status: SessionStatus.active),
+        ],
+      ),
+      seatingRepository: _SeatingRepository(
+        tournamentRoundSummary: _tournamentRoundSummary('round_1'),
+        onGenerateBonusRound: seatingRepository.generateBonusRoundAssignments,
+      ),
+    );
+    await controller.load('evt_01');
+    controller.selectTable(
+      role: BonusRoundTableRole.champions,
+      table: _table(id: 'tbl_champions'),
+    );
+    controller.selectTable(
+      role: BonusRoundTableRole.redemption,
+      table: _table(id: 'tbl_redemption'),
+    );
+
+    final created = await controller.createBonusRound('evt_01');
+
+    expect(created, isTrue);
+    expect(seatingRepository.generatedEventId, 'evt_01');
+  });
+
+  test('does not require exactly four redemption seats to create finals',
+      () async {
+    final seatingRepository = _SeatingRepository();
+    final controller = BonusRoundController(
+      leaderboardRepository: _LeaderboardRepository(_leaderboard(count: 6)),
+      tableRepository: _TableRepository([
+        _table(id: 'tbl_champions'),
+        _table(id: 'tbl_redemption'),
+      ]),
+      sessionRepository: const _SessionRepository(),
+      seatingRepository: seatingRepository,
+    );
+    await controller.load('evt_01');
+    controller.selectTable(
+      role: BonusRoundTableRole.champions,
+      table: _table(id: 'tbl_champions'),
+    );
+    controller.selectTable(
+      role: BonusRoundTableRole.redemption,
+      table: _table(id: 'tbl_redemption'),
+    );
+
+    final created = await controller.createBonusRound('evt_01');
+
+    expect(created, isTrue);
+    expect(controller.redemptionSeats, hasLength(2));
+    expect(seatingRepository.generatedRedemptionTableId, 'tbl_redemption');
+  });
+
+  test(
+      'requires at least two standings-eligible players before enabling creation',
       () async {
     final controller = BonusRoundController(
       leaderboardRepository: _LeaderboardRepository(
-        _leaderboard().take(7).toList(growable: false),
+        _leaderboard(count: 1),
       ),
       tableRepository: _TableRepository([
         _table(id: 'tbl_champions'),
@@ -139,14 +360,14 @@ void main() {
     expect(created, isFalse);
     expect(
       controller.actionError,
-      'At least eight ranked players are required.',
+      'At least 2 standings-eligible players are required for Table of Champions.',
     );
   });
 }
 
-List<LeaderboardEntry> _leaderboard() {
+List<LeaderboardEntry> _leaderboard({int count = 8}) {
   return List.generate(
-    8,
+    count,
     (index) => LeaderboardEntry(
       eventGuestId: 'guest_${index + 1}',
       displayName: 'Player ${index + 1}',
@@ -179,6 +400,8 @@ EventTableRecord _table({
 
 TableSessionRecord _session({
   SessionStatus status = SessionStatus.active,
+  EventScoringPhase scoringPhase = EventScoringPhase.qualification,
+  String? tournamentRoundId,
 }) {
   return TableSessionRecord(
     id: 'sess_01',
@@ -189,6 +412,7 @@ TableSessionRecord _session({
     rotationPolicyType: RotationPolicyType.dealerCycleReturnToInitialEast,
     rotationPolicyConfig: const {},
     status: status,
+    scoringPhase: scoringPhase,
     initialEastSeatIndex: 0,
     currentDealerSeatIndex: 0,
     dealerPassCount: 0,
@@ -196,6 +420,27 @@ TableSessionRecord _session({
     handCount: 0,
     startedAt: DateTime.parse('2026-05-22T12:00:00Z'),
     startedByUserId: 'usr_01',
+    tournamentRoundId: tournamentRoundId,
+  );
+}
+
+TournamentRoundSummary _tournamentRoundSummary(String roundId) {
+  return TournamentRoundSummary(
+    round: TournamentRoundRecord(
+      id: roundId,
+      eventId: 'evt_01',
+      roundNumber: 1,
+      scoringPhase: EventScoringPhase.tournament,
+      status: TournamentRoundStatus.complete,
+      assignmentRound: 1,
+    ),
+    assignedTableCount: 1,
+    completeTableCount: 1,
+    activeTableCount: 0,
+    pausedTableCount: 0,
+    notStartedTableCount: 0,
+    currentRoundTables: const [],
+    otherTables: const [],
   );
 }
 
@@ -337,6 +582,18 @@ class _SessionRepository implements SessionRepository {
 }
 
 class _SeatingRepository implements SeatingRepository {
+  _SeatingRepository({
+    this.tournamentRoundSummary,
+    this.onGenerateBonusRound,
+  });
+
+  final TournamentRoundSummary? tournamentRoundSummary;
+  final Future<List<SeatingAssignmentRecord>> Function({
+    required String eventId,
+    required String championsTableId,
+    String? redemptionTableId,
+  })? onGenerateBonusRound;
+
   String? generatedEventId;
   String? generatedChampionsTableId;
   String? generatedRedemptionTableId;
@@ -350,8 +607,16 @@ class _SeatingRepository implements SeatingRepository {
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   }) async {
+    final override = onGenerateBonusRound;
+    if (override != null) {
+      return override(
+        eventId: eventId,
+        championsTableId: championsTableId,
+        redemptionTableId: redemptionTableId,
+      );
+    }
     generatedEventId = eventId;
     generatedChampionsTableId = championsTableId;
     generatedRedemptionTableId = redemptionTableId;
@@ -365,12 +630,30 @@ class _SeatingRepository implements SeatingRepository {
       const [];
 
   @override
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
   Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
       const [];
+
+  @override
+  Future<TournamentRoundSummary> loadTournamentRoundSummary(
+    String eventId,
+  ) async =>
+      tournamentRoundSummary ?? TournamentRoundSummary.empty();
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
     String eventId,
   ) async =>
       const [];
+
+  @override
+  Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
+    String eventId,
+  ) async =>
+      null;
 }

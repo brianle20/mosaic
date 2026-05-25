@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
@@ -14,19 +16,17 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   _FakeSeatingRepository({
     this.loadedAssignments = const [],
     this.generatedAssignments = const [],
-    this.clearedAssignments = const [],
   });
 
   final List<SeatingAssignmentRecord> loadedAssignments;
   final List<SeatingAssignmentRecord> generatedAssignments;
-  final List<SeatingAssignmentRecord> clearedAssignments;
   int generateCallCount = 0;
   int clearCallCount = 0;
 
   @override
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId) async {
     clearCallCount += 1;
-    return clearedAssignments;
+    return const [];
   }
 
   @override
@@ -41,7 +41,7 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   }) {
     throw UnimplementedError();
   }
@@ -231,7 +231,8 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 }
 
 void main() {
-  testWidgets('shows empty state and generate action', (tester) async {
+  testWidgets('shows empty state without seating mutation actions',
+      (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: SeatingAssignmentScreen(
@@ -246,21 +247,20 @@ void main() {
 
     expect(find.text('Seating'), findsOneWidget);
     expect(
-      find.text('Generate random seating for checked-in players.'),
+      find.text('Round seating appears after starting a tournament round.'),
       findsOneWidget,
     );
-    expect(find.text('Generate Seating'), findsOneWidget);
+    expect(find.text('Generate Seating'), findsNothing);
     expect(find.text('Clear Assignments'), findsNothing);
   });
 
-  testWidgets('generates and displays seating by table and wind',
-      (tester) async {
+  testWidgets('displays seating by table and wind', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
           seatingRepository: _FakeSeatingRepository(
-            generatedAssignments: [
+            loadedAssignments: [
               _assignment(
                 id: 'a1',
                 tableId: 'tbl_01',
@@ -298,9 +298,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Generate Seating'));
-    await tester.pumpAndSettle();
-
     expect(find.text('Table 1'), findsOneWidget);
     expect(find.text('East'), findsOneWidget);
     expect(find.text('South'), findsOneWidget);
@@ -310,7 +307,8 @@ void main() {
     expect(find.text('Ben South'), findsOneWidget);
     expect(find.text('Cam West'), findsOneWidget);
     expect(find.text('Dia North'), findsOneWidget);
-    expect(find.text('Clear Assignments'), findsOneWidget);
+    expect(find.text('Generate Seating'), findsNothing);
+    expect(find.text('Clear Assignments'), findsNothing);
   });
 
   testWidgets('renders initial assignments before loading remote seating',
@@ -339,96 +337,77 @@ void main() {
 
     expect(find.text('Table 1'), findsOneWidget);
     expect(find.text('Ava East'), findsOneWidget);
-    expect(find.text('Generate random seating for checked-in players.'),
+    expect(find.text('Round seating appears after starting a tournament round.'),
         findsNothing);
   });
 
-  testWidgets('regenerate confirms before replacing displayed assignments',
+  testWidgets('enter table opens assigned start session fallback',
       (tester) async {
-    final repository = _FakeSeatingRepository(
-      loadedAssignments: [
-        _assignment(displayName: 'Original East'),
-      ],
-      generatedAssignments: [
-        _assignment(displayName: 'New East'),
-      ],
-    );
+    StartSessionArgs? openedArgs;
 
     await tester.pumpWidget(
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
-          seatingRepository: repository,
+          seatingRepository: _FakeSeatingRepository(),
           guestRepository: _FakeGuestRepository(),
           sessionRepository: const _FakeSessionRepository(),
+          initialAssignments: [
+            _assignment(
+              id: 'a1',
+              tableId: 'tbl_01',
+              tableLabel: 'Table 1',
+              displayName: 'Ava East',
+              seatIndex: 0,
+            ),
+            _assignment(
+              id: 'a2',
+              tableId: 'tbl_01',
+              tableLabel: 'Table 1',
+              displayName: 'Ben South',
+              seatIndex: 1,
+            ),
+            _assignment(
+              id: 'a3',
+              tableId: 'tbl_01',
+              tableLabel: 'Table 1',
+              displayName: 'Cam West',
+              seatIndex: 2,
+            ),
+            _assignment(
+              id: 'a4',
+              tableId: 'tbl_01',
+              tableLabel: 'Table 1',
+              displayName: 'Dia North',
+              seatIndex: 3,
+            ),
+          ],
         ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.startSessionRoute) {
+            openedArgs = settings.arguments! as StartSessionArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Start Session')),
+              settings: settings,
+            );
+          }
+          return null;
+        },
       ),
     );
+
+    await tester.pump();
+    await tester.tap(find.text('Enter Table'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Generate Seating'));
-    await tester.pumpAndSettle();
-
-    expect(repository.generateCallCount, 0);
-    expect(find.text('Regenerate Seating'), findsOneWidget);
-    expect(
-      find.text('This will replace the current seating assignments.'),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.text('Regenerate'));
-    await tester.pumpAndSettle();
-
-    expect(repository.generateCallCount, 1);
-    expect(find.text('Original East'), findsNothing);
-    expect(find.text('New East'), findsOneWidget);
+    expect(openedArgs?.eventId, 'evt_01');
+    expect(openedArgs?.table.id, 'tbl_01');
+    expect(openedArgs?.table.label, 'Table 1');
+    expect(openedArgs?.scoringPhase, EventScoringPhase.tournament);
+    expect(openedArgs?.allowAssignedTableEntry, isTrue);
   });
 
-  testWidgets('clear confirms before removing displayed assignments',
-      (tester) async {
-    final repository = _FakeSeatingRepository(
-      loadedAssignments: [
-        _assignment(displayName: 'Ava East'),
-      ],
-      clearedAssignments: const [],
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SeatingAssignmentScreen(
-          eventId: 'evt_01',
-          seatingRepository: repository,
-          guestRepository: _FakeGuestRepository(),
-          sessionRepository: const _FakeSessionRepository(),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Ava East'), findsOneWidget);
-
-    await tester.tap(find.text('Clear Assignments'));
-    await tester.pumpAndSettle();
-
-    expect(repository.clearCallCount, 0);
-    expect(find.text('Clear Seating'), findsOneWidget);
-    expect(
-      find.text('This will remove the current seating assignments.'),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.text('Clear'));
-    await tester.pumpAndSettle();
-
-    expect(repository.clearCallCount, 1);
-    expect(find.text('Ava East'), findsNothing);
-    expect(
-      find.text('Generate random seating for checked-in players.'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('shows eligible guests left unassigned after generation',
+  testWidgets('shows eligible guests left unassigned after loading seating',
       (tester) async {
     final guests = [
       _guest(id: 'gst_01', displayName: 'Ava East'),
@@ -443,7 +422,7 @@ void main() {
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
           seatingRepository: _FakeSeatingRepository(
-            generatedAssignments: [
+            loadedAssignments: [
               _assignment(
                 id: 'a1',
                 guestId: 'gst_01',
@@ -483,14 +462,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Generate Seating'));
-    await tester.pumpAndSettle();
-
     expect(find.text('Unassigned'), findsOneWidget);
     expect(find.text('Eli Waiting'), findsOneWidget);
   });
 
-  testWidgets('blocks seating changes while a session is live', (tester) async {
+  testWidgets('live session warning does not expose seating mutation actions',
+      (tester) async {
     final repository = _FakeSeatingRepository(
       loadedAssignments: [
         _assignment(displayName: 'Ava East'),
@@ -515,12 +492,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(seatingChangeBlockedMessage), findsOneWidget);
-    expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-        isNull);
-    expect(
-      tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
-      isNull,
-    );
+    expect(find.text('Generate Seating'), findsNothing);
+    expect(find.text('Clear Assignments'), findsNothing);
     expect(repository.generateCallCount, 0);
     expect(repository.clearCallCount, 0);
   });

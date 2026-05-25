@@ -11,6 +11,7 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 
 class ThrowingEventRepository implements EventRepository {
@@ -276,7 +277,17 @@ class ThrowingSeatingRepository implements SeatingRepository {
       throw UnimplementedError();
 
   @override
+  Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
+    String eventId,
+  ) =>
+      throw UnimplementedError();
+
+  @override
   Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<TournamentRoundSummary> loadTournamentRoundSummary(String eventId) =>
       throw UnimplementedError();
 
   @override
@@ -286,10 +297,16 @@ class ThrowingSeatingRepository implements SeatingRepository {
       throw UnimplementedError();
 
   @override
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
+    String eventId,
+  ) =>
+      throw UnimplementedError();
+
+  @override
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   }) =>
       throw UnimplementedError();
 

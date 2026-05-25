@@ -148,6 +148,13 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     );
   }
 
+  Future<void> _checkInOpenPlay(EventGuestRecord guest) async {
+    await _runQuickAction(
+      () => _controller.checkIn(guest.id),
+      successMessage: '${guest.displayName} is checked in for open play.',
+    );
+  }
+
   Future<void> _assignTag(EventGuestRecord guest) async {
     await _runQuickAction(
       () => _controller.assignTag(
@@ -532,6 +539,13 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     final isSubmitting = _controller.isSubmittingGuest(guest.id);
 
     if (!guest.isCheckedIn) {
+      if (guest.tournamentStatus == EventTournamentStatus.openPlayOnly) {
+        return FilledButton(
+          onPressed: isSubmitting ? null : () => _checkInOpenPlay(guest),
+          child: const Text('Check In'),
+        );
+      }
+
       return FilledButton(
         onPressed: isSubmitting ? null : () => _checkInAndAssign(guest),
         child: const Text('Check In & Tag'),
@@ -587,13 +601,14 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     final actions = <_GuestRosterOverflowAction>[
       _GuestRosterOverflowAction.addCoverEntry,
     ];
+    final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
 
     switch (guest.tournamentStatus) {
       case EventTournamentStatus.openPlayOnly:
-        actions.addAll(const [
-          _GuestRosterOverflowAction.markQualified,
-          _GuestRosterOverflowAction.withdraw,
-        ]);
+        if (hasTag) {
+          actions.add(_GuestRosterOverflowAction.markQualified);
+        }
+        actions.add(_GuestRosterOverflowAction.withdraw);
       case EventTournamentStatus.qualifying:
         actions.addAll(const [
           _GuestRosterOverflowAction.moveToOpenPlayOnly,
@@ -605,11 +620,13 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
           _GuestRosterOverflowAction.withdraw,
         ]);
       case EventTournamentStatus.withdrawn:
-        actions.addAll(const [
-          _GuestRosterOverflowAction.markQualifying,
-          _GuestRosterOverflowAction.markQualified,
-          _GuestRosterOverflowAction.moveToOpenPlayOnly,
-        ]);
+        if (hasTag) {
+          actions.addAll(const [
+            _GuestRosterOverflowAction.markQualifying,
+            _GuestRosterOverflowAction.markQualified,
+          ]);
+        }
+        actions.add(_GuestRosterOverflowAction.moveToOpenPlayOnly);
     }
 
     return actions;
@@ -785,6 +802,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       return 'Ready for check-in';
     }
     if (assignment == null) {
+      if (guest.tournamentStatus == EventTournamentStatus.openPlayOnly) {
+        return 'Checked in for open play';
+      }
       return 'Needs player tag';
     }
     return 'Operational status available';

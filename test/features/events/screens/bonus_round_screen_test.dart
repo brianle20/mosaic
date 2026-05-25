@@ -6,6 +6,7 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/screens/bonus_round_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
@@ -54,8 +55,132 @@ void main() {
     await tester.pumpAndSettle();
     final createButton = find.widgetWithText(
       FilledButton,
-      'Create Bonus Round',
+      'Begin Finals',
     );
+    await tester.ensureVisible(createButton);
+    await tester.tap(createButton);
+    await tester.pumpAndSettle();
+
+    expect(seatingRepository.generatedChampionsTableId, 'tbl_1');
+    expect(seatingRepository.generatedRedemptionTableId, 'tbl_2');
+  });
+
+  testWidgets('creates champions-only finals for five eligible players',
+      (tester) async {
+    final seatingRepository = _SeatingRepository();
+
+    await tester.pumpWidget(
+      _bonusRoundApp(
+        leaderboardRepository: _LeaderboardRepository(
+          _leaderboard(count: 5, handsPlayed: 10),
+        ),
+        seatingRepository: seatingRepository,
+        tableRepository: _TableRepository(
+          tables: [_table(id: 'tbl_1', label: 'Table 1')],
+          resolvedTablesByUid: {
+            'table-1': _table(id: 'tbl_1', label: 'Table 1'),
+          },
+        ),
+        nfcService: _NfcService(['table-1']),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Begin Finals'), findsWidgets);
+    expect(find.text('Table of Champions'), findsOneWidget);
+    expect(find.text('Table of Redemption'), findsNothing);
+    expect(find.text('#5 Player 5'), findsNothing);
+
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('scanChampionsTable')));
+    await tester.tap(find.byKey(const ValueKey('scanChampionsTable')));
+    await tester.pumpAndSettle();
+    final createButton = find.widgetWithText(FilledButton, 'Begin Finals');
+    await tester.ensureVisible(createButton);
+    await tester.tap(createButton);
+    await tester.pumpAndSettle();
+
+    expect(seatingRepository.generatedChampionsTableId, 'tbl_1');
+    expect(seatingRepository.generatedRedemptionTableId, isNull);
+  });
+
+  testWidgets('requires redemption table for six eligible players',
+      (tester) async {
+    final seatingRepository = _SeatingRepository();
+
+    await tester.pumpWidget(
+      _bonusRoundApp(
+        leaderboardRepository: _LeaderboardRepository(
+          _leaderboard(count: 6, handsPlayed: 10),
+        ),
+        seatingRepository: seatingRepository,
+        tableRepository: _TableRepository(
+          tables: [
+            _table(id: 'tbl_1', label: 'Table 1'),
+            _table(id: 'tbl_2', label: 'Table 2'),
+          ],
+          resolvedTablesByUid: {
+            'table-1': _table(id: 'tbl_1', label: 'Table 1'),
+          },
+        ),
+        nfcService: _NfcService(['table-1']),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Table of Champions'), findsOneWidget);
+    expect(find.text('Table of Redemption'), findsOneWidget);
+    expect(find.text('#4 Player 4'), findsOneWidget);
+    expect(find.text('#5 Player 5'), findsOneWidget);
+    expect(find.text('#6 Player 6'), findsOneWidget);
+    expect(find.text('#1 Player 1'), findsOneWidget);
+
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('scanChampionsTable')));
+    await tester.tap(find.byKey(const ValueKey('scanChampionsTable')));
+    await tester.pumpAndSettle();
+
+    final beginFinalsButton = find.widgetWithText(FilledButton, 'Begin Finals');
+    await tester.scrollUntilVisible(beginFinalsButton, 300);
+    final createButton = tester.widget<FilledButton>(beginFinalsButton);
+    expect(createButton.onPressed, isNull);
+    expect(seatingRepository.generatedChampionsTableId, isNull);
+  });
+
+  testWidgets('creates two-seat redemption finals for six eligible players',
+      (tester) async {
+    final seatingRepository = _SeatingRepository();
+
+    await tester.pumpWidget(
+      _bonusRoundApp(
+        leaderboardRepository: _LeaderboardRepository(
+          _leaderboard(count: 6, handsPlayed: 10),
+        ),
+        seatingRepository: seatingRepository,
+        tableRepository: _TableRepository(
+          tables: [
+            _table(id: 'tbl_1', label: 'Table 1'),
+            _table(id: 'tbl_2', label: 'Table 2'),
+          ],
+          resolvedTablesByUid: {
+            'table-1': _table(id: 'tbl_1', label: 'Table 1'),
+            'table-2': _table(id: 'tbl_2', label: 'Table 2'),
+          },
+        ),
+        nfcService: _NfcService(['table-1', 'table-2']),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('scanChampionsTable')));
+    await tester.tap(find.byKey(const ValueKey('scanChampionsTable')));
+    await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('scanRedemptionTable')));
+    await tester.tap(find.byKey(const ValueKey('scanRedemptionTable')));
+    await tester.pumpAndSettle();
+    final createButton = find.widgetWithText(FilledButton, 'Begin Finals');
     await tester.ensureVisible(createButton);
     await tester.tap(createButton);
     await tester.pumpAndSettle();
@@ -65,14 +190,35 @@ void main() {
   });
 }
 
-List<LeaderboardEntry> _leaderboard() {
+Widget _bonusRoundApp({
+  required LeaderboardRepository leaderboardRepository,
+  required SeatingRepository seatingRepository,
+  required TableRepository tableRepository,
+  required NfcService nfcService,
+}) {
+  return MaterialApp(
+    home: BonusRoundScreen(
+      eventId: 'evt_01',
+      leaderboardRepository: leaderboardRepository,
+      tableRepository: tableRepository,
+      sessionRepository: const _SessionRepository(),
+      seatingRepository: seatingRepository,
+      nfcService: nfcService,
+    ),
+  );
+}
+
+List<LeaderboardEntry> _leaderboard({
+  int count = 8,
+  int handsPlayed = 4,
+}) {
   return List.generate(
-    8,
+    count,
     (index) => LeaderboardEntry(
       eventGuestId: 'guest_${index + 1}',
       displayName: 'Player ${index + 1}',
       totalPoints: 80 - index,
-      handsPlayed: 4,
+      handsPlayed: handsPlayed,
       handsWon: 1,
       selfDrawWins: 0,
       discardWins: 1,
@@ -275,7 +421,7 @@ class _SeatingRepository implements SeatingRepository {
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   }) async {
     generatedChampionsTableId = championsTableId;
     generatedRedemptionTableId = redemptionTableId;
@@ -289,12 +435,30 @@ class _SeatingRepository implements SeatingRepository {
       const [];
 
   @override
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
   Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
       const [];
+
+  @override
+  Future<TournamentRoundSummary> loadTournamentRoundSummary(
+    String eventId,
+  ) async =>
+      TournamentRoundSummary.empty();
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
     String eventId,
   ) async =>
       const [];
+
+  @override
+  Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
+    String eventId,
+  ) async =>
+      null;
 }

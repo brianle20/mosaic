@@ -15,6 +15,7 @@ import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/table_scan_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/activity/screens/activity_screen.dart';
@@ -320,9 +321,14 @@ class _ActivityRepository extends ThrowingActivityRepository {
 class _SeatingRepository extends ThrowingSeatingRepository {
   const _SeatingRepository({
     this.generatedAssignments = const [],
+    this.roundSummary,
   });
 
   final List<SeatingAssignmentRecord> generatedAssignments;
+  final TournamentRoundSummary? roundSummary;
+
+  static int generatedTournamentRoundCount = 0;
+  static int generatedRandomAssignmentCount = 0;
 
   @override
   Future<List<SeatingAssignmentRecord>> clearAssignments(
@@ -332,14 +338,36 @@ class _SeatingRepository extends ThrowingSeatingRepository {
   @override
   Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
     String eventId,
+  ) async {
+    generatedRandomAssignmentCount += 1;
+    return generatedAssignments;
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
+    String eventId,
+  ) async {
+    generatedTournamentRoundCount += 1;
+    return generatedAssignments;
+  }
+
+  @override
+  Future<TournamentRoundSummary> loadTournamentRoundSummary(
+    String eventId,
   ) async =>
-      generatedAssignments;
+      roundSummary ?? TournamentRoundSummary.empty();
+
+  @override
+  Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
+    String eventId,
+  ) async =>
+      roundSummary;
 
   @override
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   }) async =>
       const [];
 
@@ -838,6 +866,7 @@ Future<void> _pumpDashboard(
   PrizeRepository? prizeRepository,
   TableRepository? tableRepository,
   SessionRepository? sessionRepository,
+  SeatingRepository? seatingRepository,
   NfcService? nfcService,
 }) async {
   await tester.pumpWidget(
@@ -851,11 +880,58 @@ Future<void> _pumpDashboard(
         prizeRepository: prizeRepository,
         tableRepository: tableRepository,
         sessionRepository: sessionRepository,
+        seatingRepository: seatingRepository,
         nfcService: nfcService,
       ),
     ),
   );
   await tester.pumpAndSettle();
+}
+
+TournamentRoundSummary _roundSummary({
+  int roundNumber = 1,
+  int assignedTableCount = 1,
+  int completeTableCount = 0,
+  int activeTableCount = 0,
+  int pausedTableCount = 0,
+  int notStartedTableCount = 0,
+}) {
+  return TournamentRoundSummary(
+    round: TournamentRoundRecord(
+      id: 'round_01',
+      eventId: 'evt_01',
+      roundNumber: roundNumber,
+      scoringPhase: EventScoringPhase.tournament,
+      status: TournamentRoundStatus.active,
+      assignmentRound: roundNumber,
+      startedAt: DateTime.utc(2026, 5, 24, 19),
+    ),
+    assignedTableCount: assignedTableCount,
+    completeTableCount: completeTableCount,
+    activeTableCount: activeTableCount,
+    pausedTableCount: pausedTableCount,
+    notStartedTableCount: notStartedTableCount,
+    currentRoundTables: const [],
+    otherTables: const [],
+  );
+}
+
+SeatingAssignmentRecord _assignment({
+  String eventId = 'evt_01',
+  String tableLabel = 'Table 1',
+  String displayName = 'Ava East',
+}) {
+  return SeatingAssignmentRecord(
+    id: 'asg_01',
+    eventId: eventId,
+    eventTableId: 'tbl_01',
+    tableLabel: tableLabel,
+    eventGuestId: 'gst_01',
+    displayName: displayName,
+    seatIndex: 0,
+    assignmentRound: 1,
+    status: 'active',
+  );
 }
 
 void main() {
@@ -981,13 +1057,15 @@ void main() {
 
     await _pumpDashboard(tester, event: event);
 
+    expect(find.text('Qualification Open'), findsOneWidget);
+
     await tester.drag(find.byType(ListView), const Offset(0, -700));
     await tester.pumpAndSettle();
 
-    expect(find.text('Scoring Phase'), findsOneWidget);
-    expect(find.text('Qualification'), findsWidgets);
-    expect(find.text('Tournament'), findsOneWidget);
-    expect(find.text('Bonus'), findsOneWidget);
+    expect(find.text('Scoring Phase'), findsNothing);
+    expect(find.text('Qualification'), findsNothing);
+    expect(find.text('Tournament'), findsNothing);
+    expect(find.text('Bonus'), findsNothing);
     expect(find.text('View Qualification Standings'), findsOneWidget);
     expect(find.text('Qualification Leaderboard'), findsNothing);
     expect(find.text('Alice Wong'), findsNothing);
@@ -1399,64 +1477,52 @@ void main() {
     expect(find.text('No hands recorded yet.'), findsOneWidget);
   });
 
-  testWidgets('active event seating action routes into assignments screen',
+  testWidgets('active event hides seating prep action',
       (tester) async {
-    RouteSettings? openedSettings;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EventDashboardScreen(
-          args: const EventDashboardArgs(eventId: 'evt_01'),
-          eventRepository: _EventRepository(activeEvent),
-          guestRepository: _GuestRepository(),
-          leaderboardRepository: _LeaderboardRepository(),
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.seatingAssignmentsRoute) {
-            openedSettings = settings;
-            final args = settings.arguments! as SeatingAssignmentsArgs;
-            return MaterialPageRoute<void>(
-              builder: (_) => SeatingAssignmentScreen(
-                eventId: args.eventId,
-                seatingRepository: const _SeatingRepository(),
-                guestRepository: _GuestRepository(),
-                sessionRepository: const _SessionRepository(),
-              ),
-              settings: settings,
-            );
-          }
-
-          return null;
-        },
-      ),
-    );
+    await _pumpDashboard(tester, event: activeEvent);
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Seating'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Seating'));
+    await tester.ensureVisible(find.text('Event options'));
     await tester.pumpAndSettle();
 
-    expect(openedSettings?.name, AppRouter.seatingAssignmentsRoute);
-    expect(
-      (openedSettings?.arguments as SeatingAssignmentsArgs?)?.eventId,
-      'evt_01',
-    );
-    expect(find.byType(SeatingAssignmentScreen), findsOneWidget);
-    expect(find.text('Generate Seating'), findsOneWidget);
+    expect(find.text('Seating'), findsNothing);
   });
 
-  testWidgets('active event bonus round action routes to setup screen',
+  testWidgets(
+      'active event options do not show finals before a completed round',
+      (tester) async {
+    await _pumpDashboard(tester, event: activeEvent);
+
+    await tester.ensureVisible(find.text('Event options'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Begin Finals'), findsNothing);
+  });
+
+  testWidgets(
+      'completed tournament round offers finals below next round action',
       (tester) async {
     RouteSettings? openedSettings;
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'scoring_open': true,
+      'current_scoring_phase': 'tournament',
+    });
 
     await tester.pumpWidget(
       MaterialApp(
         home: EventDashboardScreen(
-          args: const EventDashboardArgs(eventId: 'evt_01'),
-          eventRepository: _EventRepository(activeEvent),
+          args: EventDashboardArgs(eventId: event.id),
+          eventRepository: _EventRepository(event),
           guestRepository: _GuestRepository(),
           leaderboardRepository: _LeaderboardRepository(),
+          seatingRepository: _SeatingRepository(
+            roundSummary: _roundSummary(
+              roundNumber: 2,
+              assignedTableCount: 3,
+              completeTableCount: 3,
+            ),
+          ),
         ),
         onGenerateRoute: (settings) {
           if (settings.name == AppRouter.bonusRoundRoute) {
@@ -1481,9 +1547,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.text('Create Bonus Round'));
+    expect(find.text('Start Next Round'), findsOneWidget);
+    await tester.ensureVisible(find.text('Begin Finals'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Create Bonus Round'));
+    await tester.tap(find.text('Begin Finals'));
     await tester.pumpAndSettle();
 
     expect(openedSettings?.name, AppRouter.bonusRoundRoute);
@@ -1900,8 +1967,8 @@ void main() {
 
     expect(find.text(draftEvent.title), findsOneWidget);
     expect(find.text('Event Phase'), findsNothing);
-    expect(find.text('Check-In Not Open'), findsOneWidget);
-    expect(find.text('Scoring Not Open'), findsOneWidget);
+    expect(find.text('Check-In Not Open'), findsNothing);
+    expect(find.text('Scoring Not Open'), findsNothing);
     expect(find.text('Open Check-In'), findsOneWidget);
     expect(find.text('Scan Table'), findsNothing);
     expect(find.text('Event options'), findsOneWidget);
@@ -1919,8 +1986,8 @@ void main() {
 
     expect(find.text(completedEvent.title), findsOneWidget);
     expect(find.text('Event Phase'), findsNothing);
-    expect(find.text('Check-In Open'), findsOneWidget);
-    expect(find.text('Scoring Not Open'), findsOneWidget);
+    expect(find.text('Check-In Open'), findsNothing);
+    expect(find.text('Scoring Not Open'), findsNothing);
     expect(find.text('Finalize Event'), findsOneWidget);
     expect(find.text('Event options'), findsOneWidget);
   });
@@ -2317,28 +2384,142 @@ void main() {
 
     expect(find.text('Start Tournament'), findsOneWidget);
     expect(find.text('Pause Scoring'), findsOneWidget);
+    expect(find.text('Qualification Open'), findsOneWidget);
+    expect(find.text('Scoring Phase'), findsNothing);
+  });
+
+  testWidgets(
+      'tournament scoring shows phase status without manual phase control',
+      (tester) async {
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'scoring_open': true,
+      'current_scoring_phase': 'tournament',
+    });
+
+    await _pumpDashboard(tester, event: event);
+
+    expect(find.text('Tournament Live'), findsOneWidget);
+    expect(find.text('Scoring Phase'), findsNothing);
+    expect(find.text('Qualification'), findsNothing);
+    expect(find.text('Tournament'), findsNothing);
+    expect(find.text('Bonus'), findsNothing);
+    expect(find.text('View Qualification Standings'), findsNothing);
+  });
+
+  testWidgets('tournament dashboard shows round command center while active',
+      (tester) async {
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'scoring_open': true,
+      'current_scoring_phase': 'tournament',
+    });
+
+    await _pumpDashboard(
+      tester,
+      event: event,
+      seatingRepository: _SeatingRepository(
+        roundSummary: _roundSummary(
+          roundNumber: 2,
+          assignedTableCount: 3,
+          completeTableCount: 1,
+          activeTableCount: 2,
+        ),
+      ),
+    );
+
+    expect(find.text('Tournament Live'), findsOneWidget);
+    expect(find.text('Round 2'), findsOneWidget);
+    expect(find.text('1 of 3 tables complete'), findsOneWidget);
+    expect(find.text('2 tables still in progress'), findsOneWidget);
+    expect(find.text('Open Tables'), findsOneWidget);
+  });
+
+  testWidgets('tournament dashboard can recover with no generated round',
+      (tester) async {
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'scoring_open': true,
+      'current_scoring_phase': 'tournament',
+    });
+
+    await _pumpDashboard(
+      tester,
+      event: event,
+      seatingRepository: _SeatingRepository(
+        roundSummary: TournamentRoundSummary.empty(),
+      ),
+    );
+
+    expect(find.text('Tournament Round'), findsOneWidget);
+    expect(find.text('No tournament round generated'), findsOneWidget);
+    expect(find.text('Generate Tournament Round'), findsOneWidget);
+  });
+
+  testWidgets('tournament dashboard starts next round when complete',
+      (tester) async {
+    _SeatingRepository.generatedTournamentRoundCount = 0;
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'scoring_open': true,
+      'current_scoring_phase': 'tournament',
+    });
+    final seatingRepository = _SeatingRepository(
+      roundSummary: _roundSummary(
+        roundNumber: 2,
+        assignedTableCount: 3,
+        completeTableCount: 3,
+      ),
+      generatedAssignments: [_assignment(eventId: event.id)],
+    );
+    RouteSettings? openedSettings;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: EventDashboardArgs(eventId: event.id),
+          eventRepository: _EventRepository(event),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          seatingRepository: seatingRepository,
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.seatingAssignmentsRoute) {
+            openedSettings = settings;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Opened Seating')),
+              settings: settings,
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ready to start next round'), findsOneWidget);
+    await tester.tap(find.text('Start Next Round'));
+    await tester.pumpAndSettle();
+
+    expect(_SeatingRepository.generatedTournamentRoundCount, 1);
+    expect(openedSettings?.name, AppRouter.seatingAssignmentsRoute);
+    expect(
+      (openedSettings?.arguments as SeatingAssignmentsArgs?)
+          ?.initialAssignments,
+      seatingRepository.generatedAssignments,
+    );
   });
 
   testWidgets('start tournament opens seating with generated assignments',
       (tester) async {
+    _SeatingRepository.generatedRandomAssignmentCount = 0;
+    _SeatingRepository.generatedTournamentRoundCount = 0;
     final event = EventRecord.fromJson({
       ...activeEvent.toJson(),
       'scoring_open': true,
       'current_scoring_phase': 'qualification',
     });
-    final generatedAssignments = [
-      SeatingAssignmentRecord(
-        id: 'asg_01',
-        eventId: event.id,
-        eventTableId: 'tbl_01',
-        tableLabel: 'Table 1',
-        eventGuestId: 'gst_01',
-        displayName: 'Ava East',
-        seatIndex: 0,
-        assignmentRound: 1,
-        status: 'active',
-      ),
-    ];
+    final generatedAssignments = [_assignment(eventId: event.id)];
 
     await tester.pumpWidget(
       MaterialApp(
@@ -2388,6 +2569,8 @@ void main() {
     expect(find.text('Ava East'), findsOneWidget);
     expect(find.text('Generate random seating for checked-in players.'),
         findsNothing);
+    expect(_SeatingRepository.generatedTournamentRoundCount, 1);
+    expect(_SeatingRepository.generatedRandomAssignmentCount, 0);
   });
 
   testWidgets('completed event shows Finalize Event action', (tester) async {
@@ -2438,6 +2621,29 @@ void main() {
     expect(find.text('Add Guest'), findsNothing);
     expect(find.text('Complete Event'), findsNothing);
     expect(find.text('Finalize Event'), findsNothing);
+  });
+
+  testWidgets('finalized event hides live scoring controls', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: const EventDashboardArgs(eventId: 'evt_03'),
+          eventRepository: _EventRepository(finalizedEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Results Locked'), findsOneWidget);
+    expect(find.text('Scoring Not Open'), findsNothing);
+    expect(find.text('Check-In Not Open'), findsNothing);
+    expect(find.text('Scoring Phase'), findsNothing);
+    expect(find.text('Qualification'), findsNothing);
+    expect(find.text('Tournament'), findsNothing);
+    expect(find.text('Bonus'), findsNothing);
+    expect(find.text('View Qualification Standings'), findsNothing);
   });
 
   testWidgets('blocked lifecycle error renders when completion fails',

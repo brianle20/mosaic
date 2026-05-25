@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 import 'package:mosaic/features/tables/models/table_overview_card_data.dart';
@@ -13,32 +15,40 @@ class TableListController extends ChangeNotifier {
     required TableRepository tableRepository,
     required SessionRepository sessionRepository,
     required GuestRepository guestRepository,
+    SeatingRepository? seatingRepository,
     DateTime Function()? now,
   })  : _tableRepository = tableRepository,
         _sessionRepository = sessionRepository,
         _guestRepository = guestRepository,
+        _seatingRepository = seatingRepository,
         _now = now ?? DateTime.now;
 
   final TableRepository _tableRepository;
   final SessionRepository _sessionRepository;
   final GuestRepository _guestRepository;
+  final SeatingRepository? _seatingRepository;
   final DateTime Function() _now;
 
   bool isLoading = true;
+  bool isStartingNextRound = false;
   String? error;
   List<EventTableRecord> tables = const [];
   Map<String, TableSessionRecord> activeSessionsByTableId = const {};
   Map<String, List<TableSessionRecord>> sessionsByTableId = const {};
   Map<String, SessionDetailRecord> sessionDetailsBySessionId = const {};
   Map<String, String> guestNamesById = const {};
+  TournamentRoundSummary tournamentRoundSummary =
+      TournamentRoundSummary.empty();
   List<TableOverviewCardData> cards = const [];
+  List<TableOverviewCardData> currentRoundCards = const [];
+  List<TableOverviewCardData> otherCards = const [];
 
   void refreshRoundTimers() {
     if (activeSessionsByTableId.isEmpty) {
       return;
     }
 
-    cards = _buildCards();
+    _refreshCards();
     notifyListeners();
   }
 
@@ -46,6 +56,7 @@ class TableListController extends ChangeNotifier {
     final cachedTables = await _tableRepository.readCachedTables(eventId);
     final cachedSessions = await _sessionRepository.readCachedSessions(eventId);
     final cachedGuests = await _guestRepository.readCachedGuests(eventId);
+    final cachedRoundSummary = await _readCachedTournamentRoundSummary(eventId);
 
     isLoading = true;
     error = null;
@@ -53,9 +64,11 @@ class TableListController extends ChangeNotifier {
     activeSessionsByTableId = _activeSessionsByTable(cachedSessions);
     sessionsByTableId = _sessionsByTable(cachedSessions);
     guestNamesById = _guestNamesById(cachedGuests);
+    tournamentRoundSummary =
+        cachedRoundSummary ?? TournamentRoundSummary.empty();
     sessionDetailsBySessionId =
         await _readCachedDetails(activeSessionsByTableId.values);
-    cards = _buildCards();
+    _refreshCards();
     notifyListeners();
 
     try {
@@ -85,9 +98,37 @@ class TableListController extends ChangeNotifier {
       }
     }
 
-    cards = _buildCards();
+    tournamentRoundSummary = await _loadTournamentRoundSummary(eventId);
+
+    _refreshCards();
     isLoading = false;
     notifyListeners();
+  }
+
+  Future<List<SeatingAssignmentRecord>?> startNextTournamentRound(
+    String eventId,
+  ) async {
+    final seatingRepository = _seatingRepository;
+    if (seatingRepository == null || !tournamentRoundSummary.isComplete) {
+      return null;
+    }
+
+    isStartingNextRound = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      final assignments =
+          await seatingRepository.generateTournamentRound(eventId);
+      await load(eventId);
+      return assignments;
+    } catch (exception) {
+      error = exception.toString();
+      return null;
+    } finally {
+      isStartingNextRound = false;
+      notifyListeners();
+    }
   }
 
   List<TableSessionRecord> sessionsForTable(String tableId) {
@@ -171,14 +212,75 @@ class TableListController extends ChangeNotifier {
     };
   }
 
+  void _refreshCards() {
+    cards = _buildCards();
+    currentRoundCards =
+        cards.where((card) => card.isCurrentRound).toList(growable: false);
+    otherCards =
+        cards.where((card) => !card.isCurrentRound).toList(growable: false);
+  }
+
   List<TableOverviewCardData> _buildCards() {
+    final currentRoundTablesById = {
+      for (final table in tournamentRoundSummary.currentRoundTables)
+        table.eventTableId: table,
+    };
     return [
       for (final table in tables)
         TableOverviewCardData(
           table: table,
           liveSummary: _liveSummaryFor(table),
+          currentRoundSummary: currentRoundTablesById[table.id],
+          currentRoundHandCount: _currentRoundHandCount(
+            currentRoundTablesById[table.id],
+          ),
         ),
     ];
+  }
+
+  Future<TournamentRoundSummary?> _readCachedTournamentRoundSummary(
+    String eventId,
+  ) async {
+    try {
+      return await _seatingRepository?.readCachedTournamentRoundSummary(
+        eventId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<TournamentRoundSummary> _loadTournamentRoundSummary(
+    String eventId,
+  ) async {
+    try {
+      return await _seatingRepository?.loadTournamentRoundSummary(eventId) ??
+          TournamentRoundSummary.empty();
+    } catch (_) {
+      return await _readCachedTournamentRoundSummary(eventId) ??
+          TournamentRoundSummary.empty();
+    }
+  }
+
+  int _currentRoundHandCount(TournamentRoundTableSummary? roundTable) {
+    if (roundTable == null) {
+      return 0;
+    }
+
+    final sessionId =
+        roundTable.activeSessionId ?? roundTable.latestEndedSessionId;
+    if (sessionId == null) {
+      return 0;
+    }
+
+    for (final session in sessionsByTableId[roundTable.eventTableId] ??
+        const <TableSessionRecord>[]) {
+      if (session.id == sessionId) {
+        return session.handCount;
+      }
+    }
+
+    return 0;
   }
 
   LiveTableSummary? _liveSummaryFor(EventTableRecord table) {

@@ -296,6 +296,35 @@ class _FakeNfcService implements NfcService {
   }
 }
 
+class _CountingNfcService implements NfcService {
+  int assignmentScanCount = 0;
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForAssignment(
+    BuildContext context,
+  ) async {
+    assignmentScanCount += 1;
+    return const TagScanResult(
+      rawUid: 'FASTTAG01',
+      normalizedUid: 'FASTTAG01',
+      isManualEntry: true,
+    );
+  }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForSessionSeat(
+    BuildContext context, {
+    required String seatLabel,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TagScanResult?> scanTableTag(BuildContext context) {
+    throw UnimplementedError();
+  }
+}
+
 GuestTagAssignmentSummary _tagAssignment({
   required String guestId,
   String uid = 'FASTDONE',
@@ -466,7 +495,8 @@ void main() {
     expect(find.byTooltip('More actions for Uma'), findsOneWidget);
     expect(find.text('Mark Paid Manually'), findsNothing);
     expect(find.text('Mark Comped'), findsOneWidget);
-    expect(find.text('Check In & Tag'), findsOneWidget);
+    expect(find.text('Check In'), findsOneWidget);
+    expect(find.text('Check In & Tag'), findsNothing);
     expect(find.text('Assign Tag'), findsOneWidget);
     expect(find.text('Add Cover Entry'), findsOneWidget);
     expect(find.text('Open Play Only'), findsAtLeastNWidgets(1));
@@ -750,6 +780,36 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Mark Qualified'), findsNothing);
+  });
+
+  testWidgets('open-play-only guests need a tag before qualification actions', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Assign Tag'), findsOneWidget);
+    expect(find.text('Mark Qualifying'), findsNothing);
+
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mark Qualified'), findsNothing);
+    expect(find.text('Withdraw'), findsOneWidget);
   });
 
   testWidgets('secondary tournament actions live behind the row menu', (
@@ -1044,7 +1104,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Paid'), findsOneWidget);
-    expect(find.text('Check In & Tag'), findsOneWidget);
+    expect(find.text('Check In'), findsOneWidget);
     expect(find.text('Alice Wong is now marked paid.'), findsOneWidget);
   });
 
@@ -1065,8 +1125,37 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Comped'), findsOneWidget);
-    expect(find.text('Check In & Tag'), findsOneWidget);
+    expect(find.text('Check In'), findsOneWidget);
     expect(find.text('Alice Wong is now marked comped.'), findsOneWidget);
+  });
+
+  testWidgets('checks in open-play-only guests without scanning a tag',
+      (tester) async {
+    final nfcService = _CountingNfcService();
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      _buildRosterApp(
+        guestRepository: repository,
+        nfcService: nfcService,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Check In'));
+    await tester.pumpAndSettle();
+
+    expect(nfcService.assignmentScanCount, 0);
+    expect(find.text('Checked in for open play'), findsOneWidget);
+    expect(find.text('Assign Tag'), findsOneWidget);
+    expect(find.text('Alice Wong is checked in for open play.'), findsOneWidget);
   });
 
   testWidgets('check in and tag completes from the roster', (tester) async {
@@ -1076,6 +1165,7 @@ void main() {
         name: 'Alice Wong',
         attendanceStatus: AttendanceStatus.expected,
         coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualifying,
       ),
     ]);
 

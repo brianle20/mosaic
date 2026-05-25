@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:collection/collection.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
@@ -7,6 +9,7 @@ import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
 import '../../../helpers/repository_fakes.dart';
 
@@ -291,13 +294,20 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 }
 
 class _FakeSeatingRepository extends ThrowingSeatingRepository {
-  _FakeSeatingRepository({this.onGenerate});
+  _FakeSeatingRepository({
+    this.onGenerate,
+    this.onLoadRoundSummary,
+    this.cachedRoundSummary,
+  });
 
   final Future<List<SeatingAssignmentRecord>> Function(String eventId)?
       onGenerate;
+  final Future<TournamentRoundSummary> Function(String eventId)?
+      onLoadRoundSummary;
+  final TournamentRoundSummary? cachedRoundSummary;
 
   @override
-  Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
     String eventId,
   ) async {
     final handler = onGenerate;
@@ -306,6 +316,23 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
     }
     return handler(eventId);
   }
+
+  @override
+  Future<TournamentRoundSummary> loadTournamentRoundSummary(
+    String eventId,
+  ) async {
+    final handler = onLoadRoundSummary;
+    if (handler != null) {
+      return handler(eventId);
+    }
+    return cachedRoundSummary ?? TournamentRoundSummary.empty();
+  }
+
+  @override
+  Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
+    String eventId,
+  ) async =>
+      cachedRoundSummary;
 }
 
 TableSessionRecord _tableSession({
@@ -349,6 +376,26 @@ SessionDetailRecord _sessionDetail(String sessionId) {
     seats: const [],
     hands: const [],
     settlements: const [],
+  );
+}
+
+TournamentRoundSummary _roundSummary(int roundNumber) {
+  return TournamentRoundSummary(
+    round: TournamentRoundRecord(
+      id: 'round_$roundNumber',
+      eventId: 'evt_01',
+      roundNumber: roundNumber,
+      scoringPhase: EventScoringPhase.tournament,
+      status: TournamentRoundStatus.active,
+      assignmentRound: roundNumber,
+    ),
+    assignedTableCount: 1,
+    completeTableCount: 0,
+    activeTableCount: 1,
+    pausedTableCount: 0,
+    notStartedTableCount: 0,
+    currentRoundTables: const [],
+    otherTables: const [],
   );
 }
 
@@ -648,6 +695,76 @@ void main() {
     ]);
   });
 
+  test('startTournament keeps tournament phase when round generation fails',
+      () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'qualification',
+    });
+    final operations = <String>[];
+    final repository = _FakeEventRepository(cachedEvents: [event]);
+    repository.scoringPhaseHandler = (eventId, phase) {
+      operations.add('phase:${eventScoringPhaseToJson(phase)}');
+      return EventRecord.fromJson({
+        ...event.toJson(),
+        'current_scoring_phase': eventScoringPhaseToJson(phase),
+      });
+    };
+    final controller = EventDashboardController(
+      eventRepository: repository,
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      sessionRepository: _FakeSessionRepository(
+        [
+          _tableSession(
+            id: 'ses_active_qualification',
+            status: SessionStatus.active,
+            scoringPhase: EventScoringPhase.qualification,
+          ),
+        ],
+        onEndSession: (sessionId, reason) async {
+          operations.add('end:$sessionId:$reason');
+          return _sessionDetail(sessionId);
+        },
+      ),
+      seatingRepository: _FakeSeatingRepository(
+        onGenerate: (eventId) async {
+          operations.add('generate:$eventId');
+          throw StateError(
+              'Add or tag more tables before starting this round.');
+        },
+      ),
+    );
+    await controller.load('evt_01');
+
+    final assignments = await controller.startTournament();
+
+    expect(assignments, isNull);
+    expect(controller.event?.currentScoringPhase, EventScoringPhase.tournament);
+    expect(
+      controller.lifecycleError,
+      contains('Add or tag more tables before starting this round.'),
+    );
+    expect(
+      controller.lifecycleError,
+      contains('Tournament mode remains active'),
+    );
+    expect(operations, [
+      'end:ses_active_qualification:tournament_started',
+      'phase:tournament',
+      'generate:evt_01',
+    ]);
+  });
+
   test('startTournament can use repositories attached after controller init',
       () async {
     final event = EventRecord.fromJson(const {
@@ -692,6 +809,82 @@ void main() {
     expect(assignments, isEmpty);
     expect(generatedAssignments, isTrue);
     expect(controller.lifecycleError, isNull);
+  });
+
+  test('startNextTournamentRound reports missing seating repository', () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'tournament',
+    });
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(cachedEvents: [event]),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+    );
+    await controller.load('evt_01');
+
+    final assignments = await controller.startNextTournamentRound();
+
+    expect(assignments, isNull);
+    expect(
+      controller.lifecycleError,
+      'Seating setup is required to start the next tournament round.',
+    );
+  });
+
+  test('in-flight load cannot overwrite round state after next round starts',
+      () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'tournament',
+    });
+    final remoteEvent = Completer<EventRecord?>();
+    var roundLoadCount = 0;
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(
+        cachedEvents: [event],
+        eventLoader: (_) => remoteEvent.future,
+      ),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      seatingRepository: _FakeSeatingRepository(
+        cachedRoundSummary: _roundSummary(1),
+        onGenerate: (_) async => const [],
+        onLoadRoundSummary: (_) async {
+          roundLoadCount += 1;
+          return roundLoadCount == 1 ? _roundSummary(3) : _roundSummary(1);
+        },
+      ),
+    );
+
+    final loadFuture = controller.load('evt_01');
+    await Future<void>.delayed(Duration.zero);
+
+    final assignments = await controller.startNextTournamentRound();
+    remoteEvent.complete(event);
+    await loadFuture;
+
+    expect(assignments, isEmpty);
+    expect(controller.tournamentRoundSummary.round?.roundNumber, 3);
+    expect(controller.isLoading, isFalse);
   });
 
   test('cancelEvent updates the event to cancelled', () async {

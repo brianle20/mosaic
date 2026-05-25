@@ -298,6 +298,49 @@ void main() {
       expect(startedSession.seats, hasLength(4));
     });
 
+    test('starts assigned table sessions without a scanned table uid',
+        () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseSessionRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcSingleRunner: (functionName, params) async {
+          expect(functionName, 'start_assigned_table_session');
+          expect(params, {
+            'target_event_table_id': 'tbl_01',
+            'scanned_table_uid': null,
+          });
+          return {
+            'id': 'ses_01',
+            'event_id': 'evt_01',
+            'event_table_id': 'tbl_01',
+            'session_number_for_table': 1,
+            'ruleset_id': 'HK_STANDARD',
+            'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+            'rotation_policy_config_json': {},
+            'status': 'active',
+            'initial_east_seat_index': 0,
+            'current_dealer_seat_index': 0,
+            'dealer_pass_count': 0,
+            'completed_games_count': 0,
+            'hand_count': 0,
+            'started_at': '2026-04-24T19:00:00-07:00',
+            'started_by_user_id': 'usr_01',
+          };
+        },
+        sessionSeatsLoader: (_) async => const [],
+      );
+
+      final startedSession = await repository.startAssignedSession(
+        const StartAssignedTableSessionInput(
+          eventTableId: 'tbl_01',
+          scannedTableUid: null,
+        ),
+      );
+
+      expect(startedSession.session.id, 'ses_01');
+    });
+
     test('loads and caches table label with session detail', () async {
       final cache = await LocalCache.create();
       final loadedTableIds = <String>[];

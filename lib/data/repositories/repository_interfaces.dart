@@ -11,6 +11,7 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 
 abstract interface class AuthRepository {
   HostAuthUser? get currentHost;
@@ -213,16 +214,26 @@ abstract interface class LeaderboardRepository {
 abstract interface class SeatingRepository {
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(String eventId);
 
+  Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
+    String eventId,
+  );
+
   Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId);
 
+  Future<TournamentRoundSummary> loadTournamentRoundSummary(String eventId);
+
   Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
+    String eventId,
+  );
+
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
     String eventId,
   );
 
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   });
 
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId);

@@ -22,10 +22,28 @@ void main() {
       expect(session.toJson()['scoring_phase'], 'qualification');
     });
   });
+
+  group('TableSessionRecord tournament round fields', () {
+    test('round-trips tournament round metadata from JSON', () {
+      final session = TableSessionRecord.fromJson(
+        _sessionJson(
+          tournamentRoundId: 'rnd_01',
+          assignmentRound: 4,
+        ),
+      );
+
+      expect(session.tournamentRoundId, 'rnd_01');
+      expect(session.assignmentRound, 4);
+      expect(session.toJson()['tournament_round_id'], 'rnd_01');
+      expect(session.toJson()['assignment_round'], 4);
+    });
+  });
 }
 
 Map<String, dynamic> _sessionJson({
   String scoringPhase = 'tournament',
+  String? tournamentRoundId,
+  int? assignmentRound,
 }) {
   return {
     'id': 'ses_01',
@@ -44,5 +62,7 @@ Map<String, dynamic> _sessionJson({
     'started_at': '2026-04-24T19:00:00-07:00',
     'started_by_user_id': 'usr_01',
     'scoring_phase': scoringPhase,
+    'tournament_round_id': tournamentRoundId,
+    'assignment_round': assignmentRound,
   };
 }

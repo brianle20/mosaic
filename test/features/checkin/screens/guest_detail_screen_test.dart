@@ -374,6 +374,7 @@ void main() {
           'display_name': 'Alice Wong',
           'normalized_name': 'alice wong',
           'attendance_status': 'expected',
+          'tournament_status': 'qualifying',
           'cover_status': 'paid',
           'cover_amount_cents': 2000,
           'is_comped': false,
@@ -403,6 +404,49 @@ void main() {
       find.text('This guest is ready to check in and receive a player tag.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('checks in open-play-only guest without assigning a tag',
+      (tester) async {
+    final repository = _FakeGuestRepository(
+      GuestDetailRecord(
+        guest: EventGuestRecord.fromJson(const {
+          'id': 'gst_01',
+          'event_id': 'evt_01',
+          'display_name': 'Alice Wong',
+          'normalized_name': 'alice wong',
+          'attendance_status': 'expected',
+          'tournament_status': 'open_play_only',
+          'cover_status': 'paid',
+          'cover_amount_cents': 2000,
+          'is_comped': false,
+          'has_scored_play': false,
+        }),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestDetailScreen(
+          guestId: 'gst_01',
+          eventId: 'evt_01',
+          guestRepository: repository,
+          nfcService: const _FakeNfcService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Check In'), findsOneWidget);
+    expect(find.text('Check In and Assign Tag'), findsNothing);
+
+    await tester.tap(find.text('Check In'));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastAssignedUid, isNull);
+    expect(find.text('Assign Tag'), findsOneWidget);
+    expect(find.text('Tag Unassigned'), findsOneWidget);
+    expect(find.text('Checked In'), findsOneWidget);
   });
 
   testWidgets('shows blocked eligibility messaging for unpaid guest',
@@ -647,6 +691,7 @@ void main() {
           'display_name': 'Dee Wu',
           'normalized_name': 'dee wu',
           'attendance_status': 'expected',
+          'tournament_status': 'qualifying',
           'cover_status': 'paid',
           'cover_amount_cents': 2000,
           'is_comped': false,
@@ -685,6 +730,7 @@ void main() {
           'display_name': 'Evan Ho',
           'normalized_name': 'evan ho',
           'attendance_status': 'expected',
+          'tournament_status': 'qualifying',
           'cover_status': 'paid',
           'cover_amount_cents': 2000,
           'is_comped': false,

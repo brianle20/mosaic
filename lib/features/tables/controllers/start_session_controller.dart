@@ -16,6 +16,7 @@ class StartSessionController extends ChangeNotifier {
     required SeatingRepository seatingRepository,
     required SessionRepository sessionRepository,
     String? preverifiedTableTagUid,
+    this.allowAssignedTableEntry = false,
   })  : _guestRepository = guestRepository,
         _seatingRepository = seatingRepository,
         _sessionRepository = sessionRepository,
@@ -25,6 +26,7 @@ class StartSessionController extends ChangeNotifier {
 
   final EventTableRecord table;
   final EventScoringPhase scoringPhase;
+  final bool allowAssignedTableEntry;
   final GuestRepository _guestRepository;
   final SeatingRepository _seatingRepository;
   final SessionRepository _sessionRepository;
@@ -39,7 +41,9 @@ class StartSessionController extends ChangeNotifier {
   Map<int, SeatingAssignmentRecord> expectedAssignmentsBySeatIndex = const {};
 
   bool get hasAssignedTableSeating =>
-      state.tableTagUid != null && expectedAssignmentsBySeatIndex.length == 4;
+      expectedAssignmentsBySeatIndex.length >= 2 &&
+      expectedAssignmentsBySeatIndex.length <= 4 &&
+      (state.tableTagUid != null || allowAssignedTableEntry);
 
   bool get canConfirmStart => hasAssignedTableSeating || state.canReview;
 
@@ -177,7 +181,7 @@ class StartSessionController extends ChangeNotifier {
           ? await _sessionRepository.startAssignedSession(
               StartAssignedTableSessionInput(
                 eventTableId: table.id,
-                scannedTableUid: state.tableTagUid!,
+                scannedTableUid: state.tableTagUid,
               ),
             )
           : await _sessionRepository.startSession(
@@ -225,8 +229,20 @@ class StartSessionController extends ChangeNotifier {
               assignment.status == 'active',
         )
         .toList(growable: false);
-    if (tableAssignments.length != 4) {
+    if (tableAssignments.length < 2 || tableAssignments.length > 4) {
       return const {};
+    }
+
+    final seatIndexes = {
+      for (final assignment in tableAssignments) assignment.seatIndex,
+    };
+    if (seatIndexes.length != tableAssignments.length) {
+      return const {};
+    }
+    for (var index = 0; index < tableAssignments.length; index++) {
+      if (!seatIndexes.contains(index)) {
+        return const {};
+      }
     }
 
     return {

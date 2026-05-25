@@ -87,6 +87,7 @@ void main() {
     String? venueAddress,
     bool checkinOpen = false,
     bool scoringOpen = false,
+    String currentScoringPhase = 'qualification',
   }) {
     return EventRecord.fromJson({
       'id': id,
@@ -103,6 +104,7 @@ void main() {
       'default_ruleset_id': 'HK_STANDARD',
       'prevailing_wind': 'east',
       'created_at': createdAt,
+      'current_scoring_phase': currentScoringPhase,
     });
   }
 
@@ -339,7 +341,8 @@ void main() {
     expect(find.text('Apr 29, 10:00 PM'), findsNothing);
   });
 
-  testWidgets('event tiles describe active operational state', (tester) async {
+  testWidgets('event tiles describe active tournament phase state',
+      (tester) async {
     final repository = _FakeEventRepository([
       eventRecord(
         id: 'evt_02',
@@ -351,12 +354,33 @@ void main() {
       ),
       eventRecord(
         id: 'evt_03',
-        title: 'Scoring Event',
+        title: 'Qualification Event',
         startsAt: '2026-04-30T05:00:00Z',
         lifecycleStatus: 'active',
         createdAt: '2026-04-29T14:41:00-07:00',
         checkinOpen: true,
         scoringOpen: true,
+        currentScoringPhase: 'qualification',
+      ),
+      eventRecord(
+        id: 'evt_04',
+        title: 'Tournament Event',
+        startsAt: '2026-04-30T05:00:00Z',
+        lifecycleStatus: 'active',
+        createdAt: '2026-04-29T14:42:00-07:00',
+        checkinOpen: true,
+        scoringOpen: true,
+        currentScoringPhase: 'tournament',
+      ),
+      eventRecord(
+        id: 'evt_05',
+        title: 'Finals Event',
+        startsAt: '2026-04-30T05:00:00Z',
+        lifecycleStatus: 'active',
+        createdAt: '2026-04-29T14:43:00-07:00',
+        checkinOpen: true,
+        scoringOpen: true,
+        currentScoringPhase: 'bonus',
       ),
     ]);
 
@@ -368,11 +392,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(StatusChip, 'Check-In Open'), findsOneWidget);
-    expect(find.widgetWithText(StatusChip, 'Scoring Open'), findsOneWidget);
-    expect(find.text('Apr 29, 10:00 PM'), findsNWidgets(2));
+    expect(
+        find.widgetWithText(StatusChip, 'Qualification Open'), findsOneWidget);
+    expect(find.widgetWithText(StatusChip, 'Tournament Live'), findsOneWidget);
+    expect(find.widgetWithText(StatusChip, 'Finals Live'), findsOneWidget);
+    expect(find.widgetWithText(StatusChip, 'Scoring Open'), findsNothing);
+    expect(find.text('Apr 29, 10:00 PM'), findsNWidgets(4));
     expect(find.textContaining('In Progress'), findsNothing);
     expect(find.textContaining('Check-In Open •'), findsNothing);
-    expect(find.textContaining('Scoring Open •'), findsNothing);
+    expect(find.textContaining('Qualification Open •'), findsNothing);
     expect(
       tester
           .widget<StatusChip>(find.widgetWithText(StatusChip, 'Check-In Open'))
@@ -381,7 +409,25 @@ void main() {
     );
     expect(
       tester
-          .widget<StatusChip>(find.widgetWithText(StatusChip, 'Scoring Open'))
+          .widget<StatusChip>(
+            find.widgetWithText(StatusChip, 'Qualification Open'),
+          )
+          .tone,
+      StatusChipTone.info,
+    );
+    expect(
+      tester
+          .widget<StatusChip>(
+            find.widgetWithText(StatusChip, 'Tournament Live'),
+          )
+          .tone,
+      StatusChipTone.info,
+    );
+    expect(
+      tester
+          .widget<StatusChip>(
+            find.widgetWithText(StatusChip, 'Finals Live'),
+          )
           .tone,
       StatusChipTone.info,
     );

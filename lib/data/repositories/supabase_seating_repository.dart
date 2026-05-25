@@ -1,9 +1,15 @@
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 typedef SeatingRpcListRunner = Future<List<Map<String, dynamic>>> Function(
+  String functionName,
+  Map<String, dynamic> params,
+);
+
+typedef SeatingRpcJsonRunner = Future<Map<String, dynamic>> Function(
   String functionName,
   Map<String, dynamic> params,
 );
@@ -13,17 +19,27 @@ class SupabaseSeatingRepository implements SeatingRepository {
     required this.client,
     required this.cache,
     SeatingRpcListRunner? rpcListRunner,
-  }) : _rpcListRunner = rpcListRunner;
+    SeatingRpcJsonRunner? rpcJsonRunner,
+  })  : _rpcListRunner = rpcListRunner,
+        _rpcJsonRunner = rpcJsonRunner;
 
   final SupabaseClient client;
   final LocalCache cache;
   final SeatingRpcListRunner? _rpcListRunner;
+  final SeatingRpcJsonRunner? _rpcJsonRunner;
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
     String eventId,
   ) async {
     return cache.readSeatingAssignments(eventId);
+  }
+
+  @override
+  Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
+    String eventId,
+  ) async {
+    return cache.readTournamentRoundSummary(eventId);
   }
 
   @override
@@ -45,10 +61,33 @@ class SupabaseSeatingRepository implements SeatingRepository {
   }
 
   @override
+  Future<TournamentRoundSummary> loadTournamentRoundSummary(
+    String eventId,
+  ) async {
+    final row = await _runRpcJson(
+      'get_tournament_round_summary',
+      {'target_event_id': eventId},
+    );
+    final summary = TournamentRoundSummary.fromJson(row);
+    await cache.saveTournamentRoundSummary(eventId, summary);
+    return summary;
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
+    String eventId,
+  ) async {
+    return _loadAndCache(
+      eventId,
+      'generate_tournament_round',
+    );
+  }
+
+  @override
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   }) async {
     return _loadAndCache(
       eventId,
@@ -103,6 +142,25 @@ class SupabaseSeatingRepository implements SeatingRepository {
 
     throw StateError(
       'Expected a row list from $functionName but received ${response.runtimeType}.',
+    );
+  }
+
+  Future<Map<String, dynamic>> _runRpcJson(
+    String functionName,
+    Map<String, dynamic> params,
+  ) async {
+    final runner = _rpcJsonRunner;
+    if (runner != null) {
+      return runner(functionName, params);
+    }
+
+    final response = await client.rpc(functionName, params: params);
+    if (response is Map) {
+      return response.cast<String, dynamic>();
+    }
+
+    throw StateError(
+      'Expected a JSON object from $functionName but received ${response.runtimeType}.',
     );
   }
 }

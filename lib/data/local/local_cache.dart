@@ -9,6 +9,7 @@ import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LocalCache {
@@ -31,6 +32,7 @@ class LocalCache {
   static const _eventHandLedgerKeyPrefix = 'event-hand-ledger:';
   static const _leaderboardKeyPrefix = 'leaderboard:';
   static const _seatingAssignmentsKeyPrefix = 'seating-assignments:';
+  static const _tournamentRoundSummaryKeyPrefix = 'tournament-round-summary:';
   static const _prizePlanKeyPrefix = 'prize-plan:';
   static const _prizePreviewKeyPrefix = 'prize-preview:';
   static const _prizeAwardsKeyPrefix = 'prize-awards:';
@@ -262,6 +264,28 @@ class LocalCache {
           ),
         )
         .toList(growable: false);
+  }
+
+  Future<void> saveTournamentRoundSummary(
+    String eventId,
+    TournamentRoundSummary summary,
+  ) async {
+    await _preferences.setString(
+      '$_tournamentRoundSummaryKeyPrefix$eventId',
+      jsonEncode(summary.toJson()),
+    );
+  }
+
+  TournamentRoundSummary? readTournamentRoundSummary(String eventId) {
+    final raw =
+        _preferences.getString('$_tournamentRoundSummaryKeyPrefix$eventId');
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+
+    return TournamentRoundSummary.fromJson(
+      (jsonDecode(raw) as Map).cast<String, dynamic>(),
+    );
   }
 
   Future<void> savePrizePlan(String eventId, PrizePlanDetail detail) async {

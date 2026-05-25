@@ -72,6 +72,32 @@ class GuestCheckInController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> checkIn({required String guestId}) async {
+    if (detail == null) {
+      return;
+    }
+
+    final currentDetail = detail!;
+    if (!currentDetail.guest.isEligibleForPlayerTagAssignment) {
+      actionError = 'Guests must be paid or comped before check-in.';
+      notifyListeners();
+      return;
+    }
+
+    isSubmitting = true;
+    actionError = null;
+    notifyListeners();
+
+    try {
+      detail = await _guestRepository.checkInGuest(guestId);
+    } catch (exception) {
+      actionError = exception.toString();
+    }
+
+    isSubmitting = false;
+    notifyListeners();
+  }
+
   Future<void> assignTag({
     required String guestId,
     required Future<TagScanResult?> Function() scanForTag,

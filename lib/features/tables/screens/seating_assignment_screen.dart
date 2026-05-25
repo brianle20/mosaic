@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/seating_assignment_controller.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
@@ -58,58 +61,28 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
     }
   }
 
-  Future<void> _generateSeating() async {
-    if (_controller.assignments.isNotEmpty) {
-      final confirmed = await _confirmAction(
-        title: 'Regenerate Seating',
-        message: 'This will replace the current seating assignments.',
-        confirmLabel: 'Regenerate',
-      );
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    await _controller.generate(widget.eventId);
-  }
-
-  Future<void> _clearSeating() async {
-    final confirmed = await _confirmAction(
-      title: 'Clear Seating',
-      message: 'This will remove the current seating assignments.',
-      confirmLabel: 'Clear',
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    await _controller.clear(widget.eventId);
-  }
-
-  Future<bool> _confirmAction({
-    required String title,
-    required String message,
-    required String confirmLabel,
-  }) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(confirmLabel),
-          ),
-        ],
+  Future<void> _enterTable(SeatingTableGroup group) async {
+    await Navigator.of(context).pushNamed(
+      AppRouter.startSessionRoute,
+      arguments: StartSessionArgs(
+        eventId: widget.eventId,
+        table: EventTableRecord.fromJson({
+          'id': group.eventTableId,
+          'event_id': widget.eventId,
+          'label': group.tableLabel,
+          'display_order': 0,
+          'default_ruleset_id': 'HK_STANDARD',
+          'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+          'default_rotation_policy_config_json': const <String, dynamic>{},
+        }),
+        scoringPhase: EventScoringPhase.tournament,
+        allowAssignedTableEntry: true,
       ),
     );
 
-    return confirmed == true;
+    if (mounted) {
+      await _controller.load(widget.eventId);
+    }
   }
 
   @override
@@ -139,39 +112,20 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
               const EmptyStateCard(
                 icon: Icons.event_seat,
                 title: 'No seating yet',
-                message: 'Generate random seating for checked-in players.',
+                message:
+                    'Round seating appears after starting a tournament round.',
               )
             else
               for (final group in _controller.tableGroups) ...[
-                _TableSeatingCard(group: group),
+                _TableSeatingCard(
+                  group: group,
+                  onEnterTable: () => _enterTable(group),
+                ),
                 const SizedBox(height: 12),
               ],
             if (hasAssignments && _controller.unassignedGuests.isNotEmpty) ...[
               _UnassignedGuestsCard(guests: _controller.unassignedGuests),
               const SizedBox(height: 12),
-            ],
-            const SizedBox(height: 4),
-            FilledButton(
-              onPressed:
-                  _controller.isSubmitting || !_controller.canChangeSeating
-                      ? null
-                      : _generateSeating,
-              child: Text(
-                _controller.isSubmitting ? 'Working' : 'Generate Seating',
-              ),
-            ),
-            if (hasAssignments) ...[
-              const SizedBox(height: 8),
-              OutlinedButton(
-                onPressed:
-                    _controller.isSubmitting || !_controller.canChangeSeating
-                        ? null
-                        : _clearSeating,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-                child: const Text('Clear Assignments'),
-              ),
             ],
           ],
         ),
@@ -213,9 +167,13 @@ class _UnassignedGuestsCard extends StatelessWidget {
 }
 
 class _TableSeatingCard extends StatelessWidget {
-  const _TableSeatingCard({required this.group});
+  const _TableSeatingCard({
+    required this.group,
+    required this.onEnterTable,
+  });
 
   final SeatingTableGroup group;
+  final VoidCallback onEnterTable;
 
   @override
   Widget build(BuildContext context) {
@@ -237,6 +195,15 @@ class _TableSeatingCard extends StatelessWidget {
                 windLabel: _windLabel(seat.seatIndex),
                 assignment: seat,
               ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: group.seats.length == 4 ? onEnterTable : null,
+                icon: const Icon(Icons.login),
+                label: const Text('Enter Table'),
+              ),
+            ),
           ],
         ),
       ),

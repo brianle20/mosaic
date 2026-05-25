@@ -15,6 +15,7 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
@@ -418,10 +419,16 @@ class _FakeSeatingRepository implements SeatingRepository {
       const [];
 
   @override
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
+    String eventId,
+  ) async =>
+      const [];
+
+  @override
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   }) async =>
       const [];
 
@@ -430,10 +437,22 @@ class _FakeSeatingRepository implements SeatingRepository {
       const [];
 
   @override
+  Future<TournamentRoundSummary> loadTournamentRoundSummary(
+    String eventId,
+  ) async =>
+      TournamentRoundSummary.empty();
+
+  @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
     String eventId,
   ) async =>
       const [];
+
+  @override
+  Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
+    String eventId,
+  ) async =>
+      null;
 }
 
 class _FakeNfcService implements NfcService {

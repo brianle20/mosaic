@@ -40,6 +40,8 @@ class TableSessionRecord {
     required this.handCount,
     required this.startedAt,
     required this.startedByUserId,
+    this.tournamentRoundId,
+    this.assignmentRound,
     this.endedAt,
     this.endedByUserId,
     this.endReason,
@@ -68,6 +70,8 @@ class TableSessionRecord {
       handCount: _requiredInt(json, 'hand_count'),
       startedAt: _requiredDateTime(json, 'started_at'),
       startedByUserId: _requiredString(json, 'started_by_user_id'),
+      tournamentRoundId: _optionalString(json, 'tournament_round_id'),
+      assignmentRound: _optionalInt(json, 'assignment_round'),
       endedAt: _optionalDateTime(json, 'ended_at'),
       endedByUserId: _optionalString(json, 'ended_by_user_id'),
       endReason: _optionalString(json, 'end_reason'),
@@ -91,6 +95,8 @@ class TableSessionRecord {
   final int handCount;
   final DateTime startedAt;
   final String startedByUserId;
+  final String? tournamentRoundId;
+  final int? assignmentRound;
   final DateTime? endedAt;
   final String? endedByUserId;
   final String? endReason;
@@ -114,6 +120,8 @@ class TableSessionRecord {
       'hand_count': handCount,
       'started_at': startedAt.toIso8601String(),
       'started_by_user_id': startedByUserId,
+      'tournament_round_id': tournamentRoundId,
+      'assignment_round': assignmentRound,
       'ended_at': endedAt?.toIso8601String(),
       'ended_by_user_id': endedByUserId,
       'end_reason': endReason,
@@ -281,11 +289,11 @@ class StartTableSessionInput {
 class StartAssignedTableSessionInput {
   const StartAssignedTableSessionInput({
     required this.eventTableId,
-    required this.scannedTableUid,
+    this.scannedTableUid,
   });
 
   final String eventTableId;
-  final String scannedTableUid;
+  final String? scannedTableUid;
 
   Map<String, dynamic> toRpcParams() {
     return {
@@ -344,6 +352,23 @@ int _intOrDefault(Map<String, dynamic> json, String key, int fallback) {
   final value = json[key];
   if (value == null) {
     return fallback;
+  }
+
+  if (value is int) {
+    return value;
+  }
+
+  if (value is num) {
+    return value.toInt();
+  }
+
+  throw FormatException('Expected int or null for $key.');
+}
+
+int? _optionalInt(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) {
+    return null;
   }
 
   if (value is int) {

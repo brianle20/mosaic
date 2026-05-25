@@ -142,6 +142,7 @@ class AppRouter {
             tableRepository: tableRepository,
             sessionRepository: sessionRepository,
             guestRepository: guestRepository,
+            seatingRepository: seatingRepository,
           ),
           settings: settings,
         );
@@ -168,6 +169,7 @@ class AppRouter {
             nfcService: nfcService,
             scoringPhase: args.scoringPhase,
             preverifiedTableTagUid: args.preverifiedTableTagUid,
+            allowAssignedTableEntry: args.allowAssignedTableEntry,
           ),
           settings: settings,
         );
@@ -367,12 +369,14 @@ class StartSessionArgs {
     required this.table,
     this.scoringPhase = EventScoringPhase.qualification,
     this.preverifiedTableTagUid,
+    this.allowAssignedTableEntry = false,
   });
 
   final String eventId;
   final EventTableRecord table;
   final EventScoringPhase scoringPhase;
   final String? preverifiedTableTagUid;
+  final bool allowAssignedTableEntry;
 }
 
 class SeatingAssignmentsArgs {

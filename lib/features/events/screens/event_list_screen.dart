@@ -78,12 +78,21 @@ class _EventListScreenState extends State<EventListScreen> {
   String _eventPhaseLabel(EventRecord event) {
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.draft => 'Setup',
-      EventLifecycleStatus.active when event.scoringOpen => 'Scoring Open',
+      EventLifecycleStatus.active when event.scoringOpen =>
+        _activeScoringLabel(event.currentScoringPhase),
       EventLifecycleStatus.active when event.checkinOpen => 'Check-In Open',
       EventLifecycleStatus.active => 'Active',
       EventLifecycleStatus.completed => 'Completed',
       EventLifecycleStatus.finalized => 'Finalized',
       EventLifecycleStatus.cancelled => 'Cancelled',
+    };
+  }
+
+  String _activeScoringLabel(EventScoringPhase phase) {
+    return switch (phase) {
+      EventScoringPhase.qualification => 'Qualification Open',
+      EventScoringPhase.tournament => 'Tournament Live',
+      EventScoringPhase.bonus => 'Finals Live',
     };
   }
 

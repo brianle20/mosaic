@@ -5,9 +5,11 @@ import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/screens/tables_overview_screen.dart';
 
@@ -225,6 +227,38 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     String? displayLabel,
   }) {
     throw UnimplementedError();
+  }
+}
+
+class _FakeSeatingRepository extends ThrowingSeatingRepository {
+  _FakeSeatingRepository({
+    required this.summary,
+  });
+
+  TournamentRoundSummary summary;
+  int generateCount = 0;
+  int loadCount = 0;
+
+  @override
+  Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
+    String eventId,
+  ) async =>
+      summary;
+
+  @override
+  Future<TournamentRoundSummary> loadTournamentRoundSummary(
+    String eventId,
+  ) async {
+    loadCount += 1;
+    return summary;
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
+    String eventId,
+  ) async {
+    generateCount += 1;
+    return const [];
   }
 }
 
@@ -882,6 +916,270 @@ void main() {
     expect(find.text('Opened Session Detail'), findsOneWidget);
   });
 
+  testWidgets('shows tournament round board and groups current round tables',
+      (tester) async {
+    final currentActive = _table('tbl_active', 'Table 1', order: 1);
+    final currentReady = _table('tbl_ready', 'Table 2', order: 2);
+    final currentComplete = _table('tbl_done', 'Table 3', order: 3);
+    final openPlay = _table('tbl_open', 'Open Play', order: 4);
+    final activeSession = _session(
+      id: 'ses_active',
+      tableId: currentActive.id,
+      handCount: 2,
+      currentDealerSeatIndex: 0,
+      scoringPhase: EventScoringPhase.tournament,
+      startedAt: '2026-04-24T19:00:00-07:00',
+    );
+    final completeSession = _session(
+      id: 'ses_done',
+      tableId: currentComplete.id,
+      status: 'completed',
+      handCount: 4,
+      scoringPhase: EventScoringPhase.tournament,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([
+            currentActive,
+            currentReady,
+            currentComplete,
+            openPlay,
+          ]),
+          sessionRepository: _FakeSessionRepository(
+            sessions: [activeSession, completeSession],
+            details: {'ses_active': _detail(activeSession)},
+          ),
+          guestRepository: _FakeGuestRepository([
+            _guest('guest_east', 'Alice Chen'),
+            _guest('guest_south', 'Ben Wong'),
+            _guest('guest_west', 'Chris Lee'),
+            _guest('guest_north', 'Dana Park'),
+          ]),
+          seatingRepository: _FakeSeatingRepository(
+            summary: _roundSummary(
+              status: TournamentRoundStatus.active,
+              complete: 1,
+              active: 1,
+              notStarted: 1,
+              currentTables: [
+                _roundTable(
+                  table: currentActive,
+                  status: TournamentRoundTableStatus.active,
+                  activeSessionId: 'ses_active',
+                  names: const ['Alice Chen', 'Ben Wong'],
+                ),
+                _roundTable(
+                  table: currentReady,
+                  status: TournamentRoundTableStatus.notStarted,
+                  names: const ['Chris Lee', 'Dana Park'],
+                ),
+                _roundTable(
+                  table: currentComplete,
+                  status: TournamentRoundTableStatus.complete,
+                  latestEndedSessionId: 'ses_done',
+                  names: const ['Eli Ho', 'Fran Ng'],
+                ),
+              ],
+            ),
+          ),
+          now: () => DateTime.parse('2026-04-24T19:01:00-07:00'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Round 2'), findsOneWidget);
+    expect(find.text('1 Complete'), findsOneWidget);
+    expect(find.text('1 In Progress'), findsOneWidget);
+    expect(find.text('1 Not Started'), findsOneWidget);
+    expect(find.text('1 / 3 tables complete'), findsOneWidget);
+    expect(find.text('Current Round'), findsOneWidget);
+    expect(find.text('Alice Chen, Ben Wong'), findsOneWidget);
+    expect(find.text('Chris Lee, Dana Park'), findsOneWidget);
+    expect(find.text('Hand 2'), findsOneWidget);
+    expect(find.text('59:00'), findsOneWidget);
+    expect(find.text('East · Alice Chen'), findsOneWidget);
+    expect(find.text('Enter Table'), findsOneWidget);
+    expect(find.text('Open Session'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('Eli Ho, Fran Ng'), 300);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Eli Ho, Fran Ng'), findsOneWidget);
+    expect(find.text('Hand 4'), findsOneWidget);
+    expect(find.text('View Session'), findsOneWidget);
+
+    await tester.scrollUntilVisible(find.text('Other Tables'), 300);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Other Tables'), findsOneWidget);
+    expect(find.text('Open Play'), findsOneWidget);
+    expect(find.text('Start Next Round'), findsNothing);
+  });
+
+  testWidgets('paused current-round card shows open action, timer, and dealer',
+      (tester) async {
+    final table = _table('tbl_paused', 'Table 4');
+    final session = _session(
+      id: 'ses_paused',
+      tableId: table.id,
+      status: 'paused',
+      currentDealerSeatIndex: 1,
+      scoringPhase: EventScoringPhase.tournament,
+      startedAt: '2026-04-24T19:00:00-07:00',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(
+            sessions: [session],
+            details: {'ses_paused': _detail(session)},
+          ),
+          guestRepository: _FakeGuestRepository([
+            _guest('guest_east', 'Alice Chen'),
+            _guest('guest_south', 'Ben Wong'),
+            _guest('guest_west', 'Chris Lee'),
+            _guest('guest_north', 'Dana Park'),
+          ]),
+          seatingRepository: _FakeSeatingRepository(
+            summary: _roundSummary(
+              paused: 1,
+              currentTables: [
+                _roundTable(
+                  table: table,
+                  status: TournamentRoundTableStatus.paused,
+                  activeSessionId: 'ses_paused',
+                  names: const ['Alice Chen', 'Ben Wong'],
+                ),
+              ],
+            ),
+          ),
+          now: () => DateTime.parse('2026-04-24T19:01:00-07:00'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Paused'), findsOneWidget);
+    expect(find.text('Open Session'), findsOneWidget);
+    expect(find.text('View Session'), findsNothing);
+    expect(find.text('59:00'), findsOneWidget);
+    expect(find.text('East · Ben Wong'), findsOneWidget);
+  });
+
+  testWidgets('enter table fallback opens assigned tournament start flow',
+      (tester) async {
+    final table = _table('tbl_ready', 'Table 2');
+    StartSessionArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+          seatingRepository: _FakeSeatingRepository(
+            summary: _roundSummary(
+              notStarted: 1,
+              currentTables: [
+                _roundTable(
+                  table: table,
+                  status: TournamentRoundTableStatus.notStarted,
+                  names: const ['Chris Lee', 'Dana Park'],
+                ),
+              ],
+            ),
+          ),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.startSessionRoute) {
+            openedArgs = settings.arguments! as StartSessionArgs;
+            return MaterialPageRoute<void>(
+              builder: (context) => const Scaffold(
+                body: Text('Opened Start Session'),
+              ),
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Enter Table'));
+    await tester.pumpAndSettle();
+
+    expect(openedArgs?.eventId, 'evt_01');
+    expect(openedArgs?.table.id, 'tbl_ready');
+    expect(openedArgs?.scoringPhase, EventScoringPhase.tournament);
+    expect(openedArgs?.allowAssignedTableEntry, isTrue);
+    expect(find.text('Opened Start Session'), findsOneWidget);
+  });
+
+  testWidgets('start next round generates and reloads when round is complete',
+      (tester) async {
+    final table = _table('tbl_done', 'Table 1');
+    final session = _session(
+      id: 'ses_done',
+      tableId: table.id,
+      status: 'completed',
+      handCount: 4,
+      scoringPhase: EventScoringPhase.tournament,
+    );
+    final seatingRepository = _FakeSeatingRepository(
+      summary: _roundSummary(
+        status: TournamentRoundStatus.complete,
+        assigned: 1,
+        complete: 1,
+        currentTables: [
+          _roundTable(
+            table: table,
+            status: TournamentRoundTableStatus.complete,
+            latestEndedSessionId: 'ses_done',
+            names: const ['Alice Chen', 'Ben Wong'],
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(sessions: [session]),
+          guestRepository: _FakeGuestRepository(const []),
+          seatingRepository: seatingRepository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start Next Round'), findsOneWidget);
+
+    await tester.tap(find.text('Start Next Round'));
+    await tester.pumpAndSettle();
+
+    expect(seatingRepository.generateCount, 1);
+    expect(seatingRepository.loadCount, greaterThanOrEqualTo(2));
+  });
+
   testWidgets('table options can open previous session history',
       (tester) async {
     final table = EventTableRecord.fromJson(const {
@@ -959,6 +1257,73 @@ void main() {
     expect(openedArgs?.sessionId, 'ses_01');
     expect(find.text('Opened Session Detail'), findsOneWidget);
   });
+}
+
+EventTableRecord _table(String id, String label, {int order = 1}) {
+  return EventTableRecord.fromJson({
+    'id': id,
+    'event_id': 'evt_01',
+    'label': label,
+    'display_order': order,
+    'nfc_tag_id': 'tag_$id',
+    'default_ruleset_id': 'HK_STANDARD',
+    'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+    'default_rotation_policy_config_json': const {},
+  });
+}
+
+TournamentRoundSummary _roundSummary({
+  TournamentRoundStatus status = TournamentRoundStatus.active,
+  int assigned = 0,
+  int complete = 0,
+  int active = 0,
+  int paused = 0,
+  int notStarted = 0,
+  List<TournamentRoundTableSummary> currentTables = const [],
+}) {
+  final assignedCount = assigned == 0 ? currentTables.length : assigned;
+  return TournamentRoundSummary(
+    round: TournamentRoundRecord(
+      id: 'round_02',
+      eventId: 'evt_01',
+      roundNumber: 2,
+      scoringPhase: EventScoringPhase.tournament,
+      status: status,
+      assignmentRound: 2,
+    ),
+    assignedTableCount: assignedCount,
+    completeTableCount: complete,
+    activeTableCount: active,
+    pausedTableCount: paused,
+    notStartedTableCount: notStarted,
+    currentRoundTables: currentTables,
+    otherTables: const [],
+  );
+}
+
+TournamentRoundTableSummary _roundTable({
+  required EventTableRecord table,
+  required TournamentRoundTableStatus status,
+  List<String> names = const [],
+  String? activeSessionId,
+  String? latestEndedSessionId,
+}) {
+  return TournamentRoundTableSummary(
+    eventTableId: table.id,
+    tableLabel: table.label,
+    tableDisplayOrder: table.displayOrder,
+    status: status,
+    activeSessionId: activeSessionId,
+    latestEndedSessionId: latestEndedSessionId,
+    assignedPlayers: [
+      for (var index = 0; index < names.length; index += 1)
+        TournamentRoundAssignedPlayer(
+          eventGuestId: 'guest_$index',
+          displayName: names[index],
+          seatIndex: index,
+        ),
+    ],
+  );
 }
 
 EventGuestRecord _guest(String id, String name) {

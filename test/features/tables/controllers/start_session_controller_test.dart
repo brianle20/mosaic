@@ -136,7 +136,7 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   }) {
     throw UnimplementedError();
   }
@@ -254,7 +254,82 @@ void main() {
 
     expect(started?.session.id, 'ses_01');
     expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
-    expect(sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
+    expect(
+        sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
+  });
+
+  test('assigned table can be entered without scanning the table tag',
+      () async {
+    final sessionRepository = _FakeSessionRepository();
+    final controller = _buildController(
+      seatingAssignments: _tableAssignments(),
+      sessionRepository: sessionRepository,
+      allowAssignedTableEntry: true,
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.hasAssignedTableSeating, isTrue);
+    expect(controller.currentPrompt, 'Review assigned seating');
+
+    final started = await controller.confirmStart();
+
+    expect(started?.session.id, 'ses_01');
+    expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
+    expect(sessionRepository.startedAssignedInput?.scannedTableUid, isNull);
+  });
+
+  for (final playerCount in [2, 3]) {
+    test(
+        'assigned tournament table with $playerCount players can start '
+        'without a fourth player', () async {
+      final sessionRepository = _FakeSessionRepository();
+      final controller = _buildController(
+        seatingAssignments: _tableAssignments().take(playerCount).toList(),
+        sessionRepository: sessionRepository,
+        allowAssignedTableEntry: true,
+      );
+
+      await controller.load('evt_01');
+
+      expect(controller.hasAssignedTableSeating, isTrue);
+      expect(controller.currentPrompt, 'Review assigned seating');
+      expect(controller.resolvedSeats.map((seat) => seat.guestName), [
+        'Alice',
+        'Billy',
+        if (playerCount == 3) 'Carol',
+      ]);
+
+      final started = await controller.confirmStart();
+
+      expect(started?.session.id, 'ses_01');
+      expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
+      expect(sessionRepository.startedAssignedInput?.scannedTableUid, isNull);
+    });
+  }
+
+  test(
+      'does not use assigned seating when short table seats are not contiguous',
+      () async {
+    final sessionRepository = _FakeSessionRepository();
+    final controller = _buildController(
+      seatingAssignments: [
+        _assignment(guestId: 'gst_south', name: 'Billy', seatIndex: 1),
+        _assignment(guestId: 'gst_west', name: 'Carol', seatIndex: 2),
+      ],
+      sessionRepository: sessionRepository,
+      allowAssignedTableEntry: true,
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.hasAssignedTableSeating, isFalse);
+    expect(controller.currentPrompt, 'Scan Table Tag');
+
+    final started = await controller.confirmStart();
+
+    expect(started, isNull);
+    expect(sessionRepository.startedAssignedInput, isNull);
   });
 
   test('rejects a player scanned for the wrong assigned seat', () async {
@@ -306,6 +381,7 @@ StartSessionController _buildController({
   List<SeatingAssignmentRecord> seatingAssignments = const [],
   SessionRepository? sessionRepository,
   String? preverifiedTableTagUid,
+  bool allowAssignedTableEntry = false,
 }) {
   return StartSessionController(
     table: _table(),
@@ -316,6 +392,7 @@ StartSessionController _buildController({
     seatingRepository: _FakeSeatingRepository(seatingAssignments),
     sessionRepository: sessionRepository ?? _FakeSessionRepository(),
     preverifiedTableTagUid: preverifiedTableTagUid,
+    allowAssignedTableEntry: allowAssignedTableEntry,
   );
 }
 

@@ -98,6 +98,7 @@ void main() {
         'seat_index': 2,
         'assignment_round': 1,
         'status': 'active',
+        'tournament_round_id': 'rnd_01',
       });
 
       expect(record.id, 'asg_01');
@@ -106,6 +107,7 @@ void main() {
       expect(record.seatIndex, 2);
       expect(record.assignmentRound, 1);
       expect(record.status, 'active');
+      expect(record.tournamentRoundId, 'rnd_01');
       expect(record.toJson(), {
         'id': 'asg_01',
         'event_id': 'evt_01',
@@ -117,6 +119,7 @@ void main() {
         'assignment_round': 1,
         'status': 'active',
         'assignment_type': 'random',
+        'tournament_round_id': 'rnd_01',
         'bonus_round_id': null,
         'bonus_table_role': null,
         'seed_rank': null,

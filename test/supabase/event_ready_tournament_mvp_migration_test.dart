@@ -113,7 +113,7 @@ void main() {
     expect(assignedStartSessionSql, contains('scanned_table_uid text'));
     expect(
       assignedStartSessionSql,
-      contains('count(*) = 4'),
+      contains('array_length(assignment_rows, 1) between 2 and 4'),
     );
     expect(
       assignedStartSessionSql,
@@ -375,7 +375,10 @@ void main() {
       'public.generate_bonus_round_seating_assignments',
     );
 
-    expect(bonusSeatingSql, contains("guest.tournament_status = 'qualified'"));
+    expect(bonusSeatingSql, contains('minimum_hands_played'));
+    expect(bonusSeatingSql, contains('leaderboard.hands_played >='));
+    expect(bonusSeatingSql, contains("guest.attendance_status = 'checked_in'"));
+    expect(bonusSeatingSql, contains("tag.default_tag_type = 'player'"));
     expect(bonusSeatingSql, contains("session.scoring_phase = 'tournament'"));
   });
 
@@ -384,10 +387,16 @@ void main() {
       migrationsSql,
       'public.generate_random_seating_assignments',
     );
+    final tournamentRoundSql = _extractFunction(
+      migrationsSql,
+      'public.generate_tournament_round',
+    );
 
-    expect(randomSeatingSql, contains("guest.tournament_status = 'qualified'"));
+    expect(randomSeatingSql, contains('public.generate_tournament_round'));
     expect(
-        randomSeatingSql, contains("guest.attendance_status = 'checked_in'"));
+        tournamentRoundSql, contains("guest.tournament_status = 'qualified'"));
+    expect(
+        tournamentRoundSql, contains("guest.attendance_status = 'checked_in'"));
   });
 }
 

@@ -223,7 +223,7 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   }) {
     throw UnimplementedError();
   }
@@ -1019,6 +1019,69 @@ void main() {
     expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
     expect(
         sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
+    expect(openedArgs?.sessionId, 'ses_01');
+  });
+
+  testWidgets('starts short assigned table without scanning a fourth player',
+      (tester) async {
+    final sessionRepository = _FakeSessionRepository();
+    SessionDetailArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StartSessionScreen(
+          eventId: 'evt_01',
+          table: EventTableRecord.fromJson(const {
+            'id': 'tbl_01',
+            'event_id': 'evt_01',
+            'label': 'Table 1',
+            'mode': 'points',
+            'display_order': 1,
+            'default_ruleset_id': 'HK_STANDARD',
+            'default_rotation_policy_type':
+                'dealer_cycle_return_to_initial_east',
+            'default_rotation_policy_config_json': {},
+            'status': 'active',
+          }),
+          scoringPhase: EventScoringPhase.tournament,
+          allowAssignedTableEntry: true,
+          guestRepository: _FakeGuestRepository(
+            guests: buildGuests(),
+            assignments: buildAssignments(),
+          ),
+          sessionRepository: sessionRepository,
+          seatingRepository: _FakeSeatingRepository(
+            _tableAssignments().take(3).toList(),
+          ),
+          nfcService: _QueuedNfcService([]),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            openedArgs = settings.arguments! as SessionDetailArgs;
+            return MaterialPageRoute<void>(
+              builder: (context) => const Scaffold(
+                body: Text('Opened Session Detail'),
+              ),
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review assigned seating'), findsOneWidget);
+    expect(find.text('Carol Ng'), findsOneWidget);
+    expect(find.text('Dee Wu'), findsNothing);
+    expect(find.text('Scan Next Tag'), findsNothing);
+
+    await tester.tap(find.text('Start Assigned Table'));
+    await tester.pumpAndSettle();
+
+    expect(sessionRepository.startedInput, isNull);
+    expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
+    expect(sessionRepository.startedAssignedInput?.scannedTableUid, isNull);
     expect(openedArgs?.sessionId, 'ses_01');
   });
 }

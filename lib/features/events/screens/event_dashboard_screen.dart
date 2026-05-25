@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
 import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
@@ -304,6 +305,28 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     await _reloadDashboardAfterReturn(event.id);
   }
 
+  Future<void> _startNextTournamentRound() async {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    final assignments = await _controller.startNextTournamentRound();
+    if (!mounted || assignments == null) {
+      _scrollToTop();
+      return;
+    }
+
+    await Navigator.of(context).pushNamed(
+      AppRouter.seatingAssignmentsRoute,
+      arguments: SeatingAssignmentsArgs(
+        eventId: event.id,
+        initialAssignments: assignments,
+      ),
+    );
+    await _reloadDashboardAfterReturn(event.id);
+  }
+
   Future<void> _confirmDeleteEvent() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -407,7 +430,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return switch (event?.lifecycleStatus) {
       EventLifecycleStatus.draft => 'Setup',
       EventLifecycleStatus.active when event?.scoringOpen == true =>
-        'Scoring Open',
+        _activeScoringLabel(event!.currentScoringPhase),
       EventLifecycleStatus.active when event?.checkinOpen == true =>
         'Check-In Open',
       EventLifecycleStatus.active => 'Active',
@@ -415,6 +438,14 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       EventLifecycleStatus.finalized => 'Results Locked',
       EventLifecycleStatus.cancelled => 'Cancelled',
       null => 'Loading Event',
+    };
+  }
+
+  String _activeScoringLabel(EventScoringPhase phase) {
+    return switch (phase) {
+      EventScoringPhase.qualification => 'Qualification Open',
+      EventScoringPhase.tournament => 'Tournament Live',
+      EventScoringPhase.bonus => 'Finals Live',
     };
   }
 
@@ -744,6 +775,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             lifecycleStatus != EventLifecycleStatus.finalized &&
             lifecycleStatus != EventLifecycleStatus.cancelled;
     final showQualificationSetup = _usesQualificationSetupDashboard(event);
+    final showTournamentCommandCenter =
+        lifecycleStatus == EventLifecycleStatus.active &&
+            event.scoringOpen &&
+            event.currentScoringPhase == EventScoringPhase.tournament;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -785,7 +820,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               _LiveStatusRow(
                 phaseLabel: _eventPhaseLabel(event),
                 phaseTone: _eventPhaseTone(lifecycleStatus),
-                showPhase: lifecycleStatus != EventLifecycleStatus.active,
+                showPhase: !showTournamentCommandCenter &&
+                    (lifecycleStatus != EventLifecycleStatus.active ||
+                        event.scoringOpen),
+                showOperationalFlags:
+                    lifecycleStatus == EventLifecycleStatus.active,
                 checkinOpen: event.checkinOpen,
                 scoringOpen: event.scoringOpen,
               ),
@@ -818,13 +857,23 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 _BonusRoundResultsPanel(summary: _controller.bonusRoundResults),
               ],
               const SizedBox(height: 16),
-              HeroActionButton(
-                label: _primaryActionLabel(event),
-                icon: _primaryActionIcon(event),
-                enabled: _primaryActionEnabled(event, canScanTables),
-                isBusy: _primaryActionIsBusy(event),
-                onPressed: _primaryActionCallback(event),
-              ),
+              if (showTournamentCommandCenter)
+                _TournamentRoundCommandCenter(
+                  summary: _controller.tournamentRoundSummary,
+                  isBusy: _controller.isSubmittingLifecycle,
+                  onOpenTables: _openTables,
+                  onStartNextRound: _startNextTournamentRound,
+                  onGenerateRound: _startNextTournamentRound,
+                  onBeginFinals: _openBonusRound,
+                )
+              else
+                HeroActionButton(
+                  label: _primaryActionLabel(event),
+                  icon: _primaryActionIcon(event),
+                  enabled: _primaryActionEnabled(event, canScanTables),
+                  isBusy: _primaryActionIsBusy(event),
+                  onPressed: _primaryActionCallback(event),
+                ),
               if (showTableScanAction && !event.scoringOpen) ...[
                 const SizedBox(height: 10),
                 WideSecondaryButton(
@@ -888,7 +937,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 lifecycleStatus: lifecycleStatus,
                 isSubmitting: _controller.isSubmittingLifecycle,
                 onSeating: _openSeating,
-                onBonusRound: _openBonusRound,
                 onActivity: _openActivity,
                 onHandLedger: _openHandLedger,
                 onDelete: _confirmDeleteEvent,
@@ -897,25 +945,20 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 onRevert: _confirmRevertToDraft,
                 onCancel: _confirmCancelEvent,
               ),
-              const SizedBox(height: 14),
-              _ScoringPhasePanel(
-                currentPhase: event.currentScoringPhase,
-                isSubmitting: _controller.isSubmittingLifecycle,
-                onChanged: _controller.setScoringPhase,
-              ),
-              if (event.currentScoringPhase ==
-                  EventScoringPhase.qualification) ...[
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _openLeaderboard(
-                      initialQualificationTab: true,
+              if (lifecycleStatus == EventLifecycleStatus.active) ...[
+                const SizedBox(height: 14),
+                if (event.currentScoringPhase ==
+                    EventScoringPhase.qualification)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openLeaderboard(
+                        initialQualificationTab: true,
+                      ),
+                      icon: const Icon(Icons.leaderboard),
+                      label: const Text('View Qualification Standings'),
                     ),
-                    icon: const Icon(Icons.leaderboard),
-                    label: const Text('View Qualification Standings'),
                   ),
-                ),
               ],
             ],
           ),
@@ -997,61 +1040,109 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
   }
 }
 
-class _ScoringPhasePanel extends StatelessWidget {
-  const _ScoringPhasePanel({
-    required this.currentPhase,
-    required this.isSubmitting,
-    required this.onChanged,
+class _TournamentRoundCommandCenter extends StatelessWidget {
+  const _TournamentRoundCommandCenter({
+    required this.summary,
+    required this.isBusy,
+    required this.onOpenTables,
+    required this.onStartNextRound,
+    required this.onGenerateRound,
+    required this.onBeginFinals,
   });
 
-  final EventScoringPhase currentPhase;
-  final bool isSubmitting;
-  final ValueChanged<EventScoringPhase> onChanged;
+  final TournamentRoundSummary summary;
+  final bool isBusy;
+  final VoidCallback onOpenTables;
+  final VoidCallback onStartNextRound;
+  final VoidCallback onGenerateRound;
+  final VoidCallback onBeginFinals;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final round = summary.round;
+    final title =
+        round == null ? 'Tournament Round' : 'Round ${round.roundNumber}';
+    final progress = round == null
+        ? 'No tournament round generated'
+        : '${summary.completeTableCount} of ${summary.assignedTableCount} tables complete';
+    final remainingTables = summary.activeTableCount +
+        summary.pausedTableCount +
+        summary.notStartedTableCount;
+    final detail = round == null
+        ? 'Generate a round to assign players.'
+        : summary.isComplete
+            ? 'Ready to start next round'
+            : '$remainingTables ${remainingTables == 1 ? 'table' : 'tables'} still in progress';
+    final actionLabel = round == null
+        ? 'Generate Tournament Round'
+        : summary.isComplete
+            ? 'Start Next Round'
+            : 'Open Tables';
+    final actionIcon = round == null
+        ? Icons.shuffle
+        : summary.isComplete
+            ? Icons.skip_next
+            : Icons.table_bar;
+    final callback = round == null
+        ? onGenerateRound
+        : summary.isComplete
+            ? onStartNextRound
+            : onOpenTables;
+
     return Container(
-      padding: const EdgeInsets.all(12),
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.82),
+        color: colorScheme.surface.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          StatusChip(label: 'Tournament Live', tone: StatusChipTone.success),
+          const SizedBox(height: 10),
           Text(
-            'Scoring Phase',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
+            title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
                 ),
           ),
-          const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SegmentedButton<EventScoringPhase>(
-              selected: {currentPhase},
-              showSelectedIcon: false,
-              onSelectionChanged: isSubmitting
-                  ? null
-                  : (selection) => onChanged(selection.single),
-              segments: const [
-                ButtonSegment(
-                  value: EventScoringPhase.qualification,
-                  label: Text('Qualification'),
+          const SizedBox(height: 6),
+          Text(
+            progress,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-                ButtonSegment(
-                  value: EventScoringPhase.tournament,
-                  label: Text('Tournament'),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            detail,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
-                ButtonSegment(
-                  value: EventScoringPhase.bonus,
-                  label: Text('Bonus'),
-                ),
-              ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: isBusy ? null : callback,
+              icon: Icon(actionIcon),
+              label: Text(actionLabel),
             ),
           ),
+          if (round != null && summary.isComplete) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: isBusy ? null : onBeginFinals,
+                icon: const Icon(Icons.emoji_events),
+                label: const Text('Begin Finals'),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1163,6 +1254,7 @@ class _LiveStatusRow extends StatelessWidget {
     required this.phaseLabel,
     required this.phaseTone,
     required this.showPhase,
+    required this.showOperationalFlags,
     required this.checkinOpen,
     required this.scoringOpen,
   });
@@ -1170,6 +1262,7 @@ class _LiveStatusRow extends StatelessWidget {
   final String phaseLabel;
   final StatusChipTone phaseTone;
   final bool showPhase;
+  final bool showOperationalFlags;
   final bool checkinOpen;
   final bool scoringOpen;
 
@@ -1180,14 +1273,16 @@ class _LiveStatusRow extends StatelessWidget {
       runSpacing: 8,
       children: [
         if (showPhase) StatusChip(label: phaseLabel, tone: phaseTone),
-        StatusChip(
-          label: scoringOpen ? 'Scoring Open' : 'Scoring Not Open',
-          tone: scoringOpen ? StatusChipTone.success : StatusChipTone.warning,
-        ),
-        StatusChip(
-          label: checkinOpen ? 'Check-In Open' : 'Check-In Not Open',
-          tone: checkinOpen ? StatusChipTone.success : StatusChipTone.warning,
-        ),
+        if (showOperationalFlags) ...[
+          StatusChip(
+            label: scoringOpen ? 'Scoring Open' : 'Scoring Not Open',
+            tone: scoringOpen ? StatusChipTone.success : StatusChipTone.warning,
+          ),
+          StatusChip(
+            label: checkinOpen ? 'Check-In Open' : 'Check-In Not Open',
+            tone: checkinOpen ? StatusChipTone.success : StatusChipTone.warning,
+          ),
+        ],
       ],
     );
   }
@@ -1411,7 +1506,6 @@ class _EventOptionsSection extends StatelessWidget {
     required this.lifecycleStatus,
     required this.isSubmitting,
     required this.onSeating,
-    required this.onBonusRound,
     required this.onActivity,
     required this.onHandLedger,
     required this.onDelete,
@@ -1424,7 +1518,6 @@ class _EventOptionsSection extends StatelessWidget {
   final EventLifecycleStatus lifecycleStatus;
   final bool isSubmitting;
   final VoidCallback onSeating;
-  final VoidCallback onBonusRound;
   final VoidCallback onActivity;
   final VoidCallback onHandLedger;
   final VoidCallback onDelete;
@@ -1436,10 +1529,12 @@ class _EventOptionsSection extends StatelessWidget {
   bool get _showsSeatingPrepAction {
     return switch (lifecycleStatus) {
       EventLifecycleStatus.draft ||
-      EventLifecycleStatus.active ||
       EventLifecycleStatus.completed =>
         true,
-      EventLifecycleStatus.finalized || EventLifecycleStatus.cancelled => false,
+      EventLifecycleStatus.active ||
+      EventLifecycleStatus.finalized ||
+      EventLifecycleStatus.cancelled =>
+        false,
     };
   }
 
@@ -1462,11 +1557,6 @@ class _EventOptionsSection extends StatelessWidget {
           children: [
             if (_showsSeatingPrepAction)
               UtilityActionButton(label: 'Seating', onPressed: onSeating),
-            if (lifecycleStatus == EventLifecycleStatus.active)
-              UtilityActionButton(
-                label: 'Create Bonus Round',
-                onPressed: onBonusRound,
-              ),
             UtilityActionButton(label: 'Activity', onPressed: onActivity),
             UtilityActionButton(
               label: 'Hand Ledger',

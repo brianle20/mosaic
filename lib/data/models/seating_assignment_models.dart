@@ -23,6 +23,7 @@ class SeatingAssignmentRecord {
     required this.assignmentRound,
     required this.status,
     this.assignmentType = SeatingAssignmentType.random,
+    this.tournamentRoundId,
     this.bonusRoundId,
     this.bonusTableRole,
     this.seedRank,
@@ -45,6 +46,7 @@ class SeatingAssignmentRecord {
       assignmentType: _assignmentTypeFromJson(
         _stringOrDefault(json, 'assignment_type', 'random'),
       ),
+      tournamentRoundId: _optionalString(json, 'tournament_round_id'),
       bonusRoundId: _optionalString(json, 'bonus_round_id'),
       bonusTableRole: _optionalBonusTableRole(json, 'bonus_table_role'),
       seedRank: _optionalInt(json, 'seed_rank'),
@@ -61,6 +63,7 @@ class SeatingAssignmentRecord {
   final int assignmentRound;
   final String status;
   final SeatingAssignmentType assignmentType;
+  final String? tournamentRoundId;
   final String? bonusRoundId;
   final BonusTableRole? bonusTableRole;
   final int? seedRank;
@@ -77,6 +80,7 @@ class SeatingAssignmentRecord {
       'assignment_round': assignmentRound,
       'status': status,
       'assignment_type': _assignmentTypeToJson(assignmentType),
+      'tournament_round_id': tournamentRoundId,
       'bonus_round_id': bonusRoundId,
       'bonus_table_role': bonusTableRole == null
           ? null

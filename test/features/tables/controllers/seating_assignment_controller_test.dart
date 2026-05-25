@@ -40,7 +40,7 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
-    required String redemptionTableId,
+    String? redemptionTableId,
   }) {
     throw UnimplementedError();
   }

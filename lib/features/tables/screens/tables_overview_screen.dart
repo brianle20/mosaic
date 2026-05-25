@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/table_list_controller.dart';
 import 'package:mosaic/features/tables/models/table_overview_card_data.dart';
@@ -22,6 +24,7 @@ class TablesOverviewScreen extends StatefulWidget {
     required this.tableRepository,
     required this.sessionRepository,
     required this.guestRepository,
+    this.seatingRepository,
     this.now,
   });
 
@@ -32,6 +35,7 @@ class TablesOverviewScreen extends StatefulWidget {
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
   final GuestRepository guestRepository;
+  final SeatingRepository? seatingRepository;
   final DateTime Function()? now;
 
   @override
@@ -49,6 +53,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       tableRepository: widget.tableRepository,
       sessionRepository: widget.sessionRepository,
       guestRepository: widget.guestRepository,
+      seatingRepository: widget.seatingRepository,
       now: widget.now,
     )
       ..addListener(_handleUpdate)
@@ -102,6 +107,38 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       ),
     );
     await _controller.load(widget.eventId);
+  }
+
+  Future<void> _enterCurrentRoundTable(EventTableRecord table) async {
+    await Navigator.of(context).pushNamed(
+      AppRouter.startSessionRoute,
+      arguments: StartSessionArgs(
+        eventId: widget.eventId,
+        table: table,
+        scoringPhase: EventScoringPhase.tournament,
+        allowAssignedTableEntry: true,
+      ),
+    );
+    await _controller.load(widget.eventId);
+  }
+
+  Future<void> _startNextRound() async {
+    final assignments =
+        await _controller.startNextTournamentRound(widget.eventId);
+    if (!mounted || assignments == null) {
+      return;
+    }
+
+    if (assignments.isNotEmpty) {
+      await Navigator.of(context).pushNamed(
+        AppRouter.seatingAssignmentsRoute,
+        arguments: SeatingAssignmentsArgs(
+          eventId: widget.eventId,
+          initialAssignments: assignments,
+        ),
+      );
+      await _controller.load(widget.eventId);
+    }
   }
 
   Future<void> _openSessionHistory(EventTableRecord table) async {
@@ -200,7 +237,25 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               ),
             ],
             const SizedBox(height: 16),
-            for (final cardData in _controller.cards) _buildTableCard(cardData),
+            if (_controller.tournamentRoundSummary.hasCurrentRound) ...[
+              _buildCurrentRoundStatusBoard(_controller.tournamentRoundSummary),
+              const SizedBox(height: 16),
+            ],
+            if (_controller.currentRoundCards.isNotEmpty) ...[
+              _buildSectionHeader('Current Round'),
+              const SizedBox(height: 8),
+              for (final cardData in _controller.currentRoundCards)
+                _buildCurrentRoundTableCard(cardData),
+              if (_controller.otherCards.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                _buildSectionHeader('Other Tables'),
+                const SizedBox(height: 8),
+                for (final cardData in _controller.otherCards)
+                  _buildTableCard(cardData),
+              ],
+            ] else
+              for (final cardData in _controller.cards)
+                _buildTableCard(cardData),
             if (_controller.tables.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 24),
@@ -216,6 +271,233 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildCurrentRoundStatusBoard(TournamentRoundSummary summary) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final round = summary.round;
+    final inProgress = summary.activeTableCount + summary.pausedTableCount;
+    return AppListSurface(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  round == null
+                      ? 'Tournament Round'
+                      : 'Round ${round.roundNumber}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+              ),
+              StatusChip(
+                label: summary.isComplete ? 'Complete' : 'In Progress',
+                tone: summary.isComplete
+                    ? StatusChipTone.success
+                    : StatusChipTone.info,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildRoundMetric(
+                '${summary.completeTableCount} Complete',
+                StatusChipTone.success,
+              ),
+              _buildRoundMetric(
+                '$inProgress In Progress',
+                inProgress == 0 ? StatusChipTone.neutral : StatusChipTone.info,
+              ),
+              _buildRoundMetric(
+                '${summary.notStartedTableCount} Not Started',
+                summary.notStartedTableCount == 0
+                    ? StatusChipTone.neutral
+                    : StatusChipTone.warning,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _roundProgressLabel(summary),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          if (!widget.readOnly && widget.scoringOpen && summary.isComplete) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed:
+                    _controller.isStartingNextRound ? null : _startNextRound,
+                icon: const Icon(Icons.skip_next),
+                label: const Text('Start Next Round'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _roundProgressLabel(TournamentRoundSummary summary) {
+    final tableLabel = summary.assignedTableCount == 1 ? 'table' : 'tables';
+    return '${summary.completeTableCount} / '
+        '${summary.assignedTableCount} $tableLabel complete';
+  }
+
+  Widget _buildRoundMetric(String label, StatusChipTone tone) {
+    return StatusChip(label: label, tone: tone);
+  }
+
+  Widget _buildSectionHeader(String label) {
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0,
+          ),
+    );
+  }
+
+  Widget _buildCurrentRoundTableCard(TableOverviewCardData cardData) {
+    final roundTable = cardData.currentRoundSummary;
+    if (roundTable == null) {
+      return _buildTableCard(cardData);
+    }
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final players = [...roundTable.assignedPlayers]
+      ..sort((left, right) => left.seatIndex.compareTo(right.seatIndex));
+    final playersLabel = players.isEmpty
+        ? 'No assigned players'
+        : players.map((player) => player.displayName).join(', ');
+    final sessionId =
+        roundTable.activeSessionId ?? roundTable.latestEndedSessionId;
+    final action = _currentRoundAction(roundTable);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AppListSurface(
+        key: ValueKey('table-card-${cardData.table.id}'),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    cardData.table.label,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                StatusChip(
+                  label: _roundTableStatusLabel(roundTable.status),
+                  tone: _roundTableStatusTone(roundTable.status),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              playersLabel,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _sessionHandLabel(cardData.currentRoundHandCount),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            if (_shouldShowCurrentRoundLiveMeta(roundTable, cardData)) ...[
+              const SizedBox(height: 8),
+              _buildCurrentRoundLiveMeta(cardData.liveSummary!),
+            ],
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                FilledButton(
+                  onPressed: action == _CurrentRoundAction.enter
+                      ? () => _enterCurrentRoundTable(cardData.table)
+                      : sessionId == null
+                          ? null
+                          : () => _openSessionDetail(sessionId),
+                  child: Text(_currentRoundActionLabel(action)),
+                ),
+                const Spacer(),
+                if (_controller.sessionsForTable(cardData.table.id).isNotEmpty)
+                  OutlinedButton.icon(
+                    onPressed: () => _openSessionHistory(cardData.table),
+                    icon: const Icon(Icons.history),
+                    label: const Text('History'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _shouldShowCurrentRoundLiveMeta(
+    TournamentRoundTableSummary roundTable,
+    TableOverviewCardData cardData,
+  ) {
+    return cardData.liveSummary != null &&
+        (roundTable.status == TournamentRoundTableStatus.active ||
+            roundTable.status == TournamentRoundTableStatus.paused);
+  }
+
+  Widget _buildCurrentRoundLiveMeta(LiveTableSummary summary) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final dealer = _currentDealerSeat(summary);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        if (summary.showRoundTimer)
+          StatusChip(
+            label: summary.roundTimeLabel,
+            tone: _roundTimeTone(summary),
+          ),
+        if (dealer != null)
+          Text(
+            '${dealer.windLabel} · ${dealer.guestName}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+      ],
+    );
+  }
+
+  SeatSummary? _currentDealerSeat(LiveTableSummary summary) {
+    for (final seat in summary.seats) {
+      if (seat.isDealer) {
+        return seat;
+      }
+    }
+    return null;
   }
 
   Widget _buildTableCard(TableOverviewCardData cardData) {
@@ -585,6 +867,46 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     };
   }
 
+  _CurrentRoundAction _currentRoundAction(
+    TournamentRoundTableSummary roundTable,
+  ) {
+    return switch (roundTable.status) {
+      TournamentRoundTableStatus.active => _CurrentRoundAction.open,
+      TournamentRoundTableStatus.paused => _CurrentRoundAction.open,
+      TournamentRoundTableStatus.complete => _CurrentRoundAction.view,
+      TournamentRoundTableStatus.notStarted => _CurrentRoundAction.enter,
+      TournamentRoundTableStatus.other => _CurrentRoundAction.view,
+    };
+  }
+
+  String _currentRoundActionLabel(_CurrentRoundAction action) {
+    return switch (action) {
+      _CurrentRoundAction.open => 'Open Session',
+      _CurrentRoundAction.view => 'View Session',
+      _CurrentRoundAction.enter => 'Enter Table',
+    };
+  }
+
+  String _roundTableStatusLabel(TournamentRoundTableStatus status) {
+    return switch (status) {
+      TournamentRoundTableStatus.active => 'Active',
+      TournamentRoundTableStatus.paused => 'Paused',
+      TournamentRoundTableStatus.complete => 'Complete',
+      TournamentRoundTableStatus.notStarted => 'Not Started',
+      TournamentRoundTableStatus.other => 'Other',
+    };
+  }
+
+  StatusChipTone _roundTableStatusTone(TournamentRoundTableStatus status) {
+    return switch (status) {
+      TournamentRoundTableStatus.active => StatusChipTone.info,
+      TournamentRoundTableStatus.paused => StatusChipTone.warning,
+      TournamentRoundTableStatus.complete => StatusChipTone.success,
+      TournamentRoundTableStatus.notStarted => StatusChipTone.warning,
+      TournamentRoundTableStatus.other => StatusChipTone.neutral,
+    };
+  }
+
   String _sessionHistorySubtitle(TableSessionRecord session) {
     return '${_sessionStatusLabel(session.status)} · '
         '${_sessionHandLabel(session.handCount)}';
@@ -620,4 +942,10 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     }
     return StatusChipTone.neutral;
   }
+}
+
+enum _CurrentRoundAction {
+  open,
+  view,
+  enter,
 }

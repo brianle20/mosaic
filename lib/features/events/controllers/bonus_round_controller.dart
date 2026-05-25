@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -7,7 +8,7 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 const bonusRoundLiveSessionBlockedMessage =
     'End active or paused sessions first.';
 const bonusRoundMinimumPlayersMessage =
-    'At least eight ranked players are required.';
+    'At least 2 standings-eligible players are required for Table of Champions.';
 
 enum BonusRoundTableRole {
   champions,
@@ -43,6 +44,8 @@ class BonusRoundController extends ChangeNotifier {
   EventTableRecord? championsTable;
   EventTableRecord? redemptionTable;
 
+  bool get redemptionRequired => redemptionSeats.isNotEmpty;
+
   List<EventTableRecord> get readyTables {
     return tables
         .where((table) => table.nfcTagId != null)
@@ -52,10 +55,9 @@ class BonusRoundController extends ChangeNotifier {
   bool get canCreateBonusRound {
     return !hasLiveSessions &&
         !hasCreatedBonusRound &&
-        championSeats.length == 4 &&
-        redemptionSeats.length == 4 &&
+        championSeats.length >= 2 &&
         championsTable != null &&
-        redemptionTable != null;
+        (!redemptionRequired || redemptionTable != null);
   }
 
   Future<void> load(String eventId) async {
@@ -72,10 +74,16 @@ class BonusRoundController extends ChangeNotifier {
       final leaderboard = await _leaderboardRepository.loadLeaderboard(eventId);
       final loadedTables = await _tableRepository.listTables(eventId);
       final sessions = await _sessionRepository.listSessions(eventId);
+      final tournamentRoundSummary =
+          await _seatingRepository.loadTournamentRoundSummary(eventId);
+      final eligibleEntries = _standingsEligibleEntries(leaderboard);
       tables = loadedTables;
-      championSeats = _championSeats(leaderboard);
-      redemptionSeats = _redemptionSeats(leaderboard);
-      hasLiveSessions = _hasLiveSessions(sessions);
+      championSeats = _championSeats(eligibleEntries);
+      redemptionSeats = _redemptionSeats(eligibleEntries);
+      hasLiveSessions = _hasBlockingLiveSessions(
+        sessions,
+        tournamentRoundSummary.round?.id,
+      );
     } catch (exception) {
       error = exception.toString();
     }
@@ -139,31 +147,44 @@ class BonusRoundController extends ChangeNotifier {
     }
 
     final sessions = await _sessionRepository.listSessions(eventId);
-    hasLiveSessions = _hasLiveSessions(sessions);
+    final tournamentRoundSummary =
+        await _seatingRepository.loadTournamentRoundSummary(eventId);
+    hasLiveSessions = _hasBlockingLiveSessions(
+      sessions,
+      tournamentRoundSummary.round?.id,
+    );
     if (hasLiveSessions) {
       actionError = bonusRoundLiveSessionBlockedMessage;
       notifyListeners();
       return false;
     }
 
-    if (championSeats.length != 4 || redemptionSeats.length != 4) {
+    if (championSeats.length < 2) {
       actionError = bonusRoundMinimumPlayersMessage;
       notifyListeners();
       return false;
     }
 
     final selectedChampionsTable = championsTable;
-    final selectedRedemptionTable = redemptionTable;
-    if (selectedChampionsTable == null || selectedRedemptionTable == null) {
-      actionError = 'Choose both bonus round tables.';
+    if (selectedChampionsTable == null) {
+      actionError = 'Choose Table of Champions.';
       notifyListeners();
       return false;
     }
 
-    if (selectedChampionsTable.id == selectedRedemptionTable.id) {
-      actionError = 'Bonus round tables must be different.';
-      notifyListeners();
-      return false;
+    final selectedRedemptionTable = redemptionRequired ? redemptionTable : null;
+    if (redemptionRequired) {
+      if (selectedRedemptionTable == null) {
+        actionError = 'Choose Table of Redemption.';
+        notifyListeners();
+        return false;
+      }
+
+      if (selectedChampionsTable.id == selectedRedemptionTable.id) {
+        actionError = 'Finals tables must be different.';
+        notifyListeners();
+        return false;
+      }
     }
 
     isSubmitting = true;
@@ -174,7 +195,7 @@ class BonusRoundController extends ChangeNotifier {
       await _seatingRepository.generateBonusRoundAssignments(
         eventId: eventId,
         championsTableId: selectedChampionsTable.id,
-        redemptionTableId: selectedRedemptionTable.id,
+        redemptionTableId: selectedRedemptionTable?.id,
       );
       hasCreatedBonusRound = true;
       isSubmitting = false;
@@ -189,31 +210,81 @@ class BonusRoundController extends ChangeNotifier {
   }
 
   List<BonusRoundSeatPreview> _championSeats(List<LeaderboardEntry> entries) {
-    if (entries.length < 8) {
+    if (entries.length < 2) {
       return const [];
     }
 
     final ranked = _rankedEntries(entries);
-    return [
-      _seatPreview('East', ranked[3]),
-      _seatPreview('South', ranked[2]),
-      _seatPreview('West', ranked[1]),
-      _seatPreview('North', ranked[0]),
-    ];
+    final finalists = ranked.take(4).toList(growable: false);
+    return _finalsSeatPreviews(finalists);
   }
 
   List<BonusRoundSeatPreview> _redemptionSeats(List<LeaderboardEntry> entries) {
-    if (entries.length < 8) {
+    if (entries.length < 6) {
       return const [];
     }
 
     final ranked = _rankedEntries(entries);
-    final bottom = ranked.sublist(ranked.length - 4);
+    final remainingFinalists = ranked.skip(4).take(4).toList(growable: false);
+    return _redemptionSeatPreviews(remainingFinalists);
+  }
+
+  List<LeaderboardEntry> _standingsEligibleEntries(
+    List<LeaderboardEntry> entries,
+  ) {
+    final minimumHands = _minimumHandsForPrize(entries);
+    if (minimumHands <= 0) {
+      return const [];
+    }
+    return entries
+        .where((entry) => entry.handsPlayed >= minimumHands)
+        .toList(growable: false);
+  }
+
+  int _minimumHandsForPrize(List<LeaderboardEntry> entries) {
+    final scoredHands = entries
+        .map((entry) => entry.handsPlayed)
+        .where((handsPlayed) => handsPlayed > 0)
+        .toList()
+      ..sort();
+    if (scoredHands.isEmpty) {
+      return 0;
+    }
+
+    final midpoint = scoredHands.length ~/ 2;
+    final medianHands = scoredHands.length.isOdd
+        ? scoredHands[midpoint].toDouble()
+        : (scoredHands[midpoint - 1] + scoredHands[midpoint]) / 2;
+    final minimumHands = (medianHands * 0.5).ceil();
+    return minimumHands < 1 ? 1 : minimumHands;
+  }
+
+  List<BonusRoundSeatPreview> _finalsSeatPreviews(
+    List<LeaderboardEntry> entries,
+  ) {
+    if (entries.length == 4) {
+      return [
+        _seatPreview('East', entries[3]),
+        _seatPreview('South', entries[2]),
+        _seatPreview('West', entries[1]),
+        _seatPreview('North', entries[0]),
+      ];
+    }
+
+    const windsByRank = ['East', 'South', 'West'];
     return [
-      _seatPreview('East', bottom[0]),
-      _seatPreview('South', bottom[1]),
-      _seatPreview('West', bottom[2]),
-      _seatPreview('North', bottom[3]),
+      for (var index = 0; index < entries.length; index += 1)
+        _seatPreview(windsByRank[index], entries[index]),
+    ];
+  }
+
+  List<BonusRoundSeatPreview> _redemptionSeatPreviews(
+    List<LeaderboardEntry> entries,
+  ) {
+    const windsByRank = ['East', 'South', 'West', 'North'];
+    return [
+      for (var index = 0; index < entries.length; index += 1)
+        _seatPreview(windsByRank[index], entries[index]),
     ];
   }
 
@@ -227,7 +298,11 @@ class BonusRoundController extends ChangeNotifier {
         if (pointsCompare != 0) {
           return pointsCompare;
         }
-        return left.displayName.compareTo(right.displayName);
+        final nameCompare = left.displayName.compareTo(right.displayName);
+        if (nameCompare != 0) {
+          return nameCompare;
+        }
+        return left.eventGuestId.compareTo(right.eventGuestId);
       });
   }
 
@@ -236,6 +311,7 @@ class BonusRoundController extends ChangeNotifier {
     LeaderboardEntry entry,
   ) {
     return BonusRoundSeatPreview(
+      eventGuestId: entry.eventGuestId,
       windLabel: windLabel,
       seedLabel: '#${entry.rank}',
       playerName: entry.displayName,
@@ -243,11 +319,20 @@ class BonusRoundController extends ChangeNotifier {
     );
   }
 
-  bool _hasLiveSessions(List<TableSessionRecord> sessions) {
+  bool _hasBlockingLiveSessions(
+    List<TableSessionRecord> sessions,
+    String? currentTournamentRoundId,
+  ) {
+    if (currentTournamentRoundId == null) {
+      return false;
+    }
+
     return sessions.any(
       (session) =>
-          session.status == SessionStatus.active ||
-          session.status == SessionStatus.paused,
+          (session.status == SessionStatus.active ||
+              session.status == SessionStatus.paused) &&
+          session.scoringPhase == EventScoringPhase.tournament &&
+          session.tournamentRoundId == currentTournamentRoundId,
     );
   }
 
@@ -264,12 +349,14 @@ class BonusRoundController extends ChangeNotifier {
 @immutable
 class BonusRoundSeatPreview {
   const BonusRoundSeatPreview({
+    required this.eventGuestId,
     required this.windLabel,
     required this.seedLabel,
     required this.playerName,
     required this.totalPoints,
   });
 
+  final String eventGuestId;
   final String windLabel;
   final String seedLabel;
   final String playerName;

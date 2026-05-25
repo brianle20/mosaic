@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/supabase_seating_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -136,6 +137,32 @@ void main() {
       expect(cached.single.bonusTableRole, BonusTableRole.tableOfChampions);
     });
 
+    test('allows bonus round assignments without a redemption table', () async {
+      final calls = <({String functionName, Map<String, dynamic> params})>[];
+      final cache = await LocalCache.create();
+      final repository = SupabaseSeatingRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcListRunner: (functionName, params) async {
+          calls.add((functionName: functionName, params: params));
+          return const [];
+        },
+      );
+
+      await repository.generateBonusRoundAssignments(
+        eventId: 'evt_01',
+        championsTableId: 'tbl_champions',
+      );
+
+      expect(calls.single.functionName,
+          'generate_bonus_round_seating_assignments');
+      expect(calls.single.params, {
+        'target_event_id': 'evt_01',
+        'champions_table_id': 'tbl_champions',
+        'redemption_table_id': null,
+      });
+    });
+
     test('clears assignments through RPC and clears cache on empty result',
         () async {
       final calls = <({String functionName, Map<String, dynamic> params})>[];
@@ -158,6 +185,86 @@ void main() {
       expect(calls.single.params, {'target_event_id': 'evt_01'});
       expect(assignments, isEmpty);
       expect(await repository.readCachedAssignments('evt_01'), isEmpty);
+    });
+
+    test('loads tournament round summary through RPC and refreshes cache',
+        () async {
+      final calls = <({String functionName, Map<String, dynamic> params})>[];
+      final cache = await LocalCache.create();
+      final repository = SupabaseSeatingRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcJsonRunner: (functionName, params) async {
+          calls.add((functionName: functionName, params: params));
+          return {
+            'round': {
+              'id': 'rnd_01',
+              'event_id': 'evt_01',
+              'round_number': 1,
+              'scoring_phase': 'tournament',
+              'status': 'seating',
+              'assignment_round': 3,
+              'started_at': '2026-05-24T19:00:00-07:00',
+              'completed_at': null,
+            },
+            'assigned_table_count': 1,
+            'complete_table_count': 0,
+            'active_table_count': 0,
+            'paused_table_count': 0,
+            'not_started_table_count': 1,
+            'current_round_tables': const [],
+            'other_tables': const [],
+          };
+        },
+      );
+
+      final summary = await repository.loadTournamentRoundSummary('evt_01');
+
+      expect(calls.single.functionName, 'get_tournament_round_summary');
+      expect(calls.single.params, {'target_event_id': 'evt_01'});
+      expect(summary.round!.id, 'rnd_01');
+      expect(summary.round!.status, TournamentRoundStatus.seating);
+
+      final cached =
+          await repository.readCachedTournamentRoundSummary('evt_01');
+      expect(cached!.round!.assignmentRound, 3);
+    });
+
+    test(
+        'generates tournament round through RPC and refreshes assignments cache',
+        () async {
+      final calls = <({String functionName, Map<String, dynamic> params})>[];
+      final cache = await LocalCache.create();
+      final repository = SupabaseSeatingRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcListRunner: (functionName, params) async {
+          calls.add((functionName: functionName, params: params));
+          return [
+            {
+              'id': 'asg_round_01',
+              'event_id': 'evt_01',
+              'event_table_id': 'tbl_01',
+              'table_label': 'Table 1',
+              'event_guest_id': 'gst_01',
+              'guest_display_name': 'Alice Wong',
+              'seat_index': 0,
+              'assignment_round': 3,
+              'status': 'active',
+              'tournament_round_id': 'rnd_01',
+            },
+          ];
+        },
+      );
+
+      final assignments = await repository.generateTournamentRound('evt_01');
+
+      expect(calls.single.functionName, 'generate_tournament_round');
+      expect(calls.single.params, {'target_event_id': 'evt_01'});
+      expect(assignments.single.tournamentRoundId, 'rnd_01');
+
+      final cached = await repository.readCachedAssignments('evt_01');
+      expect(cached.single.tournamentRoundId, 'rnd_01');
     });
   });
 }

@@ -268,13 +268,26 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
                   assignment == null
-                      ? (guest.isCheckedIn
-                          ? 'This guest is ready for a player tag.'
-                          : 'This guest is ready to check in and receive a player tag.')
+                      ? _tagPromptForGuest(guest)
                       : 'This guest already has a player tag. Replace it only if needed.',
                 ),
               ),
-              if (!guest.isCheckedIn && assignment == null)
+              if (!guest.isCheckedIn &&
+                  assignment == null &&
+                  guest.tournamentStatus == EventTournamentStatus.openPlayOnly)
+                FilledButton(
+                  onPressed: _controller.isSubmitting
+                      ? null
+                      : () => _controller.checkIn(
+                            guestId: widget.guestId,
+                          ),
+                  child: Text(
+                    _controller.isSubmitting ? 'Saving...' : 'Check In',
+                  ),
+                ),
+              if (!guest.isCheckedIn &&
+                  assignment == null &&
+                  guest.tournamentStatus != EventTournamentStatus.openPlayOnly)
                 FilledButton(
                   onPressed: _controller.isSubmitting
                       ? null
@@ -345,6 +358,16 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
       return 'Tag: $label - UID ${assignment.tag.uidHex}';
     }
     return 'UID: ${assignment.tag.uidHex}';
+  }
+
+  String _tagPromptForGuest(EventGuestRecord guest) {
+    if (guest.isCheckedIn) {
+      return 'This guest is ready for a player tag.';
+    }
+    if (guest.tournamentStatus == EventTournamentStatus.openPlayOnly) {
+      return 'This guest can check in for open play without a tag.';
+    }
+    return 'This guest is ready to check in and receive a player tag.';
   }
 
   String _formatMoneyCents(int cents) {

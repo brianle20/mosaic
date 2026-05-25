@@ -9,6 +9,7 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/table_scan_models.dart';
+import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
 
@@ -59,6 +60,7 @@ class EventDashboardController extends ChangeNotifier {
   final TableRepository? _tableRepository;
   SessionRepository? _sessionRepository;
   SeatingRepository? _seatingRepository;
+  int _stateRequestToken = 0;
 
   bool isLoading = true;
   bool isSubmittingLifecycle = false;
@@ -76,8 +78,11 @@ class EventDashboardController extends ChangeNotifier {
   String leaderLabel = 'No scores';
   List<QualificationLeaderboardRow> qualificationLeaderboard = const [];
   BonusRoundResultsSummary bonusRoundResults = const BonusRoundResultsSummary();
+  TournamentRoundSummary tournamentRoundSummary =
+      TournamentRoundSummary.empty();
 
   Future<void> load(String eventId) async {
+    final requestToken = _beginStateRequest();
     final cachedEvent = (await _eventRepository.readCachedEvents())
         .where((record) => record.id == eventId)
         .firstOrNull;
@@ -91,6 +96,11 @@ class EventDashboardController extends ChangeNotifier {
     final cachedPrizePlan = await _prizeRepository?.readCachedPrizePlan(
       eventId,
     );
+    final cachedTournamentRoundSummary =
+        await _readCachedTournamentRoundSummary(eventId);
+    if (!_isCurrentStateRequest(requestToken)) {
+      return;
+    }
 
     isLoading = true;
     error = null;
@@ -105,12 +115,20 @@ class EventDashboardController extends ChangeNotifier {
       ledgerEntries: cachedLedger ?? const [],
       leaderboardEntries: cachedLeaderboard ?? const [],
     );
+    tournamentRoundSummary = cachedTournamentRoundSummary;
     prizePoolCents = _totalPrizeCents(cachedPrizePlan);
     notifyListeners();
 
     try {
-      event = await _eventRepository.getEvent(eventId) ?? event;
+      final loadedEvent = await _eventRepository.getEvent(eventId);
+      if (!_isCurrentStateRequest(requestToken)) {
+        return;
+      }
+      event = loadedEvent ?? event;
     } catch (exception) {
+      if (!_isCurrentStateRequest(requestToken)) {
+        return;
+      }
       if (event == null) {
         error = exception.toString();
       }
@@ -118,15 +136,26 @@ class EventDashboardController extends ChangeNotifier {
 
     try {
       final remoteGuests = await _guestRepository.listGuests(eventId);
+      if (!_isCurrentStateRequest(requestToken)) {
+        return;
+      }
       _updateGuestSummaries(remoteGuests);
     } catch (exception) {
+      if (!_isCurrentStateRequest(requestToken)) {
+        return;
+      }
       if (event == null && guestCount == 0) {
         error ??= exception.toString();
       }
     }
 
     try {
-      tableCount = (await _tableRepository?.listTables(eventId))?.length ?? 0;
+      final remoteTableCount =
+          (await _tableRepository?.listTables(eventId))?.length ?? 0;
+      if (!_isCurrentStateRequest(requestToken)) {
+        return;
+      }
+      tableCount = remoteTableCount;
     } catch (_) {
       // Table count is a dashboard shortcut only; keep event loading usable.
     }
@@ -135,9 +164,14 @@ class EventDashboardController extends ChangeNotifier {
       final leaderboard = await _leaderboardRepository?.loadLeaderboard(
         eventId,
       );
-      leaderLabel = _formatLeader(leaderboard);
+      final loadedLeaderLabel = _formatLeader(leaderboard);
+      final ledger = await _loadBonusLedger(eventId);
+      if (!_isCurrentStateRequest(requestToken)) {
+        return;
+      }
+      leaderLabel = loadedLeaderLabel;
       bonusRoundResults = buildBonusRoundResultsSummary(
-        ledgerEntries: await _loadBonusLedger(eventId),
+        ledgerEntries: ledger,
         leaderboardEntries: leaderboard ?? const [],
       );
     } catch (_) {
@@ -145,22 +179,55 @@ class EventDashboardController extends ChangeNotifier {
     }
 
     try {
-      prizePoolCents = _totalPrizeCents(
-        await _prizeRepository?.loadPrizePlan(eventId: eventId),
-      );
+      final prizePlan = await _prizeRepository?.loadPrizePlan(eventId: eventId);
+      if (!_isCurrentStateRequest(requestToken)) {
+        return;
+      }
+      prizePoolCents = _totalPrizeCents(prizePlan);
     } catch (_) {
       // Prize setup is a dashboard summary only; keep event loading usable.
     }
 
+    final loadedTournamentRoundSummary =
+        await _loadTournamentRoundSummary(eventId);
+    if (!_isCurrentStateRequest(requestToken)) {
+      return;
+    }
+    tournamentRoundSummary = loadedTournamentRoundSummary;
+
     try {
-      qualificationLeaderboard = await _guestRepository
+      final loadedQualificationLeaderboard = await _guestRepository
           .fetchQualificationLeaderboard(eventId: eventId);
+      if (!_isCurrentStateRequest(requestToken)) {
+        return;
+      }
+      qualificationLeaderboard = loadedQualificationLeaderboard;
     } catch (_) {
+      if (!_isCurrentStateRequest(requestToken)) {
+        return;
+      }
       qualificationLeaderboard = const [];
     }
 
+    if (!_isCurrentStateRequest(requestToken)) {
+      return;
+    }
     isLoading = false;
     notifyListeners();
+  }
+
+  int _beginStateRequest() {
+    _stateRequestToken += 1;
+    return _stateRequestToken;
+  }
+
+  bool _isCurrentStateRequest(int requestToken) {
+    return requestToken == _stateRequestToken;
+  }
+
+  void _beginHostMutation() {
+    _stateRequestToken += 1;
+    isLoading = false;
   }
 
   void _updateGuestSummaries(List<EventGuestRecord> guests) {
@@ -241,12 +308,37 @@ class EventDashboardController extends ChangeNotifier {
     }
   }
 
+  Future<TournamentRoundSummary> _readCachedTournamentRoundSummary(
+    String eventId,
+  ) async {
+    try {
+      return await _seatingRepository?.readCachedTournamentRoundSummary(
+            eventId,
+          ) ??
+          TournamentRoundSummary.empty();
+    } catch (_) {
+      return TournamentRoundSummary.empty();
+    }
+  }
+
+  Future<TournamentRoundSummary> _loadTournamentRoundSummary(
+    String eventId,
+  ) async {
+    try {
+      return await _seatingRepository?.loadTournamentRoundSummary(eventId) ??
+          TournamentRoundSummary.empty();
+    } catch (_) {
+      return _readCachedTournamentRoundSummary(eventId);
+    }
+  }
+
   Future<void> completeEvent() async {
     final currentEvent = event;
     if (currentEvent == null || isSubmittingLifecycle) {
       return;
     }
 
+    _beginHostMutation();
     isSubmittingLifecycle = true;
     lifecycleError = null;
     notifyListeners();
@@ -267,6 +359,7 @@ class EventDashboardController extends ChangeNotifier {
       return;
     }
 
+    _beginHostMutation();
     isSubmittingLifecycle = true;
     lifecycleError = null;
     notifyListeners();
@@ -287,6 +380,7 @@ class EventDashboardController extends ChangeNotifier {
       return;
     }
 
+    _beginHostMutation();
     isSubmittingLifecycle = true;
     lifecycleError = null;
     notifyListeners();
@@ -307,6 +401,7 @@ class EventDashboardController extends ChangeNotifier {
       return;
     }
 
+    _beginHostMutation();
     isSubmittingLifecycle = true;
     lifecycleError = null;
     notifyListeners();
@@ -327,6 +422,7 @@ class EventDashboardController extends ChangeNotifier {
       return false;
     }
 
+    _beginHostMutation();
     isSubmittingLifecycle = true;
     lifecycleError = null;
     notifyListeners();
@@ -365,6 +461,7 @@ class EventDashboardController extends ChangeNotifier {
       return;
     }
 
+    _beginHostMutation();
     isSubmittingLifecycle = true;
     lifecycleError = null;
     notifyListeners();
@@ -388,6 +485,7 @@ class EventDashboardController extends ChangeNotifier {
       return;
     }
 
+    _beginHostMutation();
     isSubmittingLifecycle = true;
     lifecycleError = null;
     notifyListeners();
@@ -412,6 +510,7 @@ class EventDashboardController extends ChangeNotifier {
       return;
     }
 
+    _beginHostMutation();
     isSubmittingLifecycle = true;
     lifecycleError = null;
     notifyListeners();
@@ -462,11 +561,13 @@ class EventDashboardController extends ChangeNotifier {
       return null;
     }
 
+    _beginHostMutation();
     isSubmittingLifecycle = true;
     lifecycleError = null;
     notifyListeners();
 
-    var switchedToTournament = false;
+    var endedQualificationSessions = false;
+    var advancedToTournament = false;
     try {
       final sessions = await sessionRepository.listSessions(currentEvent.id);
       final liveQualificationSessions = sessions.where(
@@ -480,30 +581,66 @@ class EventDashboardController extends ChangeNotifier {
           sessionId: session.id,
           reason: 'tournament_started',
         );
+        endedQualificationSessions = true;
       }
 
       event = await _eventRepository.updateEventScoringPhase(
         eventId: currentEvent.id,
         phase: EventScoringPhase.tournament,
       );
-      switchedToTournament = true;
+      advancedToTournament = true;
 
       final assignments =
-          await seatingRepository.generateRandomAssignments(currentEvent.id);
+          await seatingRepository.generateTournamentRound(currentEvent.id);
+      tournamentRoundSummary =
+          await _loadTournamentRoundSummary(currentEvent.id);
       isSubmittingLifecycle = false;
       notifyListeners();
       return assignments;
     } catch (exception) {
-      if (switchedToTournament) {
-        try {
-          event = await _eventRepository.updateEventScoringPhase(
-            eventId: currentEvent.id,
-            phase: EventScoringPhase.qualification,
-          );
-        } catch (_) {
-          // Keep the original assignment/start error visible to the host.
-        }
+      final formattedError = _formatLifecycleError(exception);
+      if (advancedToTournament) {
+        lifecycleError =
+            '$formattedError Tournament mode remains active; ended qualification sessions were not reopened.';
+      } else if (endedQualificationSessions) {
+        lifecycleError =
+            '$formattedError Some qualification sessions may have ended and were not reopened.';
+      } else {
+        lifecycleError = formattedError;
       }
+      isSubmittingLifecycle = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<List<SeatingAssignmentRecord>?> startNextTournamentRound() async {
+    final currentEvent = event;
+    final seatingRepository = _seatingRepository;
+    if (currentEvent == null || isSubmittingLifecycle) {
+      return null;
+    }
+    if (seatingRepository == null) {
+      lifecycleError =
+          'Seating setup is required to start the next tournament round.';
+      notifyListeners();
+      return null;
+    }
+
+    _beginHostMutation();
+    isSubmittingLifecycle = true;
+    lifecycleError = null;
+    notifyListeners();
+
+    try {
+      final assignments =
+          await seatingRepository.generateTournamentRound(currentEvent.id);
+      tournamentRoundSummary =
+          await _loadTournamentRoundSummary(currentEvent.id);
+      isSubmittingLifecycle = false;
+      notifyListeners();
+      return assignments;
+    } catch (exception) {
       lifecycleError = _formatLifecycleError(exception);
       isSubmittingLifecycle = false;
       notifyListeners();
