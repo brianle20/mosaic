@@ -462,4 +462,70 @@ void main() {
     expect(sql, isNot(contains('min(new_assignment.event_id)')));
     expect(sql, isNot(contains('min(new_assignment.tournament_round_id)')));
   });
+
+  test('tournament round generation scores candidate layouts against history',
+      () {
+    final migration = File(
+      'supabase/migrations/20260526090000_balanced_tournament_round_seating.sql',
+    );
+
+    expect(migration.existsSync(), isTrue);
+    final sql = migration.readAsStringSync();
+
+    expect(
+        sql,
+        contains(
+            'create or replace function public.generate_tournament_round'));
+    expect(sql, contains('candidate_count integer := 500'));
+    expect(sql, contains('exact_group_repeat_penalty integer := 10000'));
+    expect(sql, contains('immediate_pair_repeat_penalty integer := 1000'));
+    expect(sql, contains('older_pair_repeat_penalty integer := 100'));
+    expect(sql, contains('candidates as'));
+    expect(sql, contains('candidate_players as'));
+    expect(sql, contains('candidate_assignments as'));
+    expect(sql, contains('historical_assignments as'));
+    expect(sql, contains('historical_pairs as'));
+    expect(sql, contains('candidate_pairs as'));
+    expect(sql, contains('previous_round_table_groups as'));
+    expect(sql, contains('candidate_table_groups as'));
+    expect(sql, contains('group_penalties as'));
+    expect(sql, contains('pair_penalties as'));
+    expect(sql, contains('candidate_score as'));
+    expect(sql, contains('selected_candidate as'));
+    expect(sql, contains('selected_assignments as'));
+    expect(sql, contains('tournament_round.scoring_phase = \'tournament\''));
+    expect(sql, contains('assignment.assignment_type = \'random\''));
+    expect(sql, contains('assignment.tournament_round_id is not null'));
+    expect(sql, contains('balanced_table_sizes'));
+    expect(sql, contains('player_count < 2'));
+    expect(sql, contains('array_length(table_sizes, 1)'));
+    expect(sql, contains('cardinality(table_sizes)'));
+    expect(sql, contains("guest.tournament_status = 'qualified'"));
+    expect(sql, contains("guest.attendance_status = 'checked_in'"));
+    expect(sql, contains("tag.default_tag_type = 'player'"));
+    expect(sql, contains("tag.default_tag_type = 'table'"));
+    expect(
+      sql,
+      contains('Add or tag more tables before starting this round.'),
+    );
+    expect(
+      sql,
+      contains(
+        'Complete active tournament round sessions before starting the next round.',
+      ),
+    );
+    expect(
+      sql,
+      contains(
+        'order by candidate_score.total_penalty asc, candidate_score.tie_breaker asc',
+      ),
+    );
+    expect(sql, contains('from selected_assignments'));
+    expect(
+      sql,
+      contains(
+          'grant execute on function public.generate_tournament_round(uuid)'),
+    );
+    expect(sql, contains("select pg_notify('pgrst', 'reload schema')"));
+  });
 }
