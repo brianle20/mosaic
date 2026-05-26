@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
@@ -65,6 +66,7 @@ class LeaderboardController extends ChangeNotifier {
   String? error;
   List<LeaderboardEntry> entries = const [];
   BonusRoundResultsSummary bonusRoundResults = const BonusRoundResultsSummary();
+  BonusRoundState? bonusRoundState;
   List<SeatingAssignmentRecord> finalsAssignments = const [];
   List<EventHandLedgerEntry> bonusLedgerEntries = const [];
 
@@ -255,6 +257,7 @@ class LeaderboardController extends ChangeNotifier {
     bonusRoundResults = buildBonusRoundResultsSummary(
       ledgerEntries: bonusLedgerEntries,
       leaderboardEntries: entries,
+      bonusRoundState: bonusRoundState,
     );
     notifyListeners();
 
@@ -262,9 +265,11 @@ class LeaderboardController extends ChangeNotifier {
       entries = await leaderboardRepository.loadLeaderboard(eventId);
       bonusLedgerEntries = await _loadBonusLedger(eventId);
       finalsAssignments = await _loadFinalsAssignments(eventId);
+      bonusRoundState = await _loadBonusRoundState(eventId);
       bonusRoundResults = buildBonusRoundResultsSummary(
         ledgerEntries: bonusLedgerEntries,
         leaderboardEntries: entries,
+        bonusRoundState: bonusRoundState,
       );
     } catch (err) {
       if (entries.isEmpty) {
@@ -325,6 +330,19 @@ class LeaderboardController extends ChangeNotifier {
       return const [];
     }
   }
+
+  Future<BonusRoundState?> _loadBonusRoundState(String eventId) async {
+    final repository = seatingRepository;
+    if (repository == null) {
+      return null;
+    }
+
+    try {
+      return await repository.loadBonusRoundState(eventId);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 @immutable
@@ -376,6 +394,8 @@ String _bonusRoleTitle(BonusTableRole? role) {
   return switch (role) {
     BonusTableRole.tableOfChampions => 'Table of Champions',
     BonusTableRole.tableOfRedemption => 'Table of Redemption',
+    BonusTableRole.tableOfChampionsSuddenDeath =>
+      'Table of Champions Sudden Death',
     null => 'Finals Table',
   };
 }
@@ -384,6 +404,8 @@ String? _bonusRoleJson(BonusTableRole? role) {
   return switch (role) {
     BonusTableRole.tableOfChampions => 'table_of_champions',
     BonusTableRole.tableOfRedemption => 'table_of_redemption',
+    BonusTableRole.tableOfChampionsSuddenDeath =>
+      'table_of_champions_sudden_death',
     null => null,
   };
 }
@@ -392,6 +414,7 @@ int _finalsTableSort(String title) {
   return switch (title) {
     'Table of Champions' => 0,
     'Table of Redemption' => 1,
-    _ => 2,
+    'Table of Champions Sudden Death' => 2,
+    _ => 3,
   };
 }

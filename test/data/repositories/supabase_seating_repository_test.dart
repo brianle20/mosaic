@@ -163,6 +163,147 @@ void main() {
       });
     });
 
+    test('loads bonus round state through nullable RPC JSON', () async {
+      final calls = <({String functionName, Map<String, dynamic> params})>[];
+      final cache = await LocalCache.create();
+      final repository = SupabaseSeatingRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcJsonRunner: (functionName, params) async {
+          calls.add((functionName: functionName, params: params));
+          return {
+            'bonus_round_id': 'bonus_01',
+            'event_id': 'evt_01',
+            'status': 'active',
+            'champions_table_id': 'tbl_champions',
+            'redemption_table_id': 'tbl_redemption',
+            'sudden_death_status': 'required',
+            'champion_resolution_method': 'sudden_death',
+            'sudden_death_table_id': 'tbl_sudden_death',
+            'sudden_death_session_id': null,
+            'tied_top_players': const [
+              {
+                'event_guest_id': 'gst_01',
+                'display_name': 'Alice Wong',
+                'bonus_score_points': 120,
+                'seed_rank': 1,
+              },
+            ],
+            'champion_event_guest_id': null,
+            'champion_bonus_score_points': null,
+            'champion_award_points': null,
+            'champion_top_up_points': null,
+          };
+        },
+      );
+
+      final state = await repository.loadBonusRoundState('evt_01');
+
+      expect(calls.single.functionName, 'get_bonus_round_state');
+      expect(calls.single.params, {'target_event_id': 'evt_01'});
+      expect(state, isNotNull);
+      expect(state!.bonusRoundId, 'bonus_01');
+      expect(state.tiedTopPlayers.single.eventGuestId, 'gst_01');
+      expect(state.tiedTopPlayers.single.bonusScorePoints, 120);
+    });
+
+    test('returns null when bonus round state RPC returns no state', () async {
+      final calls = <({String functionName, Map<String, dynamic> params})>[];
+      final cache = await LocalCache.create();
+      final repository = SupabaseSeatingRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcJsonRunner: (functionName, params) async {
+          calls.add((functionName: functionName, params: params));
+          return null;
+        },
+      );
+
+      final state = await repository.loadBonusRoundState('evt_01');
+
+      expect(calls.single.functionName, 'get_bonus_round_state');
+      expect(calls.single.params, {'target_event_id': 'evt_01'});
+      expect(state, isNull);
+    });
+
+    test('starts bonus round sudden death through RPC and refreshes cache',
+        () async {
+      final calls = <({String functionName, Map<String, dynamic> params})>[];
+      final cache = await LocalCache.create();
+      await cache.saveSeatingAssignments('evt_01', [
+        SeatingAssignmentRecordFixture.active(),
+      ]);
+      final repository = SupabaseSeatingRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcListRunner: (functionName, params) async {
+          calls.add((functionName: functionName, params: params));
+          if (functionName == 'get_event_seating_assignments') {
+            return [
+              SeatingAssignmentRecordFixture.active().toJson(),
+              {
+                'id': 'asg_sudden_01',
+                'event_id': 'evt_01',
+                'event_table_id': 'tbl_sudden_death',
+                'table_label': 'Sudden Death',
+                'event_guest_id': 'gst_01',
+                'guest_display_name': 'Alice Wong',
+                'seat_index': 0,
+                'assignment_round': 4,
+                'status': 'active',
+                'assignment_type': 'bonus',
+                'bonus_round_id': 'bonus_01',
+                'bonus_table_role': 'table_of_champions_sudden_death',
+                'seed_rank': 1,
+              },
+            ];
+          }
+          return [
+            {
+              'id': 'asg_sudden_01',
+              'event_id': 'evt_01',
+              'event_table_id': 'tbl_sudden_death',
+              'table_label': 'Sudden Death',
+              'event_guest_id': 'gst_01',
+              'guest_display_name': 'Alice Wong',
+              'seat_index': 0,
+              'assignment_round': 4,
+              'status': 'active',
+              'assignment_type': 'bonus',
+              'bonus_round_id': 'bonus_01',
+              'bonus_table_role': 'table_of_champions_sudden_death',
+              'seed_rank': 1,
+            },
+          ];
+        },
+      );
+
+      final assignments = await repository.startBonusRoundSuddenDeath(
+        eventId: 'evt_01',
+        tableId: 'tbl_sudden_death',
+      );
+
+      expect(calls.first.functionName, 'start_bonus_round_sudden_death');
+      expect(calls.first.params, {
+        'target_event_id': 'evt_01',
+        'sudden_death_table_id': 'tbl_sudden_death',
+      });
+      expect(calls.last.functionName, 'get_event_seating_assignments');
+      expect(calls.last.params, {'target_event_id': 'evt_01'});
+      expect(
+        assignments.single.bonusTableRole,
+        BonusTableRole.tableOfChampionsSuddenDeath,
+      );
+
+      final cached = await repository.readCachedAssignments('evt_01');
+      expect(cached, hasLength(2));
+      expect(cached.last.eventTableId, 'tbl_sudden_death');
+      expect(
+        cached.last.bonusTableRole,
+        BonusTableRole.tableOfChampionsSuddenDeath,
+      );
+    });
+
     test('clears assignments through RPC and clears cache on empty result',
         () async {
       final calls = <({String functionName, Map<String, dynamic> params})>[];

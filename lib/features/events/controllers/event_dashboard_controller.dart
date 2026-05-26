@@ -1,5 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -69,6 +70,7 @@ class EventDashboardController extends ChangeNotifier {
   String? lifecycleError;
   String? tableScanError;
   EventRecord? event;
+  BonusRoundState? bonusRoundState;
   int guestCount = 0;
   int checkedInGuestCount = 0;
   int qualifyingGuestCount = 0;
@@ -81,6 +83,8 @@ class EventDashboardController extends ChangeNotifier {
   TournamentRoundSummary tournamentRoundSummary =
       TournamentRoundSummary.empty();
   TournamentRoundSummary finalsRoundSummary = TournamentRoundSummary.empty();
+  List<EventHandLedgerEntry> _bonusLedgerEntries = const [];
+  List<LeaderboardEntry> _leaderboardEntries = const [];
 
   EventScoringPhase? get effectiveScoringPhase {
     if (finalsRoundSummary.hasCurrentRound) {
@@ -88,6 +92,15 @@ class EventDashboardController extends ChangeNotifier {
     }
     return event?.currentScoringPhase;
   }
+
+  bool get isSuddenDeathRequired =>
+      bonusRoundState?.suddenDeathStatus == 'required';
+
+  bool get isSuddenDeathActive =>
+      bonusRoundState?.suddenDeathStatus == 'active';
+
+  bool get isSuddenDeathCompleted =>
+      bonusRoundState?.suddenDeathStatus == 'completed';
 
   Future<void> load(String eventId) async {
     final requestToken = _beginStateRequest();
@@ -117,14 +130,14 @@ class EventDashboardController extends ChangeNotifier {
     lifecycleError = null;
     tableScanError = null;
     event = cachedEvent;
+    bonusRoundState = null;
     _updateGuestSummaries(cachedGuests);
     tableCount = cachedTables?.length ?? 0;
     leaderLabel = _formatLeader(cachedLeaderboard);
     qualificationLeaderboard = const [];
-    bonusRoundResults = buildBonusRoundResultsSummary(
-      ledgerEntries: cachedLedger ?? const [],
-      leaderboardEntries: cachedLeaderboard ?? const [],
-    );
+    _bonusLedgerEntries = cachedLedger ?? const [];
+    _leaderboardEntries = cachedLeaderboard ?? const [];
+    _rebuildBonusRoundResults();
     tournamentRoundSummary = cachedFinalsRoundSummary.hasCurrentRound
         ? TournamentRoundSummary.empty()
         : cachedEvent?.currentScoringPhase == EventScoringPhase.tournament
@@ -185,10 +198,9 @@ class EventDashboardController extends ChangeNotifier {
         return;
       }
       leaderLabel = loadedLeaderLabel;
-      bonusRoundResults = buildBonusRoundResultsSummary(
-        ledgerEntries: ledger,
-        leaderboardEntries: leaderboard ?? const [],
-      );
+      _leaderboardEntries = leaderboard ?? const [];
+      _bonusLedgerEntries = ledger;
+      _rebuildBonusRoundResults();
     } catch (_) {
       // Leaderboard is a dashboard shortcut only; keep event loading usable.
     }
@@ -216,6 +228,13 @@ class EventDashboardController extends ChangeNotifier {
         ? TournamentRoundSummary.empty()
         : loadedTournamentRoundSummary;
     finalsRoundSummary = loadedFinalsRoundSummary;
+
+    final loadedBonusRoundState = await _loadBonusRoundState(eventId);
+    if (!_isCurrentStateRequest(requestToken)) {
+      return;
+    }
+    bonusRoundState = loadedBonusRoundState;
+    _rebuildBonusRoundResults();
 
     try {
       final loadedQualificationLeaderboard = await _guestRepository
@@ -328,6 +347,22 @@ class EventDashboardController extends ChangeNotifier {
     } catch (_) {
       return const [];
     }
+  }
+
+  Future<BonusRoundState?> _loadBonusRoundState(String eventId) async {
+    try {
+      return await _seatingRepository?.loadBonusRoundState(eventId);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _rebuildBonusRoundResults() {
+    bonusRoundResults = buildBonusRoundResultsSummary(
+      ledgerEntries: _bonusLedgerEntries,
+      leaderboardEntries: _leaderboardEntries,
+      bonusRoundState: bonusRoundState,
+    );
   }
 
   Future<TournamentRoundSummary> _readCachedTournamentRoundSummary(
@@ -520,7 +555,8 @@ class EventDashboardController extends ChangeNotifier {
     return switch (role) {
       BonusTableRole.tableOfChampions => 0,
       BonusTableRole.tableOfRedemption => 1,
-      null => 2,
+      BonusTableRole.tableOfChampionsSuddenDeath => 2,
+      null => 3,
     };
   }
 

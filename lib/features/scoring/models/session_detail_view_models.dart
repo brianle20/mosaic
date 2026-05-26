@@ -1,5 +1,6 @@
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 
@@ -166,6 +167,11 @@ bool _isLiveSession(SessionStatus status) {
 
 String _contextLabel(SessionDetailRecord detail) {
   final sessionNumber = detail.session.sessionNumberForTable;
+  if (detail.session.bonusTableRole ==
+      BonusTableRole.tableOfChampionsSuddenDeath) {
+    return 'Table of Champions Sudden Death · Session $sessionNumber';
+  }
+
   return 'Current session · Session $sessionNumber';
 }
 

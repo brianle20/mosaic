@@ -66,4 +66,121 @@ void main() {
       contains('Bonus round tables must be different'),
     );
   });
+
+  test('finals sudden death migration adds tiebreak state and RPCs', () {
+    final migrationFile = File(
+      'supabase/migrations/20260526130000_finals_sudden_death.sql',
+    );
+
+    expect(migrationFile.existsSync(), isTrue);
+    final migration = migrationFile.readAsStringSync();
+
+    expect(migration, contains('champion_resolution_method'));
+    expect(migration, contains('sudden_death_status'));
+    expect(migration, contains('sudden_death_table_id'));
+    expect(migration, contains('sudden_death_session_id'));
+    expect(migration, contains('table_of_champions_sudden_death'));
+    expect(migration, contains('public.get_bonus_round_state'));
+    expect(
+      migration,
+      contains(
+        'create or replace function public.get_bonus_round_state(\n'
+        '  target_event_id uuid\n'
+        ')',
+      ),
+    );
+    expect(migration, contains('public.start_bonus_round_sudden_death'));
+    expect(
+      migration,
+      contains(
+        'create or replace function public.start_bonus_round_sudden_death(\n'
+        '  target_event_id uuid,\n'
+        '  sudden_death_table_id uuid\n'
+        ')',
+      ),
+    );
+    expect(migration, isNot(contains('target_bonus_round_id uuid')));
+    expect(migration, contains('app_private.apply_bonus_round_champion_award'));
+    expect(migration, contains('tied_top_players'));
+    expect(migration, contains("'bonus_round_id', bonus_round_row.id"));
+    expect(migration, contains("'event_id', bonus_round_row.event_id"));
+    expect(migration, contains("'status', bonus_round_row.status"));
+    expect(
+      migration,
+      contains("'champions_table_id', bonus_round_row.champions_table_id"),
+    );
+    expect(
+      migration,
+      contains("'redemption_table_id', bonus_round_row.redemption_table_id"),
+    );
+    expect(
+      migration,
+      contains(
+        "'champion_event_guest_id', bonus_round_row.champion_event_guest_id",
+      ),
+    );
+    expect(
+      migration,
+      contains(
+        "'champion_bonus_score_points', "
+        'bonus_round_row.champion_bonus_score_points',
+      ),
+    );
+    expect(
+      migration,
+      contains(
+        "'champion_top_up_points', bonus_round_row.champion_top_up_points",
+      ),
+    );
+    expect(
+      migration,
+      contains(
+        "'champion_award_points', bonus_round_row.champion_award_points",
+      ),
+    );
+    expect(
+      migration,
+      contains('where bonus_round.event_id = target_event_id'),
+    );
+    expect(
+      migration,
+      contains("bonus_round.sudden_death_status = 'required'"),
+    );
+    expect(migration, contains('sudden death required'));
+    expect(migration, contains('result_type = \'win\''));
+    expect(migration, contains('result_type = \'washout\''));
+    expect(migration, contains('order by random()'));
+    expect(migration,
+        contains('create or replace function public.complete_event'));
+    expect(
+      migration,
+      contains("bonus_round.sudden_death_status in ('required', 'active')"),
+    );
+    expect(
+      migration,
+      contains(
+        'Resolve Table of Champions sudden death before completing the event.',
+      ),
+    );
+    expect(
+      migration,
+      isNot(contains(
+        'order by session_bonus_scores.bonus_score_points desc,\n'
+        '    session_bonus_scores.seed_rank asc nulls last',
+      )),
+    );
+    expect(
+      migration,
+      contains(
+        'grant execute on function public.get_bonus_round_state(uuid)',
+      ),
+    );
+    expect(
+      migration,
+      contains(
+        'grant execute on function public.start_bonus_round_sudden_death(uuid, uuid)',
+      ),
+    );
+    expect(migration, contains("select pg_notify('pgrst', 'reload schema')"));
+  });
 }

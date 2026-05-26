@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
@@ -43,10 +44,17 @@ class TableListController extends ChangeNotifier {
   Map<String, String> guestNamesById = const {};
   TournamentRoundSummary tournamentRoundSummary =
       TournamentRoundSummary.empty();
+  BonusRoundState? bonusRoundState;
   List<SeatingAssignmentRecord> bonusAssignments = const [];
   List<TableOverviewCardData> cards = const [];
   List<TableOverviewCardData> currentRoundCards = const [];
   List<TableOverviewCardData> otherCards = const [];
+
+  bool get isSuddenDeathRequired =>
+      bonusRoundState?.suddenDeathStatus == 'required';
+
+  bool get isSuddenDeathActive =>
+      bonusRoundState?.suddenDeathStatus == 'active';
 
   void refreshRoundTimers() {
     if (activeSessionsByTableId.isEmpty) {
@@ -71,6 +79,7 @@ class TableListController extends ChangeNotifier {
     sessionsByTableId = _sessionsByTable(cachedSessions);
     guestNamesById = _guestNamesById(cachedGuests);
     bonusAssignments = cachedBonusAssignments;
+    bonusRoundState = null;
     effectiveScoringPhase = _resolveEffectiveScoringPhase(
       sessions: cachedSessions,
       activeBonusAssignments: cachedBonusAssignments,
@@ -116,8 +125,10 @@ class TableListController extends ChangeNotifier {
       activeBonusAssignments: bonusAssignments,
     );
     if (effectiveScoringPhase == EventScoringPhase.bonus) {
+      bonusRoundState = await _loadBonusRoundState(eventId);
       tournamentRoundSummary = _buildBonusRoundSummary();
     } else {
+      bonusRoundState = null;
       tournamentRoundSummary = await _loadTournamentRoundSummary(eventId);
     }
 
@@ -143,6 +154,33 @@ class TableListController extends ChangeNotifier {
           await seatingRepository.generateTournamentRound(eventId);
       await load(eventId);
       return assignments;
+    } catch (exception) {
+      error = exception.toString();
+      return null;
+    } finally {
+      isStartingNextRound = false;
+      notifyListeners();
+    }
+  }
+
+  Future<List<SeatingAssignmentRecord>?> startBonusRoundSuddenDeath({
+    required String eventId,
+    required String tableId,
+  }) async {
+    final seatingRepository = _seatingRepository;
+    if (seatingRepository == null) {
+      return null;
+    }
+
+    isStartingNextRound = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      return await seatingRepository.startBonusRoundSuddenDeath(
+        eventId: eventId,
+        tableId: tableId,
+      );
     } catch (exception) {
       error = exception.toString();
       return null;
@@ -339,8 +377,9 @@ class TableListController extends ChangeNotifier {
             currentRoundTablesById[table.id],
           ),
           assignmentTitle: _assignmentTitle(
-            bonusAssignmentsByTableId[table.id],
-          ),
+                bonusAssignmentsByTableId[table.id],
+              ) ??
+              _suddenDeathAssignmentTitle(table.id),
           assignmentSubtitle:
               effectiveScoringPhase == EventScoringPhase.bonus &&
                       currentRoundTablesById.containsKey(table.id)
@@ -369,8 +408,23 @@ class TableListController extends ChangeNotifier {
     return switch (role) {
       BonusTableRole.tableOfChampions => 'Table of Champions',
       BonusTableRole.tableOfRedemption => 'Table of Redemption',
+      BonusTableRole.tableOfChampionsSuddenDeath =>
+        'Table of Champions Sudden Death',
       null => 'Finals Table',
     };
+  }
+
+  String? _suddenDeathAssignmentTitle(String tableId) {
+    final state = bonusRoundState;
+    if (effectiveScoringPhase != EventScoringPhase.bonus ||
+        state == null ||
+        state.suddenDeathTableId != tableId ||
+        (state.suddenDeathStatus != 'required' &&
+            state.suddenDeathStatus != 'active')) {
+      return null;
+    }
+
+    return 'Table of Champions Sudden Death';
   }
 
   Future<TournamentRoundSummary?> _readCachedTournamentRoundSummary(
@@ -406,6 +460,14 @@ class TableListController extends ChangeNotifier {
       return _activeBonusAssignments(assignments);
     } catch (_) {
       return await _readCachedBonusAssignments(eventId);
+    }
+  }
+
+  Future<BonusRoundState?> _loadBonusRoundState(String eventId) async {
+    try {
+      return await _seatingRepository?.loadBonusRoundState(eventId);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -447,6 +509,15 @@ class TableListController extends ChangeNotifier {
   }
 
   TournamentRoundSummary _buildBonusRoundSummary() {
+    final state = bonusRoundState;
+    if (state?.suddenDeathStatus == 'required' ||
+        state?.suddenDeathStatus == 'active') {
+      final suddenDeathSummary = _buildSuddenDeathSummary(state!);
+      if (suddenDeathSummary != null) {
+        return suddenDeathSummary;
+      }
+    }
+
     final grouped = _bonusAssignmentsByTableId();
     if (grouped.isEmpty) {
       return TournamentRoundSummary.empty();
@@ -511,6 +582,129 @@ class TableListController extends ChangeNotifier {
     );
   }
 
+  TournamentRoundSummary? _buildSuddenDeathSummary(BonusRoundState state) {
+    final tableId = state.suddenDeathTableId;
+    if (tableId == null) {
+      return null;
+    }
+
+    final tableById = {for (final table in tables) table.id: table};
+    final table = tableById[tableId];
+    if (table == null) {
+      return null;
+    }
+
+    final assignments = bonusAssignments
+        .where(
+          (assignment) =>
+              assignment.eventTableId == tableId &&
+              assignment.assignmentType == SeatingAssignmentType.bonus &&
+              assignment.status == 'active' &&
+              (assignment.bonusTableRole ==
+                      BonusTableRole.tableOfChampionsSuddenDeath ||
+                  assignment.bonusTableRole == null),
+        )
+        .toList(growable: false)
+      ..sort((left, right) => left.seatIndex.compareTo(right.seatIndex));
+
+    final tableStatus = state.suddenDeathStatus == 'required'
+        ? TournamentRoundTableStatus.notStarted
+        : _bonusSessionStatusFor(tableId);
+    final activeCount =
+        tableStatus == TournamentRoundTableStatus.active ? 1 : 0;
+    final pausedCount =
+        tableStatus == TournamentRoundTableStatus.paused ? 1 : 0;
+    final completeCount =
+        tableStatus == TournamentRoundTableStatus.complete ? 1 : 0;
+    final notStartedCount =
+        tableStatus == TournamentRoundTableStatus.notStarted ? 1 : 0;
+    final assignmentRound = assignments.isNotEmpty
+        ? assignments.first.assignmentRound
+        : bonusAssignments.isNotEmpty
+            ? bonusAssignments.first.assignmentRound + 1
+            : 1;
+
+    return TournamentRoundSummary(
+      round: TournamentRoundRecord(
+        id: state.bonusRoundId ?? 'bonus_$assignmentRound',
+        eventId: state.eventId ?? table.eventId,
+        roundNumber: assignmentRound,
+        scoringPhase: EventScoringPhase.bonus,
+        status: completeCount == 1
+            ? TournamentRoundStatus.complete
+            : activeCount + pausedCount > 0
+                ? TournamentRoundStatus.active
+                : TournamentRoundStatus.seating,
+        assignmentRound: assignmentRound,
+      ),
+      assignedTableCount: 1,
+      completeTableCount: completeCount,
+      activeTableCount: activeCount,
+      pausedTableCount: pausedCount,
+      notStartedTableCount: notStartedCount,
+      currentRoundTables: [
+        TournamentRoundTableSummary(
+          eventTableId: tableId,
+          tableLabel: table.label,
+          tableDisplayOrder: table.displayOrder,
+          status: tableStatus,
+          activeSessionId: _matchingLiveSession(
+            eventTableId: tableId,
+            scoringPhase: EventScoringPhase.bonus,
+          )?.id,
+          latestEndedSessionId: _matchingLatestEndedSession(
+            eventTableId: tableId,
+            scoringPhase: EventScoringPhase.bonus,
+          )?.id,
+          assignedPlayers: assignments.isNotEmpty
+              ? [
+                  for (final assignment in assignments)
+                    TournamentRoundAssignedPlayer(
+                      eventGuestId: assignment.eventGuestId,
+                      displayName: assignment.displayName,
+                      seatIndex: assignment.seatIndex,
+                    ),
+                ]
+              : _suddenDeathTiedPlayers(state),
+        ),
+      ],
+      otherTables: const [],
+    );
+  }
+
+  TournamentRoundTableStatus _bonusSessionStatusFor(String tableId) {
+    final activeSession = _matchingLiveSession(
+      eventTableId: tableId,
+      scoringPhase: EventScoringPhase.bonus,
+    );
+    return switch (activeSession?.status) {
+      SessionStatus.active => TournamentRoundTableStatus.active,
+      SessionStatus.paused => TournamentRoundTableStatus.paused,
+      _ => _matchingLatestEndedSession(
+                eventTableId: tableId,
+                scoringPhase: EventScoringPhase.bonus,
+              ) ==
+              null
+          ? TournamentRoundTableStatus.notStarted
+          : TournamentRoundTableStatus.complete,
+    };
+  }
+
+  List<TournamentRoundAssignedPlayer> _suddenDeathTiedPlayers(
+    BonusRoundState state,
+  ) {
+    return [
+      for (var index = 0; index < state.tiedTopPlayers.length; index += 1)
+        TournamentRoundAssignedPlayer(
+          eventGuestId:
+              state.tiedTopPlayers[index].eventGuestId ?? 'tied_$index',
+          displayName:
+              state.tiedTopPlayers[index].displayName ?? 'Player ${index + 1}',
+          seatIndex: index,
+        ),
+    ];
+  }
+
   int _bonusRoleSort(TournamentRoundTableSummary table) {
     final assignments = _bonusAssignmentsByTableId()[table.eventTableId];
     final role = assignments == null || assignments.isEmpty
@@ -519,7 +713,8 @@ class TableListController extends ChangeNotifier {
     return switch (role) {
       BonusTableRole.tableOfChampions => 0,
       BonusTableRole.tableOfRedemption => 1,
-      null => 2,
+      BonusTableRole.tableOfChampionsSuddenDeath => 2,
+      null => 3,
     };
   }
 

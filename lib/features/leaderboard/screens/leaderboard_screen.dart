@@ -537,6 +537,12 @@ class _BonusRoundResultsCard extends StatelessWidget {
                 result: summary.finalChampion!,
               ),
             if (summary.finalChampion != null &&
+                (summary.suddenDeathStatus != null ||
+                    summary.redemptionWinner != null))
+              const SizedBox(height: 10),
+            if (summary.suddenDeathStatus != null)
+              _BonusRoundStatusLine(status: summary.suddenDeathStatus!),
+            if (summary.suddenDeathStatus != null &&
                 summary.redemptionWinner != null)
               const SizedBox(height: 10),
             if (summary.redemptionWinner != null)
@@ -548,6 +554,44 @@ class _BonusRoundResultsCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _BonusRoundStatusLine extends StatelessWidget {
+  const _BonusRoundStatusLine({required this.status});
+
+  final BonusRoundSuddenDeathStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.flash_on, size: 20, color: colorScheme.tertiary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                status.statusLabel,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              Text(
+                status.detailLabel,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

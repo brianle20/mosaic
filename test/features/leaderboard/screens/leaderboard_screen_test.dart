@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -132,9 +133,13 @@ class _LedgerSessionRepository implements SessionRepository {
 }
 
 class _SeatingRepository implements SeatingRepository {
-  const _SeatingRepository({required this.assignments});
+  const _SeatingRepository({
+    required this.assignments,
+    this.bonusRoundState,
+  });
 
   final List<SeatingAssignmentRecord> assignments;
+  final BonusRoundState? bonusRoundState;
 
   @override
   Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
@@ -176,6 +181,19 @@ class _SeatingRepository implements SeatingRepository {
 
   @override
   Future<TournamentRoundSummary> loadTournamentRoundSummary(String eventId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<BonusRoundState?> loadBonusRoundState(String eventId) {
+    return Future.value(bonusRoundState);
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> startBonusRoundSuddenDeath({
+    required String eventId,
+    required String tableId,
+  }) {
     throw UnimplementedError();
   }
 
@@ -546,6 +564,118 @@ void main() {
     expect(find.text('Redemption winner'), findsOneWidget);
     expect(find.text('Brian Lee'), findsWidgets);
     expect(find.text('Score +18'), findsOneWidget);
+  });
+
+  testWidgets('renders pending sudden death in bonus round results',
+      (tester) async {
+    final repository = _RecordingLeaderboardRepository(
+      entries: const [
+        LeaderboardEntry(
+          eventGuestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          totalPoints: 121,
+          handsPlayed: 6,
+          handsWon: 2,
+          selfDrawWins: 1,
+          discardWins: 1,
+          rank: 1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LeaderboardScreen(
+          eventId: 'evt_01',
+          leaderboardRepository: repository,
+          seatingRepository: const _SeatingRepository(
+            assignments: [],
+            bonusRoundState: BonusRoundState(
+              championResolutionMethod: 'sudden_death',
+              suddenDeathStatus: 'required',
+              tiedTopPlayers: [
+                BonusRoundTiedPlayer(
+                  eventGuestId: 'gst_alice',
+                  displayName: 'Alice Wong',
+                  bonusScorePoints: 120,
+                  seedRank: 1,
+                ),
+                BonusRoundTiedPlayer(
+                  eventGuestId: 'gst_brian',
+                  displayName: 'Brian Lee',
+                  bonusScorePoints: 120,
+                  seedRank: 2,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bonus Round Results'), findsOneWidget);
+    expect(find.text('Sudden death required'), findsOneWidget);
+    expect(
+      find.text('Tied finalists: Alice Wong (120 pts), Brian Lee (120 pts)'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('renders active sudden death in bonus round results',
+      (tester) async {
+    final repository = _RecordingLeaderboardRepository(
+      entries: const [
+        LeaderboardEntry(
+          eventGuestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          totalPoints: 121,
+          handsPlayed: 6,
+          handsWon: 2,
+          selfDrawWins: 1,
+          discardWins: 1,
+          rank: 1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LeaderboardScreen(
+          eventId: 'evt_01',
+          leaderboardRepository: repository,
+          seatingRepository: const _SeatingRepository(
+            assignments: [],
+            bonusRoundState: BonusRoundState(
+              championResolutionMethod: 'sudden_death',
+              suddenDeathStatus: 'active',
+              tiedTopPlayers: [
+                BonusRoundTiedPlayer(
+                  eventGuestId: 'gst_alice',
+                  displayName: 'Alice Wong',
+                  bonusScorePoints: 120,
+                  seedRank: 1,
+                ),
+                BonusRoundTiedPlayer(
+                  eventGuestId: 'gst_brian',
+                  displayName: 'Brian Lee',
+                  bonusScorePoints: 120,
+                  seedRank: 2,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bonus Round Results'), findsOneWidget);
+    expect(find.text('Sudden death active'), findsOneWidget);
+    expect(
+      find.text('Tied finalists: Alice Wong (120 pts), Brian Lee (120 pts)'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('shows finals tables and standings in a Finals tab',

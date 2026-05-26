@@ -1,5 +1,6 @@
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/activity_models.dart';
+import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -224,6 +225,8 @@ abstract interface class SeatingRepository {
 
   Future<TournamentRoundSummary> loadTournamentRoundSummary(String eventId);
 
+  Future<BonusRoundState?> loadBonusRoundState(String eventId);
+
   Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
     String eventId,
   );
@@ -236,6 +239,11 @@ abstract interface class SeatingRepository {
     required String eventId,
     required String championsTableId,
     String? redemptionTableId,
+  });
+
+  Future<List<SeatingAssignmentRecord>> startBonusRoundSuddenDeath({
+    required String eventId,
+    required String tableId,
   });
 
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId);

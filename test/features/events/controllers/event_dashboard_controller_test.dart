@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:collection/collection.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -299,6 +300,7 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
     this.onGenerate,
     this.onLoadRoundSummary,
     this.cachedRoundSummary,
+    this.bonusRoundState,
   });
 
   final Future<List<SeatingAssignmentRecord>> Function(String eventId)?
@@ -306,6 +308,7 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   final Future<TournamentRoundSummary> Function(String eventId)?
       onLoadRoundSummary;
   final TournamentRoundSummary? cachedRoundSummary;
+  final BonusRoundState? bonusRoundState;
 
   @override
   Future<List<SeatingAssignmentRecord>> generateTournamentRound(
@@ -334,6 +337,10 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
     String eventId,
   ) async =>
       cachedRoundSummary;
+
+  @override
+  Future<BonusRoundState?> loadBonusRoundState(String eventId) async =>
+      bonusRoundState;
 }
 
 TournamentRoundSummary _roundSummary(int roundNumber) {
@@ -486,6 +493,122 @@ void main() {
         controller.event?.currentScoringPhase, EventScoringPhase.qualification);
     expect(controller.qualificationLeaderboard.single.fullName, 'Brian Le');
     expect(controller.qualificationLeaderboard.single.qualificationPoints, 48);
+  });
+
+  test('loads bonus round sudden death state with finals data', () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'bonus',
+    });
+    const suddenDeathState = BonusRoundState(
+      bonusRoundId: 'bonus_01',
+      eventId: 'evt_01',
+      status: 'active',
+      suddenDeathStatus: 'required',
+      championResolutionMethod: 'sudden_death',
+      tiedTopPlayers: [
+        BonusRoundTiedPlayer(
+          eventGuestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          bonusScorePoints: 120,
+          seedRank: 1,
+        ),
+        BonusRoundTiedPlayer(
+          eventGuestId: 'gst_bob',
+          displayName: 'Bob Lee',
+          bonusScorePoints: 120,
+          seedRank: 2,
+        ),
+      ],
+    );
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(cachedEvents: [event]),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      seatingRepository: _FakeSeatingRepository(
+        bonusRoundState: suddenDeathState,
+      ),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.bonusRoundState, suddenDeathState);
+    expect(controller.isSuddenDeathRequired, isTrue);
+    expect(controller.isSuddenDeathActive, isFalse);
+    expect(controller.isSuddenDeathCompleted, isFalse);
+    expect(controller.bonusRoundResults.hasResults, isTrue);
+    expect(
+      controller.bonusRoundResults.suddenDeathStatus?.detailLabel,
+      contains('Alice Wong'),
+    );
+  });
+
+  test('loads active bonus round sudden death state with finals data',
+      () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'bonus',
+    });
+    const suddenDeathState = BonusRoundState(
+      bonusRoundId: 'bonus_01',
+      eventId: 'evt_01',
+      status: 'active',
+      suddenDeathStatus: 'active',
+      championResolutionMethod: 'sudden_death',
+      suddenDeathTableId: 'tbl_sudden',
+      suddenDeathSessionId: 'ses_sudden',
+      tiedTopPlayers: [
+        BonusRoundTiedPlayer(
+          eventGuestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          bonusScorePoints: 120,
+          seedRank: 1,
+        ),
+        BonusRoundTiedPlayer(
+          eventGuestId: 'gst_bob',
+          displayName: 'Bob Lee',
+          bonusScorePoints: 120,
+          seedRank: 2,
+        ),
+      ],
+    );
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(cachedEvents: [event]),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      seatingRepository: _FakeSeatingRepository(
+        bonusRoundState: suddenDeathState,
+      ),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.bonusRoundState, suddenDeathState);
+    expect(controller.isSuddenDeathRequired, isFalse);
+    expect(controller.isSuddenDeathActive, isTrue);
+    expect(controller.isSuddenDeathCompleted, isFalse);
+    expect(
+      controller.bonusRoundResults.suddenDeathStatus?.statusLabel,
+      'Sudden death active',
+    );
   });
 
   test('updates event scoring phase through repository', () async {

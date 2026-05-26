@@ -911,6 +911,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   summary: showFinalsCommandCenter
                       ? _controller.finalsRoundSummary
                       : _controller.tournamentRoundSummary,
+                  suddenDeathStatus: showFinalsCommandCenter
+                      ? _controller.bonusRoundResults.suddenDeathStatus
+                      : null,
                   isBusy: _controller.isSubmittingLifecycle,
                   onOpenTables: _openTables,
                   onStartNextRound: _startNextTournamentRound,
@@ -1096,6 +1099,7 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
   const _TournamentRoundCommandCenter({
     required this.scoringPhase,
     required this.summary,
+    this.suddenDeathStatus,
     required this.isBusy,
     required this.onOpenTables,
     required this.onStartNextRound,
@@ -1105,6 +1109,7 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
 
   final EventScoringPhase scoringPhase;
   final TournamentRoundSummary summary;
+  final BonusRoundSuddenDeathStatus? suddenDeathStatus;
   final bool isBusy;
   final VoidCallback onOpenTables;
   final VoidCallback onStartNextRound;
@@ -1116,6 +1121,7 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final round = summary.round;
     final isFinals = scoringPhase == EventScoringPhase.bonus;
+    final pendingSuddenDeath = isFinals ? suddenDeathStatus : null;
     final title = isFinals
         ? 'Finals'
         : round == null
@@ -1130,13 +1136,14 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
     final remainingTables = summary.activeTableCount +
         summary.pausedTableCount +
         summary.notStartedTableCount;
-    final detail = isFinals
-        ? _finalsDetail(round)
-        : round == null
-            ? 'Generate a round to assign players.'
-            : summary.isComplete
-                ? 'Ready to start next round'
-                : '$remainingTables ${remainingTables == 1 ? 'table' : 'tables'} still in progress';
+    final detail = pendingSuddenDeath?.detailLabel ??
+        (isFinals
+            ? _finalsDetail(round)
+            : round == null
+                ? 'Generate a round to assign players.'
+                : summary.isComplete
+                    ? 'Ready to start next round'
+                    : '$remainingTables ${remainingTables == 1 ? 'table' : 'tables'} still in progress');
     final actionLabel = isFinals
         ? 'Open Finals Tables'
         : round == null
@@ -1171,7 +1178,11 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           StatusChip(
-            label: isFinals ? 'Finals Live' : 'Tournament Live',
+            label: pendingSuddenDeath == null
+                ? isFinals
+                    ? 'Finals Live'
+                    : 'Tournament Live'
+                : _suddenDeathCommandLabel(pendingSuddenDeath),
             tone: StatusChipTone.success,
           ),
           const SizedBox(height: 10),
@@ -1245,6 +1256,14 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
   String _pluralize(int count, String noun, String suffix) {
     return '$count $noun${count == 1 ? '' : 's'} $suffix';
   }
+
+  String _suddenDeathCommandLabel(BonusRoundSuddenDeathStatus status) {
+    return switch (status.statusLabel) {
+      'Sudden death required' => 'Sudden Death Required',
+      'Sudden death active' => 'Sudden Death Active',
+      _ => status.statusLabel,
+    };
+  }
 }
 
 class _BonusRoundResultsPanel extends StatelessWidget {
@@ -1274,6 +1293,12 @@ class _BonusRoundResultsPanel extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: 10),
+          if (summary.suddenDeathStatus != null)
+            _BonusRoundPendingLine(status: summary.suddenDeathStatus!),
+          if (summary.suddenDeathStatus != null &&
+              (summary.finalChampion != null ||
+                  summary.redemptionWinner != null))
+            const SizedBox(height: 10),
           if (summary.finalChampion != null)
             _BonusRoundResultLine(
               icon: Icons.emoji_events,
@@ -1290,6 +1315,43 @@ class _BonusRoundResultsPanel extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _BonusRoundPendingLine extends StatelessWidget {
+  const _BonusRoundPendingLine({required this.status});
+
+  final BonusRoundSuddenDeathStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(Icons.gavel, size: 20, color: colorScheme.tertiary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                status.statusLabel,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              Text(
+                status.detailLabel,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

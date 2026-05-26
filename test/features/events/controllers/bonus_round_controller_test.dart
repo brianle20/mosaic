@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -644,6 +645,16 @@ class _SeatingRepository implements SeatingRepository {
     String eventId,
   ) async =>
       tournamentRoundSummary ?? TournamentRoundSummary.empty();
+
+  @override
+  Future<BonusRoundState?> loadBonusRoundState(String eventId) async => null;
+
+  @override
+  Future<List<SeatingAssignmentRecord>> startBonusRoundSuddenDeath({
+    required String eventId,
+    required String tableId,
+  }) async =>
+      const [];
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(

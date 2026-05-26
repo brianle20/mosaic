@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -124,6 +125,112 @@ void main() {
         'bonus_table_role': null,
         'seed_rank': null,
       });
+    });
+
+    test('round-trips sudden death table role from JSON', () {
+      final record = SeatingAssignmentRecord.fromJson(const {
+        'id': 'asg_01',
+        'event_id': 'evt_01',
+        'event_table_id': 'tbl_sudden_death',
+        'table_label': 'Sudden Death',
+        'event_guest_id': 'gst_01',
+        'guest_display_name': 'Alice Wong',
+        'seat_index': 0,
+        'assignment_round': 4,
+        'status': 'active',
+        'assignment_type': 'bonus',
+        'bonus_round_id': 'bonus_01',
+        'bonus_table_role': 'table_of_champions_sudden_death',
+        'seed_rank': 1,
+      });
+
+      expect(
+        record.bonusTableRole,
+        BonusTableRole.tableOfChampionsSuddenDeath,
+      );
+      expect(
+        record.toJson()['bonus_table_role'],
+        'table_of_champions_sudden_death',
+      );
+    });
+  });
+
+  group('BonusRoundState', () {
+    test('parses sudden death RPC state with tied players', () {
+      final state = BonusRoundState.fromJson(const {
+        'bonus_round_id': 'bonus_01',
+        'event_id': 'evt_01',
+        'status': 'active',
+        'champions_table_id': 'tbl_champions',
+        'redemption_table_id': 'tbl_redemption',
+        'sudden_death_status': 'required',
+        'champion_resolution_method': 'sudden_death',
+        'sudden_death_table_id': 'tbl_sudden_death',
+        'sudden_death_session_id': 'ses_sudden_death',
+        'tied_top_players': [
+          {
+            'event_guest_id': 'gst_01',
+            'display_name': 'Alice Wong',
+            'bonus_score_points': 120,
+            'seed_rank': 1,
+          },
+          {
+            'event_guest_id': 'gst_02',
+            'display_name': 'Bob Lee',
+            'bonus_score_points': 120.0,
+            'seed_rank': 2.0,
+          },
+        ],
+        'champion_event_guest_id': 'gst_01',
+        'champion_bonus_score_points': 180,
+        'champion_award_points': 200,
+        'champion_top_up_points': 20,
+      });
+
+      expect(state.bonusRoundId, 'bonus_01');
+      expect(state.eventId, 'evt_01');
+      expect(state.status, 'active');
+      expect(state.championsTableId, 'tbl_champions');
+      expect(state.redemptionTableId, 'tbl_redemption');
+      expect(state.suddenDeathStatus, 'required');
+      expect(state.championResolutionMethod, 'sudden_death');
+      expect(state.suddenDeathTableId, 'tbl_sudden_death');
+      expect(state.suddenDeathSessionId, 'ses_sudden_death');
+      expect(state.tiedTopPlayers, hasLength(2));
+      expect(state.tiedTopPlayers.first.displayName, 'Alice Wong');
+      expect(state.tiedTopPlayers.last.bonusScorePoints, 120);
+      expect(state.tiedTopPlayers.last.seedRank, 2);
+      expect(state.championEventGuestId, 'gst_01');
+      expect(state.championBonusScorePoints, 180);
+      expect(state.championAwardPoints, 200);
+      expect(state.championTopUpPoints, 20);
+      expect(state.toJson()['tied_top_players'], [
+        {
+          'event_guest_id': 'gst_01',
+          'display_name': 'Alice Wong',
+          'bonus_score_points': 120,
+          'seed_rank': 1,
+        },
+        {
+          'event_guest_id': 'gst_02',
+          'display_name': 'Bob Lee',
+          'bonus_score_points': 120,
+          'seed_rank': 2,
+        },
+      ]);
+    });
+
+    test('tolerates missing nullable fields from RPC state', () {
+      final state = BonusRoundState.fromJson(const {
+        'bonus_round_id': 'bonus_01',
+        'event_id': 'evt_01',
+        'status': 'active',
+      });
+
+      expect(state.bonusRoundId, 'bonus_01');
+      expect(state.tiedTopPlayers, isEmpty);
+      expect(state.suddenDeathStatus, isNull);
+      expect(state.championAwardPoints, isNull);
     });
   });
 
@@ -458,6 +565,37 @@ void main() {
         '2026-05-24T19:37:15.000Z',
       );
       expect(session.toJson()['round_timer_paused_seconds'], 180);
+    });
+
+    test('round-trips bonus table role for sudden death sessions', () {
+      final session = TableSessionRecord.fromJson(const {
+        'id': 'ses_01',
+        'event_id': 'evt_01',
+        'event_table_id': 'tbl_01',
+        'session_number_for_table': 1,
+        'ruleset_id': 'HK_STANDARD',
+        'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+        'rotation_policy_config_json': {},
+        'status': 'active',
+        'scoring_phase': 'bonus',
+        'bonus_table_role': 'table_of_champions_sudden_death',
+        'initial_east_seat_index': 0,
+        'current_dealer_seat_index': 1,
+        'dealer_pass_count': 0,
+        'completed_games_count': 0,
+        'hand_count': 2,
+        'started_at': '2026-05-24T19:00:00Z',
+        'started_by_user_id': 'usr_01',
+      });
+
+      expect(
+        session.bonusTableRole,
+        BonusTableRole.tableOfChampionsSuddenDeath,
+      );
+      expect(
+        session.toJson()['bonus_table_role'],
+        'table_of_champions_sudden_death',
+      );
     });
   });
 

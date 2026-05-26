@@ -8,6 +8,7 @@ enum SeatingAssignmentType {
 enum BonusTableRole {
   tableOfChampions,
   tableOfRedemption,
+  tableOfChampionsSuddenDeath,
 }
 
 @immutable
@@ -197,6 +198,8 @@ BonusTableRole? _optionalBonusTableRole(
   return switch (value) {
     'table_of_champions' => BonusTableRole.tableOfChampions,
     'table_of_redemption' => BonusTableRole.tableOfRedemption,
+    'table_of_champions_sudden_death' =>
+      BonusTableRole.tableOfChampionsSuddenDeath,
     _ => throw FormatException('Unknown bonus table role: $value'),
   };
 }
@@ -205,5 +208,7 @@ String _bonusTableRoleToJson(BonusTableRole role) {
   return switch (role) {
     BonusTableRole.tableOfChampions => 'table_of_champions',
     BonusTableRole.tableOfRedemption => 'table_of_redemption',
+    BonusTableRole.tableOfChampionsSuddenDeath =>
+      'table_of_champions_sudden_death',
   };
 }

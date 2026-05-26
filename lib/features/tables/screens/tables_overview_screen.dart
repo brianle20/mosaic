@@ -159,6 +159,29 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     }
   }
 
+  Future<void> _startSuddenDeath(EventTableRecord table) async {
+    final assignments = await _controller.startBonusRoundSuddenDeath(
+      eventId: widget.eventId,
+      tableId: table.id,
+    );
+    if (!mounted || assignments == null) {
+      return;
+    }
+
+    if (assignments.isNotEmpty) {
+      await Navigator.of(context).pushNamed(
+        AppRouter.seatingAssignmentsRoute,
+        arguments: SeatingAssignmentsArgs(
+          eventId: widget.eventId,
+          initialAssignments: assignments,
+        ),
+      );
+    }
+    if (mounted) {
+      await _controller.load(widget.eventId);
+    }
+  }
+
   Future<void> _openBonusRound() async {
     await Navigator.of(context).pushNamed(
       AppRouter.bonusRoundRoute,
@@ -446,6 +469,12 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
 
   String _currentBoardTitle(TournamentRoundRecord? round) {
     if (_controller.effectiveScoringPhase == EventScoringPhase.bonus) {
+      if (_controller.isSuddenDeathRequired) {
+        return 'Sudden Death Required';
+      }
+      if (_controller.isSuddenDeathActive) {
+        return 'Sudden Death in progress';
+      }
       return 'Finals';
     }
     return round == null ? 'Tournament Round' : 'Round ${round.roundNumber}';
@@ -533,7 +562,9 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               children: [
                 FilledButton(
                   onPressed: action == _CurrentRoundAction.enter
-                      ? () => _enterCurrentRoundTable(cardData.table)
+                      ? _controller.isSuddenDeathRequired
+                          ? () => _startSuddenDeath(cardData.table)
+                          : () => _enterCurrentRoundTable(cardData.table)
                       : sessionId == null
                           ? null
                           : () => _openSessionDetail(sessionId),
@@ -966,6 +997,10 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   Widget _buildReadyTableCard(EventTableRecord table) {
     final hasTag = table.nfcTagId != null;
     final hasSessionHistory = _controller.sessionsForTable(table.id).isNotEmpty;
+    final canStartSuddenDeath = hasTag &&
+        _controller.isSuddenDeathRequired &&
+        widget.scoringOpen &&
+        !widget.readOnly;
     final statusLabel = widget.readOnly
         ? 'Locked'
         : hasTag || _isQualificationPhase
@@ -983,7 +1018,9 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 ? 'Ready for qualification play. Enter the table to record qualifier hands.'
                 : 'Open scoring before recording qualifier hands at this table.'
             : hasTag
-                ? 'Scan this table from the event dashboard to start seating.'
+                ? canStartSuddenDeath
+                    ? 'Start sudden death at this table.'
+                    : 'Scan this table from the event dashboard to start seating.'
                 : 'Bind this table tag before live seating.';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1019,6 +1056,14 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 runSpacing: 12,
                 children: [
                   if (!widget.readOnly) ...[
+                    if (canStartSuddenDeath)
+                      FilledButton.icon(
+                        onPressed: _controller.isStartingNextRound
+                            ? null
+                            : () => _startSuddenDeath(table),
+                        icon: const Icon(Icons.flash_on),
+                        label: const Text('Start Sudden Death'),
+                      ),
                     if (_isQualificationPhase && widget.scoringOpen)
                       FilledButton.icon(
                         onPressed: () => _enterReadyTable(table),
@@ -1069,6 +1114,11 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   }
 
   String _currentRoundActionLabel(_CurrentRoundAction action) {
+    if (_controller.isSuddenDeathRequired &&
+        action == _CurrentRoundAction.enter) {
+      return 'Start Sudden Death';
+    }
+
     return switch (action) {
       _CurrentRoundAction.open => 'Open Session',
       _CurrentRoundAction.view => 'View Session',

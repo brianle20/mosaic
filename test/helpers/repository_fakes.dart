@@ -1,5 +1,6 @@
 import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/auth_models.dart';
+import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -295,6 +296,10 @@ class ThrowingSeatingRepository implements SeatingRepository {
       throw UnimplementedError();
 
   @override
+  Future<BonusRoundState?> loadBonusRoundState(String eventId) =>
+      throw UnimplementedError();
+
+  @override
   Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
     String eventId,
   ) =>
@@ -311,6 +316,13 @@ class ThrowingSeatingRepository implements SeatingRepository {
     required String eventId,
     required String championsTableId,
     String? redemptionTableId,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<SeatingAssignmentRecord>> startBonusRoundSuddenDeath({
+    required String eventId,
+    required String tableId,
   }) =>
       throw UnimplementedError();
 

@@ -1,6 +1,7 @@
 import 'package:meta/meta.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 
 enum RotationPolicyType {
   dealerCycleReturnToInitialEast,
@@ -33,6 +34,7 @@ class TableSessionRecord {
     required this.rotationPolicyConfig,
     required this.status,
     this.scoringPhase = EventScoringPhase.qualification,
+    this.bonusTableRole,
     required this.initialEastSeatIndex,
     required this.currentDealerSeatIndex,
     required this.dealerPassCount,
@@ -65,6 +67,7 @@ class TableSessionRecord {
       scoringPhase: eventScoringPhaseFromJson(
         _stringOrDefault(json, 'scoring_phase', 'qualification'),
       ),
+      bonusTableRole: _optionalBonusTableRole(json, 'bonus_table_role'),
       initialEastSeatIndex: _requiredInt(json, 'initial_east_seat_index'),
       currentDealerSeatIndex: _requiredInt(json, 'current_dealer_seat_index'),
       dealerPassCount: _requiredInt(json, 'dealer_pass_count'),
@@ -93,6 +96,7 @@ class TableSessionRecord {
   final Map<String, dynamic> rotationPolicyConfig;
   final SessionStatus status;
   final EventScoringPhase scoringPhase;
+  final BonusTableRole? bonusTableRole;
   final int initialEastSeatIndex;
   final int currentDealerSeatIndex;
   final int dealerPassCount;
@@ -120,6 +124,9 @@ class TableSessionRecord {
       'rotation_policy_config_json': rotationPolicyConfig,
       'status': _sessionStatusToJson(status),
       'scoring_phase': eventScoringPhaseToJson(scoringPhase),
+      'bonus_table_role': bonusTableRole == null
+          ? null
+          : _bonusTableRoleToJson(bonusTableRole!),
       'initial_east_seat_index': initialEastSeatIndex,
       'current_dealer_seat_index': currentDealerSeatIndex,
       'dealer_pass_count': dealerPassCount,
@@ -485,6 +492,37 @@ String _sessionStatusToJson(SessionStatus value) {
     SessionStatus.completed => 'completed',
     SessionStatus.endedEarly => 'ended_early',
     SessionStatus.aborted => 'aborted',
+  };
+}
+
+BonusTableRole? _optionalBonusTableRole(
+  Map<String, dynamic> json,
+  String key,
+) {
+  final value = json[key];
+  if (value == null) {
+    return null;
+  }
+
+  if (value is! String) {
+    throw FormatException('Expected string or null for $key.');
+  }
+
+  return switch (value) {
+    'table_of_champions' => BonusTableRole.tableOfChampions,
+    'table_of_redemption' => BonusTableRole.tableOfRedemption,
+    'table_of_champions_sudden_death' =>
+      BonusTableRole.tableOfChampionsSuddenDeath,
+    _ => throw FormatException('Unknown bonus table role: $value'),
+  };
+}
+
+String _bonusTableRoleToJson(BonusTableRole role) {
+  return switch (role) {
+    BonusTableRole.tableOfChampions => 'table_of_champions',
+    BonusTableRole.tableOfRedemption => 'table_of_redemption',
+    BonusTableRole.tableOfChampionsSuddenDeath =>
+      'table_of_champions_sudden_death',
   };
 }
 

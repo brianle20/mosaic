@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/activity_models.dart';
+import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -335,11 +336,13 @@ class _SeatingRepository extends ThrowingSeatingRepository {
     this.generatedAssignments = const [],
     this.roundSummary,
     this.assignments = const [],
+    this.bonusRoundState,
   });
 
   final List<SeatingAssignmentRecord> generatedAssignments;
   final TournamentRoundSummary? roundSummary;
   final List<SeatingAssignmentRecord> assignments;
+  final BonusRoundState? bonusRoundState;
 
   static int generatedTournamentRoundCount = 0;
   static int generatedRandomAssignmentCount = 0;
@@ -394,6 +397,10 @@ class _SeatingRepository extends ThrowingSeatingRepository {
     String eventId,
   ) async =>
       assignments;
+
+  @override
+  Future<BonusRoundState?> loadBonusRoundState(String eventId) async =>
+      bonusRoundState;
 }
 
 class _PrizeRepository extends ThrowingPrizeRepository {
@@ -2631,6 +2638,104 @@ void main() {
 
     expect(openedArgs?.eventId, event.id);
     expect(openedArgs?.scoringPhase, EventScoringPhase.bonus);
+  });
+
+  testWidgets('completed finals with required sudden death opens tables',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    _SeatingRepository.generatedTournamentRoundCount = 0;
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'scoring_open': true,
+      'current_scoring_phase': 'bonus',
+    });
+    TablesOverviewArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: EventDashboardArgs(eventId: event.id),
+          eventRepository: _EventRepository(event),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository:
+              _TableRepository(tables: [_table(eventId: event.id)]),
+          sessionRepository: _SessionRepository(
+            sessions: [
+              _session(
+                id: 'ses_final',
+                eventId: event.id,
+                tableId: 'tbl_01',
+                status: SessionStatus.completed,
+              ),
+            ],
+          ),
+          seatingRepository: _SeatingRepository(
+            bonusRoundState: const BonusRoundState(
+              bonusRoundId: 'bonus_01',
+              eventId: 'evt_01',
+              status: 'active',
+              suddenDeathStatus: 'required',
+              championResolutionMethod: 'sudden_death',
+              tiedTopPlayers: [
+                BonusRoundTiedPlayer(
+                  eventGuestId: 'gst_alice',
+                  displayName: 'Alice Wong',
+                  bonusScorePoints: 120,
+                  seedRank: 1,
+                ),
+                BonusRoundTiedPlayer(
+                  eventGuestId: 'gst_bob',
+                  displayName: 'Bob Lee',
+                  bonusScorePoints: 120,
+                  seedRank: 2,
+                ),
+              ],
+            ),
+            assignments: [
+              _bonusAssignment(eventId: event.id),
+              _bonusAssignment(
+                id: 'bonus_asg_02',
+                eventId: event.id,
+                guestId: 'gst_02',
+                displayName: 'Ben South',
+                seatIndex: 1,
+              ),
+            ],
+          ),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedArgs = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(
+                body: Text('Opened Finals Tables'),
+              ),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sudden Death Required'), findsOneWidget);
+    expect(find.textContaining('Alice Wong'), findsWidgets);
+    expect(find.textContaining('Bob Lee'), findsWidgets);
+    expect(find.text('Ready to complete event'), findsNothing);
+    expect(find.text('Open Finals Tables'), findsOneWidget);
+
+    final openFinalsTablesButton =
+        find.widgetWithText(FilledButton, 'Open Finals Tables');
+    await tester.tap(openFinalsTablesButton);
+    await tester.pumpAndSettle();
+
+    expect(openedArgs?.eventId, event.id);
+    expect(openedArgs?.scoringPhase, EventScoringPhase.bonus);
+    expect(_SeatingRepository.generatedTournamentRoundCount, 0);
   });
 
   testWidgets('dashboard opens finals tables when event phase is stale',

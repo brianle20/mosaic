@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/features/scoring/models/session_detail_view_models.dart';
 
@@ -52,6 +53,21 @@ void main() {
       );
 
       expect(viewModel.roundWindLabel, 'Round Wind: North');
+    });
+
+    test('labels table of champions sudden death session distinctly', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(
+          scoringPhase: EventScoringPhase.bonus,
+          bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
+        ),
+        guestNamesById: _guestNamesById,
+      );
+
+      expect(
+        viewModel.contextLabel,
+        'Table of Champions Sudden Death · Session 1',
+      );
     });
 
     test('falls back to default table session title without a table label', () {
@@ -281,6 +297,7 @@ SessionDetailRecord _detail({
   String status = 'active',
   int currentDealerSeatIndex = 1,
   EventScoringPhase scoringPhase = EventScoringPhase.qualification,
+  BonusTableRole? bonusTableRole,
   int? assignmentRound,
   String startedAt = '2026-04-24T19:00:00-07:00',
   String? endedAt,
@@ -299,6 +316,8 @@ SessionDetailRecord _detail({
       'rotation_policy_config_json': {},
       'status': status,
       'scoring_phase': eventScoringPhaseToJson(scoringPhase),
+      'bonus_table_role':
+          bonusTableRole == null ? null : 'table_of_champions_sudden_death',
       'assignment_round': assignmentRound,
       'initial_east_seat_index': 0,
       'current_dealer_seat_index': currentDealerSeatIndex,
