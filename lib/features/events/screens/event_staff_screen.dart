@@ -96,14 +96,7 @@ class _EventStaffScreenState extends State<EventStaffScreen> {
   Widget build(BuildContext context) {
     return SoftHostScaffold(
       title: 'Staff',
-      actions: [
-        GlassCircleButton(
-          visualKey: const ValueKey('eventStaffBackAction'),
-          icon: Icons.chevron_left,
-          tooltip: 'Back',
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-      ],
+      showBackButton: true,
       body: AsyncBody(
         isLoading: _controller.isLoading,
         error: _controller.error,
