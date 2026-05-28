@@ -221,6 +221,10 @@ void main() {
       migrationsSql,
       'public.update_event_scoring_phase',
     );
+    final metadataSql = _extractFunction(
+      migrationsSql,
+      'public.update_event_metadata',
+    );
 
     expect(
       tournamentStatusSql,
@@ -257,6 +261,14 @@ void main() {
       scoringPhaseSql,
       contains('delete from public.event_seating_assignments'),
     );
+
+    expect(
+      metadataSql,
+      contains('create or replace function public.update_event_metadata'),
+    );
+    expect(metadataSql, contains('app_private.require_owned_event'));
+    expect(metadataSql, contains("lifecycle_status <> 'draft'"));
+    expect(metadataSql, contains('event_cover_charge_cents'));
   });
 
   test('public realtime uses a public-safe update table', () {

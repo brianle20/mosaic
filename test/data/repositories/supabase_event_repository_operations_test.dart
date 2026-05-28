@@ -171,5 +171,61 @@ void main() {
       expect(cachedEvent!.lifecycleStatus, EventLifecycleStatus.draft);
       expect(cache.readEvents().map((event) => event.id), contains('evt_copy'));
     });
+
+    test('updateEventMetadata updates draft metadata through RPC and cache',
+        () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseEventRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        eventMutationRunner: (functionName, params) async {
+          expect(functionName, 'update_event_metadata');
+          expect(params, {
+            'target_event_id': 'evt_01',
+            'event_title': 'Edited Mahjong',
+            'event_description': null,
+            'event_venue_name': 'Club 88',
+            'event_venue_address': '123 Bamboo Ave',
+            'event_timezone': 'America/Los_Angeles',
+            'event_starts_at': '2026-05-30T02:00:00.000Z',
+            'event_cover_charge_cents': 1500,
+            'event_default_ruleset_id': 'HK_STANDARD',
+          });
+          return {
+            'id': 'evt_01',
+            'owner_user_id': 'usr_01',
+            'title': 'Edited Mahjong',
+            'timezone': 'America/Los_Angeles',
+            'starts_at': '2026-05-30T02:00:00.000Z',
+            'created_at': '2026-05-24T12:00:00-07:00',
+            'lifecycle_status': 'draft',
+            'checkin_open': false,
+            'scoring_open': false,
+            'cover_charge_cents': 1500,
+            'default_ruleset_id': 'HK_STANDARD',
+            'prevailing_wind': 'east',
+            'current_scoring_phase': 'qualification',
+            'venue_name': 'Club 88',
+            'venue_address': '123 Bamboo Ave',
+          };
+        },
+      );
+
+      final event = await repository.updateEventMetadata(
+        UpdateEventInput(
+          id: 'evt_01',
+          title: 'Edited Mahjong',
+          timezone: 'America/Los_Angeles',
+          startsAt: DateTime(2026, 5, 29, 19),
+          coverChargeCents: 1500,
+          venueName: 'Club 88',
+          venueAddress: '123 Bamboo Ave',
+        ),
+      );
+
+      expect(event.title, 'Edited Mahjong');
+      expect(event.venueName, 'Club 88');
+      expect(cache.readEvent('evt_01')!.title, 'Edited Mahjong');
+    });
   });
 }

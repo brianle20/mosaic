@@ -68,11 +68,18 @@ class _CompleterEventRepository extends ThrowingEventRepository {
 
 class _ImmediateEventRepository extends ThrowingEventRepository {
   CreateEventInput? capturedInput;
+  UpdateEventInput? capturedUpdateInput;
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) async {
     capturedInput = input;
     return _eventRecordFromInput(input);
+  }
+
+  @override
+  Future<EventRecord> updateEventMetadata(UpdateEventInput input) async {
+    capturedUpdateInput = input;
+    return _eventRecordFromUpdateInput(input);
   }
 
   @override
@@ -150,6 +157,25 @@ EventRecord _eventRecordFromInput(CreateEventInput input) {
   });
 }
 
+EventRecord _eventRecordFromUpdateInput(UpdateEventInput input) {
+  return EventRecord.fromJson({
+    'id': input.id,
+    'owner_user_id': 'usr_01',
+    'title': input.title,
+    'timezone': input.timezone,
+    'starts_at': input.startsAt.toIso8601String(),
+    'lifecycle_status': 'draft',
+    'checkin_open': false,
+    'scoring_open': false,
+    'cover_charge_cents': input.coverChargeCents,
+    'default_ruleset_id': input.defaultRulesetId,
+    'prevailing_wind': 'east',
+    'venue_name': input.venueName,
+    'venue_address': input.venueAddress,
+    'description': input.description,
+  });
+}
+
 void main() {
   test('submit returns event when repository completes after dispose',
       () async {
@@ -185,5 +211,19 @@ void main() {
     expect(event!.id, 'evt_01');
     expect(isSubmittingStates, [true, false]);
     expect(controller.isSubmitting, isFalse);
+  });
+
+  test('submit updates existing event metadata instead of creating', () async {
+    final repository = _ImmediateEventRepository();
+    final controller = EventFormController(eventRepository: repository);
+    addTearDown(controller.dispose);
+
+    final event = await controller.submit(_validDraft, eventId: 'evt_01');
+
+    expect(event, isNotNull);
+    expect(repository.capturedInput, isNull);
+    expect(repository.capturedUpdateInput, isNotNull);
+    expect(repository.capturedUpdateInput!.id, 'evt_01');
+    expect(repository.capturedUpdateInput!.title, 'Friday Night Mahjong');
   });
 }

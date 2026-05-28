@@ -25,7 +25,7 @@ class EventFormController extends ChangeNotifier {
     }
   }
 
-  Future<EventRecord?> submit(EventFormDraft draft) async {
+  Future<EventRecord?> submit(EventFormDraft draft, {String? eventId}) async {
     if (!draft.isValid) {
       _notifyIfActive();
       return null;
@@ -36,7 +36,11 @@ class EventFormController extends ChangeNotifier {
     _notifyIfActive();
 
     try {
-      final event = await _eventRepository.createEvent(draft.toCreateInput());
+      final event = eventId == null
+          ? await _eventRepository.createEvent(draft.toCreateInput())
+          : await _eventRepository.updateEventMetadata(
+              draft.toUpdateInput(eventId),
+            );
       isSubmitting = false;
       _notifyIfActive();
       return event;

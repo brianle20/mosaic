@@ -8,12 +8,34 @@ import 'package:mosaic/features/events/screens/create_event_screen.dart';
 
 class _RecordingEventRepository extends ThrowingEventRepository {
   CreateEventInput? capturedInput;
+  UpdateEventInput? capturedUpdateInput;
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) async {
     capturedInput = input;
     return EventRecord.fromJson({
       'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': input.title,
+      'timezone': input.timezone,
+      'starts_at': input.startsAt.toIso8601String(),
+      'lifecycle_status': 'draft',
+      'checkin_open': false,
+      'scoring_open': false,
+      'cover_charge_cents': input.coverChargeCents,
+      'default_ruleset_id': input.defaultRulesetId,
+      'prevailing_wind': 'east',
+      'venue_name': input.venueName,
+      'venue_address': input.venueAddress,
+      'description': input.description,
+    });
+  }
+
+  @override
+  Future<EventRecord> updateEventMetadata(UpdateEventInput input) async {
+    capturedUpdateInput = input;
+    return EventRecord.fromJson({
+      'id': input.id,
       'owner_user_id': 'usr_01',
       'title': input.title,
       'timezone': input.timezone,
@@ -324,5 +346,56 @@ void main() {
     expect(capturedArgs, isNotNull);
     expect(capturedArgs!.eventId, 'evt_01');
     expect(find.text('Event dashboard'), findsOneWidget);
+  });
+
+  testWidgets('editing prepopulates fields and saves metadata updates',
+      (tester) async {
+    final repository = _RecordingEventRepository();
+    EventRecord? savedEvent;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CreateEventScreen(
+          eventRepository: repository,
+          initialEvent: EventRecord.fromJson(const {
+            'id': 'evt_01',
+            'owner_user_id': 'usr_01',
+            'title': 'Original Mahjong',
+            'timezone': 'America/Los_Angeles',
+            'starts_at': '2026-05-29T19:00:00',
+            'lifecycle_status': 'draft',
+            'checkin_open': false,
+            'scoring_open': false,
+            'cover_charge_cents': 2000,
+            'default_ruleset_id': 'HK_STANDARD',
+            'prevailing_wind': 'east',
+            'venue_name': 'Old Club',
+            'venue_address': 'Old Address',
+          }),
+          onSaved: (event) => savedEvent = event,
+        ),
+      ),
+    );
+
+    expect(find.text('Edit Event'), findsOneWidget);
+    expect(
+        find.widgetWithText(TextFormField, 'Original Mahjong'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Old Club'), findsOneWidget);
+
+    await tester.enterText(
+        find.byKey(createEventTitleFieldKey), 'Edited Event');
+    await tester.enterText(find.byKey(createEventVenueNameFieldKey), 'Club 88');
+    await tester.enterText(find.byKey(createEventCoverChargeFieldKey), '1500');
+    await tester.ensureVisible(find.text('Save Changes'));
+    await tester.tap(find.text('Save Changes'));
+    await tester.pumpAndSettle();
+
+    expect(repository.capturedInput, isNull);
+    expect(repository.capturedUpdateInput, isNotNull);
+    expect(repository.capturedUpdateInput!.id, 'evt_01');
+    expect(repository.capturedUpdateInput!.title, 'Edited Event');
+    expect(repository.capturedUpdateInput!.venueName, 'Club 88');
+    expect(repository.capturedUpdateInput!.coverChargeCents, 1500);
+    expect(savedEvent, isNotNull);
   });
 }

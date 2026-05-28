@@ -25,7 +25,11 @@ class EventListController extends ChangeNotifier {
     if (_accessState == null) {
       return MosaicAccessRole.owner;
     }
-    return _accessState.roleForEvent(eventId);
+    final accessRole = _accessState.roleForEvent(eventId);
+    if (accessRole != null) {
+      return accessRole;
+    }
+    return _isOwnedByCurrentUser(eventId) ? MosaicAccessRole.owner : null;
   }
 
   Future<void> load() async {
@@ -86,7 +90,21 @@ class EventListController extends ChangeNotifier {
     final eventIds =
         accessState.events.map((accessEvent) => accessEvent.eventId).toSet();
     return records
-        .where((record) => eventIds.contains(record.id))
+        .where(
+          (record) =>
+              eventIds.contains(record.id) ||
+              record.ownerUserId == accessState.userId,
+        )
         .toList(growable: false);
+  }
+
+  bool _isOwnedByCurrentUser(String eventId) {
+    final userId = _accessState?.userId;
+    if (userId == null) {
+      return false;
+    }
+    return events.any(
+      (event) => event.id == eventId && event.ownerUserId == userId,
+    );
   }
 }

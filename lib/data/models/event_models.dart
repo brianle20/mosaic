@@ -70,6 +70,46 @@ class CreateEventInput {
 }
 
 @immutable
+class UpdateEventInput {
+  const UpdateEventInput({
+    required this.id,
+    required this.title,
+    required this.startsAt,
+    required this.timezone,
+    required this.coverChargeCents,
+    this.description,
+    this.venueName,
+    this.venueAddress,
+    this.defaultRulesetId = 'HK_STANDARD',
+  });
+
+  final String id;
+  final String title;
+  final String? description;
+  final String? venueName;
+  final String? venueAddress;
+  final String timezone;
+  final DateTime startsAt;
+  final int coverChargeCents;
+  final String defaultRulesetId;
+
+  Map<String, dynamic> toRpcParams() {
+    return {
+      'target_event_id': id,
+      'event_title': title,
+      'event_description': description,
+      'event_venue_name': venueName,
+      'event_venue_address': venueAddress,
+      'event_timezone': timezone,
+      'event_starts_at':
+          eventWallTimeToUtc(startsAt, timezone).toIso8601String(),
+      'event_cover_charge_cents': coverChargeCents,
+      'event_default_ruleset_id': defaultRulesetId,
+    };
+  }
+}
+
+@immutable
 class EventRecord {
   const EventRecord({
     required this.id,

@@ -259,6 +259,19 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     await _reloadDashboardAfterReturn(event.id);
   }
 
+  Future<void> _openEditEvent() async {
+    final event = _controller.event;
+    if (event == null || !_controller.canManageEvent) {
+      return;
+    }
+
+    await Navigator.of(context).pushNamed(
+      AppRouter.createEventRoute,
+      arguments: CreateEventArgs(initialEvent: event),
+    );
+    await _reloadDashboardAfterReturn(event.id);
+  }
+
   Future<void> _openSeating() async {
     final event = _controller.event;
     if (event == null) {
@@ -1040,6 +1053,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 onStaff: _openStaff,
                 onActivity: _openActivity,
                 onHandLedger: _openHandLedger,
+                onEdit: _openEditEvent,
                 onCopy: _confirmCopyEventForTesting,
                 onDelete: _confirmDeleteEvent,
                 onComplete: () => _controller.completeEvent(),
@@ -1730,6 +1744,7 @@ class _EventOptionsSection extends StatelessWidget {
     required this.onStaff,
     required this.onActivity,
     required this.onHandLedger,
+    required this.onEdit,
     required this.onCopy,
     required this.onDelete,
     required this.onComplete,
@@ -1746,6 +1761,7 @@ class _EventOptionsSection extends StatelessWidget {
   final VoidCallback onStaff;
   final VoidCallback onActivity;
   final VoidCallback onHandLedger;
+  final VoidCallback onEdit;
   final VoidCallback onCopy;
   final VoidCallback onDelete;
   final VoidCallback onComplete;
@@ -1784,6 +1800,8 @@ class _EventOptionsSection extends StatelessWidget {
               UtilityActionButton(label: 'Seating', onPressed: onSeating),
             if (canManageStaff)
               UtilityActionButton(label: 'Staff', onPressed: onStaff),
+            if (canManageEvent && lifecycleStatus == EventLifecycleStatus.draft)
+              UtilityActionButton(label: 'Edit Event', onPressed: onEdit),
             UtilityActionButton(label: 'Activity', onPressed: onActivity),
             UtilityActionButton(
               label: 'Hand Ledger',

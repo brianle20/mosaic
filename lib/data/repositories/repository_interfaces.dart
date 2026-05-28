@@ -58,6 +58,8 @@ abstract interface class EventRepository {
 
   Future<EventRecord> createEvent(CreateEventInput input);
 
+  Future<EventRecord> updateEventMetadata(UpdateEventInput input);
+
   Future<EventRecord> copyEventForTesting(String eventId);
 
   Future<EventRecord> startEvent(String eventId);

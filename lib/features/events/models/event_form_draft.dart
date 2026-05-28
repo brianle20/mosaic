@@ -62,4 +62,17 @@ class EventFormDraft {
       coverChargeCents: coverChargeCents,
     );
   }
+
+  UpdateEventInput toUpdateInput(String eventId) {
+    return UpdateEventInput(
+      id: eventId,
+      title: title.trim(),
+      timezone: timezone.trim(),
+      startsAt: startsAt,
+      venueName: venueName.trim().isEmpty ? null : venueName.trim(),
+      venueAddress: venueAddress.trim().isEmpty ? null : venueAddress.trim(),
+      description: description.trim().isEmpty ? null : description.trim(),
+      coverChargeCents: coverChargeCents,
+    );
+  }
 }

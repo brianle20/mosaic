@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mosaic/core/time/event_timezones.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -19,11 +20,15 @@ class CreateEventScreen extends StatefulWidget {
   const CreateEventScreen({
     super.key,
     required this.eventRepository,
+    this.initialEvent,
     this.onCreated,
+    this.onSaved,
   });
 
   final EventRepository eventRepository;
+  final EventRecord? initialEvent;
   final ValueChanged<EventRecord>? onCreated;
+  final ValueChanged<EventRecord>? onSaved;
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -39,11 +44,24 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   final String _timezone = 'America/Los_Angeles';
   late DateTime _startsAt;
+  bool get _isEditing => widget.initialEvent != null;
 
   @override
   void initState() {
     super.initState();
-    _startsAt = defaultEventStartAt(DateTime.now());
+    final initialEvent = widget.initialEvent;
+    _startsAt = initialEvent == null
+        ? defaultEventStartAt(DateTime.now())
+        : eventInstantInTimezone(
+            initialEvent.startsAt,
+            initialEvent.timezone,
+          );
+    _titleController.text = initialEvent?.title ?? '';
+    _venueNameController.text = initialEvent?.venueName ?? '';
+    _venueAddressController.text = initialEvent?.venueAddress ?? '';
+    _coverChargeController.text = initialEvent == null
+        ? '0.00'
+        : formatMoneyCents(initialEvent.coverChargeCents);
     _controller = EventFormController(eventRepository: widget.eventRepository)
       ..addListener(_handleUpdate);
   }
@@ -131,12 +149,24 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       return;
     }
 
-    final event = await _controller.submit(draft);
+    final event = await _controller.submit(
+      draft,
+      eventId: widget.initialEvent?.id,
+    );
     if (!mounted || event == null) {
       return;
     }
 
+    if (_isEditing) {
+      widget.onSaved?.call(event);
+      if (widget.onSaved == null) {
+        Navigator.of(context).pop(event);
+      }
+      return;
+    }
+
     widget.onCreated?.call(event);
+    widget.onSaved?.call(event);
     if (widget.onCreated == null) {
       Navigator.of(context).pushReplacementNamed(
         AppRouter.eventDashboardRoute,
@@ -148,12 +178,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Event')),
+      appBar: AppBar(title: Text(_isEditing ? 'Edit Event' : 'Create Event')),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
         child: FilledButton(
           onPressed: _controller.isSubmitting ? null : _submit,
-          child: Text(_controller.isSubmitting ? 'Saving...' : 'Save Event'),
+          child: Text(
+            _controller.isSubmitting
+                ? 'Saving...'
+                : _isEditing
+                    ? 'Save Changes'
+                    : 'Save Event',
+          ),
         ),
       ),
       body: Form(

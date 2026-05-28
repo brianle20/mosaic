@@ -61,6 +61,34 @@ void main() {
     expect(controller.roleForEvent('evt_02'), isNull);
   });
 
+  test('owner access includes newly owned events missing from access snapshot',
+      () async {
+    final existing = _eventRecord('evt_01', 'Existing Event');
+    final copied = _eventRecord('evt_02', 'Copied Event');
+    final controller = EventListController(
+      eventRepository: _FakeEventRepository(
+        cachedEvents: [existing],
+        remoteEventsFuture: Future.value([copied, existing]),
+      ),
+      accessState: const MosaicAccessState(
+        userId: 'owner_01',
+        isActive: true,
+        events: [
+          MosaicAccessEvent(
+            eventId: 'evt_01',
+            title: 'Existing Event',
+            role: MosaicAccessRole.owner,
+          ),
+        ],
+      ),
+    );
+
+    await controller.load();
+
+    expect(controller.events, [copied, existing]);
+    expect(controller.roleForEvent('evt_02'), MosaicAccessRole.owner);
+  });
+
   test('load does not notify after dispose while async work is in flight',
       () async {
     final completer = Completer<List<EventRecord>>();

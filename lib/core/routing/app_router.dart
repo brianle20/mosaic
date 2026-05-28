@@ -83,9 +83,11 @@ class AppRouter {
           settings: settings,
         );
       case createEventRoute:
+        final args = settings.arguments as CreateEventArgs?;
         return MaterialPageRoute<void>(
           builder: (_) => CreateEventScreen(
             eventRepository: eventRepository,
+            initialEvent: args?.initialEvent,
           ),
           settings: settings,
         );
@@ -334,6 +336,12 @@ class EventDashboardArgs {
 
   final String eventId;
   final MosaicAccessRole callerRole;
+}
+
+class CreateEventArgs {
+  const CreateEventArgs({this.initialEvent});
+
+  final EventRecord? initialEvent;
 }
 
 class EventStaffArgs {

@@ -1614,6 +1614,40 @@ void main() {
     expect(find.text('Seating'), findsOneWidget);
   });
 
+  testWidgets('draft event opens metadata editor from event options',
+      (tester) async {
+    RouteSettings? openedSettings;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: EventDashboardArgs(eventId: draftEvent.id),
+          eventRepository: _EventRepository(draftEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+        onGenerateRoute: (settings) {
+          openedSettings = settings;
+          return MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Edit event form')),
+            settings: settings,
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Edit Event'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit Event'));
+    await tester.pumpAndSettle();
+
+    expect(openedSettings?.name, AppRouter.createEventRoute);
+    final args = openedSettings?.arguments as CreateEventArgs?;
+    expect(args?.initialEvent?.id, draftEvent.id);
+    expect(find.text('Edit event form'), findsOneWidget);
+  });
+
   testWidgets('completed event exposes seating prep action', (tester) async {
     await _pumpDashboard(tester, event: completedEvent);
 

@@ -54,6 +54,17 @@ class SupabaseEventRepository implements EventRepository {
   }
 
   @override
+  Future<EventRecord> updateEventMetadata(UpdateEventInput input) async {
+    final response = await _runMutation(
+      'update_event_metadata',
+      input.toRpcParams(),
+    );
+    final record = EventRecord.fromJson(response);
+    await _saveEventRecord(record);
+    return record;
+  }
+
+  @override
   Future<EventRecord> copyEventForTesting(String eventId) async {
     final response = await _runMutation(
       'copy_event_for_testing',
