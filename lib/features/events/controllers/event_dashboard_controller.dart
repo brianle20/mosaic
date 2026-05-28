@@ -1,5 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
@@ -46,6 +47,7 @@ class EventDashboardController extends ChangeNotifier {
     TableRepository? tableRepository,
     SessionRepository? sessionRepository,
     SeatingRepository? seatingRepository,
+    this.callerRole = MosaicAccessRole.owner,
   })  : _eventRepository = eventRepository,
         _guestRepository = guestRepository,
         _leaderboardRepository = leaderboardRepository,
@@ -61,6 +63,7 @@ class EventDashboardController extends ChangeNotifier {
   final TableRepository? _tableRepository;
   SessionRepository? _sessionRepository;
   SeatingRepository? _seatingRepository;
+  MosaicAccessRole callerRole;
   int _stateRequestToken = 0;
 
   bool isLoading = true;
@@ -85,6 +88,16 @@ class EventDashboardController extends ChangeNotifier {
   TournamentRoundSummary finalsRoundSummary = TournamentRoundSummary.empty();
   List<EventHandLedgerEntry> _bonusLedgerEntries = const [];
   List<LeaderboardEntry> _leaderboardEntries = const [];
+
+  bool get canManageEvent => callerRole.canManageEvent;
+
+  bool get canManageStaff => callerRole.canManageStaff;
+
+  bool get canScoreQualification => callerRole.canScoreQualification;
+
+  bool get canScoreTournament => callerRole.canScoreTournament;
+
+  bool get canScoreBonus => callerRole.canScoreBonus;
 
   EventScoringPhase? get effectiveScoringPhase {
     if (finalsRoundSummary.hasCurrentRound) {
@@ -608,7 +621,7 @@ class EventDashboardController extends ChangeNotifier {
 
   Future<void> completeEvent() async {
     final currentEvent = event;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return;
     }
 
@@ -629,7 +642,7 @@ class EventDashboardController extends ChangeNotifier {
 
   Future<void> finalizeEvent() async {
     final currentEvent = event;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return;
     }
 
@@ -650,7 +663,7 @@ class EventDashboardController extends ChangeNotifier {
 
   Future<void> cancelEvent() async {
     final currentEvent = event;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return;
     }
 
@@ -671,7 +684,7 @@ class EventDashboardController extends ChangeNotifier {
 
   Future<void> revertToDraft() async {
     final currentEvent = event;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return;
     }
 
@@ -692,7 +705,7 @@ class EventDashboardController extends ChangeNotifier {
 
   Future<bool> deleteEvent() async {
     final currentEvent = event;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return false;
     }
 
@@ -717,7 +730,7 @@ class EventDashboardController extends ChangeNotifier {
 
   Future<EventRecord?> copyEventForTesting() async {
     final currentEvent = event;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return null;
     }
 
@@ -756,7 +769,7 @@ class EventDashboardController extends ChangeNotifier {
 
   Future<void> startEvent() async {
     final currentEvent = event;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return;
     }
 
@@ -780,7 +793,7 @@ class EventDashboardController extends ChangeNotifier {
     required bool scoringOpen,
   }) async {
     final currentEvent = event;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return;
     }
 
@@ -805,7 +818,7 @@ class EventDashboardController extends ChangeNotifier {
 
   Future<void> setScoringPhase(EventScoringPhase phase) async {
     final currentEvent = event;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return;
     }
 
@@ -849,7 +862,7 @@ class EventDashboardController extends ChangeNotifier {
   Future<List<SeatingAssignmentRecord>?> startTournament() async {
     final currentEvent = event;
     final seatingRepository = _seatingRepository;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return null;
     }
     if (seatingRepository == null) {
@@ -887,7 +900,7 @@ class EventDashboardController extends ChangeNotifier {
   Future<List<SeatingAssignmentRecord>?> startNextTournamentRound() async {
     final currentEvent = event;
     final seatingRepository = _seatingRepository;
-    if (currentEvent == null || isSubmittingLifecycle) {
+    if (!canManageEvent || currentEvent == null || isSubmittingLifecycle) {
       return null;
     }
     if (seatingRepository == null) {
@@ -924,6 +937,11 @@ class EventDashboardController extends ChangeNotifier {
     final currentEvent = event;
     final tableRepository = _tableRepository;
     final sessionRepository = _sessionRepository;
+    if (!_canScoreCurrentPhase()) {
+      tableScanError = 'Your role cannot score this phase.';
+      notifyListeners();
+      return null;
+    }
     if (currentEvent == null ||
         tableRepository == null ||
         sessionRepository == null ||
@@ -971,5 +989,15 @@ class EventDashboardController extends ChangeNotifier {
       isScanningTable = false;
       notifyListeners();
     }
+  }
+
+  bool _canScoreCurrentPhase() {
+    final phase = effectiveScoringPhase ?? event?.currentScoringPhase;
+    return switch (phase) {
+      EventScoringPhase.qualification => canScoreQualification,
+      EventScoringPhase.tournament => canScoreTournament,
+      EventScoringPhase.bonus => canScoreBonus,
+      null => false,
+    };
   }
 }

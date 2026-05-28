@@ -42,6 +42,11 @@ class GuestRosterScreen extends StatefulWidget {
     required this.eventId,
     required this.eventTitle,
     required this.eventCoverChargeCents,
+    this.canCheckIn = true,
+    this.canManageGuests = true,
+    this.canManageCover = true,
+    this.canAssignTags = true,
+    this.canManageTournamentStatus = true,
     required this.guestRepository,
     required this.nfcService,
   });
@@ -49,6 +54,11 @@ class GuestRosterScreen extends StatefulWidget {
   final String eventId;
   final String eventTitle;
   final int eventCoverChargeCents;
+  final bool canCheckIn;
+  final bool canManageGuests;
+  final bool canManageCover;
+  final bool canAssignTags;
+  final bool canManageTournamentStatus;
   final GuestRepository guestRepository;
   final NfcService nfcService;
 
@@ -96,6 +106,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   Future<void> _openAddGuest() async {
+    if (!widget.canManageGuests) {
+      return;
+    }
     await Navigator.of(context).pushNamed(
       AppRouter.guestFormRoute,
       arguments: GuestFormArgs(
@@ -116,6 +129,10 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       arguments: GuestDetailArgs(
         eventId: widget.eventId,
         guestId: guest.id,
+        canCheckIn: widget.canCheckIn,
+        canManageGuests: widget.canManageGuests,
+        canManageCover: widget.canManageCover,
+        canAssignTags: widget.canAssignTags,
       ),
     );
     if (!mounted) {
@@ -125,6 +142,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   Future<void> _markPaid(EventGuestRecord guest) async {
+    if (!widget.canManageCover) {
+      return;
+    }
     await _runQuickAction(
       () => _controller.markPaid(guest.id),
       successMessage: '${guest.displayName} is now marked paid.',
@@ -132,6 +152,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   Future<void> _markComped(EventGuestRecord guest) async {
+    if (!widget.canManageCover) {
+      return;
+    }
     await _runQuickAction(
       () => _controller.markComped(guest.id),
       successMessage: '${guest.displayName} is now marked comped.',
@@ -139,6 +162,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   Future<void> _checkInGuest(EventGuestRecord guest) async {
+    if (!widget.canCheckIn) {
+      return;
+    }
     await _runQuickAction(
       () => _controller.checkIn(guest.id),
       successMessage:
@@ -149,6 +175,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   Future<void> _assignTag(EventGuestRecord guest) async {
+    if (!widget.canAssignTags) {
+      return;
+    }
     await _runQuickAction(
       () => _controller.assignTag(
         guestId: guest.id,
@@ -164,6 +193,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     EventGuestRecord guest,
     EventTournamentStatus status,
   ) async {
+    if (!widget.canManageTournamentStatus) {
+      return;
+    }
     await _runQuickAction(
       () => _controller.updateTournamentStatus(
         guestId: guest.id,
@@ -175,6 +207,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   Future<void> _addCoverEntry(EventGuestRecord guest) async {
+    if (!widget.canManageCover) {
+      return;
+    }
     final initialAmountCents = await _initialCoverEntryAmountCents(guest);
     if (!mounted) {
       return;
@@ -271,12 +306,14 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            FilledButton.icon(
-              onPressed: _openAddGuest,
-              icon: const Icon(Icons.person_add),
-              label: const Text('Add Guest'),
-            ),
-            const SizedBox(height: 16),
+            if (widget.canManageGuests) ...[
+              FilledButton.icon(
+                onPressed: _openAddGuest,
+                icon: const Icon(Icons.person_add),
+                label: const Text('Add Guest'),
+              ),
+              const SizedBox(height: 16),
+            ],
             Text(widget.eventTitle,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
@@ -538,10 +575,17 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     }
 
     if (!hasTag) {
+      if (!widget.canAssignTags) {
+        return null;
+      }
       return FilledButton(
         onPressed: isSubmitting ? null : () => _assignTag(guest),
         child: const Text('Assign Tag'),
       );
+    }
+
+    if (!widget.canManageTournamentStatus) {
+      return null;
     }
 
     return switch (guest.tournamentStatus) {
@@ -569,10 +613,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   bool _hasOverflowActions(EventGuestRecord guest) {
-    if (!guest.isEligibleForPlayerTagAssignment) {
-      return true;
-    }
-
     return _overflowActionsForGuest(guest).isNotEmpty;
   }
 
@@ -580,13 +620,21 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     EventGuestRecord guest,
   ) {
     if (!guest.isEligibleForPlayerTagAssignment) {
+      if (!widget.canManageCover) {
+        return const [];
+      }
       return const [_GuestRosterOverflowAction.markPaidManually];
     }
 
-    final actions = <_GuestRosterOverflowAction>[
-      _GuestRosterOverflowAction.addCoverEntry,
-    ];
+    final actions = <_GuestRosterOverflowAction>[];
+    if (widget.canManageCover) {
+      actions.add(_GuestRosterOverflowAction.addCoverEntry);
+    }
     final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
+
+    if (!widget.canManageTournamentStatus) {
+      return actions;
+    }
 
     switch (guest.tournamentStatus) {
       case EventTournamentStatus.openPlayOnly:
@@ -663,6 +711,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   Widget _buildQuickActionsForGuest(EventGuestRecord guest) {
     final isSubmitting = _controller.isSubmittingGuest(guest.id);
     if (!guest.isEligibleForPlayerTagAssignment) {
+      if (!widget.canManageCover) {
+        return const SizedBox.shrink();
+      }
       return Row(
         children: [
           Expanded(
@@ -687,8 +738,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     }
 
     if (!guest.isCheckedIn) {
-      return Row(
-        children: [
+      final actions = <Widget>[];
+      if (widget.canCheckIn) {
+        actions.add(
           Expanded(
             child: OutlinedButton(
               style: _compactActionButtonStyle(),
@@ -696,7 +748,13 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
               child: _singleLineButtonLabel('Check In'),
             ),
           ),
-          const SizedBox(width: 8),
+        );
+      }
+      if (widget.canAssignTags) {
+        if (actions.isNotEmpty) {
+          actions.add(const SizedBox(width: 8));
+        }
+        actions.add(
           Expanded(
             child: FilledButton(
               style: _compactActionButtonStyle(),
@@ -704,7 +762,13 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
               child: _singleLineButtonLabel('Assign Tag'),
             ),
           ),
-        ],
+        );
+      }
+      if (actions.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return Row(
+        children: actions,
       );
     }
 

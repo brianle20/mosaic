@@ -21,9 +21,13 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
 class _FakeAuthRepository implements AuthRepository {
-  _FakeAuthRepository({this.host});
+  _FakeAuthRepository({
+    this.host,
+    MosaicAccessState? access,
+  }) : access = access ?? _approvedAccess();
 
   HostAuthUser? host;
+  MosaicAccessState access;
   final StreamController<HostAuthUser?> controller =
       StreamController<HostAuthUser?>.broadcast();
 
@@ -32,6 +36,9 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   HostAuthUser? get currentHost => host;
+
+  @override
+  Future<MosaicAccessState> loadCurrentAccess() async => access;
 
   @override
   Future<HostAuthUser?> signInWithPassword({
@@ -61,6 +68,20 @@ class _FakeAuthRepository implements AuthRepository {
     host = null;
     controller.add(null);
   }
+}
+
+MosaicAccessState _approvedAccess() {
+  return const MosaicAccessState(
+    userId: 'usr_01',
+    isActive: true,
+    events: [
+      MosaicAccessEvent(
+        eventId: 'evt_01',
+        title: 'Friday Night Mahjong',
+        role: MosaicAccessRole.owner,
+      ),
+    ],
+  );
 }
 
 class _FakeEventRepository implements EventRepository {
@@ -542,7 +563,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Host Sign In'), findsOneWidget);
+    expect(find.text('Mosaic Sign In'), findsOneWidget);
     expect(find.text('Events'), findsNothing);
   });
 
@@ -587,7 +608,7 @@ void main() {
 
     expect(find.text('Events'), findsOneWidget);
     expect(find.text('Friday Night Mahjong'), findsOneWidget);
-    expect(find.text('Host Sign In'), findsNothing);
+    expect(find.text('Mosaic Sign In'), findsNothing);
   });
 
   testWidgets('returns to host sign in after sign out', (tester) async {
@@ -633,7 +654,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('eventsSignOutAction')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Host Sign In'), findsOneWidget);
+    expect(find.text('Mosaic Sign In'), findsOneWidget);
     expect(find.text('Events'), findsNothing);
   });
 

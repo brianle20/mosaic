@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:collection/collection.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
@@ -364,6 +365,34 @@ TournamentRoundSummary _roundSummary(int roundNumber) {
 }
 
 void main() {
+  test('exposes role capability booleans for event scorers', () {
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(cachedEvents: const []),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      callerRole: MosaicAccessRole.eventScorer,
+    );
+
+    expect(controller.canManageEvent, isFalse);
+    expect(controller.canManageStaff, isFalse);
+    expect(controller.canScoreQualification, isTrue);
+    expect(controller.canScoreTournament, isTrue);
+    expect(controller.canScoreBonus, isTrue);
+  });
+
+  test('qualification scorers cannot score tournament or bonus phases', () {
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(cachedEvents: const []),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      callerRole: MosaicAccessRole.qualificationScorer,
+    );
+
+    expect(controller.canManageEvent, isFalse);
+    expect(controller.canManageStaff, isFalse);
+    expect(controller.canScoreQualification, isTrue);
+    expect(controller.canScoreTournament, isFalse);
+    expect(controller.canScoreBonus, isFalse);
+  });
+
   test('loads cached dashboard data when remote fetches fail', () async {
     final cachedEvent = EventRecord.fromJson(const {
       'id': 'evt_01',

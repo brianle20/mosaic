@@ -15,12 +15,20 @@ class GuestDetailScreen extends StatefulWidget {
     super.key,
     required this.guestId,
     required this.eventId,
+    this.canCheckIn = true,
+    this.canManageGuests = true,
+    this.canManageCover = true,
+    this.canAssignTags = true,
     required this.guestRepository,
     required this.nfcService,
   });
 
   final String guestId;
   final String eventId;
+  final bool canCheckIn;
+  final bool canManageGuests;
+  final bool canManageCover;
+  final bool canAssignTags;
   final GuestRepository guestRepository;
   final NfcService nfcService;
 
@@ -55,6 +63,9 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
   }
 
   Future<void> _openAddCoverEntry() async {
+    if (!widget.canManageCover) {
+      return;
+    }
     final detail = _controller.detail;
     final submission = await Navigator.of(context).push<SubmitCoverEntryInput>(
       MaterialPageRoute(
@@ -79,6 +90,9 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
   }
 
   Future<void> _openEditCoverEntry(GuestCoverEntryRecord entry) async {
+    if (!widget.canManageCover) {
+      return;
+    }
     final submission = await Navigator.of(context).push<SubmitCoverEntryInput>(
       MaterialPageRoute(
         builder: (_) => AddCoverEntryScreen(
@@ -103,6 +117,9 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
   }
 
   Future<void> _openEditGuest(EventGuestRecord guest) async {
+    if (!widget.canManageGuests) {
+      return;
+    }
     var existingGuests = await widget.guestRepository.readCachedGuests(
       widget.eventId,
     );
@@ -141,7 +158,7 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
       appBar: AppBar(
         title: Text(guest?.displayName ?? 'Guest'),
         actions: [
-          if (guest != null)
+          if (guest != null && widget.canManageGuests)
             TextButton(
               onPressed:
                   _controller.isSubmitting ? null : () => _openEditGuest(guest),
@@ -213,11 +230,12 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-                TextButton(
-                  onPressed:
-                      _controller.isSubmitting ? null : _openAddCoverEntry,
-                  child: const Text('Add Cover Entry'),
-                ),
+                if (widget.canManageCover)
+                  TextButton(
+                    onPressed:
+                        _controller.isSubmitting ? null : _openAddCoverEntry,
+                    child: const Text('Add Cover Entry'),
+                  ),
               ],
             ),
             if (detail != null && detail.coverEntries.isEmpty)
@@ -233,13 +251,15 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                   child: ListTile(
                     title: Text(_coverEntrySummary(entry)),
                     subtitle: entry.note == null ? null : Text(entry.note!),
-                    trailing: IconButton(
-                      tooltip: 'Edit cover entry',
-                      onPressed: _controller.isSubmitting
-                          ? null
-                          : () => _openEditCoverEntry(entry),
-                      icon: const Icon(Icons.edit),
-                    ),
+                    trailing: widget.canManageCover
+                        ? IconButton(
+                            tooltip: 'Edit cover entry',
+                            onPressed: _controller.isSubmitting
+                                ? null
+                                : () => _openEditCoverEntry(entry),
+                            icon: const Icon(Icons.edit),
+                          )
+                        : null,
                   ),
                 ),
               ),
@@ -272,39 +292,48 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                       : 'This guest already has a player tag. Replace it only if needed.',
                 ),
               ),
-              if (!guest.isCheckedIn && assignment == null)
+              if (!guest.isCheckedIn &&
+                  assignment == null &&
+                  (widget.canCheckIn || widget.canAssignTags))
                 Row(
                   children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _controller.isSubmitting
-                            ? null
-                            : () => _controller.checkIn(
-                                  guestId: widget.guestId,
-                                ),
-                        child: Text(
-                          _controller.isSubmitting ? 'Saving...' : 'Check In',
+                    if (widget.canCheckIn)
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _controller.isSubmitting
+                              ? null
+                              : () => _controller.checkIn(
+                                    guestId: widget.guestId,
+                                  ),
+                          child: Text(
+                            _controller.isSubmitting ? 'Saving...' : 'Check In',
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: _controller.isSubmitting
-                            ? null
-                            : () => _controller.assignTag(
-                                  guestId: widget.guestId,
-                                  scanForTag: () => widget.nfcService
-                                      .scanPlayerTagForAssignment(context),
-                                ),
-                        child: Text(
-                          _controller.isSubmitting ? 'Saving...' : 'Assign Tag',
+                    if (widget.canCheckIn && widget.canAssignTags)
+                      const SizedBox(width: 12),
+                    if (widget.canAssignTags)
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _controller.isSubmitting
+                              ? null
+                              : () => _controller.assignTag(
+                                    guestId: widget.guestId,
+                                    scanForTag: () => widget.nfcService
+                                        .scanPlayerTagForAssignment(context),
+                                  ),
+                          child: Text(
+                            _controller.isSubmitting
+                                ? 'Saving...'
+                                : 'Assign Tag',
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
-              if (guest.isCheckedIn && assignment == null)
+              if (guest.isCheckedIn &&
+                  assignment == null &&
+                  widget.canAssignTags)
                 FilledButton(
                   onPressed: _controller.isSubmitting
                       ? null
@@ -317,7 +346,7 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                     _controller.isSubmitting ? 'Saving...' : 'Assign Tag',
                   ),
                 ),
-              if (assignment != null)
+              if (assignment != null && widget.canAssignTags)
                 FilledButton(
                   onPressed: _controller.isSubmitting
                       ? null

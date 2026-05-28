@@ -28,6 +28,21 @@ class _FakeAuthRepository implements AuthRepository {
   HostAuthUser? get currentHost => current;
 
   @override
+  Future<MosaicAccessState> loadCurrentAccess() async {
+    return const MosaicAccessState(
+      userId: 'usr_01',
+      isActive: true,
+      events: [
+        MosaicAccessEvent(
+          eventId: 'evt_01',
+          title: 'Friday Night Mahjong',
+          role: MosaicAccessRole.owner,
+        ),
+      ],
+    );
+  }
+
+  @override
   Future<HostAuthUser?> signInWithPassword({
     required String email,
     required String password,
@@ -85,9 +100,11 @@ void main() {
       ),
     );
 
-    expect(find.text('Host Sign In'), findsOneWidget);
+    expect(find.text('Mosaic Sign In'), findsOneWidget);
     expect(
-        find.text('Run live Mahjong events from one phone.'), findsOneWidget);
+      find.text('Sign in to manage Mosaic events.'),
+      findsOneWidget,
+    );
     expect(find.text('Email Code'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.byType(TextFormField), findsOneWidget);

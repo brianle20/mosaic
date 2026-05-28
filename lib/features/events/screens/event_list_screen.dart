@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_list_controller.dart';
@@ -15,10 +16,12 @@ class EventListScreen extends StatefulWidget {
   const EventListScreen({
     super.key,
     required this.eventRepository,
+    this.accessState,
     this.onSignOut,
   });
 
   final EventRepository eventRepository;
+  final MosaicAccessState? accessState;
   final Future<void> Function()? onSignOut;
 
   @override
@@ -31,7 +34,10 @@ class _EventListScreenState extends State<EventListScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = EventListController(eventRepository: widget.eventRepository)
+    _controller = EventListController(
+      eventRepository: widget.eventRepository,
+      accessState: widget.accessState,
+    )
       ..addListener(_handleUpdate)
       ..load();
   }
@@ -60,9 +66,17 @@ class _EventListScreenState extends State<EventListScreen> {
   }
 
   Future<void> _openEvent(EventRecord event) async {
+    final role = _controller.roleForEvent(event.id);
+    if (role == null) {
+      return;
+    }
+
     await Navigator.of(context).pushNamed(
       AppRouter.eventDashboardRoute,
-      arguments: EventDashboardArgs(eventId: event.id),
+      arguments: EventDashboardArgs(
+        eventId: event.id,
+        callerRole: role,
+      ),
     );
     if (!mounted) {
       return;
@@ -121,8 +135,20 @@ class _EventListScreenState extends State<EventListScreen> {
     return null;
   }
 
+  String _roleLabel(MosaicAccessRole role) {
+    return switch (role) {
+      MosaicAccessRole.owner => 'Owner',
+      MosaicAccessRole.qualificationScorer => 'Qualification Scorer',
+      MosaicAccessRole.eventScorer => 'Event Scorer',
+    };
+  }
+
   Widget _buildEventCard(EventRecord event) {
     final location = _eventLocation(event);
+    final role = _controller.roleForEvent(event.id);
+    if (role == null) {
+      return const SizedBox.shrink();
+    }
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
@@ -150,6 +176,12 @@ class _EventListScreenState extends State<EventListScreen> {
                 StatusChip(
                   label: _eventPhaseLabel(event),
                   tone: _eventPhaseTone(event),
+                ),
+                StatusChip(
+                  label: _roleLabel(role),
+                  tone: role == MosaicAccessRole.owner
+                      ? StatusChipTone.success
+                      : StatusChipTone.info,
                 ),
                 Text(
                   formatEventTileStart(
@@ -197,13 +229,15 @@ class _EventListScreenState extends State<EventListScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            HeroActionButton(
-              key: const ValueKey('eventsCreateHeroAction'),
-              onPressed: _openCreateEvent,
-              icon: Icons.add,
-              label: 'Create Event',
-            ),
-            const SizedBox(height: 16),
+            if (_controller.canCreateEvents) ...[
+              HeroActionButton(
+                key: const ValueKey('eventsCreateHeroAction'),
+                onPressed: _openCreateEvent,
+                icon: Icons.add,
+                label: 'Create Event',
+              ),
+              const SizedBox(height: 16),
+            ],
             for (final event in _controller.events) _buildEventCard(event),
             if (_controller.events.isEmpty)
               const Padding(

@@ -10,6 +10,17 @@ class _FakeAuthRepository implements AuthRepository {
   _FakeAuthRepository({this.host});
 
   HostAuthUser? host;
+  MosaicAccessState accessState = const MosaicAccessState(
+    userId: 'usr_01',
+    isActive: true,
+    events: [
+      MosaicAccessEvent(
+        eventId: 'evt_01',
+        title: 'Test Event',
+        role: MosaicAccessRole.owner,
+      ),
+    ],
+  );
   String? sentOtpEmail;
   String? verifiedOtpEmail;
   String? verifiedOtpCode;
@@ -21,6 +32,9 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   HostAuthUser? get currentHost => host;
+
+  @override
+  Future<MosaicAccessState> loadCurrentAccess() async => accessState;
 
   @override
   Future<HostAuthUser?> signInWithPassword({
@@ -149,6 +163,11 @@ void main() {
         );
         return AuthResponse(user: currentUser);
       },
+      loadCurrentAccessAction: () async => const {
+        'userId': 'usr_01',
+        'isActive': true,
+        'events': [],
+      },
       signOutAction: () async {
         signOutCalled = true;
         currentUser = null;
@@ -232,6 +251,11 @@ void main() {
         );
         return AuthResponse(user: currentUser);
       },
+      loadCurrentAccessAction: () async => const {
+        'userId': 'usr_email_otp',
+        'isActive': true,
+        'events': [],
+      },
       signOutAction: () async {},
     );
 
@@ -252,5 +276,123 @@ void main() {
     expect(verifiedOtpEmail, 'helper@example.com');
     expect(verifiedOtpCode, '123456');
     expect(verifiedOtpType, OtpType.email);
+  });
+
+  test('maps phone-only current host and loads Mosaic access', () async {
+    final currentUser = const User(
+      id: 'usr_phone',
+      appMetadata: {'provider': 'phone'},
+      userMetadata: null,
+      aud: 'authenticated',
+      phone: '+15551234567',
+      createdAt: '2026-05-28T00:00:00Z',
+    );
+    var loadAccessCalled = false;
+
+    final repository = SupabaseAuthRepository(
+      currentUserReader: () => currentUser,
+      authStateChangesReader: () => const Stream<AuthState>.empty(),
+      signInWithPasswordAction: ({
+        required String email,
+        required String password,
+      }) async {
+        throw UnimplementedError();
+      },
+      sendEmailOtpAction: ({
+        required String email,
+        required bool shouldCreateUser,
+      }) async {},
+      verifyEmailOtpAction: ({
+        required String email,
+        required String token,
+        required OtpType type,
+      }) async {
+        throw UnimplementedError();
+      },
+      loadCurrentAccessAction: () async {
+        loadAccessCalled = true;
+        return const {
+          'userId': 'usr_phone',
+          'isActive': true,
+          'events': [
+            {
+              'eventId': 'evt_01',
+              'title': 'FV Mahjong 1',
+              'role': 'event_scorer',
+            },
+          ],
+        };
+      },
+      signOutAction: () async {},
+    );
+
+    expect(
+      repository.currentHost,
+      const HostAuthUser(
+        id: 'usr_phone',
+        phoneE164: '+15551234567',
+      ),
+    );
+
+    final access = await repository.loadCurrentAccess();
+
+    expect(loadAccessCalled, isTrue);
+    expect(access.hasApprovedAccess, isTrue);
+    expect(access.events.single.role, MosaicAccessRole.eventScorer);
+    expect(access.canScoreTournament('evt_01'), isTrue);
+  });
+
+  test('loads Mosaic access from Supabase table RPC rows', () async {
+    final currentUser = const User(
+      id: 'usr_rows',
+      appMetadata: {'provider': 'email'},
+      userMetadata: null,
+      aud: 'authenticated',
+      email: 'rows@example.com',
+      createdAt: '2026-05-28T00:00:00Z',
+    );
+
+    final repository = SupabaseAuthRepository(
+      currentUserReader: () => currentUser,
+      authStateChangesReader: () => const Stream<AuthState>.empty(),
+      signInWithPasswordAction: ({
+        required String email,
+        required String password,
+      }) async {
+        throw UnimplementedError();
+      },
+      sendEmailOtpAction: ({
+        required String email,
+        required bool shouldCreateUser,
+      }) async {},
+      verifyEmailOtpAction: ({
+        required String email,
+        required String token,
+        required OtpType type,
+      }) async {
+        throw UnimplementedError();
+      },
+      loadCurrentAccessAction: () async => const [
+        {
+          'event_id': 'evt_owner',
+          'event_title': 'Owned Event',
+          'role': 'owner',
+        },
+        {
+          'event_id': 'evt_staff',
+          'event_title': 'Staff Event',
+          'role': 'qualification_scorer',
+        },
+      ],
+      signOutAction: () async {},
+    );
+
+    final access = await repository.loadCurrentAccess();
+
+    expect(access.userId, 'usr_rows');
+    expect(access.hasApprovedAccess, isTrue);
+    expect(access.ownedEvents.single.eventId, 'evt_owner');
+    expect(access.assignedEvents.single.role,
+        MosaicAccessRole.qualificationScorer);
   });
 }

@@ -117,12 +117,9 @@ void main() {
     expect(startSessionSql, contains('current_scoring_phase'));
     expect(startSessionSql, contains('effective_scoring_phase'));
     expect(startSessionSql, contains('scoring_phase'));
-    expect(
-      startSessionSql,
-      contains(
-        'case when bonus_assignment_row.id is null then effective_scoring_phase else',
-      ),
-    );
+    expect(startSessionSql, contains('bonus_assignment_row.id is null'));
+    expect(startSessionSql, contains('then effective_scoring_phase'));
+    expect(startSessionSql, contains("else 'bonus'"));
     expect(seatingValidationSql, contains('current_scoring_phase'));
     expect(
       seatingValidationSql,

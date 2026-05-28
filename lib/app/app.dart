@@ -3,6 +3,7 @@ import 'package:mosaic/core/config/app_environment.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/theme/app_theme.dart';
 import 'package:mosaic/data/local/local_cache.dart';
+import 'package:mosaic/data/models/staff_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/data/repositories/supabase_activity_repository.dart';
 import 'package:mosaic/data/repositories/supabase_auth_repository.dart';
@@ -12,6 +13,7 @@ import 'package:mosaic/data/repositories/supabase_leaderboard_repository.dart';
 import 'package:mosaic/data/repositories/supabase_prize_repository.dart';
 import 'package:mosaic/data/repositories/supabase_seating_repository.dart';
 import 'package:mosaic/data/repositories/supabase_session_repository.dart';
+import 'package:mosaic/data/repositories/supabase_staff_repository.dart';
 import 'package:mosaic/data/repositories/supabase_table_repository.dart';
 import 'package:mosaic/features/auth/controllers/auth_controller.dart';
 import 'package:mosaic/features/auth/screens/host_sign_in_screen.dart';
@@ -34,6 +36,7 @@ class MosaicApp extends StatelessWidget {
     this.activityRepository,
     this.prizeRepository,
     this.seatingRepository,
+    this.staffRepository,
     this.nfcService,
   });
 
@@ -48,6 +51,7 @@ class MosaicApp extends StatelessWidget {
   final ActivityRepository? activityRepository;
   final PrizeRepository? prizeRepository;
   final SeatingRepository? seatingRepository;
+  final StaffRepository? staffRepository;
   final NfcService? nfcService;
 
   @override
@@ -80,6 +84,7 @@ class MosaicApp extends StatelessWidget {
         activityRepository: activityRepository!,
         prizeRepository: prizeRepository!,
         seatingRepository: seatingRepository!,
+        staffRepository: staffRepository ?? const _UnavailableStaffRepository(),
         nfcService: nfcService!,
       );
     }
@@ -95,6 +100,7 @@ class MosaicApp extends StatelessWidget {
           ActivityRepository activityRepository,
           PrizeRepository prizeRepository,
           SeatingRepository seatingRepository,
+          StaffRepository staffRepository,
           NfcService nfcService,
         })>(
       future: _loadRepositories(),
@@ -125,6 +131,7 @@ class MosaicApp extends StatelessWidget {
           activityRepository: snapshot.data!.activityRepository,
           prizeRepository: snapshot.data!.prizeRepository,
           seatingRepository: snapshot.data!.seatingRepository,
+          staffRepository: snapshot.data!.staffRepository,
           nfcService: snapshot.data!.nfcService,
         );
       },
@@ -142,6 +149,7 @@ class MosaicApp extends StatelessWidget {
         ActivityRepository activityRepository,
         PrizeRepository prizeRepository,
         SeatingRepository seatingRepository,
+        StaffRepository staffRepository,
         NfcService nfcService,
       })> _loadRepositories() async {
     final cache = await LocalCache.create();
@@ -180,6 +188,7 @@ class MosaicApp extends StatelessWidget {
         client: client,
         cache: cache,
       ),
+      staffRepository: SupabaseStaffRepository(client: client),
       nfcService: createDefaultNfcService(),
     );
   }
@@ -289,6 +298,7 @@ class _AppWithRepositories extends StatelessWidget {
     required this.activityRepository,
     required this.prizeRepository,
     required this.seatingRepository,
+    required this.staffRepository,
     required this.nfcService,
   });
 
@@ -301,6 +311,7 @@ class _AppWithRepositories extends StatelessWidget {
   final ActivityRepository activityRepository;
   final PrizeRepository prizeRepository;
   final SeatingRepository seatingRepository;
+  final StaffRepository staffRepository;
   final NfcService nfcService;
 
   @override
@@ -314,6 +325,7 @@ class _AppWithRepositories extends StatelessWidget {
       activityRepository: activityRepository,
       prizeRepository: prizeRepository,
       seatingRepository: seatingRepository,
+      staffRepository: staffRepository,
       nfcService: nfcService,
     );
 
@@ -324,10 +336,38 @@ class _AppWithRepositories extends StatelessWidget {
         authRepository: authRepository,
         eventRepository: eventRepository,
         guestRepository: guestRepository,
+        tableRepository: tableRepository,
+        sessionRepository: sessionRepository,
+        leaderboardRepository: leaderboardRepository,
+        activityRepository: activityRepository,
+        prizeRepository: prizeRepository,
+        seatingRepository: seatingRepository,
+        staffRepository: staffRepository,
+        nfcService: nfcService,
       ),
       onGenerateRoute: router.onGenerateRoute,
     );
   }
+}
+
+class _UnavailableStaffRepository implements StaffRepository {
+  const _UnavailableStaffRepository();
+
+  @override
+  Future<List<EventStaffMembershipRecord>> listEventStaff(String eventId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<EventStaffMembershipRecord> upsertEventStaff(
+    UpsertEventStaffMembershipInput input,
+  ) =>
+      throw UnimplementedError();
+
+  @override
+  Future<EventStaffMembershipRecord> disableEventStaffMembership(
+    String membershipId,
+  ) =>
+      throw UnimplementedError();
 }
 
 class _AuthGate extends StatefulWidget {
@@ -335,11 +375,27 @@ class _AuthGate extends StatefulWidget {
     required this.authRepository,
     required this.eventRepository,
     required this.guestRepository,
+    required this.tableRepository,
+    required this.sessionRepository,
+    required this.leaderboardRepository,
+    required this.activityRepository,
+    required this.prizeRepository,
+    required this.seatingRepository,
+    required this.staffRepository,
+    required this.nfcService,
   });
 
   final AuthRepository authRepository;
   final EventRepository eventRepository;
   final GuestRepository guestRepository;
+  final TableRepository tableRepository;
+  final SessionRepository sessionRepository;
+  final LeaderboardRepository leaderboardRepository;
+  final ActivityRepository activityRepository;
+  final PrizeRepository prizeRepository;
+  final SeatingRepository seatingRepository;
+  final StaffRepository staffRepository;
+  final NfcService nfcService;
 
   @override
   State<_AuthGate> createState() => _AuthGateState();
@@ -382,6 +438,7 @@ class _AuthGateState extends State<_AuthGate> {
 
     return EventListScreen(
       eventRepository: widget.eventRepository,
+      accessState: _controller.currentAccess,
       onSignOut: _controller.signOut,
     );
   }

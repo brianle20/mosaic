@@ -104,6 +104,24 @@ class SupabaseTableRepository implements TableRepository {
     required String scannedUid,
   }) async {
     final normalizedUid = _normalizeTagUid(scannedUid);
+    if (_tagByUidLoader == null && _tableByTagLoader == null) {
+      try {
+        final table = EventTableRecord.fromJson(
+          await _runRpcSingle(
+            'resolve_event_table_by_tag',
+            {
+              'target_event_id': eventId,
+              'scanned_uid': normalizedUid,
+            },
+          ),
+        );
+        await _saveMergedTables(eventId, table);
+        return table;
+      } on PostgrestException catch (exception) {
+        throw _tableTagResolutionExceptionForMessage(exception.message);
+      }
+    }
+
     final tagRow = await _loadTagByUid(normalizedUid);
     if (tagRow == null) {
       throw const TableTagResolutionException(
@@ -225,6 +243,23 @@ class SupabaseTableRepository implements TableRepository {
 
 String _normalizeTagUid(String value) {
   return value.replaceAll(RegExp(r'[^0-9A-Za-z]+'), '').toUpperCase();
+}
+
+TableTagResolutionException _tableTagResolutionExceptionForMessage(
+  String message,
+) {
+  if (message.contains('Expected a table tag')) {
+    return const TableTagResolutionException(
+      TableTagResolutionFailure.nonTableTag,
+    );
+  }
+  if (message.contains('not assigned to a table')) {
+    return const TableTagResolutionException(
+      TableTagResolutionFailure.wrongEventOrUnbound,
+    );
+  }
+  return const TableTagResolutionException(
+      TableTagResolutionFailure.unknownTag);
 }
 
 String _rotationPolicyToJson(RotationPolicyType value) {

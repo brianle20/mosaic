@@ -115,19 +115,14 @@ class _HostSignInScreenState extends State<HostSignInScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Host Sign In',
+                      'Mosaic Sign In',
                       style: Theme.of(context).textTheme.headlineMedium,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Run live Mahjong events from one phone.',
+                      'Sign in to manage Mosaic events.',
                       style: Theme.of(context).textTheme.titleMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Sign in to manage live event operations.',
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),

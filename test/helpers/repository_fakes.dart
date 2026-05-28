@@ -341,6 +341,9 @@ class ThrowingAuthRepository implements AuthRepository {
   Stream<HostAuthUser?> authStateChanges() => throw UnimplementedError();
 
   @override
+  Future<MosaicAccessState> loadCurrentAccess() => throw UnimplementedError();
+
+  @override
   Future<HostAuthUser?> signInWithPassword({
     required String email,
     required String password,

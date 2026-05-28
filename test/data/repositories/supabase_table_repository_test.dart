@@ -160,6 +160,41 @@ void main() {
       expect(table.nfcTagId, 'tag_table_01');
     });
 
+    test('resolves a table tag through the staff-safe RPC by default',
+        () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseTableRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcSingleRunner: (functionName, params) async {
+          expect(functionName, 'resolve_event_table_by_tag');
+          expect(params, {
+            'target_event_id': 'evt_01',
+            'scanned_uid': 'TABLE001',
+          });
+          return const {
+            'id': 'tbl_01',
+            'event_id': 'evt_01',
+            'label': 'Table 1',
+            'display_order': 1,
+            'nfc_tag_id': 'tag_table_01',
+            'default_ruleset_id': 'HK_STANDARD',
+            'default_rotation_policy_type':
+                'dealer_cycle_return_to_initial_east',
+            'default_rotation_policy_config_json': {},
+          };
+        },
+      );
+
+      final table = await repository.resolveTableByTag(
+        eventId: 'evt_01',
+        scannedUid: ' table-001 ',
+      );
+
+      expect(table.id, 'tbl_01');
+      expect(table.nfcTagId, 'tag_table_01');
+    });
+
     test('throws unknownTag when scanned table tag is unknown', () async {
       final cache = await LocalCache.create();
       final repository = SupabaseTableRepository(

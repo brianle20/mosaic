@@ -6,9 +6,13 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/auth/controllers/auth_controller.dart';
 
 class _FakeAuthRepository implements AuthRepository {
-  _FakeAuthRepository({this.current});
+  _FakeAuthRepository({
+    this.current,
+    MosaicAccessState? access,
+  }) : access = access ?? _approvedAccess();
 
   HostAuthUser? current;
+  MosaicAccessState access;
   final StreamController<HostAuthUser?> controller =
       StreamController<HostAuthUser?>.broadcast();
   Object? signInError;
@@ -23,6 +27,9 @@ class _FakeAuthRepository implements AuthRepository {
 
   @override
   HostAuthUser? get currentHost => current;
+
+  @override
+  Future<MosaicAccessState> loadCurrentAccess() async => access;
 
   @override
   Future<HostAuthUser?> signInWithPassword({
@@ -66,6 +73,20 @@ class _FakeAuthRepository implements AuthRepository {
     current = null;
     controller.add(null);
   }
+}
+
+MosaicAccessState _approvedAccess() {
+  return const MosaicAccessState(
+    userId: 'usr_01',
+    isActive: true,
+    events: [
+      MosaicAccessEvent(
+        eventId: 'evt_01',
+        title: 'Friday Night Mahjong',
+        role: MosaicAccessRole.owner,
+      ),
+    ],
+  );
 }
 
 void main() {
@@ -112,6 +133,31 @@ void main() {
         ),
       );
       expect(controller.isSignedIn, isTrue);
+    });
+
+    test('signed in host without approved access is not app signed in',
+        () async {
+      final repository = _FakeAuthRepository(
+        current: const HostAuthUser(
+          id: 'usr_01',
+          email: 'host@example.test',
+        ),
+        access: const MosaicAccessState(
+          userId: 'usr_01',
+          isActive: true,
+          events: [],
+        ),
+      );
+      final controller = AuthController(authRepository: repository);
+
+      await controller.bootstrap();
+
+      expect(controller.hasAuthenticatedHost, isTrue);
+      expect(controller.isSignedIn, isFalse);
+      expect(
+        controller.submitError,
+        contains('not approved for any events'),
+      );
     });
 
     test('reports a friendly error when sign in fails', () async {
@@ -211,6 +257,7 @@ void main() {
       await controller.signOut();
 
       expect(controller.currentHost, isNull);
+      expect(controller.currentAccess, isNull);
       expect(controller.isSignedIn, isFalse);
     });
   });

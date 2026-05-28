@@ -10,6 +10,7 @@ import 'package:mosaic/data/models/ruleset_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/staff_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
@@ -18,6 +19,8 @@ abstract interface class AuthRepository {
   HostAuthUser? get currentHost;
 
   Stream<HostAuthUser?> authStateChanges();
+
+  Future<MosaicAccessState> loadCurrentAccess();
 
   Future<HostAuthUser?> signInWithPassword({
     required String email,
@@ -32,6 +35,18 @@ abstract interface class AuthRepository {
   });
 
   Future<void> signOut();
+}
+
+abstract interface class StaffRepository {
+  Future<List<EventStaffMembershipRecord>> listEventStaff(String eventId);
+
+  Future<EventStaffMembershipRecord> upsertEventStaff(
+    UpsertEventStaffMembershipInput input,
+  );
+
+  Future<EventStaffMembershipRecord> disableEventStaffMembership(
+    String membershipId,
+  );
 }
 
 abstract interface class EventRepository {

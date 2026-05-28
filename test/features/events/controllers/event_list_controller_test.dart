@@ -1,11 +1,66 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/events/controllers/event_list_controller.dart';
 
 void main() {
+  test('staff-only access cannot create events and exposes event role', () {
+    final controller = EventListController(
+      eventRepository: _FakeEventRepository(
+        cachedEvents: const <EventRecord>[],
+        remoteEventsFuture: Future.value(const <EventRecord>[]),
+      ),
+      accessState: const MosaicAccessState(
+        userId: 'usr_01',
+        isActive: true,
+        events: [
+          MosaicAccessEvent(
+            eventId: 'evt_01',
+            title: 'Friday Night Mahjong',
+            role: MosaicAccessRole.qualificationScorer,
+          ),
+        ],
+      ),
+    );
+
+    expect(controller.canCreateEvents, isFalse);
+    expect(
+      controller.roleForEvent('evt_01'),
+      MosaicAccessRole.qualificationScorer,
+    );
+  });
+
+  test('staff access filters cached and remote events to allowed ids',
+      () async {
+    final allowed = _eventRecord('evt_01', 'Allowed Event');
+    final denied = _eventRecord('evt_02', 'Denied Event');
+    final controller = EventListController(
+      eventRepository: _FakeEventRepository(
+        cachedEvents: [allowed, denied],
+        remoteEventsFuture: Future.value([denied, allowed]),
+      ),
+      accessState: const MosaicAccessState(
+        userId: 'usr_01',
+        isActive: true,
+        events: [
+          MosaicAccessEvent(
+            eventId: 'evt_01',
+            title: 'Allowed Event',
+            role: MosaicAccessRole.eventScorer,
+          ),
+        ],
+      ),
+    );
+
+    await controller.load();
+
+    expect(controller.events, [allowed]);
+    expect(controller.roleForEvent('evt_02'), isNull);
+  });
+
   test('load does not notify after dispose while async work is in flight',
       () async {
     final completer = Completer<List<EventRecord>>();
@@ -21,6 +76,23 @@ void main() {
     completer.complete(const <EventRecord>[]);
 
     await expectLater(future, completes);
+  });
+}
+
+EventRecord _eventRecord(String id, String title) {
+  return EventRecord.fromJson({
+    'id': id,
+    'owner_user_id': 'owner_01',
+    'title': title,
+    'timezone': 'America/Los_Angeles',
+    'starts_at': '2026-05-24T19:00:00-07:00',
+    'lifecycle_status': 'active',
+    'checkin_open': true,
+    'scoring_open': true,
+    'current_scoring_phase': 'qualification',
+    'cover_charge_cents': 2000,
+    'default_ruleset_id': 'HK_STANDARD',
+    'prevailing_wind': 'east',
   });
 }
 

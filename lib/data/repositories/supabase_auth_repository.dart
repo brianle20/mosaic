@@ -17,6 +17,7 @@ typedef VerifyEmailOtpAction = Future<AuthResponse> Function({
   required String token,
   required OtpType type,
 });
+typedef LoadCurrentAccessAction = Future<Object?> Function();
 typedef SignOutAction = Future<void> Function();
 
 class SupabaseAuthRepository implements AuthRepository {
@@ -26,12 +27,14 @@ class SupabaseAuthRepository implements AuthRepository {
     required SignInWithPasswordAction signInWithPasswordAction,
     required SendEmailOtpAction sendEmailOtpAction,
     required VerifyEmailOtpAction verifyEmailOtpAction,
+    required LoadCurrentAccessAction loadCurrentAccessAction,
     required SignOutAction signOutAction,
   })  : _currentUserReader = currentUserReader,
         _authStateChangesReader = authStateChangesReader,
         _signInWithPasswordAction = signInWithPasswordAction,
         _sendEmailOtpAction = sendEmailOtpAction,
         _verifyEmailOtpAction = verifyEmailOtpAction,
+        _loadCurrentAccessAction = loadCurrentAccessAction,
         _signOutAction = signOutAction;
 
   factory SupabaseAuthRepository.fromClient(SupabaseClient client) {
@@ -67,6 +70,9 @@ class SupabaseAuthRepository implements AuthRepository {
           type: type,
         );
       },
+      loadCurrentAccessAction: () async {
+        return client.rpc('get_current_mosaic_access');
+      },
       signOutAction: client.auth.signOut,
     );
   }
@@ -76,6 +82,7 @@ class SupabaseAuthRepository implements AuthRepository {
   final SignInWithPasswordAction _signInWithPasswordAction;
   final SendEmailOtpAction _sendEmailOtpAction;
   final VerifyEmailOtpAction _verifyEmailOtpAction;
+  final LoadCurrentAccessAction _loadCurrentAccessAction;
   final SignOutAction _signOutAction;
 
   @override
@@ -84,6 +91,14 @@ class SupabaseAuthRepository implements AuthRepository {
   @override
   Stream<HostAuthUser?> authStateChanges() {
     return _authStateChangesReader().map((_) => currentHost);
+  }
+
+  @override
+  Future<MosaicAccessState> loadCurrentAccess() async {
+    return MosaicAccessState.fromRpcResponse(
+      await _loadCurrentAccessAction(),
+      userId: _currentUserReader()?.id,
+    );
   }
 
   @override
@@ -123,13 +138,17 @@ class SupabaseAuthRepository implements AuthRepository {
 
   HostAuthUser? _mapUser(User? user) {
     final email = user?.email;
-    if (user == null || email == null || email.isEmpty) {
+    final phone = user?.phone;
+    if (user == null ||
+        ((email == null || email.isEmpty) &&
+            (phone == null || phone.isEmpty))) {
       return null;
     }
 
     return HostAuthUser(
       id: user.id,
       email: email,
+      phoneE164: phone,
     );
   }
 }

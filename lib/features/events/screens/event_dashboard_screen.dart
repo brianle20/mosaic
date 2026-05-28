@@ -24,6 +24,7 @@ class EventDashboardScreen extends StatefulWidget {
     this.tableRepository,
     this.sessionRepository,
     this.seatingRepository,
+    this.staffRepository,
     this.nfcService,
   });
 
@@ -35,6 +36,7 @@ class EventDashboardScreen extends StatefulWidget {
   final TableRepository? tableRepository;
   final SessionRepository? sessionRepository;
   final SeatingRepository? seatingRepository;
+  final StaffRepository? staffRepository;
   final NfcService? nfcService;
 
   @override
@@ -60,6 +62,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       tableRepository: widget.tableRepository,
       sessionRepository: widget.sessionRepository,
       seatingRepository: widget.seatingRepository,
+      callerRole: widget.args.callerRole,
     )
       ..addListener(_handleUpdate)
       ..load(widget.args.eventId);
@@ -109,6 +112,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventId: event.id,
         eventTitle: event.title,
         eventCoverChargeCents: event.coverChargeCents,
+        canCheckIn: _controller.canScoreQualification,
+        canManageGuests: _controller.canManageEvent,
+        canManageCover: _controller.canManageEvent,
+        canAssignTags: _controller.canManageEvent,
+        canManageTournamentStatus: _controller.canManageEvent,
       ),
     );
     await _reloadDashboardAfterReturn(event.id);
@@ -130,6 +138,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             _controller.effectiveScoringPhase ?? event.currentScoringPhase,
         readOnly: event.lifecycleStatus != EventLifecycleStatus.draft &&
             event.lifecycleStatus != EventLifecycleStatus.active,
+        canManageTables: _controller.canManageEvent,
       ),
     );
     await _reloadDashboardAfterReturn(event.id);
@@ -231,6 +240,22 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       ),
     );
 
+    await _reloadDashboardAfterReturn(event.id);
+  }
+
+  Future<void> _openStaff() async {
+    final event = _controller.event;
+    if (event == null || !_controller.canManageStaff) {
+      return;
+    }
+
+    await Navigator.of(context).pushNamed(
+      AppRouter.eventStaffRoute,
+      arguments: EventStaffArgs(
+        eventId: event.id,
+        eventTitle: event.title,
+      ),
+    );
     await _reloadDashboardAfterReturn(event.id);
   }
 
@@ -560,6 +585,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
     final lifecycleStatus = event?.lifecycleStatus;
     final showLiveActions = lifecycleStatus != null &&
+        _controller.canManageEvent &&
         lifecycleStatus != EventLifecycleStatus.completed &&
         lifecycleStatus != EventLifecycleStatus.finalized &&
         lifecycleStatus != EventLifecycleStatus.cancelled;
@@ -567,7 +593,13 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         widget.sessionRepository != null &&
         widget.nfcService != null;
     final showTableScanAction =
-        lifecycleStatus == EventLifecycleStatus.active && canScanTables;
+        lifecycleStatus == EventLifecycleStatus.active &&
+            canScanTables &&
+            _canScorePhase(
+              _controller.effectiveScoringPhase ??
+                  event?.currentScoringPhase ??
+                  EventScoringPhase.qualification,
+            );
     return Scaffold(
       appBar: AppBar(title: Text(event?.title ?? 'Event Dashboard')),
       body: AsyncBody(
@@ -664,52 +696,59 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   onPressed: _openActivity,
                   child: const Text('Activity'),
                 ),
-                FilledButton(
-                  onPressed: _openPrizes,
-                  child: const Text('Prizes'),
-                ),
+                if (_controller.canManageEvent)
+                  FilledButton(
+                    onPressed: _openPrizes,
+                    child: const Text('Prizes'),
+                  ),
                 if (showLiveActions)
                   OutlinedButton(
                     onPressed: _openGuests,
                     child: const Text('Add Guest'),
                   ),
-                if (lifecycleStatus == EventLifecycleStatus.draft)
+                if (_controller.canManageEvent &&
+                    lifecycleStatus == EventLifecycleStatus.draft)
                   FilledButton(
                     onPressed: _controller.isSubmittingLifecycle
                         ? null
                         : () => _controller.startEvent(),
                     child: const Text('Open Check-In'),
                   ),
-                if (lifecycleStatus == EventLifecycleStatus.active)
+                if (_controller.canManageEvent &&
+                    lifecycleStatus == EventLifecycleStatus.active)
                   FilledButton(
                     onPressed: _controller.isSubmittingLifecycle
                         ? null
                         : () => _controller.completeEvent(),
                     child: const Text('Complete Event'),
                   ),
-                if (lifecycleStatus == EventLifecycleStatus.completed)
+                if (_controller.canManageEvent &&
+                    lifecycleStatus == EventLifecycleStatus.completed)
                   FilledButton(
                     onPressed: _controller.isSubmittingLifecycle
                         ? null
                         : () => _controller.finalizeEvent(),
                     child: const Text('Finalize Event'),
                   ),
-                if (lifecycleStatus == EventLifecycleStatus.draft)
+                if (_controller.canManageEvent &&
+                    lifecycleStatus == EventLifecycleStatus.draft)
                   OutlinedButton(
                     onPressed: _controller.isSubmittingLifecycle
                         ? null
                         : _confirmDeleteEvent,
                     child: const Text('Delete Event'),
                   ),
-                if (lifecycleStatus == EventLifecycleStatus.active)
+                if (_controller.canManageEvent &&
+                    lifecycleStatus == EventLifecycleStatus.active)
                   OutlinedButton(
                     onPressed: _controller.isSubmittingLifecycle
                         ? null
                         : _confirmRevertToDraft,
                     child: const Text('Revert to Draft'),
                   ),
-                if (lifecycleStatus == EventLifecycleStatus.active ||
-                    lifecycleStatus == EventLifecycleStatus.completed)
+                if (_controller.canManageEvent &&
+                    (lifecycleStatus == EventLifecycleStatus.active ||
+                        lifecycleStatus == EventLifecycleStatus.completed))
                   OutlinedButton(
                     onPressed: _controller.isSubmittingLifecycle
                         ? null
@@ -718,7 +757,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   ),
               ],
             ),
-            if (lifecycleStatus == EventLifecycleStatus.active) ...[
+            if (_controller.canManageEvent &&
+                lifecycleStatus == EventLifecycleStatus.active) ...[
               const SizedBox(height: 24),
               Card(
                 child: Padding(
@@ -811,20 +851,22 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         widget.nfcService != null;
     final lifecycleStatus = event.lifecycleStatus;
     final showTableScanAction =
-        lifecycleStatus == EventLifecycleStatus.active && canScanTables;
+        lifecycleStatus == EventLifecycleStatus.active &&
+            canScanTables &&
+            _canScorePhase(scoringPhase);
     final showLiveNavigation =
         lifecycleStatus != EventLifecycleStatus.completed &&
             lifecycleStatus != EventLifecycleStatus.finalized &&
             lifecycleStatus != EventLifecycleStatus.cancelled;
     final showQualificationSetup = _usesQualificationSetupDashboard(event);
-    final showTournamentCommandCenter =
+    final showTournamentCommandCenter = _controller.canManageEvent &&
         lifecycleStatus == EventLifecycleStatus.active &&
-            event.scoringOpen &&
-            scoringPhase == EventScoringPhase.tournament;
-    final showFinalsCommandCenter =
+        event.scoringOpen &&
+        scoringPhase == EventScoringPhase.tournament;
+    final showFinalsCommandCenter = _controller.canManageEvent &&
         lifecycleStatus == EventLifecycleStatus.active &&
-            event.scoringOpen &&
-            scoringPhase == EventScoringPhase.bonus;
+        event.scoringOpen &&
+        scoringPhase == EventScoringPhase.bonus;
     final showRoundCommandCenter =
         showTournamentCommandCenter || showFinalsCommandCenter;
 
@@ -898,6 +940,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   onGuests: _openGuests,
                   onTables: _openTables,
                   onPrizes: _openPrizes,
+                  canOpenPrizes: _controller.canManageEvent,
                   onLeaderboard: _openLeaderboard,
                 ),
               if (_controller.bonusRoundResults.hasResults) ...[
@@ -947,7 +990,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 ),
               ],
               if (showLiveNavigation) const SizedBox(height: 14),
-              if (lifecycleStatus == EventLifecycleStatus.active) ...[
+              if (_controller.canManageEvent &&
+                  lifecycleStatus == EventLifecycleStatus.active) ...[
                 _LiveOperationsStrip(
                   isSubmitting: _controller.isSubmittingLifecycle,
                   scoringOpen: event.scoringOpen,
@@ -990,7 +1034,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               _EventOptionsSection(
                 lifecycleStatus: lifecycleStatus,
                 isSubmitting: _controller.isSubmittingLifecycle,
+                canManageEvent: _controller.canManageEvent,
+                canManageStaff: _controller.canManageStaff,
                 onSeating: _openSeating,
+                onStaff: _openStaff,
                 onActivity: _openActivity,
                 onHandLedger: _openHandLedger,
                 onCopy: _confirmCopyEventForTesting,
@@ -1057,9 +1104,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.draft => true,
-      EventLifecycleStatus.active when event.scoringOpen =>
-        canScanTables && !_isTableScanInProgress,
-      EventLifecycleStatus.active => true,
+      EventLifecycleStatus.active when event.scoringOpen => canScanTables &&
+          _canScorePhase(
+              _controller.effectiveScoringPhase ?? event.currentScoringPhase) &&
+          !_isTableScanInProgress,
+      EventLifecycleStatus.active => _controller.canManageEvent,
       EventLifecycleStatus.completed => true,
       EventLifecycleStatus.finalized => true,
       EventLifecycleStatus.cancelled => true,
@@ -1092,6 +1141,14 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return event.lifecycleStatus == EventLifecycleStatus.active &&
         !event.scoringOpen &&
         event.currentScoringPhase == EventScoringPhase.qualification;
+  }
+
+  bool _canScorePhase(EventScoringPhase phase) {
+    return switch (phase) {
+      EventScoringPhase.qualification => _controller.canScoreQualification,
+      EventScoringPhase.tournament => _controller.canScoreTournament,
+      EventScoringPhase.bonus => _controller.canScoreBonus,
+    };
   }
 }
 
@@ -1457,6 +1514,7 @@ class _LiveMetricsRow extends StatelessWidget {
     required this.onGuests,
     required this.onTables,
     required this.onPrizes,
+    required this.canOpenPrizes,
     required this.onLeaderboard,
   });
 
@@ -1467,6 +1525,7 @@ class _LiveMetricsRow extends StatelessWidget {
   final VoidCallback onGuests;
   final VoidCallback onTables;
   final VoidCallback onPrizes;
+  final bool canOpenPrizes;
   final VoidCallback onLeaderboard;
 
   @override
@@ -1499,7 +1558,7 @@ class _LiveMetricsRow extends StatelessWidget {
               child: MetricTile(
                 label: 'Prize Pool',
                 value: prizePoolLabel,
-                onTap: onPrizes,
+                onTap: canOpenPrizes ? onPrizes : null,
               ),
             ),
             const SizedBox(width: 10),
@@ -1665,7 +1724,10 @@ class _EventOptionsSection extends StatelessWidget {
   const _EventOptionsSection({
     required this.lifecycleStatus,
     required this.isSubmitting,
+    required this.canManageEvent,
+    required this.canManageStaff,
     required this.onSeating,
+    required this.onStaff,
     required this.onActivity,
     required this.onHandLedger,
     required this.onCopy,
@@ -1678,7 +1740,10 @@ class _EventOptionsSection extends StatelessWidget {
 
   final EventLifecycleStatus lifecycleStatus;
   final bool isSubmitting;
+  final bool canManageEvent;
+  final bool canManageStaff;
   final VoidCallback onSeating;
+  final VoidCallback onStaff;
   final VoidCallback onActivity;
   final VoidCallback onHandLedger;
   final VoidCallback onCopy;
@@ -1715,24 +1780,28 @@ class _EventOptionsSection extends StatelessWidget {
           spacing: 10,
           runSpacing: 10,
           children: [
-            if (_showsSeatingPrepAction)
+            if (canManageEvent && _showsSeatingPrepAction)
               UtilityActionButton(label: 'Seating', onPressed: onSeating),
+            if (canManageStaff)
+              UtilityActionButton(label: 'Staff', onPressed: onStaff),
             UtilityActionButton(label: 'Activity', onPressed: onActivity),
             UtilityActionButton(
               label: 'Hand Ledger',
               onPressed: onHandLedger,
             ),
-            UtilityActionButton(
-              label: 'Copy Event',
-              onPressed: isSubmitting ? null : onCopy,
-            ),
-            if (lifecycleStatus == EventLifecycleStatus.draft)
+            if (canManageEvent)
+              UtilityActionButton(
+                label: 'Copy Event',
+                onPressed: isSubmitting ? null : onCopy,
+              ),
+            if (canManageEvent && lifecycleStatus == EventLifecycleStatus.draft)
               UtilityActionButton(
                 label: 'Delete Event',
                 onPressed: isSubmitting ? null : onDelete,
                 isDanger: true,
               ),
-            if (lifecycleStatus == EventLifecycleStatus.active) ...[
+            if (canManageEvent &&
+                lifecycleStatus == EventLifecycleStatus.active) ...[
               UtilityActionButton(
                 label: 'Complete Event',
                 onPressed: isSubmitting ? null : onComplete,
@@ -1747,7 +1816,8 @@ class _EventOptionsSection extends StatelessWidget {
                 isDanger: true,
               ),
             ],
-            if (lifecycleStatus == EventLifecycleStatus.completed) ...[
+            if (canManageEvent &&
+                lifecycleStatus == EventLifecycleStatus.completed) ...[
               UtilityActionButton(
                 label: 'Cancel Event',
                 onPressed: isSubmitting ? null : onCancel,

@@ -31,17 +31,32 @@ class AuthController extends ChangeNotifier {
   String? submitError;
   String? pendingOtpEmail;
   HostAuthUser? currentHost;
+  MosaicAccessState? currentAccess;
 
-  bool get isSignedIn => currentHost != null;
+  bool get isSignedIn =>
+      currentHost != null && currentAccess?.hasApprovedAccess == true;
+
+  bool get hasAuthenticatedHost => currentHost != null;
 
   Future<void> bootstrap() async {
     currentHost = _authRepository.currentHost;
-    isBootstrapping = false;
     submitError = null;
+    if (currentHost != null) {
+      await _loadCurrentAccessForSignedInHost();
+    }
+    isBootstrapping = false;
     _authSubscription ??= _authRepository.authStateChanges().listen((host) {
       currentHost = host;
+      if (host == null) {
+        currentAccess = null;
+        submitError = null;
+        isBootstrapping = false;
+        notifyListeners();
+        return;
+      }
       isBootstrapping = false;
       notifyListeners();
+      unawaited(_refreshAccessFromAuthState());
     });
     notifyListeners();
   }
@@ -60,9 +75,14 @@ class AuthController extends ChangeNotifier {
         password: password,
       );
       currentHost = host;
+      if (host != null) {
+        await _loadCurrentAccessForSignedInHost();
+      } else {
+        currentAccess = null;
+      }
       isSigningIn = false;
       notifyListeners();
-      return host;
+      return isSignedIn ? host : null;
     } catch (exception) {
       submitError = _friendlyMessageFor(exception);
       isSigningIn = false;
@@ -119,9 +139,14 @@ class AuthController extends ChangeNotifier {
         code: code.trim(),
       );
       currentHost = host;
+      if (host != null) {
+        await _loadCurrentAccessForSignedInHost();
+      } else {
+        currentAccess = null;
+      }
       isVerifyingCode = false;
       notifyListeners();
-      return host;
+      return isSignedIn ? host : null;
     } catch (exception) {
       submitError = _friendlyOtpMessageFor(exception);
       isVerifyingCode = false;
@@ -134,6 +159,7 @@ class AuthController extends ChangeNotifier {
     submitError = null;
     await _authRepository.signOut();
     currentHost = null;
+    currentAccess = null;
     notifyListeners();
   }
 
@@ -161,5 +187,30 @@ class AuthController extends ChangeNotifier {
     }
 
     return 'Unable to verify the code right now.';
+  }
+
+  Future<void> _refreshAccessFromAuthState() async {
+    await _loadCurrentAccessForSignedInHost();
+    if (!isBootstrapping) {
+      notifyListeners();
+    }
+  }
+
+  Future<void> _loadCurrentAccessForSignedInHost() async {
+    try {
+      final access = await _authRepository.loadCurrentAccess();
+      currentAccess = access;
+      submitError = access.hasApprovedAccess ? null : _noAccessMessage(access);
+    } catch (_) {
+      currentAccess = null;
+      submitError = 'Unable to load your Mosaic access right now.';
+    }
+  }
+
+  String _noAccessMessage(MosaicAccessState access) {
+    if (!access.isActive) {
+      return 'Your Mosaic access is disabled. Ask an event owner for help.';
+    }
+    return 'Your Mosaic account is not approved for any events yet. Ask an event owner to add you as staff.';
   }
 }

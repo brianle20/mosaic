@@ -22,6 +22,7 @@ class TablesOverviewScreen extends StatefulWidget {
     required this.scoringOpen,
     this.scoringPhase = EventScoringPhase.tournament,
     this.readOnly = false,
+    this.canManageTables = true,
     required this.tableRepository,
     required this.sessionRepository,
     required this.guestRepository,
@@ -34,6 +35,7 @@ class TablesOverviewScreen extends StatefulWidget {
   final bool scoringOpen;
   final EventScoringPhase scoringPhase;
   final bool readOnly;
+  final bool canManageTables;
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
   final GuestRepository guestRepository;
@@ -282,7 +284,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (!widget.readOnly) ...[
+            if (!widget.readOnly && widget.canManageTables) ...[
               FilledButton.icon(
                 onPressed: _openAddTable,
                 icon: const Icon(Icons.table_restaurant),
@@ -401,6 +403,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 ),
           ),
           if (!widget.readOnly &&
+              widget.canManageTables &&
               widget.scoringOpen &&
               _controller.effectiveScoringPhase ==
                   EventScoringPhase.tournament &&
@@ -426,6 +429,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               ),
             ),
           ] else if (!widget.readOnly &&
+              widget.canManageTables &&
               widget.scoringOpen &&
               summary.hasCurrentRound) ...[
             const SizedBox(height: 12),
@@ -563,7 +567,9 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 FilledButton(
                   onPressed: action == _CurrentRoundAction.enter
                       ? _controller.isSuddenDeathRequired
-                          ? () => _startSuddenDeath(cardData.table)
+                          ? widget.canManageTables
+                              ? () => _startSuddenDeath(cardData.table)
+                              : null
                           : () => _enterCurrentRoundTable(cardData.table)
                       : sessionId == null
                           ? null
@@ -782,7 +788,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                         table.nfcTagId == null ? 'Tag missing' : 'Tag bound',
                       ),
                     ),
-                    if (!widget.readOnly) ...[
+                    if (!widget.readOnly && widget.canManageTables) ...[
                       const PopupMenuItem(
                         value: 'edit',
                         child: Text('Edit table'),
@@ -1000,6 +1006,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     final canStartSuddenDeath = hasTag &&
         _controller.isSuddenDeathRequired &&
         widget.scoringOpen &&
+        widget.canManageTables &&
         !widget.readOnly;
     final statusLabel = widget.readOnly
         ? 'Locked'
@@ -1070,14 +1077,16 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                         icon: const Icon(Icons.login),
                         label: const Text('Enter Table'),
                       ),
-                    OutlinedButton(
-                      onPressed: () => _openEditTable(table),
-                      child: const Text('Edit'),
-                    ),
-                    OutlinedButton(
-                      onPressed: () => _openEditTable(table),
-                      child: const Text('Bind Tag'),
-                    ),
+                    if (widget.canManageTables) ...[
+                      OutlinedButton(
+                        onPressed: () => _openEditTable(table),
+                        child: const Text('Edit'),
+                      ),
+                      OutlinedButton(
+                        onPressed: () => _openEditTable(table),
+                        child: const Text('Bind Tag'),
+                      ),
+                    ],
                   ],
                   if (hasSessionHistory)
                     OutlinedButton.icon(

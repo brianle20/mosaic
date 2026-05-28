@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/staff_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/screens/guest_detail_screen.dart';
@@ -10,6 +12,7 @@ import 'package:mosaic/features/events/screens/bonus_round_screen.dart';
 import 'package:mosaic/features/events/screens/create_event_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
+import 'package:mosaic/features/events/screens/event_staff_screen.dart';
 import 'package:mosaic/features/leaderboard/screens/leaderboard_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_awards_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
@@ -33,7 +36,9 @@ class AppRouter {
     required this.activityRepository,
     required this.prizeRepository,
     required this.seatingRepository,
+    this.staffRepository,
     required this.nfcService,
+    this.accessState,
   });
 
   final EventRepository eventRepository;
@@ -44,7 +49,9 @@ class AppRouter {
   final ActivityRepository activityRepository;
   final PrizeRepository prizeRepository;
   final SeatingRepository seatingRepository;
+  final StaffRepository? staffRepository;
   final NfcService nfcService;
+  final MosaicAccessState? accessState;
 
   static const eventListRoute = '/';
   static const createEventRoute = '/events/create';
@@ -63,6 +70,7 @@ class AppRouter {
   static const prizePlanRoute = '/prizes/plan';
   static const prizeAwardsRoute = '/prizes/awards';
   static const seatingAssignmentsRoute = '/tables/seating';
+  static const eventStaffRoute = '/events/staff';
 
   Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -70,6 +78,7 @@ class AppRouter {
         return MaterialPageRoute<void>(
           builder: (_) => EventListScreen(
             eventRepository: eventRepository,
+            accessState: accessState,
           ),
           settings: settings,
         );
@@ -92,7 +101,20 @@ class AppRouter {
             tableRepository: tableRepository,
             sessionRepository: sessionRepository,
             seatingRepository: seatingRepository,
+            staffRepository:
+                staffRepository ?? const _UnavailableStaffRepository(),
             nfcService: nfcService,
+          ),
+          settings: settings,
+        );
+      case eventStaffRoute:
+        final args = settings.arguments as EventStaffArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => EventStaffScreen(
+            eventId: args.eventId,
+            eventTitle: args.eventTitle,
+            staffRepository:
+                staffRepository ?? const _UnavailableStaffRepository(),
           ),
           settings: settings,
         );
@@ -103,6 +125,11 @@ class AppRouter {
             eventId: args.eventId,
             eventTitle: args.eventTitle,
             eventCoverChargeCents: args.eventCoverChargeCents,
+            canCheckIn: args.canCheckIn,
+            canManageGuests: args.canManageGuests,
+            canManageCover: args.canManageCover,
+            canAssignTags: args.canAssignTags,
+            canManageTournamentStatus: args.canManageTournamentStatus,
             guestRepository: guestRepository,
             nfcService: nfcService,
           ),
@@ -126,6 +153,10 @@ class AppRouter {
           builder: (_) => GuestDetailScreen(
             guestId: args.guestId,
             eventId: args.eventId,
+            canCheckIn: args.canCheckIn,
+            canManageGuests: args.canManageGuests,
+            canManageCover: args.canManageCover,
+            canAssignTags: args.canAssignTags,
             guestRepository: guestRepository,
             nfcService: nfcService,
           ),
@@ -140,6 +171,7 @@ class AppRouter {
             scoringOpen: args.scoringOpen,
             scoringPhase: args.scoringPhase,
             readOnly: args.readOnly,
+            canManageTables: args.canManageTables,
             tableRepository: tableRepository,
             sessionRepository: sessionRepository,
             guestRepository: guestRepository,
@@ -266,6 +298,7 @@ class AppRouter {
         return MaterialPageRoute<void>(
           builder: (_) => EventListScreen(
             eventRepository: eventRepository,
+            accessState: accessState,
           ),
           settings: settings,
         );
@@ -273,12 +306,44 @@ class AppRouter {
   }
 }
 
+class _UnavailableStaffRepository implements StaffRepository {
+  const _UnavailableStaffRepository();
+
+  @override
+  Future<List<EventStaffMembershipRecord>> listEventStaff(String eventId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<EventStaffMembershipRecord> upsertEventStaff(
+    UpsertEventStaffMembershipInput input,
+  ) =>
+      throw UnimplementedError();
+
+  @override
+  Future<EventStaffMembershipRecord> disableEventStaffMembership(
+    String membershipId,
+  ) =>
+      throw UnimplementedError();
+}
+
 class EventDashboardArgs {
   const EventDashboardArgs({
     required this.eventId,
+    this.callerRole = MosaicAccessRole.owner,
   });
 
   final String eventId;
+  final MosaicAccessRole callerRole;
+}
+
+class EventStaffArgs {
+  const EventStaffArgs({
+    required this.eventId,
+    required this.eventTitle,
+  });
+
+  final String eventId;
+  final String eventTitle;
 }
 
 class GuestRosterArgs {
@@ -286,11 +351,21 @@ class GuestRosterArgs {
     required this.eventId,
     required this.eventTitle,
     required this.eventCoverChargeCents,
+    this.canCheckIn = true,
+    this.canManageGuests = true,
+    this.canManageCover = true,
+    this.canAssignTags = true,
+    this.canManageTournamentStatus = true,
   });
 
   final String eventId;
   final String eventTitle;
   final int eventCoverChargeCents;
+  final bool canCheckIn;
+  final bool canManageGuests;
+  final bool canManageCover;
+  final bool canAssignTags;
+  final bool canManageTournamentStatus;
 }
 
 class EventHandLedgerArgs {
@@ -327,10 +402,18 @@ class GuestDetailArgs {
   const GuestDetailArgs({
     required this.eventId,
     required this.guestId,
+    this.canCheckIn = true,
+    this.canManageGuests = true,
+    this.canManageCover = true,
+    this.canAssignTags = true,
   });
 
   final String eventId;
   final String guestId;
+  final bool canCheckIn;
+  final bool canManageGuests;
+  final bool canManageCover;
+  final bool canAssignTags;
 }
 
 class TablesOverviewArgs {
@@ -340,6 +423,7 @@ class TablesOverviewArgs {
     required this.scoringOpen,
     this.scoringPhase = EventScoringPhase.tournament,
     this.readOnly = false,
+    this.canManageTables = true,
   });
 
   final String eventId;
@@ -347,6 +431,7 @@ class TablesOverviewArgs {
   final bool scoringOpen;
   final EventScoringPhase scoringPhase;
   final bool readOnly;
+  final bool canManageTables;
 }
 
 class ActivityArgs {
