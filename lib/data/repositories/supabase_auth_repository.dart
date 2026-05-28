@@ -8,6 +8,15 @@ typedef SignInWithPasswordAction = Future<AuthResponse> Function({
   required String email,
   required String password,
 });
+typedef SendEmailOtpAction = Future<void> Function({
+  required String email,
+  required bool shouldCreateUser,
+});
+typedef VerifyEmailOtpAction = Future<AuthResponse> Function({
+  required String email,
+  required String token,
+  required OtpType type,
+});
 typedef SignOutAction = Future<void> Function();
 
 class SupabaseAuthRepository implements AuthRepository {
@@ -15,10 +24,14 @@ class SupabaseAuthRepository implements AuthRepository {
     required CurrentUserReader currentUserReader,
     required AuthStateChangesReader authStateChangesReader,
     required SignInWithPasswordAction signInWithPasswordAction,
+    required SendEmailOtpAction sendEmailOtpAction,
+    required VerifyEmailOtpAction verifyEmailOtpAction,
     required SignOutAction signOutAction,
   })  : _currentUserReader = currentUserReader,
         _authStateChangesReader = authStateChangesReader,
         _signInWithPasswordAction = signInWithPasswordAction,
+        _sendEmailOtpAction = sendEmailOtpAction,
+        _verifyEmailOtpAction = verifyEmailOtpAction,
         _signOutAction = signOutAction;
 
   factory SupabaseAuthRepository.fromClient(SupabaseClient client) {
@@ -34,6 +47,26 @@ class SupabaseAuthRepository implements AuthRepository {
           password: password,
         );
       },
+      sendEmailOtpAction: ({
+        required String email,
+        required bool shouldCreateUser,
+      }) {
+        return client.auth.signInWithOtp(
+          email: email,
+          shouldCreateUser: shouldCreateUser,
+        );
+      },
+      verifyEmailOtpAction: ({
+        required String email,
+        required String token,
+        required OtpType type,
+      }) {
+        return client.auth.verifyOTP(
+          email: email,
+          token: token,
+          type: type,
+        );
+      },
       signOutAction: client.auth.signOut,
     );
   }
@@ -41,6 +74,8 @@ class SupabaseAuthRepository implements AuthRepository {
   final CurrentUserReader _currentUserReader;
   final AuthStateChangesReader _authStateChangesReader;
   final SignInWithPasswordAction _signInWithPasswordAction;
+  final SendEmailOtpAction _sendEmailOtpAction;
+  final VerifyEmailOtpAction _verifyEmailOtpAction;
   final SignOutAction _signOutAction;
 
   @override
@@ -59,6 +94,24 @@ class SupabaseAuthRepository implements AuthRepository {
     final response = await _signInWithPasswordAction(
       email: email,
       password: password,
+    );
+    return _mapUser(response.user);
+  }
+
+  @override
+  Future<void> sendEmailOtp({required String email}) {
+    return _sendEmailOtpAction(email: email, shouldCreateUser: false);
+  }
+
+  @override
+  Future<HostAuthUser?> verifyEmailOtp({
+    required String email,
+    required String code,
+  }) async {
+    final response = await _verifyEmailOtpAction(
+      email: email,
+      token: code,
+      type: OtpType.email,
     );
     return _mapUser(response.user);
   }

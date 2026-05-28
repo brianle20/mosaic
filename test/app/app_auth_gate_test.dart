@@ -44,6 +44,19 @@ class _FakeAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> sendEmailOtp({required String email}) async {}
+
+  @override
+  Future<HostAuthUser?> verifyEmailOtp({
+    required String email,
+    required String code,
+  }) async {
+    host = HostAuthUser(id: 'usr_otp', email: email);
+    controller.add(host);
+    return host;
+  }
+
+  @override
   Future<void> signOut() async {
     host = null;
     controller.add(null);

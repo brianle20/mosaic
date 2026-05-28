@@ -348,6 +348,17 @@ class ThrowingAuthRepository implements AuthRepository {
       throw UnimplementedError();
 
   @override
+  Future<void> sendEmailOtp({required String email}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<HostAuthUser?> verifyEmailOtp({
+    required String email,
+    required String code,
+  }) =>
+      throw UnimplementedError();
+
+  @override
   Future<void> signOut() => throw UnimplementedError();
 }
 

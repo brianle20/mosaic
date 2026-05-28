@@ -10,8 +10,13 @@ import 'package:mosaic/features/auth/screens/host_sign_in_screen.dart';
 class _FakeAuthRepository implements AuthRepository {
   HostAuthUser? current;
   Object? signInError;
+  Object? sendOtpError;
+  Object? verifyOtpError;
   String? lastEmail;
   String? lastPassword;
+  String? sentOtpEmail;
+  String? verifiedOtpEmail;
+  String? verifiedOtpCode;
 
   final StreamController<HostAuthUser?> controller =
       StreamController<HostAuthUser?>.broadcast();
@@ -40,6 +45,29 @@ class _FakeAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<void> sendEmailOtp({required String email}) async {
+    sentOtpEmail = email;
+    if (sendOtpError != null) {
+      throw sendOtpError!;
+    }
+  }
+
+  @override
+  Future<HostAuthUser?> verifyEmailOtp({
+    required String email,
+    required String code,
+  }) async {
+    verifiedOtpEmail = email;
+    verifiedOtpCode = code;
+    if (verifyOtpError != null) {
+      throw verifyOtpError!;
+    }
+    current = HostAuthUser(id: 'usr_otp', email: email);
+    controller.add(current);
+    return current;
+  }
+
+  @override
   Future<void> signOut() async {
     current = null;
     controller.add(null);
@@ -47,7 +75,7 @@ class _FakeAuthRepository implements AuthRepository {
 }
 
 void main() {
-  testWidgets('renders email, password, and submit action', (tester) async {
+  testWidgets('defaults to email code sign-in', (tester) async {
     final controller = AuthController(authRepository: _FakeAuthRepository());
     await controller.bootstrap();
 
@@ -60,14 +88,11 @@ void main() {
     expect(find.text('Host Sign In'), findsOneWidget);
     expect(
         find.text('Run live Mahjong events from one phone.'), findsOneWidget);
-    expect(
-      find.text(
-        'Sign in with the host account to manage check-in, sessions, scoring, and prizes.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.byType(TextFormField), findsNWidgets(2));
-    expect(find.text('Sign In'), findsOneWidget);
+    expect(find.text('Email Code'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
+    expect(find.byType(TextFormField), findsOneWidget);
+    expect(find.text('Send Code'), findsOneWidget);
+    expect(find.text('Sign In'), findsNothing);
   });
 
   testWidgets('configures email input for email entry', (tester) async {
@@ -105,6 +130,9 @@ void main() {
       ),
     );
 
+    await tester.tap(find.text('Password'));
+    await tester.pumpAndSettle();
+
     final passwordEditable = tester.widget<EditableText>(
       find.descendant(
         of: find.byType(TextFormField).last,
@@ -119,24 +147,7 @@ void main() {
     expect(passwordEditable.autofillHints, contains(AutofillHints.password));
   });
 
-  testWidgets('shows validation messages for missing fields', (tester) async {
-    final controller = AuthController(authRepository: _FakeAuthRepository());
-    await controller.bootstrap();
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: HostSignInScreen(authController: controller),
-      ),
-    );
-
-    await tester.tap(find.text('Sign In'));
-    await tester.pump();
-
-    expect(find.text('Email is required.'), findsOneWidget);
-    expect(find.text('Password is required.'), findsOneWidget);
-  });
-
-  testWidgets('submits email and password through the controller',
+  testWidgets('email code mode sends code and shows code entry',
       (tester) async {
     final repository = _FakeAuthRepository();
     final controller = AuthController(authRepository: repository);
@@ -147,6 +158,120 @@ void main() {
         home: HostSignInScreen(authController: controller),
       ),
     );
+
+    await tester.enterText(find.byType(TextFormField), 'helper@example.com');
+    await tester.tap(find.text('Send Code'));
+    await tester.pumpAndSettle();
+
+    expect(repository.sentOtpEmail, 'helper@example.com');
+    expect(
+      find.text('Enter the code sent to helper@example.com.'),
+      findsOneWidget,
+    );
+    expect(find.text('Verify Code'), findsOneWidget);
+    expect(find.text('Resend Code'), findsOneWidget);
+    expect(find.text('Use a different email'), findsOneWidget);
+  });
+
+  testWidgets('email code entry does not show validation before edit',
+      (tester) async {
+    final controller = AuthController(authRepository: _FakeAuthRepository());
+    await controller.bootstrap();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HostSignInScreen(authController: controller),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextFormField), 'helper@example.com');
+    await tester.tap(find.text('Send Code'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Code is required.'), findsNothing);
+  });
+
+  testWidgets('email code mode verifies code', (tester) async {
+    final repository = _FakeAuthRepository();
+    final controller = AuthController(authRepository: repository);
+    await controller.bootstrap();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HostSignInScreen(authController: controller),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextFormField), 'helper@example.com');
+    await tester.tap(find.text('Send Code'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), '123456');
+    await tester.tap(find.text('Verify Code'));
+    await tester.pumpAndSettle();
+
+    expect(repository.verifiedOtpEmail, 'helper@example.com');
+    expect(repository.verifiedOtpCode, '123456');
+  });
+
+  testWidgets('email code mode validates missing email and code',
+      (tester) async {
+    final controller = AuthController(authRepository: _FakeAuthRepository());
+    await controller.bootstrap();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HostSignInScreen(authController: controller),
+      ),
+    );
+
+    await tester.tap(find.text('Send Code'));
+    await tester.pump();
+
+    expect(find.text('Email is required.'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField), 'helper@example.com');
+    await tester.tap(find.text('Send Code'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Verify Code'));
+    await tester.pump();
+    expect(find.text('Code is required.'), findsOneWidget);
+  });
+
+  testWidgets('password mode validates missing password', (tester) async {
+    final controller = AuthController(authRepository: _FakeAuthRepository());
+    await controller.bootstrap();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HostSignInScreen(authController: controller),
+      ),
+    );
+
+    await tester.tap(find.text('Password'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Sign In'));
+    await tester.pump();
+
+    expect(find.text('Email is required.'), findsOneWidget);
+    expect(find.text('Password is required.'), findsOneWidget);
+  });
+
+  testWidgets('password mode keeps password sign-in available', (tester) async {
+    final repository = _FakeAuthRepository();
+    final controller = AuthController(authRepository: repository);
+    await controller.bootstrap();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HostSignInScreen(authController: controller),
+      ),
+    );
+
+    await tester.tap(find.text('Password'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TextFormField), findsNWidgets(2));
+    expect(find.text('Sign In'), findsOneWidget);
 
     await tester.enterText(
       find.byType(TextFormField).first,
@@ -173,6 +298,9 @@ void main() {
       ),
     );
 
+    await tester.tap(find.text('Password'));
+    await tester.pumpAndSettle();
+
     await tester.enterText(
       find.byType(TextFormField).first,
       'host@example.test',
@@ -183,7 +311,7 @@ void main() {
 
     expect(find.text('Invalid email or password.'), findsOneWidget);
     expect(
-      find.text('Use the single host account for this event operation.'),
+      find.text('Use an email code, or switch to password sign-in.'),
       findsOneWidget,
     );
   });

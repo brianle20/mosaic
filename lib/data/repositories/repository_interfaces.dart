@@ -24,6 +24,13 @@ abstract interface class AuthRepository {
     required String password,
   });
 
+  Future<void> sendEmailOtp({required String email});
+
+  Future<HostAuthUser?> verifyEmailOtp({
+    required String email,
+    required String code,
+  });
+
   Future<void> signOut();
 }
 
