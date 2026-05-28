@@ -9,7 +9,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    await dotenv.load(fileName: '.env');
+    await dotenv.load(fileName: '.env.mobile');
     final environment = AppEnvironment.fromMap(dotenv.env);
     final config = SupabaseConfig.fromEnvironment(environment);
     await SupabaseBootstrap.initialize(config);
