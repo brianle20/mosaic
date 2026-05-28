@@ -111,6 +111,8 @@ abstract interface class GuestRepository {
 
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input);
 
+  Future<void> removeGuest(String guestId);
+
   Future<EventGuestRecord> updateEventGuestTournamentStatus({
     required String eventGuestId,
     required EventTournamentStatus status,

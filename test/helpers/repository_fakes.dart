@@ -122,6 +122,9 @@ class ThrowingGuestRepository implements GuestRepository {
       throw UnimplementedError();
 
   @override
+  Future<void> removeGuest(String guestId) => throw UnimplementedError();
+
+  @override
   Future<EventGuestRecord> updateEventGuestTournamentStatus({
     required String eventGuestId,
     required EventTournamentStatus status,

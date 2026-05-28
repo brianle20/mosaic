@@ -18,6 +18,7 @@ enum _GuestRosterOverflowAction {
   markQualified,
   moveToOpenPlayOnly,
   withdraw,
+  removeGuest,
 }
 
 enum _GuestRosterCheckInFilter {
@@ -203,6 +204,41 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       ),
       successMessage:
           '${guest.displayName} is now ${_tournamentStatusLabel(status).toLowerCase()}.',
+    );
+  }
+
+  Future<void> _confirmRemoveGuest(EventGuestRecord guest) async {
+    if (!widget.canManageGuests) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Remove ${guest.displayName}?'),
+        content: const Text(
+          'Remove this guest from the event? This is only for accidental adds and cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    await _runQuickAction(
+      () => _controller.removeGuest(guest.id),
+      successMessage: '${guest.displayName} was removed.',
     );
   }
 
@@ -620,10 +656,14 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     EventGuestRecord guest,
   ) {
     if (!guest.isEligibleForPlayerTagAssignment) {
-      if (!widget.canManageCover) {
-        return const [];
+      final actions = <_GuestRosterOverflowAction>[];
+      if (widget.canManageCover) {
+        actions.add(_GuestRosterOverflowAction.markPaidManually);
       }
-      return const [_GuestRosterOverflowAction.markPaidManually];
+      if (_canRemoveGuest(guest)) {
+        actions.add(_GuestRosterOverflowAction.removeGuest);
+      }
+      return actions;
     }
 
     final actions = <_GuestRosterOverflowAction>[];
@@ -631,6 +671,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       actions.add(_GuestRosterOverflowAction.addCoverEntry);
     }
     final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
+    if (_canRemoveGuest(guest)) {
+      actions.add(_GuestRosterOverflowAction.removeGuest);
+    }
 
     if (!widget.canManageTournamentStatus) {
       return actions;
@@ -673,7 +716,18 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       _GuestRosterOverflowAction.markQualified => 'Mark Qualified',
       _GuestRosterOverflowAction.moveToOpenPlayOnly => 'Move to Open Play Only',
       _GuestRosterOverflowAction.withdraw => 'Withdraw',
+      _GuestRosterOverflowAction.removeGuest => 'Remove Guest',
     };
+  }
+
+  bool _canRemoveGuest(EventGuestRecord guest) {
+    return widget.canManageGuests &&
+        guest.attendanceStatus == AttendanceStatus.expected &&
+        guest.checkedInAt == null &&
+        guest.coverStatus == CoverStatus.unpaid &&
+        !guest.isComped &&
+        !guest.hasScoredPlay &&
+        !_controller.activeTagAssignments.containsKey(guest.id);
   }
 
   void _handleOverflowAction(
@@ -693,6 +747,8 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         _updateTournamentStatus(guest, EventTournamentStatus.openPlayOnly);
       case _GuestRosterOverflowAction.withdraw:
         _updateTournamentStatus(guest, EventTournamentStatus.withdrawn);
+      case _GuestRosterOverflowAction.removeGuest:
+        _confirmRemoveGuest(guest);
     }
   }
 

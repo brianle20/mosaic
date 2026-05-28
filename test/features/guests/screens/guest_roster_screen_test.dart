@@ -25,6 +25,7 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   final Map<String, GuestTagAssignmentSummary> _activeAssignments;
   final Map<String, List<GuestCoverEntryRecord>> _coverEntries;
   final statusUpdates = <String, EventTournamentStatus>{};
+  final removedGuestIds = <String>[];
 
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
@@ -200,6 +201,14 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     String? displayLabel,
   }) {
     throw UnimplementedError();
+  }
+
+  @override
+  Future<void> removeGuest(String guestId) async {
+    removedGuestIds.add(guestId);
+    _guests.removeWhere((guest) => guest.id == guestId);
+    _activeAssignments.remove(guestId);
+    _coverEntries.remove(guestId);
   }
 
   @override
@@ -859,6 +868,68 @@ void main() {
     await tester.tap(find.text('Withdraw'));
     await tester.pumpAndSettle();
     expect(repository.statusUpdates['gst_01'], EventTournamentStatus.withdrawn);
+  });
+
+  testWidgets('accidental guests can be removed after confirmation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Ethan Kwan',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.unpaid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('More actions for Ethan Kwan'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove Guest'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove Ethan Kwan?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+    await tester.pumpAndSettle();
+
+    expect(repository.removedGuestIds, ['gst_01']);
+    expect(find.text('Ethan Kwan'), findsNothing);
+    expect(find.text('No guests yet'), findsOneWidget);
+  });
+
+  testWidgets('remove guest is hidden once guest has event activity', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+      ),
+    ], activeAssignments: {
+      'gst_01': _tagAssignment(guestId: 'gst_01', uid: 'ALICE01'),
+    });
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove Guest'), findsNothing);
   });
 
   testWidgets('roster shows host full names instead of public display names', (

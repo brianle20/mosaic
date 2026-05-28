@@ -451,6 +451,16 @@ class SupabaseGuestRepository implements GuestRepository {
   }
 
   @override
+  Future<void> removeGuest(String guestId) async {
+    final row = await _runRpcSingle(
+      'remove_event_guest',
+      {'target_event_guest_id': guestId},
+    );
+    final guest = EventGuestRecord.fromJson(row);
+    await _removeGuestFromCache(guest.eventId, guest.id);
+  }
+
+  @override
   Future<EventGuestRecord> updateEventGuestTournamentStatus({
     required String eventGuestId,
     required EventTournamentStatus status,
@@ -490,6 +500,16 @@ class SupabaseGuestRepository implements GuestRepository {
       guest,
     ]..sort((left, right) => left.displayName.compareTo(right.displayName));
     await cache.saveGuests(eventId, mergedGuests);
+  }
+
+  Future<void> _removeGuestFromCache(String eventId, String guestId) async {
+    final currentGuests = await readCachedGuests(eventId);
+    await cache.saveGuests(
+      eventId,
+      currentGuests
+          .where((currentGuest) => currentGuest.id != guestId)
+          .toList(growable: false),
+    );
   }
 
   Future<GuestProfileRecord> _resolveProfileForCreate(

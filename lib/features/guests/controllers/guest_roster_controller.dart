@@ -113,6 +113,23 @@ class GuestRosterController extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> removeGuest(String guestId) async {
+    await _runGuestAction(
+      guestId,
+      () async {
+        await _guestRepository.removeGuest(guestId);
+        guests = guests
+            .where((guest) => guest.id != guestId)
+            .toList(growable: false);
+        final updatedAssignments =
+            Map<String, GuestTagAssignmentSummary>.from(activeTagAssignments)
+              ..remove(guestId);
+        activeTagAssignments = updatedAssignments;
+      },
+    );
+    return true;
+  }
+
   Future<bool> checkInAndAssign({
     required String guestId,
     required Future<TagScanResult?> Function() scanForTag,

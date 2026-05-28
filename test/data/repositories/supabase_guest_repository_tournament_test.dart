@@ -231,6 +231,36 @@ void main() {
       expect(guest.tournamentStatus, EventTournamentStatus.qualified);
     });
 
+    test('removeGuest deletes through RPC and removes cached row', () async {
+      final cache = await LocalCache.create();
+      await cache.saveGuests('evt_01', [
+        EventGuestRecord.fromJson({
+          ..._guestRow(id: 'gst_01'),
+          'display_name': 'Alice Wong',
+          'normalized_name': 'alice wong',
+        }),
+        EventGuestRecord.fromJson({
+          ..._guestRow(id: 'gst_02'),
+          'display_name': 'Bob Lee',
+          'normalized_name': 'bob lee',
+        }),
+      ]);
+      final repository = SupabaseGuestRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcSingleRunner: (functionName, params) async {
+          expect(functionName, 'remove_event_guest');
+          expect(params, {'target_event_guest_id': 'gst_01'});
+          return _guestRow(id: 'gst_01');
+        },
+      );
+
+      await repository.removeGuest('gst_01');
+
+      final cachedGuests = cache.readGuests('evt_01');
+      expect(cachedGuests.map((guest) => guest.id), ['gst_02']);
+    });
+
     test('fetches qualification leaderboard from the host-only RPC', () async {
       final cache = await LocalCache.create();
       final repository = SupabaseGuestRepository(
@@ -269,7 +299,7 @@ void main() {
 
 Map<String, dynamic> _guestRow({
   required String id,
-  required String tournamentStatus,
+  String tournamentStatus = 'open_play_only',
 }) {
   return {
     'id': id,

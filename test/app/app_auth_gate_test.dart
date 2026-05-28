@@ -260,6 +260,11 @@ class _FakeGuestRepository implements GuestRepository {
   }
 
   @override
+  Future<void> removeGuest(String guestId) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventGuestRecord> updateEventGuestTournamentStatus({
     required String eventGuestId,
     required EventTournamentStatus status,
