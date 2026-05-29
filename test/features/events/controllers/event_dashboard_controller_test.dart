@@ -364,6 +364,26 @@ TournamentRoundSummary _roundSummary(int roundNumber) {
   );
 }
 
+EventGuestRecord _eventGuest({
+  required String id,
+  required String displayName,
+  required String attendanceStatus,
+  required String tournamentStatus,
+}) {
+  return EventGuestRecord.fromJson({
+    'id': id,
+    'event_id': 'evt_01',
+    'display_name': displayName,
+    'normalized_name': displayName.toLowerCase(),
+    'attendance_status': attendanceStatus,
+    'cover_status': 'paid',
+    'cover_amount_cents': 2000,
+    'is_comped': false,
+    'has_scored_play': false,
+    'tournament_status': tournamentStatus,
+  });
+}
+
 void main() {
   test('exposes role capability booleans for event scorers', () {
     final controller = EventDashboardController(
@@ -435,6 +455,54 @@ void main() {
     expect(controller.event?.id, 'evt_01');
     expect(controller.guestCount, 1);
     expect(controller.error, isNull);
+  });
+
+  test('dashboard guest counts exclude withdrawn guests', () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': false,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+    });
+    final guests = [
+      _eventGuest(
+        id: 'gst_qualifying',
+        displayName: 'Active Qualifier',
+        attendanceStatus: 'expected',
+        tournamentStatus: 'qualifying',
+      ),
+      _eventGuest(
+        id: 'gst_open_play',
+        displayName: 'Open Play Guest',
+        attendanceStatus: 'checked_in',
+        tournamentStatus: 'open_play_only',
+      ),
+      _eventGuest(
+        id: 'gst_withdrawn',
+        displayName: 'Withdrawn Guest',
+        attendanceStatus: 'checked_in',
+        tournamentStatus: 'withdrawn',
+      ),
+    ];
+
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(cachedEvents: [event]),
+      guestRepository: _FakeGuestRepository(cachedGuests: guests),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.guestCount, 2);
+    expect(controller.checkedInGuestCount, 1);
+    expect(controller.qualifyingGuestCount, 1);
+    expect(controller.qualifiedGuestCount, 0);
   });
 
   test('leader label uses the top qualified leaderboard player', () async {

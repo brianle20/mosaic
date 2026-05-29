@@ -285,14 +285,20 @@ class EventDashboardController extends ChangeNotifier {
   }
 
   void _updateGuestSummaries(List<EventGuestRecord> guests) {
-    guestCount = guests.length;
-    checkedInGuestCount = guests.where((guest) => guest.isCheckedIn).length;
-    qualifyingGuestCount = guests
+    final activeGuests = guests
+        .where(
+          (guest) => guest.tournamentStatus != EventTournamentStatus.withdrawn,
+        )
+        .toList(growable: false);
+    guestCount = activeGuests.length;
+    checkedInGuestCount =
+        activeGuests.where((guest) => guest.isCheckedIn).length;
+    qualifyingGuestCount = activeGuests
         .where(
           (guest) => guest.tournamentStatus == EventTournamentStatus.qualifying,
         )
         .length;
-    qualifiedGuestCount = guests
+    qualifiedGuestCount = activeGuests
         .where(
           (guest) => guest.tournamentStatus == EventTournamentStatus.qualified,
         )
