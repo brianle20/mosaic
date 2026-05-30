@@ -43,6 +43,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   int? _discarderSeatIndex;
   int? _penaltySeatIndex;
   bool? _dealerWasWaitingAtDraw;
+  String? _scanError;
   _PlayerScanTarget _playerScanTarget = _PlayerScanTarget.winner;
   late final TextEditingController _fanCountController;
   StreamSubscription<TagScanResult>? _playerTagSubscription;
@@ -86,23 +87,35 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     }
   }
 
-  void _handlePlayerTagScan(TagScanResult scanResult) {
+  void _handlePlayerTagScan(
+    TagScanResult scanResult, {
+    _PlayerScanTarget? targetOverride,
+  }) {
     if (_resultType != HandResultType.win) {
       return;
     }
 
     final scannedSeatIndex = _seatIndexForPlayerTag(scanResult.normalizedUid);
     if (scannedSeatIndex == null || !mounted) {
+      if (mounted) {
+        setState(() {
+          _scanError = 'Scanned tag is not assigned to this table.';
+        });
+      }
       return;
     }
 
     setState(() {
+      _scanError = null;
       _winType ??= HandWinType.selfDraw;
+      final target = targetOverride ?? _playerScanTarget;
       final scanSetsDiscarder = _winType == HandWinType.discard &&
-          _playerScanTarget == _PlayerScanTarget.discarder;
+          target == _PlayerScanTarget.discarder;
       if (scanSetsDiscarder) {
         if (_winnerSeatIndex != scannedSeatIndex) {
           _discarderSeatIndex = scannedSeatIndex;
+        } else {
+          _scanError = 'Discarder cannot be the winner.';
         }
       } else {
         _winnerSeatIndex = scannedSeatIndex;
@@ -129,6 +142,30 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       }
     }
     return null;
+  }
+
+  Future<void> _scanPlayerTag(_PlayerScanTarget target) async {
+    final nfcService = widget.nfcService;
+    if (nfcService == null) {
+      return;
+    }
+
+    try {
+      final result = await nfcService.scanPlayerTagForAssignment(context);
+      if (!mounted || result == null) {
+        return;
+      }
+
+      _handlePlayerTagScan(result, targetOverride: target);
+    } catch (exception) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _scanError = exception.toString();
+      });
+    }
   }
 
   int get _drawDealerSeatIndex =>
@@ -234,18 +271,8 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   }
 
   bool get _canScanPlayers =>
-      widget.nfcService is PassiveNfcService &&
+      widget.nfcService != null &&
       widget.guestTagAssignmentsByGuestId.isNotEmpty;
-
-  String get _playerScanHelpText {
-    if (_winType == HandWinType.discard &&
-        _playerScanTarget == _PlayerScanTarget.discarder) {
-      return 'Next scan sets discarder.';
-    }
-    return _winType == HandWinType.discard
-        ? 'Next scan sets winner.'
-        : 'Scan a player tag to set winner.';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -317,6 +344,17 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
           ),
           const SizedBox(height: 16),
           if (_resultType == HandResultType.win) ...[
+            if (_canScanPlayers) ...[
+              FilledButton(
+                onPressed: () => _scanPlayerTag(_PlayerScanTarget.winner),
+                child: const Text('Scan Winner'),
+              ),
+              if (_scanError != null) ...[
+                const SizedBox(height: 6),
+                Text(_scanError!),
+              ],
+              const SizedBox(height: 12),
+            ],
             DropdownButtonFormField<int>(
               initialValue: _winnerSeatIndex,
               decoration: const InputDecoration(labelText: 'Winner'),
@@ -336,13 +374,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
             if (_draft.winnerSeatError != null) ...[
               const SizedBox(height: 6),
               Text(_draft.winnerSeatError!),
-            ],
-            if (_canScanPlayers) ...[
-              const SizedBox(height: 6),
-              Text(
-                _playerScanHelpText,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
             ],
             const SizedBox(height: 16),
             Wrap(
@@ -377,34 +408,17 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
               const SizedBox(height: 6),
               Text(_draft.winTypeError!),
             ],
-            if (_canScanPlayers && _winType == HandWinType.discard) ...[
-              const SizedBox(height: 16),
-              Text(
-                'Scan Target',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 8),
-              SegmentedButton<_PlayerScanTarget>(
-                segments: const [
-                  ButtonSegment(
-                    value: _PlayerScanTarget.winner,
-                    label: Text('Winner scan'),
-                  ),
-                  ButtonSegment(
-                    value: _PlayerScanTarget.discarder,
-                    label: Text('Discarder scan'),
-                  ),
-                ],
-                selected: {_playerScanTarget},
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _playerScanTarget = selection.first;
-                  });
-                },
-              ),
-            ],
             const SizedBox(height: 16),
             if (_winType == HandWinType.discard) ...[
+              if (_canScanPlayers && _winnerSeatIndex != null) ...[
+                FilledButton(
+                  onPressed: () => _scanPlayerTag(
+                    _PlayerScanTarget.discarder,
+                  ),
+                  child: const Text('Scan Discarder'),
+                ),
+                const SizedBox(height: 12),
+              ],
               DropdownButtonFormField<int>(
                 initialValue: _discarderSeatIndex,
                 decoration: const InputDecoration(labelText: 'Discarder'),

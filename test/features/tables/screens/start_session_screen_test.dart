@@ -117,8 +117,11 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
 }
 
 class _FakeSessionRepository extends ThrowingSessionRepository {
+  _FakeSessionRepository({this.startAssignedException});
+
   StartTableSessionInput? startedInput;
   StartAssignedTableSessionInput? startedAssignedInput;
+  final Object? startAssignedException;
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -182,6 +185,9 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   Future<StartedTableSessionRecord> startAssignedSession(
       StartAssignedTableSessionInput input) async {
     startedAssignedInput = input;
+    if (startAssignedException case final exception?) {
+      throw exception;
+    }
     return _startedSession();
   }
 
@@ -1083,6 +1089,58 @@ void main() {
     expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
     expect(sessionRepository.startedAssignedInput?.scannedTableUid, isNull);
     expect(openedArgs?.sessionId, 'ses_01');
+  });
+
+  testWidgets('shows friendly error when scanned table tag mismatches table',
+      (tester) async {
+    final sessionRepository = _FakeSessionRepository(
+      startAssignedException: Exception(
+        'PostgrestException(message: The scanned table tag does not match '
+        'the selected table., code: P0001, details: Bad Request, hint: null)',
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StartSessionScreen(
+          eventId: 'evt_01',
+          table: EventTableRecord.fromJson(const {
+            'id': 'tbl_01',
+            'event_id': 'evt_01',
+            'label': 'Table 1C',
+            'mode': 'points',
+            'display_order': 1,
+            'default_ruleset_id': 'HK_STANDARD',
+            'default_rotation_policy_type':
+                'dealer_cycle_return_to_initial_east',
+            'default_rotation_policy_config_json': {},
+            'status': 'active',
+          }),
+          scoringPhase: EventScoringPhase.tournament,
+          preverifiedTableTagUid: 'TABLE-OTHER',
+          guestRepository: _FakeGuestRepository(
+            guests: buildGuests(),
+            assignments: buildAssignments(),
+          ),
+          sessionRepository: sessionRepository,
+          seatingRepository: _FakeSeatingRepository(_tableAssignments()),
+          nfcService: _QueuedNfcService([]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Start Assigned Table'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'This tag is not bound to Table 1C. Scan the Table 1C tag, '
+        'or rebind this table tag from Tables.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('PostgrestException'), findsNothing);
   });
 }
 

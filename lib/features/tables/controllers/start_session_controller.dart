@@ -163,7 +163,7 @@ class StartSessionController extends ChangeNotifier {
   }
 
   void recordScanError(Object exception) {
-    actionError = exception.toString();
+    actionError = _formatActionError(exception);
     notifyListeners();
   }
 
@@ -198,7 +198,7 @@ class StartSessionController extends ChangeNotifier {
       notifyListeners();
       return started;
     } catch (exception) {
-      actionError = exception.toString();
+      actionError = _formatActionError(exception);
       isSubmitting = false;
       notifyListeners();
       return null;
@@ -253,6 +253,18 @@ class StartSessionController extends ChangeNotifier {
 
   bool get _shouldUseAssignedSeating =>
       scoringPhase != EventScoringPhase.qualification;
+
+  String _formatActionError(Object exception) {
+    final message = exception.toString();
+    if (message
+        .toLowerCase()
+        .contains('scanned table tag does not match the selected table')) {
+      return 'This tag is not bound to ${table.label}. Scan the '
+          '${table.label} tag, or rebind this table tag from Tables.';
+    }
+
+    return message;
+  }
 }
 
 class ResolvedSeat {

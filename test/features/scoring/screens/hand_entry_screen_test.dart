@@ -195,6 +195,31 @@ class _PassiveNfcService implements NfcService, PassiveNfcService {
   Future<void> dispose() => controller.close();
 }
 
+class _QueuedPlayerNfcService implements NfcService {
+  _QueuedPlayerNfcService(this.results);
+
+  final List<TagScanResult?> results;
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForAssignment(
+      BuildContext context) async {
+    return results.removeAt(0);
+  }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForSessionSeat(
+    BuildContext context, {
+    required String seatLabel,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TagScanResult?> scanTableTag(BuildContext context) {
+    throw UnimplementedError();
+  }
+}
+
 void main() {
   SessionDetailRecord buildDetail({
     int currentDealerSeatIndex = 0,
@@ -666,11 +691,16 @@ void main() {
     expect(repository.recordedInput?.winnerSeatIndex, 1);
   });
 
-  testWidgets('self draw hides scan target because scans only set winner',
+  testWidgets('explicit player scan selects the matching seated winner',
       (tester) async {
     final repository = _RecordingSessionRepository();
-    final nfcService = _PassiveNfcService();
-    addTearDown(nfcService.dispose);
+    final nfcService = _QueuedPlayerNfcService([
+      const TagScanResult(
+        rawUid: 'player-south',
+        normalizedUid: 'PLAYER-SOUTH',
+        isManualEntry: false,
+      ),
+    ]);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -687,15 +717,28 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('Scan Winner'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bob Lee (East)'), findsOneWidget);
     expect(find.text('Scan Target'), findsNothing);
-    expect(find.text('Scan a player tag to set winner.'), findsOneWidget);
   });
 
-  testWidgets('discard scan target fills winner then discarder',
+  testWidgets('discard scan buttons fill winner then discarder',
       (tester) async {
     final repository = _RecordingSessionRepository();
-    final nfcService = _PassiveNfcService();
-    addTearDown(nfcService.dispose);
+    final nfcService = _QueuedPlayerNfcService([
+      const TagScanResult(
+        rawUid: 'player-south',
+        normalizedUid: 'PLAYER-SOUTH',
+        isManualEntry: false,
+      ),
+      const TagScanResult(
+        rawUid: 'player-west',
+        normalizedUid: 'PLAYER-WEST',
+        isManualEntry: false,
+      ),
+    ]);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -716,28 +759,17 @@ void main() {
     await tester.tap(find.text('Discard'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Scan Target'), findsOneWidget);
-    expect(find.text('Next scan sets winner.'), findsOneWidget);
+    expect(find.text('Scan Target'), findsNothing);
+    expect(find.text('Scan Winner'), findsOneWidget);
+    expect(find.text('Scan Discarder'), findsNothing);
 
-    nfcService.controller.add(
-      const TagScanResult(
-        rawUid: 'player-south',
-        normalizedUid: 'PLAYER-SOUTH',
-        isManualEntry: false,
-      ),
-    );
+    await tester.tap(find.text('Scan Winner'));
     await tester.pumpAndSettle();
 
     expect(find.text('Bob Lee (East)'), findsOneWidget);
-    expect(find.text('Next scan sets discarder.'), findsOneWidget);
+    expect(find.text('Scan Discarder'), findsOneWidget);
 
-    nfcService.controller.add(
-      const TagScanResult(
-        rawUid: 'player-west',
-        normalizedUid: 'PLAYER-WEST',
-        isManualEntry: false,
-      ),
-    );
+    await tester.tap(find.text('Scan Discarder'));
     await tester.pumpAndSettle();
 
     expect(find.text('Carol Ng (South)'), findsOneWidget);
