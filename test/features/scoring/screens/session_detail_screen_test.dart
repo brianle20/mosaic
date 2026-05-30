@@ -380,7 +380,10 @@ void main() {
   testWidgets('active session renders live console context and actions',
       (tester) async {
     final sessionRepository = _FakeSessionRepository(
-      detail: _buildDetail(SessionStatus.active),
+      detail: _buildDetail(
+        SessionStatus.active,
+        scoringPhase: EventScoringPhase.tournament,
+      ),
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -549,6 +552,8 @@ void main() {
 
     expect(find.text('Round Time'), findsNothing);
     expect(find.text('Time expired'), findsNothing);
+    expect(find.text('Pause Timer'), findsNothing);
+    expect(find.text('Resume Timer'), findsNothing);
   });
 
   testWidgets('active session blocks hand entry when scoring is paused',
@@ -561,7 +566,10 @@ void main() {
           scoringOpen: false,
           guestRepository: _FakeGuestRepository(),
           sessionRepository: _FakeSessionRepository(
-            detail: _buildDetail(SessionStatus.active),
+            detail: _buildDetail(
+              SessionStatus.active,
+              scoringPhase: EventScoringPhase.tournament,
+            ),
           ),
         ),
       ),
@@ -725,7 +733,10 @@ void main() {
           sessionId: 'ses_01',
           guestRepository: _FakeGuestRepository(),
           sessionRepository: _FakeSessionRepository(
-            detail: _buildDetail(SessionStatus.paused),
+            detail: _buildDetail(
+              SessionStatus.paused,
+              scoringPhase: EventScoringPhase.tournament,
+            ),
           ),
         ),
       ),

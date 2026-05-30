@@ -173,6 +173,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
     final sessionStatus = detail?.session.status;
     final canRecordHand =
         widget.scoringOpen && sessionStatus == SessionStatus.active;
+    final canControlRoundTimer = viewModel?.showRoundTimer ?? false;
 
     return Scaffold(
       appBar: AppBar(title: Text(viewModel?.title ?? 'Table Session')),
@@ -210,10 +211,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                           ),
                     isSubmitting: _controller.isSubmittingOperation,
                     onRecordHand: canRecordHand ? () => _openHandEntry() : null,
-                    onPause: detail.session.status == SessionStatus.active
+                    onPause: canControlRoundTimer &&
+                            detail.session.status == SessionStatus.active
                         ? _controller.pauseSession
                         : null,
-                    onResume: detail.session.status == SessionStatus.paused
+                    onResume: canControlRoundTimer &&
+                            detail.session.status == SessionStatus.paused
                         ? _controller.resumeSession
                         : null,
                     onEnd: detail.session.status == SessionStatus.active ||
