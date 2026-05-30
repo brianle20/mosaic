@@ -972,6 +972,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       : null,
                   isBusy: _controller.isSubmittingLifecycle,
                   onOpenTables: _openTables,
+                  onScanTable: showTableScanAction ? _scanTable : null,
+                  isScanningTable: _isTableScanInProgress,
                   onStartNextRound: _startNextTournamentRound,
                   onGenerateRound: _startNextTournamentRound,
                   onBeginFinals: _openBonusRound,
@@ -1175,6 +1177,8 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
     this.suddenDeathStatus,
     required this.isBusy,
     required this.onOpenTables,
+    this.onScanTable,
+    this.isScanningTable = false,
     required this.onStartNextRound,
     required this.onGenerateRound,
     required this.onBeginFinals,
@@ -1185,6 +1189,8 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
   final BonusRoundSuddenDeathStatus? suddenDeathStatus;
   final bool isBusy;
   final VoidCallback onOpenTables;
+  final VoidCallback? onScanTable;
+  final bool isScanningTable;
   final VoidCallback onStartNextRound;
   final VoidCallback onGenerateRound;
   final VoidCallback onBeginFinals;
@@ -1288,6 +1294,17 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
               label: Text(actionLabel),
             ),
           ),
+          if (round != null && !summary.isComplete && onScanTable != null) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: isBusy || isScanningTable ? null : onScanTable,
+                icon: const Icon(Icons.nfc),
+                label: Text(isScanningTable ? 'Scanning' : 'Scan Table'),
+              ),
+            ),
+          ],
           if (!isFinals && round != null && summary.isComplete) ...[
             const SizedBox(height: 10),
             SizedBox(

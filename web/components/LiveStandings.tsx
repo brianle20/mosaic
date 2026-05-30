@@ -132,6 +132,7 @@ export function LiveStandings({
   }>({ eventId, scoreChanges: {} });
   const clientRef = useRef<SupabaseRealtimeClient | null>(supabaseClient ?? null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scoreChangesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const snapshotRef = useRef({
@@ -190,6 +191,23 @@ export function LiveStandings({
       setStatusState({ eventId, status: "idle" });
     };
 
+    const clearRealtimeTimer = () => {
+      if (realtimeTimerRef.current) {
+        clearTimeout(realtimeTimerRef.current);
+        realtimeTimerRef.current = null;
+      }
+    };
+
+    const scheduleRealtimeSnapshot = (
+      streamedSnapshot: PublicStandingsSnapshot,
+    ) => {
+      clearRealtimeTimer();
+      realtimeTimerRef.current = setTimeout(() => {
+        realtimeTimerRef.current = null;
+        applySnapshot(streamedSnapshot);
+      }, REFRESH_DEBOUNCE_MS);
+    };
+
     const refresh = () => {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
@@ -200,6 +218,7 @@ export function LiveStandings({
         try {
           const refreshedSnapshot = await fetchStandings(client, eventId);
           if (isCurrentEvent) {
+            clearRealtimeTimer();
             applySnapshot(refreshedSnapshot);
           }
         } catch {
@@ -249,7 +268,7 @@ export function LiveStandings({
 
           const streamedSnapshot = snapshotFromRealtimePayload(payload);
           if (streamedSnapshot) {
-            applySnapshot(streamedSnapshot);
+            scheduleRealtimeSnapshot(streamedSnapshot);
           }
         },
       );
@@ -263,6 +282,7 @@ export function LiveStandings({
       if (timerRef.current) {
         clearTimeout(timerRef.current);
       }
+      clearRealtimeTimer();
       if (scoreChangesTimerRef.current) {
         clearTimeout(scoreChangesTimerRef.current);
       }

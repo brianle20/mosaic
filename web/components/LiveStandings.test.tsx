@@ -25,6 +25,7 @@ function createSupabaseClient() {
 
 describe("LiveStandings", () => {
   it("subscribes to the public standings snapshot and applies streamed payloads without refetching", async () => {
+    vi.useFakeTimers();
     const realtime = createSupabaseClient();
     const initial: PublicStandingsSnapshot = {
       eventTitle: "Mosaic May Tournament",
@@ -80,11 +81,13 @@ describe("LiveStandings", () => {
           },
         },
       });
+      vi.advanceTimersByTime(250);
     });
 
     expect(fetchStandings).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "FV Mahjong 1" })).toBeVisible();
     expect(screen.getAllByText("Brian L.")[0]).toBeVisible();
+    vi.useRealTimers();
   });
 
   it("ignores realtime payloads for other events when event_id is present", async () => {
@@ -225,13 +228,106 @@ describe("LiveStandings", () => {
     });
 
     expect(fetchStandings).not.toHaveBeenCalled();
-    expect(screen.getAllByText("+384")).toHaveLength(2);
+    expect(screen.queryByText("+384")).not.toBeInTheDocument();
+
+    await act(async () => {
+      vi.advanceTimersByTime(250);
+    });
+
+    expect(screen.getByText("+384")).toBeVisible();
 
     await act(async () => {
       vi.advanceTimersByTime(2600);
     });
 
     expect(screen.queryByText("+384")).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("coalesces bursty streamed standings into one visible points change", async () => {
+    vi.useFakeTimers();
+    const realtime = createSupabaseClient();
+    const initial: PublicStandingsSnapshot = {
+      eventTitle: "Mosaic May Tournament",
+      leaderboard: [
+        {
+          eventGuestId: "guest-1",
+          publicDisplayName: "Caren L.",
+          totalPoints: 1024,
+          handsPlayed: 15,
+          wins: 7,
+          selfDrawWins: 2,
+          discardWins: 5,
+          discardLosses: 0,
+          rank: 1,
+        },
+      ],
+      bonusResults: [],
+      updatedAt: "2026-05-24T12:00:00.000Z",
+    };
+
+    render(
+      <LiveStandings
+        eventId="event-1"
+        initialSnapshot={initial}
+        supabaseClient={realtime.client}
+        fetchStandings={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      realtime.callbacks[0]({
+        new: {
+          event_id: "event-1",
+          updated_at: "2026-05-24T12:01:00.000Z",
+          payload: {
+            eventTitle: "Mosaic May Tournament",
+            leaderboard: [
+              {
+                eventGuestId: "guest-1",
+                publicDisplayName: "Caren L.",
+                totalPoints: 1408,
+                handsPlayed: 16,
+                wins: 8,
+                selfDrawWins: 2,
+                discardWins: 6,
+                discardLosses: 0,
+                rank: 1,
+              },
+            ],
+            bonusResults: [],
+          },
+        },
+      });
+      vi.advanceTimersByTime(100);
+      realtime.callbacks[0]({
+        new: {
+          event_id: "event-1",
+          updated_at: "2026-05-24T12:01:01.000Z",
+          payload: {
+            eventTitle: "Mosaic May Tournament",
+            leaderboard: [
+              {
+                eventGuestId: "guest-1",
+                publicDisplayName: "Caren L.",
+                totalPoints: 1500,
+                handsPlayed: 16,
+                wins: 8,
+                selfDrawWins: 2,
+                discardWins: 6,
+                discardLosses: 0,
+                rank: 1,
+              },
+            ],
+            bonusResults: [],
+          },
+        },
+      });
+      vi.advanceTimersByTime(250);
+    });
+
+    expect(screen.queryByText("+384")).not.toBeInTheDocument();
+    expect(screen.getByText("+476")).toBeVisible();
     vi.useRealTimers();
   });
 

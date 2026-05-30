@@ -374,16 +374,22 @@ describe("StandingsTable", () => {
       />,
     );
 
-    expect(screen.getAllByText("+384")).toHaveLength(2);
-    expect(screen.getAllByText("+384")[0]).toHaveClass(
+    expect(screen.getByText("+384")).toBeVisible();
+    expect(screen.getByText("+384")).toHaveClass(
       "points-delta",
       "points-delta-positive",
     );
-    expect(container.querySelector(".standings-table tbody tr")).toHaveClass(
+    expect(container.querySelector(".standings-table tbody tr")).not.toHaveClass(
       "is-live-updated",
     );
-    expect(container.querySelector(".mobile-standings-card")).toHaveClass(
+    expect(container.querySelector(".points-cell")).toHaveClass(
+      "points-has-change",
+    );
+    expect(container.querySelector(".mobile-standings-card")).not.toHaveClass(
       "is-live-updated",
+    );
+    expect(container.querySelector(".mobile-card-points")).toHaveClass(
+      "points-has-change",
     );
   });
 

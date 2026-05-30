@@ -68,12 +68,15 @@ describe("standings table readability styles", () => {
   });
 
   it("animates changed standings subtly and respects reduced motion", () => {
-    expect(css).toMatch(/@keyframes standings-flash/);
-    expect(css).toMatch(/\.is-live-updated\s*\{[\s\S]*animation:\s*standings-flash/);
-    expect(css).toMatch(/\.points-delta\s*\{[\s\S]*animation:\s*points-delta-pop/);
+    expect(css).not.toMatch(/\.is-live-updated\s*\{[\s\S]*animation:/);
+    expect(css).toMatch(/@keyframes points-value-pulse/);
+    expect(css).toMatch(/@keyframes points-delta-float/);
+    expect(css).toMatch(/\.points-has-change\s*\{[\s\S]*animation:\s*points-value-pulse/);
+    expect(css).toMatch(/\.points-delta\s*\{[\s\S]*position:\s*absolute/);
+    expect(css).toMatch(/\.points-delta\s*\{[\s\S]*animation:\s*points-delta-float/);
     expect(css).toMatch(/\.points-delta-positive\s*\{[\s\S]*color:\s*var\(--accent-strong\)/);
     expect(css).toMatch(/\.points-delta-negative\s*\{[\s\S]*color:\s*var\(--danger\)/);
-    expect(css).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*\.is-live-updated/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*\.points-has-change/);
     expect(css).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*\.points-delta/);
     expect(css).toMatch(/@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*animation:\s*none/);
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getMinimumHandsForPrize,
   getNotPrizeEligibleRows,
@@ -67,6 +67,7 @@ type LeaderboardTableProps = {
 
 function LeaderboardTable({ rows, scoreChanges }: LeaderboardTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const isMobileLayout = useIsMobileStandingsLayout();
 
   const toggleExpanded = (eventGuestId: string) => {
     setExpandedRows((currentRows) => {
@@ -117,7 +118,14 @@ function LeaderboardTable({ rows, scoreChanges }: LeaderboardTableProps) {
               const scoreChange = scoreChanges[row.eventGuestId];
               const rowClassName = [
                 isTopFour ? "top-four-row" : null,
-                scoreChange ? "is-live-updated" : null,
+              ]
+                .filter(Boolean)
+                .join(" ");
+              const pointsClassName = [
+                "numeric",
+                "points-cell",
+                pointsTone,
+                scoreChange ? "points-has-change" : null,
               ]
                 .filter(Boolean)
                 .join(" ");
@@ -134,11 +142,13 @@ function LeaderboardTable({ rows, scoreChanges }: LeaderboardTableProps) {
                     {row.publicDisplayName}
                   </td>
                   <td
-                    className={`numeric points-cell ${pointsTone}`}
+                    className={pointsClassName}
                     data-label="Points"
                   >
-                    {row.totalPoints.toLocaleString()}
-                    <PointsDelta change={scoreChange} />
+                    <span className="points-value">
+                      {row.totalPoints.toLocaleString()}
+                      <PointsDelta change={isMobileLayout ? undefined : scoreChange} />
+                    </span>
                   </td>
                   <td
                     className="numeric stat-cell summary-stat-cell"
@@ -188,6 +198,7 @@ function LeaderboardTable({ rows, scoreChanges }: LeaderboardTableProps) {
         expandedRows={expandedRows}
         onToggleExpanded={toggleExpanded}
         scoreChanges={scoreChanges}
+        showPointsDelta={isMobileLayout}
       />
     </>
   );
@@ -198,6 +209,7 @@ type MobileStandingsCardsProps = {
   expandedRows: Set<string>;
   onToggleExpanded: (eventGuestId: string) => void;
   scoreChanges: ScoreChangeMap;
+  showPointsDelta: boolean;
 };
 
 function MobileStandingsCards({
@@ -205,6 +217,7 @@ function MobileStandingsCards({
   expandedRows,
   onToggleExpanded,
   scoreChanges,
+  showPointsDelta,
 }: MobileStandingsCardsProps) {
   return (
     <div className="mobile-standings-cards" aria-label="Mobile standings">
@@ -217,7 +230,13 @@ function MobileStandingsCards({
           "mobile-standings-card",
           isTopFour ? "top-four-mobile-card" : null,
           isExpanded ? "is-expanded" : null,
-          scoreChange ? "is-live-updated" : null,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        const mobilePointsClassName = [
+          "mobile-card-points",
+          getPointsTone(row.totalPoints),
+          scoreChange ? "points-has-change" : null,
         ]
           .filter(Boolean)
           .join(" ");
@@ -236,12 +255,12 @@ function MobileStandingsCards({
             >
               <span className="mobile-card-rank">{formatPlacement(placement)}</span>
               <span className="mobile-card-name">{row.publicDisplayName}</span>
-              <span className={`mobile-card-points ${getPointsTone(row.totalPoints)}`}>
+              <span className={mobilePointsClassName}>
                 <span className="mobile-card-points-value">
                   {row.totalPoints.toLocaleString()}
                 </span>
                 <span className="mobile-card-points-label">points</span>
-                <PointsDelta change={scoreChange} />
+                <PointsDelta change={showPointsDelta ? scoreChange : undefined} />
               </span>
               <span className="mobile-card-summary">
                 <strong>{row.handsPlayed}</strong> hands
@@ -276,6 +295,28 @@ function MobileStandingsCards({
       })}
     </div>
   );
+}
+
+function useIsMobileStandingsLayout() {
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return;
+    }
+
+    const query = window.matchMedia("(max-width: 680px)");
+    const updateIsMobileLayout = () => setIsMobileLayout(query.matches);
+
+    updateIsMobileLayout();
+    query.addEventListener("change", updateIsMobileLayout);
+
+    return () => {
+      query.removeEventListener("change", updateIsMobileLayout);
+    };
+  }, []);
+
+  return isMobileLayout;
 }
 
 function PointsDelta({ change }: { change?: ScoreChange }) {

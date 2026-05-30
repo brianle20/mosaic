@@ -2623,6 +2623,8 @@ void main() {
     await _pumpDashboard(
       tester,
       event: event,
+      tableRepository: _TableRepository(tables: [_table(eventId: event.id)]),
+      sessionRepository: const _SessionRepository(),
       seatingRepository: _SeatingRepository(
         roundSummary: _roundSummary(
           roundNumber: 2,
@@ -2631,6 +2633,7 @@ void main() {
           activeTableCount: 2,
         ),
       ),
+      nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 
     expect(find.text('Tournament Live'), findsOneWidget);
@@ -2638,6 +2641,7 @@ void main() {
     expect(find.text('1 of 3 tables complete'), findsOneWidget);
     expect(find.text('2 tables still in progress'), findsOneWidget);
     expect(find.text('Open Tables'), findsOneWidget);
+    expect(find.text('Scan Table'), findsOneWidget);
   });
 
   testWidgets('tournament dashboard can recover with no generated round',

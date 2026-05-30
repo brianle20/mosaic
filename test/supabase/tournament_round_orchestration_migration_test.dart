@@ -406,6 +406,26 @@ void main() {
     expect(sql, contains("select pg_notify('pgrst', 'reload schema');"));
   });
 
+  test('latest finals redemption seating selects the last four players', () {
+    final sql = _readAllMigrationSql();
+    final functionSql = _extractLatestFunction(
+      sql,
+      'public.generate_bonus_round_seating_assignments',
+    );
+
+    expect(
+      functionSql,
+      contains('ranked_players.seed_rank > ranked_players.player_count - 4'),
+    );
+    expect(
+      functionSql,
+      contains(
+        'ranked_players.seed_rank - (ranked_players.player_count - 4) - 1',
+      ),
+    );
+    expect(functionSql, isNot(contains('ranked_players.seed_rank > 4')));
+  });
+
   test('tournament sessions use tournament round number for round wind', () {
     final migration = File(
       'supabase/migrations/20260525110000_reset_tournament_session_round_wind.sql',
@@ -542,4 +562,28 @@ void main() {
     );
     expect(sql, contains("select pg_notify('pgrst', 'reload schema')"));
   });
+}
+
+String _readAllMigrationSql() {
+  final migrationFiles = Directory('supabase/migrations')
+      .listSync()
+      .whereType<File>()
+      .where((file) => file.path.endsWith('.sql'))
+      .toList()
+    ..sort((a, b) => a.path.compareTo(b.path));
+
+  return migrationFiles
+      .map((file) => '-- ${file.path}\n${file.readAsStringSync()}')
+      .join('\n\n');
+}
+
+String _extractLatestFunction(String sql, String functionName) {
+  final escapedName = RegExp.escape(functionName);
+  final matches = RegExp(
+    'create or replace function $escapedName\\s*\\([\\s\\S]*?\\)\\s*'
+    'returns[\\s\\S]*?\\n\\\$\\\$;',
+    caseSensitive: false,
+  ).allMatches(sql).toList();
+
+  return matches.isEmpty ? '' : matches.last.group(0)!;
 }
