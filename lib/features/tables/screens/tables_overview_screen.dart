@@ -510,6 +510,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     final sessionId =
         roundTable.activeSessionId ?? roundTable.latestEndedSessionId;
     final action = _currentRoundAction(roundTable);
+    final canStartSuddenDeath = _canStartSuddenDeathFromCurrentTable(cardData);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -565,16 +566,22 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               runSpacing: 10,
               children: [
                 FilledButton(
-                  onPressed: action == _CurrentRoundAction.enter
-                      ? _controller.isSuddenDeathRequired
-                          ? widget.canManageTables
-                              ? () => _startSuddenDeath(cardData.table)
-                              : null
-                          : () => _enterCurrentRoundTable(cardData.table)
-                      : sessionId == null
-                          ? null
-                          : () => _openSessionDetail(sessionId),
-                  child: Text(_currentRoundActionLabel(action)),
+                  onPressed: canStartSuddenDeath
+                      ? () => _startSuddenDeath(cardData.table)
+                      : action == _CurrentRoundAction.enter
+                          ? _controller.isSuddenDeathRequired
+                              ? widget.canManageTables
+                                  ? () => _startSuddenDeath(cardData.table)
+                                  : null
+                              : () => _enterCurrentRoundTable(cardData.table)
+                          : sessionId == null
+                              ? null
+                              : () => _openSessionDetail(sessionId),
+                  child: Text(
+                    canStartSuddenDeath
+                        ? 'Start Sudden Death'
+                        : _currentRoundActionLabel(action),
+                  ),
                 ),
                 if (cardData.liveSummary case final liveSummary?)
                   if (liveSummary.showRoundTimer)
@@ -1005,6 +1012,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     final hasSessionHistory = _controller.sessionsForTable(table.id).isNotEmpty;
     final canStartSuddenDeath = hasTag &&
         _controller.isSuddenDeathRequired &&
+        !_hasCompletedChampionsTableForSuddenDeath() &&
         widget.scoringOpen &&
         widget.canManageTables &&
         !widget.readOnly;
@@ -1100,6 +1108,28 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  bool _canStartSuddenDeathFromCurrentTable(TableOverviewCardData cardData) {
+    return _controller.isSuddenDeathRequired &&
+        widget.scoringOpen &&
+        widget.canManageTables &&
+        !widget.readOnly &&
+        cardData.table.nfcTagId != null &&
+        cardData.assignmentTitle == 'Table of Champions' &&
+        cardData.currentRoundSummary?.status ==
+            TournamentRoundTableStatus.complete;
+  }
+
+  bool _hasCompletedChampionsTableForSuddenDeath() {
+    return _controller.currentRoundCards.any(
+      (card) =>
+          _canStartSuddenDeathFromCurrentTable(card) ||
+          (_controller.isSuddenDeathRequired &&
+              card.assignmentTitle == 'Table of Champions' &&
+              card.currentRoundSummary?.status ==
+                  TournamentRoundTableStatus.complete),
     );
   }
 
