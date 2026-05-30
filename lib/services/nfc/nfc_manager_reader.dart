@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:mosaic/services/nfc/native_nfc_reader.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
@@ -11,6 +12,7 @@ class NfcManagerReader implements NativeNfcReader {
       : _manager = manager ?? NfcManager.instance;
 
   final NfcManager _manager;
+  bool _isReading = false;
 
   @override
   Future<NativeNfcAvailability> checkAvailability() async {
@@ -23,12 +25,34 @@ class NfcManagerReader implements NativeNfcReader {
 
   @override
   Future<Uint8List?> readUid({required String alertMessage}) async {
+    if (_isReading) {
+      throw const NfcScanException(
+        'An NFC scan is already in progress. Finish or cancel it, then try again.',
+      );
+    }
+
+    _isReading = true;
+    try {
+      return await _readUid(alertMessage: alertMessage);
+    } finally {
+      _isReading = false;
+    }
+  }
+
+  Future<Uint8List?> _readUid({required String alertMessage}) async {
     final completer = Completer<Uint8List?>();
     var completed = false;
 
-    void completeWithNull() {
+    Future<void> stopAndCompleteWithNull() async {
       if (completed) return;
       completed = true;
+
+      try {
+        await _manager.stopSession();
+      } catch (_) {
+        // User cancellation already invalidated the session on some platforms.
+      }
+
       completer.complete(null);
     }
 
@@ -67,40 +91,64 @@ class NfcManagerReader implements NativeNfcReader {
       completer.completeError(error, stackTrace);
     }
 
-    await _manager.startSession(
-      pollingOptions: const {
-        NfcPollingOption.iso14443,
-        NfcPollingOption.iso15693,
-      },
-      alertMessageIos: alertMessage,
-      invalidateAfterFirstReadIos: true,
-      onSessionErrorIos: (error) {
-        if (error.code ==
-            NfcReaderErrorCodeIos.readerSessionInvalidationErrorUserCanceled) {
-          completeWithNull();
-          return;
-        }
+    Future<void> startSession() async {
+      await _manager.startSession(
+        pollingOptions: const {
+          NfcPollingOption.iso14443,
+          NfcPollingOption.iso15693,
+        },
+        alertMessageIos: alertMessage,
+        invalidateAfterFirstReadIos: true,
+        onSessionErrorIos: (error) {
+          if (error.code ==
+              NfcReaderErrorCodeIos
+                  .readerSessionInvalidationErrorUserCanceled) {
+            unawaited(stopAndCompleteWithNull());
+            return;
+          }
 
-        completeWithError(
-          NfcScanException(_formatIosSessionError(error)),
-          StackTrace.current,
-        );
-      },
-      onDiscovered: (tag) {
-        final uid = uidBytesFromNfcManagerTag(tag);
-        if (uid == null || uid.isEmpty) {
-          unawaited(
-            stopAndCompleteWithError(
-              const NfcScanException('No NFC tag identifier was found.'),
-              StackTrace.current,
-            ),
+          completeWithError(
+            NfcScanException(_formatIosSessionError(error)),
+            StackTrace.current,
           );
-          return;
+        },
+        onDiscovered: (tag) {
+          final uid = uidBytesFromNfcManagerTag(tag);
+          if (uid == null || uid.isEmpty) {
+            unawaited(
+              stopAndCompleteWithError(
+                const NfcScanException('No NFC tag identifier was found.'),
+                StackTrace.current,
+              ),
+            );
+            return;
+          }
+
+          unawaited(stopAndCompleteWithUid(uid));
+        },
+      );
+    }
+
+    try {
+      await startSession();
+    } on PlatformException catch (error) {
+      if (error.code != 'session_already_exists') {
+        rethrow;
+      }
+
+      await _manager.stopSession();
+      try {
+        await startSession();
+      } on PlatformException catch (retryError) {
+        if (retryError.code != 'session_already_exists') {
+          rethrow;
         }
 
-        unawaited(stopAndCompleteWithUid(uid));
-      },
-    );
+        throw const NfcScanException(
+          'An NFC scan is already in progress. Finish or cancel it, then try again.',
+        );
+      }
+    }
 
     return completer.future;
   }
