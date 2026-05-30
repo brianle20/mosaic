@@ -392,6 +392,20 @@ void main() {
         contains('from public.generate_tournament_round(target_event_id)'));
   });
 
+  test('start tournament round RPC qualifies event update id column', () {
+    final migration = File(
+      'supabase/migrations/20260530133000_fix_start_tournament_round_event_update.sql',
+    );
+
+    expect(migration.existsSync(), isTrue);
+    final sql = migration.readAsStringSync();
+
+    expect(sql, contains('update public.events as event'));
+    expect(sql, contains('where event.id = target_event_id;'));
+    expect(sql, isNot(contains('where id = target_event_id;')));
+    expect(sql, contains("select pg_notify('pgrst', 'reload schema');"));
+  });
+
   test('tournament sessions use tournament round number for round wind', () {
     final migration = File(
       'supabase/migrations/20260525110000_reset_tournament_session_round_wind.sql',

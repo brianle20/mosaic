@@ -20,6 +20,7 @@ import 'package:mosaic/features/auth/screens/host_sign_in_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service_factory.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/widgets/keyboard_dismiss_region.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MosaicApp extends StatelessWidget {
@@ -60,6 +61,7 @@ class MosaicApp extends StatelessWidget {
       return MaterialApp(
         title: 'Mosaic',
         theme: AppTheme.build(),
+        builder: _buildKeyboardDismissRegion,
         home: _StartupErrorScreen(message: startupError!),
       );
     }
@@ -109,6 +111,7 @@ class MosaicApp extends StatelessWidget {
           return MaterialApp(
             title: 'Mosaic',
             theme: AppTheme.build(),
+            builder: _buildKeyboardDismissRegion,
             home: _StartupErrorScreen(message: snapshot.error.toString()),
           );
         }
@@ -117,6 +120,7 @@ class MosaicApp extends StatelessWidget {
           return MaterialApp(
             title: 'Mosaic',
             theme: AppTheme.build(),
+            builder: _buildKeyboardDismissRegion,
             home: _BootstrapLoadingScreen(environment: environment),
           );
         }
@@ -332,6 +336,7 @@ class _AppWithRepositories extends StatelessWidget {
     return MaterialApp(
       title: 'Mosaic',
       theme: AppTheme.build(),
+      builder: _buildKeyboardDismissRegion,
       home: _AuthGate(
         authRepository: authRepository,
         eventRepository: eventRepository,
@@ -348,6 +353,12 @@ class _AppWithRepositories extends StatelessWidget {
       onGenerateRoute: router.onGenerateRoute,
     );
   }
+}
+
+Widget _buildKeyboardDismissRegion(BuildContext context, Widget? child) {
+  return KeyboardDismissRegion(
+    child: child ?? const SizedBox.shrink(),
+  );
 }
 
 class _UnavailableStaffRepository implements StaffRepository {
