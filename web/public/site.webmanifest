@@ -1,0 +1,16 @@
+{
+  "name": "Mosaic",
+  "short_name": "Mosaic",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f0e6",
+  "theme_color": "#007c7f",
+  "icons": [
+    {
+      "src": "/mosaic-app-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,17 +1,72 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { metadata as layoutMetadata } from "./layout";
+import { metadata as layoutMetadata, viewport } from "./layout";
 import LandingPage, { metadata as pageMetadata } from "./page";
 
 describe("LandingPage", () => {
-  it("keeps landing metadata on the root page instead of the shared layout", () => {
+  it("keeps complete landing metadata on the root page instead of the shared layout", () => {
     expect(pageMetadata).toMatchObject({
       title: "Mosaic | Mahjong event software",
-      description: "Host polished mahjong events with Mosaic.",
+      description:
+        "Host polished mahjong events with check-in, seating, scoring, standings, finals, and prizes in one calm tool.",
+      alternates: { canonical: "/" },
+      keywords: [
+        "mahjong event software",
+        "mahjong tournament software",
+        "mahjong event management",
+        "live mahjong standings",
+      ],
+      openGraph: {
+        title: "Mosaic | Mahjong event software",
+        description:
+          "Host polished mahjong events with check-in, seating, scoring, standings, finals, and prizes in one calm tool.",
+        url: "/",
+        siteName: "Mosaic",
+        type: "website",
+        locale: "en_US",
+        images: [
+          {
+            url: "/mosaic-app-icon.png",
+            width: 1024,
+            height: 1024,
+            alt: "Mosaic app icon",
+          },
+        ],
+      },
+      twitter: {
+        card: "summary",
+        title: "Mosaic | Mahjong event software",
+        description:
+          "Host polished mahjong events with check-in, seating, scoring, standings, finals, and prizes in one calm tool.",
+        images: ["/mosaic-app-icon.png"],
+      },
     });
     expect(layoutMetadata).toMatchObject({
-      title: "Mosaic Live Standings",
-      description: "Public tournament standings for Mosaic events.",
+      applicationName: "Mosaic",
+      metadataBase: new URL("https://mosaicmahjong.com"),
+      title: {
+        default: "Mosaic",
+        template: "%s | Mosaic",
+      },
+      icons: {
+        icon: [
+          { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
+          { url: "/mosaic-app-icon.png", sizes: "1024x1024", type: "image/png" },
+        ],
+        shortcut: [{ url: "/favicon.ico" }],
+        apple: [
+          { url: "/mosaic-app-icon.png", sizes: "1024x1024", type: "image/png" },
+        ],
+      },
+      manifest: "/site.webmanifest",
+      robots: {
+        index: true,
+        follow: true,
+      },
+    });
+    expect(viewport).toMatchObject({
+      themeColor: "#f5f0e6",
+      colorScheme: "light",
     });
   });
 

@@ -4,7 +4,41 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Mosaic | Mahjong event software",
-  description: "Host polished mahjong events with Mosaic.",
+  description:
+    "Host polished mahjong events with check-in, seating, scoring, standings, finals, and prizes in one calm tool.",
+  alternates: {
+    canonical: "/",
+  },
+  keywords: [
+    "mahjong event software",
+    "mahjong tournament software",
+    "mahjong event management",
+    "live mahjong standings",
+  ],
+  openGraph: {
+    title: "Mosaic | Mahjong event software",
+    description:
+      "Host polished mahjong events with check-in, seating, scoring, standings, finals, and prizes in one calm tool.",
+    url: "/",
+    siteName: "Mosaic",
+    type: "website",
+    locale: "en_US",
+    images: [
+      {
+        url: "/mosaic-app-icon.png",
+        width: 1024,
+        height: 1024,
+        alt: "Mosaic app icon",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "Mosaic | Mahjong event software",
+    description:
+      "Host polished mahjong events with check-in, seating, scoring, standings, finals, and prizes in one calm tool.",
+    images: ["/mosaic-app-icon.png"],
+  },
 };
 
 const salesEmail = "sales@mosaicmahjong.com";
