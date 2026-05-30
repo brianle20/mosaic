@@ -823,8 +823,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                                   ),
                           child: Text(
                             event.scoringOpen
-                                ? 'Pause Scoring'
-                                : 'Open Scoring',
+                                ? 'Close Hand Entry'
+                                : 'Reopen Hand Entry',
                           ),
                         ),
                     ],
@@ -1013,11 +1013,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                       : 'Live Operations',
                   openMessage: event.currentScoringPhase ==
                           EventScoringPhase.qualification
-                      ? 'Qualification scoring is open for hosts.'
-                      : 'Scoring and check-in are open for hosts.',
+                      ? 'Qualification hand entry is open for hosts.'
+                      : 'Hand entry and check-in are open for hosts.',
                   closedMessage: showQualificationSetup
                       ? 'Start qualification when hosts are ready to log open-play games.'
-                      : 'Open scoring when hosts are ready to start rounds.',
+                      : 'Reopen hand entry when hosts are ready to score hands.',
                   primaryActionLabel: event.currentScoringPhase ==
                               EventScoringPhase.qualification &&
                           event.scoringOpen
@@ -1027,12 +1027,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                               EventScoringPhase.qualification &&
                           event.scoringOpen
                       ? _startTournament
-                      : null,
-                  onToggleScoring: event.scoringOpen
-                      ? () => _controller.setOperationalFlags(
-                            checkinOpen: event.checkinOpen,
-                            scoringOpen: false,
-                          )
                       : null,
                 ),
                 const SizedBox(height: 18),
@@ -1060,6 +1054,14 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 onFinalize: () => _controller.finalizeEvent(),
                 onRevert: _confirmRevertToDraft,
                 onCancel: _confirmCancelEvent,
+                handEntryActionLabel:
+                    event.scoringOpen ? 'Close Hand Entry' : null,
+                onHandEntryAction: event.scoringOpen
+                    ? () => _controller.setOperationalFlags(
+                          checkinOpen: event.checkinOpen,
+                          scoringOpen: false,
+                        )
+                    : null,
               ),
               if (lifecycleStatus == EventLifecycleStatus.active) ...[
                 const SizedBox(height: 14),
@@ -1666,7 +1668,6 @@ class _LiveOperationsStrip extends StatelessWidget {
     required this.closedMessage,
     required this.primaryActionLabel,
     required this.onPrimaryAction,
-    required this.onToggleScoring,
   });
 
   final bool isSubmitting;
@@ -1676,7 +1677,6 @@ class _LiveOperationsStrip extends StatelessWidget {
   final String closedMessage;
   final String? primaryActionLabel;
   final VoidCallback? onPrimaryAction;
-  final VoidCallback? onToggleScoring;
 
   @override
   Widget build(BuildContext context) {
@@ -1719,13 +1719,6 @@ class _LiveOperationsStrip extends StatelessWidget {
                   onPressed: isSubmitting ? null : onPrimaryAction,
                   child: Text(primaryActionLabel!),
                 ),
-              if (primaryActionLabel != null && scoringOpen)
-                const SizedBox(height: 8),
-              if (scoringOpen)
-                OutlinedButton(
-                  onPressed: isSubmitting ? null : onToggleScoring,
-                  child: const Text('Pause Scoring'),
-                ),
             ],
           ),
         ],
@@ -1751,6 +1744,8 @@ class _EventOptionsSection extends StatelessWidget {
     required this.onFinalize,
     required this.onRevert,
     required this.onCancel,
+    required this.handEntryActionLabel,
+    required this.onHandEntryAction,
   });
 
   final EventLifecycleStatus lifecycleStatus;
@@ -1768,6 +1763,8 @@ class _EventOptionsSection extends StatelessWidget {
   final VoidCallback onFinalize;
   final VoidCallback onRevert;
   final VoidCallback onCancel;
+  final String? handEntryActionLabel;
+  final VoidCallback? onHandEntryAction;
 
   bool get _showsSeatingPrepAction {
     return switch (lifecycleStatus) {
@@ -1811,6 +1808,13 @@ class _EventOptionsSection extends StatelessWidget {
               UtilityActionButton(
                 label: 'Copy Event',
                 onPressed: isSubmitting ? null : onCopy,
+              ),
+            if (canManageEvent &&
+                lifecycleStatus == EventLifecycleStatus.active &&
+                handEntryActionLabel != null)
+              UtilityActionButton(
+                label: handEntryActionLabel!,
+                onPressed: isSubmitting ? null : onHandEntryAction,
               ),
             if (canManageEvent && lifecycleStatus == EventLifecycleStatus.draft)
               UtilityActionButton(

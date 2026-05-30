@@ -864,6 +864,7 @@ TableSessionRecord _session({
   String eventId = 'evt_01',
   String tableId = 'tbl_01',
   SessionStatus status = SessionStatus.active,
+  EventScoringPhase scoringPhase = EventScoringPhase.tournament,
 }) {
   return TableSessionRecord(
     id: id,
@@ -874,6 +875,7 @@ TableSessionRecord _session({
     rotationPolicyType: RotationPolicyType.dealerCycleReturnToInitialEast,
     rotationPolicyConfig: const {},
     status: status,
+    scoringPhase: scoringPhase,
     initialEastSeatIndex: 0,
     currentDealerSeatIndex: 0,
     dealerPassCount: 0,
@@ -2008,7 +2010,8 @@ void main() {
     expect(find.text('Leaderboard'), findsNothing);
     expect(find.text('Activity'), findsOneWidget);
     expect(find.text('Live Operations'), findsOneWidget);
-    expect(find.text('Pause Scoring'), findsOneWidget);
+    expect(find.text('Pause Scoring'), findsNothing);
+    expect(find.text('Close Hand Entry'), findsOneWidget);
     expect(find.text('Event options'), findsOneWidget);
 
     final tablesTop = tester.getTopLeft(find.text('Tables')).dy;
@@ -2530,7 +2533,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Scoring Open'), findsOneWidget);
-    expect(find.text('Pause Scoring'), findsOneWidget);
+    expect(find.text('Pause Scoring'), findsNothing);
+    expect(find.text('Close Hand Entry'), findsOneWidget);
   });
 
   testWidgets('qualification scoring exposes a clear start tournament action',
@@ -2544,9 +2548,49 @@ void main() {
     await _pumpDashboard(tester, event: event);
 
     expect(find.text('Start Tournament'), findsOneWidget);
-    expect(find.text('Pause Scoring'), findsOneWidget);
+    expect(find.text('Pause Scoring'), findsNothing);
+    expect(find.text('Close Hand Entry'), findsOneWidget);
+    expect(find.text('Qualification hand entry is open for hosts.'),
+        findsOneWidget);
     expect(find.text('Qualification Open'), findsOneWidget);
     expect(find.text('Scoring Phase'), findsNothing);
+  });
+
+  testWidgets('close hand entry action closes scoring without pause wording',
+      (tester) async {
+    final eventRepository = _EventRepository(
+      activeEvent,
+      onSetOperationalFlags: (_, checkinOpen, scoringOpen) async {
+        return EventRecord.fromJson({
+          ...activeEvent.toJson(),
+          'checkin_open': checkinOpen,
+          'scoring_open': scoringOpen,
+        });
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: EventDashboardArgs(eventId: activeEvent.id),
+          eventRepository: eventRepository,
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(resolvedTable: _table()),
+          sessionRepository: const _SessionRepository(),
+          nfcService: _NfcService(tableScanResult: _tableScanResult()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pause Scoring'), findsNothing);
+    await tester.ensureVisible(find.text('Close Hand Entry'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Close Hand Entry'));
+    await tester.pumpAndSettle();
+
+    expect(eventRepository.event.scoringOpen, isFalse);
   });
 
   testWidgets(
