@@ -95,3 +95,26 @@ describe("standings table readability styles", () => {
     expect(css).toMatch(/@media \(max-width:\s*680px\)\s*\{[\s\S]*\.mobile-card-details dd\s*\{[\s\S]*font-variant-numeric:\s*tabular-nums/);
   });
 });
+
+describe("landing page styles", () => {
+  it("keeps the hero headline wrapping until wide desktop widths", () => {
+    expect(css).toMatch(/\.landing-hero h1\s*\{[\s\S]*white-space:\s*normal/);
+    expect(css).toMatch(/@media \(min-width:\s*1200px\)\s*\{[\s\S]*\.landing-hero h1\s*\{[\s\S]*font-size:\s*clamp\(3\.65rem,\s*4\.3vw,\s*4\.5rem\)/);
+    expect(css).toMatch(/@media \(min-width:\s*1200px\)\s*\{[\s\S]*\.landing-hero h1\s*\{[\s\S]*white-space:\s*nowrap/);
+    expect(css).not.toMatch(/@media \(max-width:\s*1023px\)\s*\{[\s\S]*\.landing-hero h1\s*\{[\s\S]*white-space:\s*normal/);
+  });
+
+  it("uses the real icon as a restrained watermark accent", () => {
+    expect(css).toMatch(/\.landing-hero::after\s*\{[\s\S]*background-image:\s*url\("\/mosaic-app-icon\.png"\)/);
+    expect(css).toMatch(/\.landing-hero::after\s*\{[\s\S]*opacity:\s*0\.07/);
+  });
+
+  it("hides the header email link on mobile", () => {
+    expect(css).toMatch(/@media \(max-width:\s*680px\)\s*\{[\s\S]*\.landing-header-email\s*\{[\s\S]*display:\s*none/);
+  });
+
+  it("switches the workflow strip to two columns on mobile", () => {
+    expect(css).toMatch(/\.workflow-strip\s*\{[\s\S]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/);
+    expect(css).toMatch(/@media \(max-width:\s*680px\)\s*\{[\s\S]*\.workflow-strip\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  });
+});

@@ -1,0 +1,84 @@
+import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Mosaic | Mahjong event software",
+  description: "Host polished mahjong events with Mosaic.",
+};
+
+const salesEmail = "sales@mosaicmahjong.com";
+const salesHref = `mailto:${salesEmail}`;
+
+const workflowSteps = ["Check in", "Seat tables", "Score hands", "Publish standings"];
+
+const benefits = [
+  {
+    title: "Event-day control",
+    copy: "Keep guests, tables, and rounds moving.",
+  },
+  {
+    title: "Live leaderboards",
+    copy: "Share standings as the room plays.",
+  },
+  {
+    title: "Finals and prizes",
+    copy: "Close the event with clear results.",
+  },
+];
+
+export default function LandingPage() {
+  return (
+    <div className="landing-page">
+      <header className="landing-header">
+        <Link className="landing-brand" href="/" aria-label="Mosaic home">
+          <Image src="/mosaic-app-icon.png" alt="" width={40} height={40} priority />
+          <span>Mosaic</span>
+        </Link>
+        <a className="landing-header-email" href={salesHref}>
+          {salesEmail}
+        </a>
+      </header>
+
+      <main>
+        <section className="landing-hero" aria-labelledby="landing-title">
+          <div className="landing-hero-content">
+            <p className="landing-eyebrow">Mahjong event software</p>
+            <h1 id="landing-title">Host polished mahjong events.</h1>
+            <p className="landing-copy">
+              Check-in, seating, scoring, standings, finals, and prizes in one calm tool.
+            </p>
+            <div className="landing-actions">
+              <a className="landing-primary-link" href={salesHref}>
+                Email sales
+              </a>
+              <p>For clubs, leagues, pop-ups, and private events.</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="workflow-strip" aria-label="Event workflow">
+          {workflowSteps.map((step) => (
+            <div className="workflow-step" key={step}>
+              {step}
+            </div>
+          ))}
+        </section>
+
+        <section className="benefit-grid" aria-label="Mosaic benefits">
+          {benefits.map((benefit) => (
+            <article className="benefit-card" key={benefit.title}>
+              <h2>{benefit.title}</h2>
+              <p>{benefit.copy}</p>
+            </article>
+          ))}
+        </section>
+
+        <section className="closing-cta" aria-labelledby="closing-title">
+          <h2 id="closing-title">Interested in Mosaic?</h2>
+          <a href={salesHref}>{salesEmail}</a>
+        </section>
+      </main>
+    </div>
+  );
+}

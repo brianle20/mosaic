@@ -76,6 +76,20 @@ void main() {
     );
   });
 
+  test('staff mutation RPCs qualify id references in plpgsql bodies', () {
+    expect(sql, contains('where identity.id = identity_row.id'));
+    expect(sql, contains('where membership.id = target_membership_id;'));
+    expect(
+      sql,
+      contains(
+        'on conflict on constraint event_staff_memberships_event_identity_unique',
+      ),
+    );
+    expect(sql, isNot(contains('where id = identity_row.id')));
+    expect(sql, isNot(contains('where id = target_membership_id;')));
+    expect(sql, isNot(contains('on conflict (event_id, approved_identity_id)')));
+  });
+
   test('RLS policies use view and scoring helpers', () {
     expect(sql, contains('events_select_owned_or_staff'));
     expect(sql, contains('event_guests_owner_or_staff_read'));

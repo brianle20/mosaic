@@ -95,8 +95,19 @@ create table if not exists public.event_staff_memberships (
     check (status in ('active', 'disabled'))
 );
 
-create unique index if not exists event_staff_memberships_event_identity_unique
-  on public.event_staff_memberships (event_id, approved_identity_id);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'event_staff_memberships_event_identity_unique'
+      and conrelid = 'public.event_staff_memberships'::regclass
+  ) then
+    alter table public.event_staff_memberships
+      add constraint event_staff_memberships_event_identity_unique
+      unique (event_id, approved_identity_id);
+  end if;
+end $$;
 
 create unique index if not exists event_staff_memberships_event_user_unique
   on public.event_staff_memberships (event_id, user_id)
@@ -1753,15 +1764,15 @@ begin
   for update;
 
   if found then
-    update public.approved_logistics_identities
+    update public.approved_logistics_identities as identity
     set
-      email = coalesce(staff_email, email),
-      email_lower = coalesce(normalized_email, email_lower),
-      phone_e164 = coalesce(normalized_phone, phone_e164),
+      email = coalesce(staff_email, identity.email),
+      email_lower = coalesce(normalized_email, identity.email_lower),
+      phone_e164 = coalesce(normalized_phone, identity.phone_e164),
       display_name = normalized_display_name,
       status = 'active'
-    where id = identity_row.id
-    returning *
+    where identity.id = identity_row.id
+    returning identity.*
     into identity_row;
   else
     insert into public.approved_logistics_identities (
@@ -1808,7 +1819,7 @@ begin
     'active',
     auth.uid()
   )
-  on conflict (event_id, approved_identity_id) do update
+  on conflict on constraint event_staff_memberships_event_identity_unique do update
   set
     user_id = coalesce(excluded.user_id, public.event_staff_memberships.user_id),
     role = excluded.role,
@@ -1860,9 +1871,9 @@ begin
 
   perform app_private.require_owned_event(target_event_id);
 
-  update public.event_staff_memberships
+  update public.event_staff_memberships as membership
   set status = 'disabled'
-  where id = target_membership_id;
+  where membership.id = target_membership_id;
 
   return query
   select *

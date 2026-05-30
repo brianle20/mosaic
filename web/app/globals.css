@@ -37,6 +37,299 @@ select {
   font: inherit;
 }
 
+.landing-page {
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  padding: 24px clamp(20px, 5vw, 72px) 56px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0)),
+    var(--background);
+}
+
+.landing-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 1.04rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.landing-brand img {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(23, 33, 30, 0.1);
+}
+
+.landing-header-email {
+  color: var(--accent-strong);
+  font-size: 0.94rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.landing-header-email:hover,
+.landing-header-email:focus-visible,
+.closing-cta a:hover,
+.closing-cta a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.landing-hero {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-items: center;
+  width: min(1180px, 100%);
+  min-height: clamp(500px, 62vh, 680px);
+  margin: 0 auto;
+  padding: 88px 0 72px;
+}
+
+.landing-hero::after {
+  content: "";
+  position: absolute;
+  right: clamp(-210px, -9vw, -60px);
+  bottom: clamp(18px, 6vw, 72px);
+  z-index: -1;
+  width: clamp(340px, 48vw, 620px);
+  aspect-ratio: 1;
+  background-image: url("/mosaic-app-icon.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.07;
+  pointer-events: none;
+}
+
+.landing-hero-content {
+  max-width: 980px;
+}
+
+.landing-eyebrow {
+  margin: 0 0 18px;
+  color: var(--accent-strong);
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.landing-hero h1 {
+  margin: 0;
+  max-width: 100%;
+  font-size: clamp(3.15rem, 7vw, 5rem);
+  line-height: 0.95;
+  letter-spacing: 0;
+  white-space: normal;
+}
+
+.landing-copy {
+  max-width: 720px;
+  margin: 26px 0 0;
+  color: var(--muted);
+  font-size: clamp(1.2rem, 2vw, 1.52rem);
+  line-height: 1.45;
+}
+
+.landing-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 34px;
+}
+
+.landing-primary-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 22px;
+  border: 1px solid var(--accent-strong);
+  border-radius: 8px;
+  background: var(--accent-strong);
+  color: white;
+  font-weight: 900;
+  text-decoration: none;
+  box-shadow: 0 16px 34px rgba(0, 79, 74, 0.18);
+}
+
+.landing-primary-link:hover,
+.landing-primary-link:focus-visible {
+  background: var(--accent);
+}
+
+.landing-actions p {
+  max-width: 360px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.workflow-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.workflow-step,
+.benefit-card,
+.closing-cta {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.workflow-step {
+  padding: 14px 16px;
+  color: var(--accent-strong);
+  font-weight: 900;
+  text-align: center;
+}
+
+.benefit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  width: min(1180px, 100%);
+  margin: 16px auto 0;
+}
+
+.benefit-card {
+  padding: 24px;
+  box-shadow: 0 14px 34px rgba(23, 33, 30, 0.06);
+}
+
+.benefit-card h2,
+.benefit-card p,
+.closing-cta h2 {
+  margin: 0;
+}
+
+.benefit-card h2 {
+  font-size: 1.08rem;
+  line-height: 1.2;
+}
+
+.benefit-card p {
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.closing-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: min(1180px, 100%);
+  margin: 16px auto 0;
+  padding: 24px;
+}
+
+.closing-cta h2 {
+  font-size: clamp(1.42rem, 2.4vw, 2rem);
+}
+
+.closing-cta a {
+  color: var(--accent-strong);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+@media (min-width: 1200px) {
+  .landing-hero h1 {
+    font-size: clamp(3.65rem, 4.3vw, 4.5rem);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 680px) {
+  .landing-page {
+    padding: 18px 16px 36px;
+  }
+
+  .landing-header-email {
+    display: none;
+  }
+
+  .landing-brand img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .landing-hero {
+    min-height: auto;
+    padding: 66px 0 44px;
+  }
+
+  .landing-hero::after {
+    right: -170px;
+    bottom: 4px;
+    width: 340px;
+    opacity: 0.06;
+  }
+
+  .landing-eyebrow {
+    margin-bottom: 14px;
+  }
+
+  .landing-copy {
+    margin-top: 20px;
+    font-size: 1.08rem;
+  }
+
+  .landing-actions,
+  .closing-cta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .landing-primary-link {
+    width: 100%;
+  }
+
+  .workflow-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workflow-step {
+    display: grid;
+    min-height: 62px;
+    place-items: center;
+    padding: 12px;
+  }
+
+  .benefit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .benefit-card,
+  .closing-cta {
+    padding: 20px;
+  }
+}
+
 .standings-shell {
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
