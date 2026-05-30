@@ -1,22 +1,25 @@
 import type { Metadata } from "next";
-import { LiveStandings } from "../../../../components/LiveStandings";
+import { LivePointsRace } from "../../../../../components/LivePointsRace";
 import {
   fetchPublicStandings,
   type PublicStandingsClient,
-} from "../../../../lib/public-standings";
-import { createPublicSupabaseClient } from "../../../../lib/supabase";
+  type PublicStandingsSnapshot,
+} from "../../../../../lib/public-standings";
+import { createPublicSupabaseClient } from "../../../../../lib/supabase";
 
-type StandingsPageProps = {
+type PointsRacePageProps = {
   params: Promise<{ eventSlug: string }>;
 };
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: StandingsPageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: PointsRacePageProps): Promise<Metadata> {
   const { eventSlug } = await params;
-  const canonicalPath = `/events/${eventSlug}/standings`;
-  const title = "Mosaic Live Standings";
-  const description = "Live mahjong standings for this Mosaic event.";
+  const canonicalPath = `/events/${eventSlug}/standings/graph`;
+  const title = "Mosaic Points Race";
+  const description = "Live cumulative points graph for this Mosaic event.";
 
   return {
     title,
@@ -48,9 +51,9 @@ export async function generateMetadata({ params }: StandingsPageProps): Promise<
   };
 }
 
-export default async function StandingsPage({ params }: StandingsPageProps) {
+export default async function PointsRacePage({ params }: PointsRacePageProps) {
   const { eventSlug } = await params;
-  let initialSnapshot;
+  let initialSnapshot: PublicStandingsSnapshot;
   let loadError: string | null = null;
 
   try {
@@ -76,7 +79,7 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
           {loadError}
         </div>
       ) : null}
-      <LiveStandings
+      <LivePointsRace
         eventId={initialSnapshot.eventId ?? eventSlug}
         initialSnapshot={initialSnapshot}
       />

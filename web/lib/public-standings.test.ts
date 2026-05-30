@@ -75,6 +75,7 @@ describe("public standings data mapping", () => {
     expect(result.leaderboard).toEqual([]);
     expect(result.bonusResults).toEqual([]);
     expect(result.finalsLeaderboards).toEqual([]);
+    expect(result.pointsTimeline).toEqual([]);
     expect(rpc).toHaveBeenCalledWith("get_public_event_summary", {
       target_event_id: "event-1",
     });
@@ -85,6 +86,9 @@ describe("public standings data mapping", () => {
       target_event_id: "event-1",
     });
     expect(rpc).toHaveBeenCalledWith("get_public_event_finals_leaderboard", {
+      target_event_id: "event-1",
+    });
+    expect(rpc).toHaveBeenCalledWith("get_public_event_points_timeline", {
       target_event_id: "event-1",
     });
   });
@@ -213,6 +217,7 @@ describe("public standings data mapping", () => {
           ],
         },
       ],
+      pointsTimeline: [],
       updatedAt: "2026-05-24T12:01:00.000Z",
     });
   });
@@ -308,8 +313,174 @@ describe("public standings data mapping", () => {
           ],
         },
       ],
+      pointsTimeline: [],
       updatedAt: "2026-05-24T12:02:00.000Z",
     });
+  });
+
+  it("maps public points timeline snapshots defensively", () => {
+    expect(
+      mapPublicStandingsSnapshotPayload(
+        {
+          eventTitle: "FV Mahjong 1",
+          leaderboard: [],
+          bonusResults: [],
+          pointsTimeline: [
+            {
+              handIndex: "2",
+              handResultId: "hand-2",
+              recordedAt: "2026-05-24T12:03:00.000Z",
+              tableLabel: "  Table 3  ",
+              players: [
+                {
+                  eventGuestId: "guest-1",
+                  publicDisplayName: "  ",
+                  pointsDelta: "not a number",
+                  totalPoints: "512",
+                  rank: "1",
+                },
+              ],
+            },
+            null,
+            {
+              handIndex: "bad",
+              players: null,
+            },
+          ],
+        },
+        "2026-05-24T12:02:00.000Z",
+      ).pointsTimeline,
+    ).toEqual([
+      {
+        handIndex: 2,
+        handResultId: "hand-2",
+        recordedAt: "2026-05-24T12:03:00.000Z",
+        tableLabel: "Table 3",
+        players: [
+          {
+            eventGuestId: "guest-1",
+            publicDisplayName: "Player",
+            pointsDelta: 0,
+            totalPoints: 512,
+            rank: 1,
+          },
+        ],
+      },
+      {
+        handIndex: 0,
+        handResultId: "",
+        recordedAt: null,
+        tableLabel: "Table",
+        players: [],
+      },
+      {
+        handIndex: 0,
+        handResultId: "",
+        recordedAt: null,
+        tableLabel: "Table",
+        players: [],
+      },
+    ]);
+  });
+
+  it("groups flat public points timeline snapshot rows from SQL", () => {
+    expect(
+      mapPublicStandingsSnapshotPayload(
+        {
+          eventTitle: "FV Mahjong 1",
+          leaderboard: [],
+          bonusResults: [],
+          pointsTimeline: [
+            {
+              handIndex: 2,
+              handResultId: "hand-2",
+              recordedAt: "2026-05-24T12:04:00.000Z",
+              tableLabel: "Table 1",
+              eventGuestId: "guest-3",
+              publicDisplayName: "Caren W.",
+              pointsDelta: 18,
+              totalPoints: 64,
+              rank: 2,
+            },
+            {
+              handIndex: 1,
+              handResultId: "hand-1",
+              recordedAt: "2026-05-24T12:03:00.000Z",
+              tableLabel: "  ",
+              eventGuestId: "guest-2",
+              publicDisplayName: null,
+              pointsDelta: "bad",
+              totalPoints: 64,
+              rank: null,
+            },
+            {
+              handIndex: 2,
+              handResultId: "hand-2",
+              recordedAt: "2026-05-24T12:04:00.000Z",
+              tableLabel: "Table 1",
+              eventGuestId: "guest-1",
+              publicDisplayName: "Alice C.",
+              pointsDelta: -18,
+              totalPoints: 128,
+              rank: 1,
+            },
+          ],
+        },
+        null,
+      ).pointsTimeline,
+    ).toEqual([
+      {
+        handIndex: 1,
+        handResultId: "hand-1",
+        recordedAt: "2026-05-24T12:03:00.000Z",
+        tableLabel: "Table",
+        players: [
+          {
+            eventGuestId: "guest-2",
+            publicDisplayName: "Player",
+            pointsDelta: 0,
+            totalPoints: 64,
+            rank: 0,
+          },
+        ],
+      },
+      {
+        handIndex: 2,
+        handResultId: "hand-2",
+        recordedAt: "2026-05-24T12:04:00.000Z",
+        tableLabel: "Table 1",
+        players: [
+          {
+            eventGuestId: "guest-1",
+            publicDisplayName: "Alice C.",
+            pointsDelta: -18,
+            totalPoints: 128,
+            rank: 1,
+          },
+          {
+            eventGuestId: "guest-3",
+            publicDisplayName: "Caren W.",
+            pointsDelta: 18,
+            totalPoints: 64,
+            rank: 2,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("defaults missing public points timeline snapshots to an empty list", () => {
+    expect(
+      mapPublicStandingsSnapshotPayload(
+        {
+          eventTitle: "FV Mahjong 1",
+          leaderboard: [],
+          bonusResults: [],
+          pointsTimeline: null,
+        },
+        null,
+      ).pointsTimeline,
+    ).toEqual([]);
   });
 
   it("groups public finals leaderboard RPC rows into finals tables", async () => {
@@ -358,7 +529,8 @@ describe("public standings data mapping", () => {
           },
         ],
         error: null,
-      });
+      })
+      .mockResolvedValue({ data: [], error: null });
 
     const result = await fetchPublicStandings({ rpc }, "event-1");
 
@@ -403,6 +575,101 @@ describe("public standings data mapping", () => {
             handsPlayed: 0,
             wins: 0,
             rank: 1,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("groups public points timeline RPC rows into sorted hands", async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: [{ event_id: "event-1", title: "Mosaic May Tournament" }],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            hand_index: 2,
+            hand_result_id: "hand-2",
+            recorded_at: "2026-05-24T12:04:00.000Z",
+            table_label: "Table 1",
+            event_guest_id: "guest-3",
+            public_display_name: "Caren W.",
+            points_delta: 18,
+            total_points: 64,
+            rank: 2,
+          },
+          {
+            hand_index: 1,
+            hand_result_id: "hand-1",
+            recorded_at: "2026-05-24T12:03:00.000Z",
+            table_label: "Table 1",
+            event_guest_id: "guest-2",
+            public_display_name: null,
+            points_delta: "bad",
+            total_points: 64,
+            rank: null,
+          },
+          {
+            hand_index: 2,
+            hand_result_id: "hand-2",
+            recorded_at: "2026-05-24T12:04:00.000Z",
+            table_label: "Table 1",
+            event_guest_id: "guest-1",
+            public_display_name: "Alice C.",
+            points_delta: -18,
+            total_points: 128,
+            rank: 1,
+          },
+        ],
+        error: null,
+      });
+
+    const result = await fetchPublicStandings({ rpc }, "event-1");
+
+    expect(rpc).toHaveBeenCalledWith("get_public_event_points_timeline", {
+      target_event_id: "event-1",
+    });
+    expect(result.pointsTimeline).toEqual([
+      {
+        handIndex: 1,
+        handResultId: "hand-1",
+        recordedAt: "2026-05-24T12:03:00.000Z",
+        tableLabel: "Table 1",
+        players: [
+          {
+            eventGuestId: "guest-2",
+            publicDisplayName: "Player",
+            pointsDelta: 0,
+            totalPoints: 64,
+            rank: 0,
+          },
+        ],
+      },
+      {
+        handIndex: 2,
+        handResultId: "hand-2",
+        recordedAt: "2026-05-24T12:04:00.000Z",
+        tableLabel: "Table 1",
+        players: [
+          {
+            eventGuestId: "guest-1",
+            publicDisplayName: "Alice C.",
+            pointsDelta: -18,
+            totalPoints: 128,
+            rank: 1,
+          },
+          {
+            eventGuestId: "guest-3",
+            publicDisplayName: "Caren W.",
+            pointsDelta: 18,
+            totalPoints: 64,
+            rank: 2,
           },
         ],
       },

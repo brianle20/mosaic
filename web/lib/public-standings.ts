@@ -33,6 +33,19 @@ export type PublicFinalsLeaderboardRpcRow = {
   [key: string]: unknown;
 };
 
+export type PublicPointsTimelineRpcRow = {
+  hand_index: number | string | null;
+  hand_result_id: string | null;
+  recorded_at: string | null;
+  table_label: string | null;
+  event_guest_id: string;
+  public_display_name: string | null;
+  points_delta: number | string | null;
+  total_points: number | string | null;
+  rank: number | string | null;
+  [key: string]: unknown;
+};
+
 export type PublicEventSummaryRpcRow = {
   event_id: string;
   public_slug?: string | null;
@@ -89,6 +102,22 @@ export type PublicFinalsLeaderboardTable = {
   rows: PublicFinalsLeaderboardRow[];
 };
 
+export type PublicPointsTimelinePlayerPoint = {
+  eventGuestId: string;
+  publicDisplayName: string;
+  pointsDelta: number;
+  totalPoints: number;
+  rank: number;
+};
+
+export type PublicPointsTimelineHand = {
+  handIndex: number;
+  handResultId: string;
+  recordedAt: string | null;
+  tableLabel: string;
+  players: PublicPointsTimelinePlayerPoint[];
+};
+
 export type PublicStandingsSnapshot = {
   eventId?: string;
   eventSlug?: string | null;
@@ -96,6 +125,7 @@ export type PublicStandingsSnapshot = {
   leaderboard: PublicLeaderboardRow[];
   bonusResults: PublicBonusResult[];
   finalsLeaderboards?: PublicFinalsLeaderboardTable[];
+  pointsTimeline: PublicPointsTimelineHand[];
   updatedAt: string | null;
 };
 
@@ -106,6 +136,7 @@ export type PublicStandingsRpcClient = {
       | "get_public_event_leaderboard"
       | "get_public_event_bonus_results"
       | "get_public_event_finals_leaderboard"
+      | "get_public_event_points_timeline"
       | "resolve_public_event_id",
     args: { target_event_id: string } | { target_public_slug: string },
   ) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>;
@@ -174,6 +205,10 @@ function readNullableNumber(value: unknown): number | null {
   return Number.isFinite(numericValue) ? numericValue : null;
 }
 
+function readNullableString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
 function mapSnapshotLeaderboardRow(row: unknown): PublicLeaderboardRow {
   const record = asRecord(row) ?? {};
 
@@ -200,6 +235,115 @@ function mapSnapshotBonusResult(row: unknown): PublicBonusResult {
     placement: readNullableNumber(record.placement),
     pointsDelta: readNumber(record.pointsDelta),
   };
+}
+
+function mapSnapshotPointsTimelinePlayer(row: unknown): PublicPointsTimelinePlayerPoint {
+  const record = asRecord(row) ?? {};
+
+  return {
+    eventGuestId: readString(record.eventGuestId, ""),
+    publicDisplayName: readString(record.publicDisplayName, "Player"),
+    pointsDelta: readNumber(record.pointsDelta),
+    totalPoints: readNumber(record.totalPoints),
+    rank: readNumber(record.rank),
+  };
+}
+
+function mapSnapshotPointsTimelineHand(row: unknown): PublicPointsTimelineHand {
+  const record = asRecord(row) ?? {};
+  const players = Array.isArray(record.players) ? record.players : [];
+
+  return {
+    handIndex: readNumber(record.handIndex),
+    handResultId: readString(record.handResultId, ""),
+    recordedAt: readNullableString(record.recordedAt),
+    tableLabel: readString(record.tableLabel, "Table"),
+    players: players.map(mapSnapshotPointsTimelinePlayer),
+  };
+}
+
+function isFlatSnapshotPointsTimelineRow(row: unknown): boolean {
+  const record = asRecord(row);
+  return record !== null && Object.prototype.hasOwnProperty.call(record, "eventGuestId");
+}
+
+function pointsTimelineHandSort(
+  left: PublicPointsTimelineHand,
+  right: PublicPointsTimelineHand,
+): number {
+  const handCompare = left.handIndex - right.handIndex;
+  if (handCompare !== 0) {
+    return handCompare;
+  }
+
+  const recordedCompare = (left.recordedAt ?? "").localeCompare(right.recordedAt ?? "");
+  if (recordedCompare !== 0) {
+    return recordedCompare;
+  }
+
+  return left.tableLabel.localeCompare(right.tableLabel);
+}
+
+function mapFlatSnapshotPointsTimelineRows(rows: unknown[]): PublicPointsTimelineHand[] {
+  const handsByKey = new Map<
+    string,
+    {
+      handIndex: number;
+      handResultId: string;
+      recordedAt: string | null;
+      tableLabel: string;
+      players: PublicPointsTimelinePlayerPoint[];
+    }
+  >();
+
+  for (const row of rows) {
+    const record = asRecord(row) ?? {};
+    const handIndex = readNumber(record.handIndex);
+    const handResultId = readString(record.handResultId, "");
+    const recordedAt = readNullableString(record.recordedAt);
+    const tableLabel = readString(record.tableLabel, "Table");
+    const key = handResultId || `${handIndex}\u0000${recordedAt ?? ""}\u0000${tableLabel}`;
+    const hand = handsByKey.get(key) ?? {
+      handIndex,
+      handResultId,
+      recordedAt,
+      tableLabel,
+      players: [],
+    };
+
+    hand.players.push(mapSnapshotPointsTimelinePlayer(row));
+    handsByKey.set(key, hand);
+  }
+
+  return Array.from(handsByKey.values()).map((hand) => ({
+    handIndex: hand.handIndex,
+    handResultId: hand.handResultId,
+    recordedAt: hand.recordedAt,
+    tableLabel: hand.tableLabel,
+    players: [...hand.players].sort(pointsTimelinePlayerSort),
+  }));
+}
+
+function mapSnapshotPointsTimelineRows(rows: unknown[]): PublicPointsTimelineHand[] {
+  const groupedRows: unknown[] = [];
+  const flatRows: unknown[] = [];
+
+  for (const row of rows) {
+    if (isFlatSnapshotPointsTimelineRow(row)) {
+      flatRows.push(row);
+    } else {
+      groupedRows.push(row);
+    }
+  }
+
+  if (flatRows.length === 0) {
+    return groupedRows.map(mapSnapshotPointsTimelineHand);
+  }
+
+  return [
+    ...groupedRows.map(mapSnapshotPointsTimelineHand),
+    ...mapFlatSnapshotPointsTimelineRows(flatRows),
+  ].sort(pointsTimelineHandSort);
 }
 
 function mapSnapshotFinalsLeaderboardRow(row: unknown): PublicFinalsLeaderboardRow {
@@ -270,6 +414,9 @@ export function mapPublicStandingsSnapshotPayload(
   const finalsLeaderboards = Array.isArray(record.finalsLeaderboards)
     ? record.finalsLeaderboards
     : [];
+  const pointsTimeline = Array.isArray(record.pointsTimeline)
+    ? record.pointsTimeline
+    : [];
   const payloadUpdatedAt =
     typeof record.updatedAt === "string" && record.updatedAt.trim().length > 0
       ? record.updatedAt
@@ -280,6 +427,7 @@ export function mapPublicStandingsSnapshotPayload(
     leaderboard: leaderboard.map(mapSnapshotLeaderboardRow),
     bonusResults: bonusResults.map(mapSnapshotBonusResult),
     finalsLeaderboards: finalsLeaderboards.map(mapSnapshotFinalsLeaderboardTable),
+    pointsTimeline: mapSnapshotPointsTimelineRows(pointsTimeline),
     updatedAt: payloadUpdatedAt ?? updatedAt,
   };
 
@@ -426,6 +574,80 @@ export function mapFinalsLeaderboardRows(
     });
 }
 
+function mapPointsTimelinePlayerRow(
+  row: PublicPointsTimelineRpcRow,
+): PublicPointsTimelinePlayerPoint {
+  return {
+    eventGuestId: row.event_guest_id,
+    publicDisplayName: row.public_display_name?.trim() || "Player",
+    pointsDelta: readNumber(row.points_delta),
+    totalPoints: readNumber(row.total_points),
+    rank: readNumber(row.rank),
+  };
+}
+
+function pointsTimelinePlayerSort(
+  left: PublicPointsTimelinePlayerPoint,
+  right: PublicPointsTimelinePlayerPoint,
+): number {
+  const leftRank = left.rank > 0 ? left.rank : Number.MAX_SAFE_INTEGER;
+  const rightRank = right.rank > 0 ? right.rank : Number.MAX_SAFE_INTEGER;
+  const rankCompare = leftRank - rightRank;
+  if (rankCompare !== 0) {
+    return rankCompare;
+  }
+
+  const pointsCompare = right.totalPoints - left.totalPoints;
+  if (pointsCompare !== 0) {
+    return pointsCompare;
+  }
+
+  return left.publicDisplayName.localeCompare(right.publicDisplayName);
+}
+
+export function mapPointsTimelineRows(
+  rows: PublicPointsTimelineRpcRow[],
+): PublicPointsTimelineHand[] {
+  const handsByKey = new Map<
+    string,
+    {
+      handIndex: number;
+      handResultId: string;
+      recordedAt: string | null;
+      tableLabel: string;
+      players: PublicPointsTimelinePlayerPoint[];
+    }
+  >();
+
+  for (const row of rows) {
+    const handIndex = readNumber(row.hand_index);
+    const handResultId = row.hand_result_id?.trim() || "";
+    const recordedAt = row.recorded_at?.trim() || null;
+    const tableLabel = row.table_label?.trim() || "Table";
+    const key = handResultId || `${handIndex}\u0000${recordedAt ?? ""}\u0000${tableLabel}`;
+    const hand = handsByKey.get(key) ?? {
+      handIndex,
+      handResultId,
+      recordedAt,
+      tableLabel,
+      players: [],
+    };
+
+    hand.players.push(mapPointsTimelinePlayerRow(row));
+    handsByKey.set(key, hand);
+  }
+
+  return Array.from(handsByKey.values())
+    .map((hand) => ({
+      handIndex: hand.handIndex,
+      handResultId: hand.handResultId,
+      recordedAt: hand.recordedAt,
+      tableLabel: hand.tableLabel,
+      players: [...hand.players].sort(pointsTimelinePlayerSort),
+    }))
+    .sort(pointsTimelineHandSort);
+}
+
 function looksLikeEventId(value: string): boolean {
   return (
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -487,12 +709,21 @@ export async function fetchPublicStandings(
   const eventId = eventResolution?.event_id ?? eventRef;
   const eventSlug = eventResolution?.public_slug ?? null;
 
-  const [summaryResult, leaderboardResult, bonusResult, finalsResult] = await Promise.all([
+  const [
+    summaryResult,
+    leaderboardResult,
+    bonusResult,
+    finalsResult,
+    pointsTimelineResult,
+  ] = await Promise.all([
     Promise.resolve(client.rpc("get_public_event_summary", { target_event_id: eventId })),
     Promise.resolve(client.rpc("get_public_event_leaderboard", { target_event_id: eventId })),
     Promise.resolve(client.rpc("get_public_event_bonus_results", { target_event_id: eventId })),
     Promise.resolve(
       client.rpc("get_public_event_finals_leaderboard", { target_event_id: eventId }),
+    ),
+    Promise.resolve(
+      client.rpc("get_public_event_points_timeline", { target_event_id: eventId }),
     ),
   ]);
 
@@ -514,6 +745,12 @@ export async function fetchPublicStandings(
     );
   }
 
+  if (pointsTimelineResult.error) {
+    throw new Error(
+      pointsTimelineResult.error.message ?? "Unable to load public points timeline.",
+    );
+  }
+
   const eventSummary = (summaryResult.data?.[0] ?? null) as PublicEventSummaryRpcRow | null;
 
   return {
@@ -528,6 +765,9 @@ export async function fetchPublicStandings(
     ),
     finalsLeaderboards: mapFinalsLeaderboardRows(
       (finalsResult.data ?? []) as PublicFinalsLeaderboardRpcRow[],
+    ),
+    pointsTimeline: mapPointsTimelineRows(
+      (pointsTimelineResult.data ?? []) as PublicPointsTimelineRpcRow[],
     ),
     updatedAt: new Date().toISOString(),
   };

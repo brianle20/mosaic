@@ -454,6 +454,52 @@ void main() {
     expect(publicFinalsSql, _doesNotExposePrivateGuestData);
   });
 
+  test('public points timeline RPC exposes public-safe cumulative rows', () {
+    final publicTimelineSql = _extractFunction(
+      migrationsSql,
+      'public.get_public_event_points_timeline',
+    );
+    final snapshotSql = _extractFunction(
+      migrationsSql,
+      'app_private.build_public_event_standings_snapshot',
+    );
+
+    expect(
+      publicTimelineSql,
+      contains(
+          'create or replace function public.get_public_event_points_timeline'),
+    );
+    expect(publicTimelineSql, contains('hand_index integer'));
+    expect(publicTimelineSql, contains('hand_result_id uuid'));
+    expect(publicTimelineSql, contains('recorded_at timestamptz'));
+    expect(publicTimelineSql, contains('table_label text'));
+    expect(publicTimelineSql, contains('event_guest_id uuid'));
+    expect(publicTimelineSql, contains('public_display_name text'));
+    expect(publicTimelineSql, contains('points_delta integer'));
+    expect(publicTimelineSql, contains('total_points integer'));
+    expect(publicTimelineSql, contains('rank integer'));
+    expect(publicTimelineSql, contains("hand_result.status = 'recorded'"));
+    expect(publicTimelineSql, contains('session.bonus_round_id is null'));
+    expect(publicTimelineSql, contains('coalesce(delta.points_delta, 0)'));
+    expect(publicTimelineSql, contains('sum(timeline_points.points_delta) over'));
+    expect(
+      publicTimelineSql,
+      contains('partition by cumulative_points.hand_index'),
+    );
+    expect(snapshotSql, contains('pointsTimeline'));
+    expect(
+      snapshotSql,
+      contains('public.get_public_event_points_timeline'),
+    );
+    expect(
+      migrationsSql,
+      contains(
+        'grant execute on function public.get_public_event_points_timeline(uuid) to anon, authenticated',
+      ),
+    );
+    expect(publicTimelineSql, _doesNotExposePrivateGuestData);
+  });
+
   test('bonus ranking uses qualified tournament participants', () {
     final bonusSeatingSql = _extractFunction(
       migrationsSql,
