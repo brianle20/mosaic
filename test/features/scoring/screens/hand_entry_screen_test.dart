@@ -180,6 +180,11 @@ class _PassiveNfcService implements NfcService, PassiveNfcService {
   }
 
   @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+          BuildContext context) async =>
+      null;
+
+  @override
   Future<TagScanResult?> scanPlayerTagForSessionSeat(
     BuildContext context, {
     required String seatLabel,
@@ -205,6 +210,11 @@ class _QueuedPlayerNfcService implements NfcService {
       BuildContext context) async {
     return results.removeAt(0);
   }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+          BuildContext context) async =>
+      null;
 
   @override
   Future<TagScanResult?> scanPlayerTagForSessionSeat(

@@ -97,6 +97,11 @@ class _FakeNfcService implements NfcService {
       null;
 
   @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+          BuildContext context) async =>
+      null;
+
+  @override
   Future<TagScanResult?> scanPlayerTagForSessionSeat(
     BuildContext context, {
     required String seatLabel,

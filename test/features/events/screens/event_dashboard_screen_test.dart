@@ -641,6 +641,12 @@ class _NfcService implements NfcService {
       null;
 
   @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+    BuildContext context,
+  ) async =>
+      null;
+
+  @override
   Future<TagScanResult?> scanPlayerTagForSessionSeat(
     BuildContext context, {
     required String seatLabel,
@@ -665,6 +671,12 @@ class _CompletingTableScanNfcService implements NfcService {
 
   @override
   Future<TagScanResult?> scanPlayerTagForAssignment(
+    BuildContext context,
+  ) async =>
+      null;
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
     BuildContext context,
   ) async =>
       null;

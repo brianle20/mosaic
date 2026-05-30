@@ -213,6 +213,14 @@ class _FakeGuestRepository implements GuestRepository {
       const {};
 
   @override
+  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
+    required String eventId,
+    required String scannedUid,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       const [];
 
@@ -520,6 +528,12 @@ class _FakeNfcService implements NfcService {
 
   @override
   Future<TagScanResult?> scanPlayerTagForAssignment(
+      BuildContext context) async {
+    return null;
+  }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
       BuildContext context) async {
     return null;
   }

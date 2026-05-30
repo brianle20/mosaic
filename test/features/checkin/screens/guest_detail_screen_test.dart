@@ -136,6 +136,14 @@ class _FakeGuestRepository implements GuestRepository {
       const {};
 
   @override
+  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
+    required String eventId,
+    required String scannedUid,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       const [];
 
@@ -323,6 +331,12 @@ class _FakeNfcService implements NfcService {
       normalizedUid: '04AABB',
       isManualEntry: true,
     );
+  }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+      BuildContext context) async {
+    return null;
   }
 
   @override

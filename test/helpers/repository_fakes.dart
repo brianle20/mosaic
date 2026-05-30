@@ -104,6 +104,13 @@ class ThrowingGuestRepository implements GuestRepository {
       throw UnimplementedError();
 
   @override
+  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
+    required String eventId,
+    required String scannedUid,
+  }) =>
+      throw UnimplementedError();
+
+  @override
   Future<GuestDetailRecord?> getGuestDetail(String guestId) =>
       throw UnimplementedError();
 

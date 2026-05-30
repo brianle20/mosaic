@@ -21,6 +21,16 @@ class ManualEntryNfcService implements NfcService, PassiveNfcService {
   }
 
   @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+      BuildContext context) async {
+    return _scanTag(
+      context,
+      title: 'Identify Player Tag',
+      labelText: 'Player Tag UID',
+    );
+  }
+
+  @override
   Future<TagScanResult?> scanPlayerTagForSessionSeat(
     BuildContext context, {
     required String seatLabel,

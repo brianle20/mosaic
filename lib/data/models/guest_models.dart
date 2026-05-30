@@ -324,6 +324,17 @@ class EventGuestRecord {
 }
 
 @immutable
+class GuestTagLookupResult {
+  const GuestTagLookupResult({
+    required this.guest,
+    required this.assignment,
+  });
+
+  final EventGuestRecord guest;
+  final GuestTagAssignmentSummary assignment;
+}
+
+@immutable
 class GuestDetailRecord {
   const GuestDetailRecord({
     required this.guest,

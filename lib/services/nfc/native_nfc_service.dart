@@ -15,6 +15,14 @@ class NativeNfcService implements NfcService {
   }
 
   @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+    BuildContext context,
+  ) async {
+    return _scanOnce(
+        'Hold a player tag near your phone to identify the guest.');
+  }
+
+  @override
   Future<TagScanResult?> scanTableTag(BuildContext context) async {
     return _scanOnce('Hold the table tag near your phone.');
   }

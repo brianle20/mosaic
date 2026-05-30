@@ -5,6 +5,41 @@ import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
+enum GuestTagIdentificationStatus {
+  found,
+  notFound,
+  cancelled,
+}
+
+@immutable
+class GuestTagIdentificationResult {
+  const GuestTagIdentificationResult._({
+    required this.status,
+    this.lookup,
+    this.scannedUid,
+  });
+
+  GuestTagIdentificationResult.found(GuestTagLookupResult lookup)
+      : this._(
+          status: GuestTagIdentificationStatus.found,
+          lookup: lookup,
+          scannedUid: lookup.assignment.tag.uidHex,
+        );
+
+  const GuestTagIdentificationResult.notFound(String scannedUid)
+      : this._(
+          status: GuestTagIdentificationStatus.notFound,
+          scannedUid: scannedUid,
+        );
+
+  const GuestTagIdentificationResult.cancelled()
+      : this._(status: GuestTagIdentificationStatus.cancelled);
+
+  final GuestTagIdentificationStatus status;
+  final GuestTagLookupResult? lookup;
+  final String? scannedUid;
+}
+
 class GuestRosterController extends ChangeNotifier {
   GuestRosterController({required GuestRepository guestRepository})
       : _guestRepository = guestRepository;
@@ -12,6 +47,7 @@ class GuestRosterController extends ChangeNotifier {
   final GuestRepository _guestRepository;
 
   bool isLoading = true;
+  bool isIdentifyingTag = false;
   String? error;
   List<EventGuestRecord> guests = const [];
   Map<String, GuestTagAssignmentSummary> activeTagAssignments = const {};
@@ -135,6 +171,42 @@ class GuestRosterController extends ChangeNotifier {
     required Future<TagScanResult?> Function() scanForTag,
   }) =>
       assignTag(guestId: guestId, scanForTag: scanForTag);
+
+  Future<GuestTagIdentificationResult> identifyGuestByTag({
+    required String eventId,
+    required Future<TagScanResult?> Function() scanForTag,
+  }) async {
+    if (isIdentifyingTag) {
+      return const GuestTagIdentificationResult.cancelled();
+    }
+
+    isIdentifyingTag = true;
+    notifyListeners();
+
+    try {
+      final scanResult = await scanForTag();
+      if (scanResult == null) {
+        return const GuestTagIdentificationResult.cancelled();
+      }
+
+      final lookup = await _guestRepository.resolveGuestByActiveTag(
+        eventId: eventId,
+        scannedUid: scanResult.normalizedUid,
+      );
+
+      if (lookup == null) {
+        return GuestTagIdentificationResult.notFound(scanResult.normalizedUid);
+      }
+
+      _mergeGuest(lookup.guest);
+      _mergeAssignment(lookup.guest.id, lookup.assignment);
+
+      return GuestTagIdentificationResult.found(lookup);
+    } finally {
+      isIdentifyingTag = false;
+      notifyListeners();
+    }
+  }
 
   Future<bool> checkIn(String guestId) async {
     await _runGuestAction(guestId, () async {

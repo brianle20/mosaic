@@ -253,6 +253,11 @@ class _QueuedNfcService implements NfcService {
       null;
 
   @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+          BuildContext context) async =>
+      null;
+
+  @override
   Future<TagScanResult?> scanPlayerTagForSessionSeat(
     BuildContext context, {
     required String seatLabel,
@@ -273,6 +278,11 @@ class _ThrowingNfcService implements NfcService {
   Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+          BuildContext context) async =>
+      null;
 
   @override
   Future<TagScanResult?> scanPlayerTagForSessionSeat(
@@ -298,6 +308,11 @@ class _CompletingTableScanNfcService implements NfcService {
   Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+          BuildContext context) async =>
+      null;
 
   @override
   Future<TagScanResult?> scanPlayerTagForSessionSeat(

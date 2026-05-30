@@ -70,6 +70,7 @@ class GuestRosterScreen extends StatefulWidget {
 class _GuestRosterScreenState extends State<GuestRosterScreen> {
   late final GuestRosterController _controller;
   final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   _GuestRosterCheckInFilter _checkInFilter = _GuestRosterCheckInFilter.all;
   _GuestRosterTournamentFilter _tournamentFilter =
       _GuestRosterTournamentFilter.all;
@@ -78,6 +79,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   void initState() {
     super.initState();
     _searchController.addListener(_handleSearchChanged);
+    _searchFocusNode.addListener(_handleSearchChanged);
     _controller = GuestRosterController(guestRepository: widget.guestRepository)
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
@@ -86,6 +88,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   @override
   void dispose() {
     _searchController
+      ..removeListener(_handleSearchChanged)
+      ..dispose();
+    _searchFocusNode
       ..removeListener(_handleSearchChanged)
       ..dispose();
     _controller
@@ -187,6 +192,147 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       successMessage: guest.isCheckedIn
           ? 'Player tag assigned to ${guest.displayName}.'
           : '${guest.displayName} is checked in and tagged.',
+    );
+  }
+
+  Future<void> _identifyTag() async {
+    try {
+      final result = await _controller.identifyGuestByTag(
+        eventId: widget.eventId,
+        scanForTag: () =>
+            widget.nfcService.scanPlayerTagForIdentification(context),
+      );
+      if (!mounted) {
+        return;
+      }
+
+      switch (result.status) {
+        case GuestTagIdentificationStatus.found:
+          final lookup = result.lookup;
+          if (lookup == null) {
+            return;
+          }
+          await _showIdentifiedTagSheet(lookup);
+        case GuestTagIdentificationStatus.notFound:
+          final scannedUid = result.scannedUid;
+          if (scannedUid == null) {
+            return;
+          }
+          await _showTagNotFoundSheet(scannedUid);
+        case GuestTagIdentificationStatus.cancelled:
+          return;
+      }
+    } catch (exception) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(_formatActionError(exception));
+    }
+  }
+
+  Future<void> _showIdentifiedTagSheet(GuestTagLookupResult lookup) async {
+    final guest = lookup.guest;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Tag Identified',
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  guest.displayName,
+                  style: Theme.of(sheetContext).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                Text(_tagIdentificationLabel(lookup.assignment)),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    StatusChip(
+                      label: _coverStatusLabel(guest.coverStatus),
+                      tone: _coverStatusTone(guest.coverStatus),
+                    ),
+                    StatusChip(
+                      label: _attendanceStatusLabel(guest.attendanceStatus),
+                      tone: _attendanceStatusTone(guest.attendanceStatus),
+                    ),
+                    StatusChip(
+                      label: _tournamentStatusLabel(guest.tournamentStatus),
+                      tone: _tournamentStatusTone(guest.tournamentStatus),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('Close'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                          _openGuestDetail(guest);
+                        },
+                        child: const Text('View Guest'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showTagNotFoundSheet(String scannedUid) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No Guest Found',
+                  style: Theme.of(sheetContext).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text('UID ${scannedUid.trim()}'),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -344,15 +490,23 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
           children: [
             if (widget.canManageGuests) ...[
               FilledButton.icon(
+                style: _topActionButtonStyle(),
                 onPressed: _openAddGuest,
                 icon: const Icon(Icons.person_add),
                 label: const Text('Add Guest'),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 6),
             ],
+            OutlinedButton.icon(
+              style: _topActionButtonStyle(),
+              onPressed: _controller.isIdentifyingTag ? null : _identifyTag,
+              icon: const Icon(Icons.nfc),
+              label: const Text('Scan Player Tag'),
+            ),
+            const SizedBox(height: 12),
             Text(widget.eventTitle,
                 style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             if (_controller.guests.isNotEmpty) ...[
               _buildSearchField(),
               const SizedBox(height: 12),
@@ -399,18 +553,40 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   Widget _buildSearchField() {
     return TextField(
       controller: _searchController,
+      focusNode: _searchFocusNode,
       textInputAction: TextInputAction.search,
+      onSubmitted: (_) => _searchFocusNode.unfocus(),
       decoration: InputDecoration(
         labelText: 'Search guests',
         prefixIcon: const Icon(Icons.search),
-        suffixIcon: _searchController.text.isEmpty
-            ? null
-            : IconButton(
-                tooltip: 'Clear search',
-                onPressed: _searchController.clear,
-                icon: const Icon(Icons.clear),
-              ),
+        suffixIcon: _buildSearchSuffixIcon(),
       ),
+    );
+  }
+
+  Widget? _buildSearchSuffixIcon() {
+    final hasSearchText = _searchController.text.isNotEmpty;
+    final isFocused = _searchFocusNode.hasFocus;
+    if (!hasSearchText && !isFocused) {
+      return null;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (hasSearchText)
+          IconButton(
+            tooltip: 'Clear search',
+            onPressed: _searchController.clear,
+            icon: const Icon(Icons.clear),
+          ),
+        if (isFocused)
+          IconButton(
+            tooltip: 'Dismiss keyboard',
+            onPressed: _searchFocusNode.unfocus,
+            icon: const Icon(Icons.keyboard_hide),
+          ),
+      ],
     );
   }
 
@@ -866,6 +1042,13 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     );
   }
 
+  ButtonStyle _topActionButtonStyle() {
+    return ButtonStyle(
+      minimumSize: WidgetStateProperty.all(const Size.fromHeight(40)),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+  }
+
   Widget _singleLineButtonLabel(String label) {
     return FittedBox(
       fit: BoxFit.scaleDown,
@@ -884,6 +1067,24 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       CoverStatus.partial => 'Partial',
       CoverStatus.comped => 'Comped',
       CoverStatus.refunded => 'Refunded',
+    };
+  }
+
+  String _attendanceStatusLabel(AttendanceStatus status) {
+    return switch (status) {
+      AttendanceStatus.expected => 'Expected',
+      AttendanceStatus.checkedIn => 'Checked In',
+      AttendanceStatus.checkedOut => 'Checked Out',
+      AttendanceStatus.noShow => 'No Show',
+    };
+  }
+
+  StatusChipTone _attendanceStatusTone(AttendanceStatus status) {
+    return switch (status) {
+      AttendanceStatus.checkedIn => StatusChipTone.success,
+      AttendanceStatus.expected => StatusChipTone.neutral,
+      AttendanceStatus.checkedOut => StatusChipTone.neutral,
+      AttendanceStatus.noShow => StatusChipTone.warning,
     };
   }
 
@@ -943,6 +1144,14 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       return 'Tag $label';
     }
     return 'UID ${_shortUid(assignment.tag.uidHex)}';
+  }
+
+  String _tagIdentificationLabel(GuestTagAssignmentSummary assignment) {
+    final label = assignment.tag.displayLabel?.trim();
+    if (label != null && label.isNotEmpty) {
+      return 'Tag $label';
+    }
+    return 'UID ${assignment.tag.uidHex.trim()}';
   }
 
   String _shortUid(String uid) {

@@ -101,6 +101,14 @@ class _FakeGuestRepository implements GuestRepository {
   }
 
   @override
+  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
+    required String eventId,
+    required String scannedUid,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       listGuests(eventId);
 

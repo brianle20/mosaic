@@ -208,6 +208,45 @@ class SupabaseGuestRepository implements GuestRepository {
   }
 
   @override
+  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
+    required String eventId,
+    required String scannedUid,
+  }) async {
+    final rows = await _runRpcList(
+      'resolve_guest_by_active_tag',
+      {
+        'target_event_id': eventId,
+        'scanned_uid': scannedUid,
+      },
+    );
+
+    if (rows.isEmpty) {
+      return null;
+    }
+
+    if (rows.length > 1) {
+      throw StateError(
+        'This tag is assigned to multiple guests in this event.',
+      );
+    }
+
+    final row = rows.single;
+    final guest = EventGuestRecord.fromJson(
+      _requiredJsonMap(row['guest'], 'guest'),
+    );
+    final assignment = GuestTagAssignmentSummary.fromJson(
+      _requiredJsonMap(row['assignment'], 'assignment'),
+    );
+
+    await _saveMergedGuestList(eventId, guest);
+
+    return GuestTagLookupResult(
+      guest: guest,
+      assignment: assignment,
+    );
+  }
+
+  @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async {
     return cache.readGuests(eventId);
   }
@@ -948,6 +987,15 @@ class SupabaseGuestRepository implements GuestRepository {
 
     throw StateError(
         'Expected a map row result but received ${value.runtimeType}.');
+  }
+
+  Map<String, dynamic> _requiredJsonMap(Object? value, String key) {
+    final row = _castRow(value);
+    if (row == null) {
+      throw StateError('RPC response is missing $key.');
+    }
+
+    return row;
   }
 
   bool _shouldUseFallback(Object exception, String functionName) {

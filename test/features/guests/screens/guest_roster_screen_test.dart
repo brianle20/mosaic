@@ -14,16 +14,21 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     List<EventGuestRecord> guests, {
     Map<String, GuestTagAssignmentSummary> activeAssignments = const {},
     Map<String, List<GuestCoverEntryRecord>> coverEntries = const {},
+    Map<String, GuestTagLookupResult> tagLookupResults = const {},
   })  : _guests = List<EventGuestRecord>.from(guests),
         _activeAssignments =
             Map<String, GuestTagAssignmentSummary>.from(activeAssignments),
         _coverEntries = Map<String, List<GuestCoverEntryRecord>>.from(
           coverEntries,
+        ),
+        _tagLookupResults = Map<String, GuestTagLookupResult>.from(
+          tagLookupResults,
         );
 
   final List<EventGuestRecord> _guests;
   final Map<String, GuestTagAssignmentSummary> _activeAssignments;
   final Map<String, List<GuestCoverEntryRecord>> _coverEntries;
+  final Map<String, GuestTagLookupResult> _tagLookupResults;
   final statusUpdates = <String, EventTournamentStatus>{};
   final removedGuestIds = <String>[];
 
@@ -121,6 +126,13 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     String eventId,
   ) async =>
       _activeAssignments;
+
+  @override
+  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
+    required String eventId,
+    required String scannedUid,
+  }) async =>
+      _tagLookupResults[scannedUid];
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
@@ -292,6 +304,13 @@ class _FakeNfcService implements NfcService {
   }
 
   @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+    BuildContext context,
+  ) async {
+    return null;
+  }
+
+  @override
   Future<TagScanResult?> scanPlayerTagForSessionSeat(
     BuildContext context, {
     required String seatLabel,
@@ -321,6 +340,48 @@ class _CountingNfcService implements NfcService {
   }
 
   @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+    BuildContext context,
+  ) async {
+    return null;
+  }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForSessionSeat(
+    BuildContext context, {
+    required String seatLabel,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TagScanResult?> scanTableTag(BuildContext context) {
+    throw UnimplementedError();
+  }
+}
+
+class _IdentifyingNfcService implements NfcService {
+  _IdentifyingNfcService(this.identificationResult);
+
+  final TagScanResult? identificationResult;
+  int identificationScanCount = 0;
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForAssignment(
+    BuildContext context,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TagScanResult?> scanPlayerTagForIdentification(
+    BuildContext context,
+  ) async {
+    identificationScanCount += 1;
+    return identificationResult;
+  }
+
+  @override
   Future<TagScanResult?> scanPlayerTagForSessionSeat(
     BuildContext context, {
     required String seatLabel,
@@ -337,8 +398,9 @@ class _CountingNfcService implements NfcService {
 GuestTagAssignmentSummary _tagAssignment({
   required String guestId,
   String uid = 'FASTDONE',
+  String? displayLabel,
 }) {
-  return GuestTagAssignmentSummary.fromJson({
+  final json = {
     'assignment_id': 'asg_$guestId',
     'event_id': 'evt_01',
     'event_guest_id': guestId,
@@ -350,8 +412,10 @@ GuestTagAssignmentSummary _tagAssignment({
       'uid_fingerprint': uid,
       'default_tag_type': 'player',
       'status': 'active',
+      if (displayLabel != null) 'display_label': displayLabel,
     },
-  });
+  };
+  return GuestTagAssignmentSummary.fromJson(json);
 }
 
 EventGuestRecord _guest({
@@ -393,6 +457,8 @@ Widget _buildRosterApp({
   required GuestRepository guestRepository,
   NfcService nfcService = const _FakeNfcService(),
   int eventCoverChargeCents = 1500,
+  bool canManageGuests = true,
+  bool canAssignTags = true,
 }) {
   return MaterialApp(
     onGenerateRoute: (settings) {
@@ -418,6 +484,8 @@ Widget _buildRosterApp({
       eventId: 'evt_01',
       eventTitle: 'Friday Night Mahjong',
       eventCoverChargeCents: eventCoverChargeCents,
+      canManageGuests: canManageGuests,
+      canAssignTags: canAssignTags,
       guestRepository: guestRepository,
       nfcService: nfcService,
     ),
@@ -456,6 +524,125 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Default cover: 2500'), findsOneWidget);
+  });
+
+  testWidgets('scan player tag shows identified guest sheet and opens detail', (
+    tester,
+  ) async {
+    final guest = _guest(
+      id: 'gst_01',
+      name: 'Alice Wong',
+      attendanceStatus: AttendanceStatus.checkedIn,
+      coverStatus: CoverStatus.paid,
+      tournamentStatus: EventTournamentStatus.qualified,
+    );
+    const scannedUid = 'ALICE0123456789';
+    final assignment = _tagAssignment(guestId: 'gst_01', uid: scannedUid);
+    final repository = _FakeGuestRepository(
+      [guest],
+      tagLookupResults: {
+        scannedUid: GuestTagLookupResult(
+          guest: guest,
+          assignment: assignment,
+        ),
+      },
+    );
+    final nfcService = _IdentifyingNfcService(
+      const TagScanResult(
+        rawUid: scannedUid,
+        normalizedUid: scannedUid,
+        isManualEntry: true,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _buildRosterApp(
+        guestRepository: repository,
+        nfcService: nfcService,
+        canManageGuests: false,
+        canAssignTags: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add Guest'), findsNothing);
+    expect(find.text('Scan Player Tag'), findsOneWidget);
+
+    await tester.tap(find.text('Scan Player Tag'));
+    await tester.pumpAndSettle();
+
+    expect(nfcService.identificationScanCount, 1);
+    expect(find.text('Tag Identified'), findsOneWidget);
+    expect(find.text('Alice Wong'), findsAtLeastNWidgets(1));
+    expect(find.text('UID ALICE0123456789'), findsOneWidget);
+    expect(find.text('UID ALICE012345...'), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Paid',
+      ),
+      findsAtLeastNWidgets(1),
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Checked In',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Qualified',
+      ),
+      findsAtLeastNWidgets(1),
+    );
+
+    await tester.tap(find.text('View Guest'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tag Identified'), findsNothing);
+    expect(find.text('Guest Detail Placeholder'), findsOneWidget);
+  });
+
+  testWidgets('scan player tag shows not-found sheet with scanned UID', (
+    tester,
+  ) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+    const scannedUid = 'MISSING0123456789';
+    final nfcService = _IdentifyingNfcService(
+      const TagScanResult(
+        rawUid: scannedUid,
+        normalizedUid: scannedUid,
+        isManualEntry: true,
+      ),
+    );
+
+    await tester.pumpWidget(
+      _buildRosterApp(
+        guestRepository: repository,
+        nfcService: nfcService,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Scan Player Tag'));
+    await tester.pumpAndSettle();
+
+    expect(nfcService.identificationScanCount, 1);
+    expect(find.text('No Guest Found'), findsOneWidget);
+    expect(find.text('UID MISSING0123456789'), findsOneWidget);
+    expect(find.text('UID MISSING01234...'), findsNothing);
+
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No Guest Found'), findsNothing);
+    expect(find.text('Guests'), findsOneWidget);
   });
 
   testWidgets('renders guests and row-specific quick actions', (tester) async {
@@ -995,6 +1182,40 @@ void main() {
     expect(find.text('Brian Le'), findsOneWidget);
     expect(find.text('Alice Wong'), findsNothing);
     expect(find.text('Checked In (1)'), findsOneWidget);
+  });
+
+  testWidgets('guest search shows a keyboard dismiss action while focused', (
+    tester,
+  ) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_alice',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(TextField, 'Search guests'));
+    await tester.pump();
+
+    EditableText editableText() => tester.widget<EditableText>(
+          find.descendant(
+            of: find.widgetWithText(TextField, 'Search guests'),
+            matching: find.byType(EditableText),
+          ),
+        );
+
+    expect(editableText().focusNode.hasFocus, isTrue);
+    expect(find.byTooltip('Dismiss keyboard'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Dismiss keyboard'));
+    await tester.pump();
+
+    expect(editableText().focusNode.hasFocus, isFalse);
   });
 
   testWidgets('combines guest search with check-in filter', (tester) async {

@@ -101,6 +101,11 @@ abstract interface class GuestRepository {
     String eventId,
   );
 
+  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
+    required String eventId,
+    required String scannedUid,
+  });
+
   Future<GuestDetailRecord?> getGuestDetail(String guestId);
 
   Future<List<GuestProfileMatch>> findGuestProfileMatches(
