@@ -62,20 +62,21 @@ class _TableFormScreenState extends State<TableFormScreen> {
   }
 
   Future<void> _submit() async {
+    final draft = _buildDraft();
+    setState(() {});
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
     final EventTableRecord? savedTable;
     if (widget.initialTable == null) {
       savedTable = await _controller.createScannedTable(
         eventId: widget.eventId,
+        draft: draft,
         nfcService: widget.nfcService,
         context: context,
       );
     } else {
-      final draft = _buildDraft();
-      setState(() {});
-      if (!_formKey.currentState!.validate()) {
-        return;
-      }
-
       savedTable = await _controller.submit(
         eventId: widget.eventId,
         draft: draft,
@@ -110,7 +111,7 @@ class _TableFormScreenState extends State<TableFormScreen> {
           child: Text(
             _controller.isSubmitting
                 ? (isEditing ? 'Saving...' : 'Scanning...')
-                : (isEditing ? 'Save Table' : 'Scan Table Tag'),
+                : (isEditing ? 'Save Table' : 'Scan Tag & Add Table'),
           ),
         ),
       ),
@@ -119,14 +120,13 @@ class _TableFormScreenState extends State<TableFormScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (isEditing) ...[
-              TextFormField(
-                controller: _labelController,
-                decoration: const InputDecoration(labelText: 'Label'),
-                validator: (_) => _buildDraft().labelError,
-              ),
-              const SizedBox(height: 12),
-            ],
+            TextFormField(
+              controller: _labelController,
+              decoration: const InputDecoration(labelText: 'Table name'),
+              textInputAction: TextInputAction.done,
+              validator: (_) => _buildDraft().labelError,
+            ),
+            const SizedBox(height: 12),
             const ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text('Ruleset'),

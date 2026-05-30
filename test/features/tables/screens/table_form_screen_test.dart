@@ -30,8 +30,8 @@ class _RecordingTableRepository implements TableRepository {
     boundTable = EventTableRecord.fromJson({
       'id': tableId,
       'event_id': 'evt_01',
-      'label': 'Table 1',
-      'display_order': 1,
+      'label': created?.label ?? 'Table 1',
+      'display_order': created?.displayOrder ?? 1,
       'nfc_tag_id': 'tag_01',
       'default_ruleset_id': 'HK_STANDARD',
       'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
@@ -114,7 +114,7 @@ class _FakeNfcService implements NfcService {
 }
 
 void main() {
-  testWidgets('scans a table tag to create and bind a new table',
+  testWidgets('names a table before scanning and binding a new table',
       (tester) async {
     final repository = _RecordingTableRepository(
       existingTables: [
@@ -142,20 +142,44 @@ void main() {
       ),
     );
 
-    expect(find.text('Label'), findsNothing);
+    expect(find.text('Table name'), findsOneWidget);
     expect(find.text('Mode'), findsNothing);
     expect(find.text('points'), findsNothing);
     expect(find.text('casual'), findsNothing);
     expect(find.text('inactive'), findsNothing);
 
-    await tester.tap(find.text('Scan Table Tag'));
+    await tester.enterText(find.byType(TextFormField), 'Feature Table');
+    await tester.tap(find.text('Scan Tag & Add Table'));
     await tester.pumpAndSettle();
 
     expect(repository.created, isNotNull);
-    expect(repository.created!.label, 'Table 2');
+    expect(repository.created!.label, 'Feature Table');
     expect(repository.boundScannedUid, 'TABLE001');
     expect(savedTable, isNotNull);
+    expect(savedTable!.label, 'Feature Table');
     expect(savedTable!.nfcTagId, 'tag_01');
+  });
+
+  testWidgets('does not scan a table tag before a name is entered',
+      (tester) async {
+    final repository = _RecordingTableRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TableFormScreen(
+          eventId: 'evt_01',
+          tableRepository: repository,
+          nfcService: const _FakeNfcService(),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Scan Tag & Add Table'));
+    await tester.pumpAndSettle();
+
+    expect(repository.created, isNull);
+    expect(repository.boundScannedUid, isNull);
+    expect(find.text('Table name is required.'), findsOneWidget);
   });
 
   testWidgets('rejects a player tag before creating a table', (tester) async {
@@ -175,7 +199,8 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Scan Table Tag'));
+    await tester.enterText(find.byType(TextFormField), 'Feature Table');
+    await tester.tap(find.text('Scan Tag & Add Table'));
     await tester.pumpAndSettle();
 
     expect(repository.created, isNull);
@@ -208,7 +233,8 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Scan Table Tag'));
+    await tester.enterText(find.byType(TextFormField), 'Feature Table');
+    await tester.tap(find.text('Scan Tag & Add Table'));
     await tester.pumpAndSettle();
 
     expect(repository.created, isNull);

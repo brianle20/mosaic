@@ -6,7 +6,7 @@ void main() {
     test('requires a label', () {
       const draft = TableFormDraft(label: '');
 
-      expect(draft.labelError, 'Table label is required.');
+      expect(draft.labelError, 'Table name is required.');
       expect(draft.isValid, isFalse);
     });
 

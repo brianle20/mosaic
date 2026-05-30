@@ -11,7 +11,7 @@ class TableFormDraft {
 
   String? get labelError {
     if (label.trim().isEmpty) {
-      return 'Table label is required.';
+      return 'Table name is required.';
     }
 
     return null;

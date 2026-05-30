@@ -18,9 +18,15 @@ class TableFormController extends ChangeNotifier {
 
   Future<EventTableRecord?> createScannedTable({
     required String eventId,
+    required TableFormDraft draft,
     required NfcService nfcService,
     required BuildContext context,
   }) async {
+    if (!draft.isValid) {
+      notifyListeners();
+      return null;
+    }
+
     isSubmitting = true;
     submitError = null;
     notifyListeners();
@@ -60,9 +66,8 @@ class TableFormController extends ChangeNotifier {
           ) +
           1;
       final createdTable = await _tableRepository.createTable(
-        CreateEventTableInput(
+        draft.toCreateInput(
           eventId: eventId,
-          label: 'Table $nextDisplayOrder',
           displayOrder: nextDisplayOrder,
         ),
       );

@@ -36,4 +36,21 @@ void main() {
     expect(migration, isNot(contains('event_tournament_rounds')));
     expect(migration, isNot(contains('prize_awards')));
   });
+
+  test('latest copy event migration does not copy table tag bindings', () {
+    final migrationFile = File(
+      'supabase/migrations/20260530093000_copy_event_without_table_tags.sql',
+    );
+
+    expect(migrationFile.existsSync(), isTrue);
+    final migration = migrationFile.readAsStringSync();
+    final tableInsert = RegExp(
+      r'insert into public\.event_tables \((.*?)\)\s*select(.*?)from public\.event_tables',
+      dotAll: true,
+    ).firstMatch(migration);
+
+    expect(tableInsert, isNotNull);
+    expect(tableInsert!.group(1), isNot(contains('nfc_tag_id')));
+    expect(tableInsert.group(2), isNot(contains('event_table.nfc_tag_id')));
+  });
 }
