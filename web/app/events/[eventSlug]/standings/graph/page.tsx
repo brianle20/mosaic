@@ -5,6 +5,7 @@ import {
   type PublicStandingsClient,
   type PublicStandingsSnapshot,
 } from "../../../../../lib/public-standings";
+import { eventTitleFromSlug, publicEventMetadata } from "../../../../../lib/public-metadata";
 import { createPublicSupabaseClient } from "../../../../../lib/supabase";
 
 type PointsRacePageProps = {
@@ -18,37 +19,15 @@ export async function generateMetadata({
 }: PointsRacePageProps): Promise<Metadata> {
   const { eventSlug } = await params;
   const canonicalPath = `/events/${eventSlug}/standings/graph`;
-  const title = "Mosaic Points Race";
-  const description = "Live cumulative points graph for this Mosaic event.";
+  const eventTitle = eventTitleFromSlug(eventSlug);
+  const title = `${eventTitle} Points Race`;
+  const description = `Live cumulative points graph for ${eventTitle}.`;
 
-  return {
+  return publicEventMetadata({
     title,
     description,
-    alternates: {
-      canonical: canonicalPath,
-    },
-    openGraph: {
-      title,
-      description,
-      url: canonicalPath,
-      siteName: "Mosaic",
-      type: "website",
-      images: [
-        {
-          url: "/mosaic-app-icon.png",
-          width: 1024,
-          height: 1024,
-          alt: "Mosaic app icon",
-        },
-      ],
-    },
-    twitter: {
-      card: "summary",
-      title,
-      description,
-      images: ["/mosaic-app-icon.png"],
-    },
-  };
+    canonicalPath,
+  });
 }
 
 export default async function PointsRacePage({ params }: PointsRacePageProps) {
@@ -81,6 +60,7 @@ export default async function PointsRacePage({ params }: PointsRacePageProps) {
       ) : null}
       <LivePointsRace
         eventId={initialSnapshot.eventId ?? eventSlug}
+        eventSlug={eventSlug}
         initialSnapshot={initialSnapshot}
       />
     </>

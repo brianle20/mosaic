@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { generateMetadata } from "./events/[eventSlug]/standings/page";
+import { generateMetadata as generatePointsRaceMetadata } from "./events/[eventSlug]/standings/graph/page";
+import { generateMetadata as generateStandingsMetadata } from "./events/[eventSlug]/standings/page";
 
 describe("site metadata assets", () => {
   it("ships browser favicon and web manifest assets", () => {
@@ -30,26 +31,52 @@ describe("site metadata assets", () => {
 describe("standings metadata", () => {
   it("uses live standings metadata instead of landing-page sales copy", async () => {
     await expect(
-      generateMetadata({
+      generateStandingsMetadata({
         params: Promise.resolve({ eventSlug: "fv-mahjong-2-copy" }),
       }),
     ).resolves.toMatchObject({
-      title: "Mosaic Live Standings",
-      description: "Live mahjong standings for this Mosaic event.",
+      title: "FV Mahjong 2 Copy Live Standings",
+      description: "Live mahjong standings for FV Mahjong 2 Copy.",
       alternates: {
         canonical: "/events/fv-mahjong-2-copy/standings",
       },
       openGraph: {
-        title: "Mosaic Live Standings",
-        description: "Live mahjong standings for this Mosaic event.",
+        title: "FV Mahjong 2 Copy Live Standings",
+        description: "Live mahjong standings for FV Mahjong 2 Copy.",
         url: "/events/fv-mahjong-2-copy/standings",
         siteName: "Mosaic",
         type: "website",
       },
       twitter: {
         card: "summary",
-        title: "Mosaic Live Standings",
-        description: "Live mahjong standings for this Mosaic event.",
+        title: "FV Mahjong 2 Copy Live Standings",
+        description: "Live mahjong standings for FV Mahjong 2 Copy.",
+      },
+    });
+  });
+
+  it("uses event-specific points race metadata", async () => {
+    await expect(
+      generatePointsRaceMetadata({
+        params: Promise.resolve({ eventSlug: "fv-mahjong-1" }),
+      }),
+    ).resolves.toMatchObject({
+      title: "FV Mahjong 1 Points Race",
+      description: "Live cumulative points graph for FV Mahjong 1.",
+      alternates: {
+        canonical: "/events/fv-mahjong-1/standings/graph",
+      },
+      openGraph: {
+        title: "FV Mahjong 1 Points Race",
+        description: "Live cumulative points graph for FV Mahjong 1.",
+        url: "/events/fv-mahjong-1/standings/graph",
+        siteName: "Mosaic",
+        type: "website",
+      },
+      twitter: {
+        card: "summary",
+        title: "FV Mahjong 1 Points Race",
+        description: "Live cumulative points graph for FV Mahjong 1.",
       },
     });
   });

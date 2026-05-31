@@ -1,7 +1,12 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { captureAnalyticsEvent } from "../lib/analytics";
 import { LivePointsRace } from "./LivePointsRace";
 import type { PublicStandingsSnapshot } from "../lib/public-standings";
+
+vi.mock("../lib/analytics", () => ({
+  captureAnalyticsEvent: vi.fn(),
+}));
 
 function createSupabaseClient() {
   const callbacks: Array<(payload: { new?: Record<string, unknown> }) => void> = [];
@@ -54,6 +59,25 @@ describe("LivePointsRace", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
+  it("tracks a public points race view without player data", () => {
+    const realtime = createSupabaseClient();
+
+    render(
+      <LivePointsRace
+        eventId="event-1"
+        eventSlug="fv-mahjong-1"
+        initialSnapshot={snapshot(100, "2026-05-24T12:00:00.000Z")}
+        supabaseClient={realtime.client}
+        fetchStandings={vi.fn()}
+      />,
+    );
+
+    expect(captureAnalyticsEvent).toHaveBeenCalledWith("points_race_viewed", {
+      event_slug: "fv-mahjong-1",
+    });
   });
 
   it("subscribes to public standings snapshots and applies streamed point timelines", async () => {

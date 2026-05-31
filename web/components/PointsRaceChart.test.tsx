@@ -1,7 +1,12 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { captureAnalyticsEvent } from "../lib/analytics";
 import { PointsRaceChart, type PointsTimelineHand } from "./PointsRaceChart";
+
+vi.mock("../lib/analytics", () => ({
+  captureAnalyticsEvent: vi.fn(),
+}));
 
 const originalMatchMedia = window.matchMedia;
 
@@ -52,6 +57,7 @@ function axisLabels(container: HTMLElement) {
 describe("PointsRaceChart", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.clearAllMocks();
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       writable: true,
@@ -79,6 +85,7 @@ describe("PointsRaceChart", () => {
     render(
       <PointsRaceChart
         eventTitle="Mosaic May Tournament"
+        eventSlug="mosaic-may-tournament"
         updatedAt="2026-05-24T12:00:00.000Z"
         pointsTimeline={createTimeline(14)}
       />,
@@ -95,6 +102,13 @@ describe("PointsRaceChart", () => {
     expect(within(legend).getByText("Player 13")).toBeVisible();
     expect(within(legend).getByText("Player 14")).toBeVisible();
     expect(screen.getByRole("button", { name: /show top players/i })).toBeVisible();
+    expect(captureAnalyticsEvent).toHaveBeenCalledWith(
+      "points_race_show_everyone_clicked",
+      {
+        event_slug: "mosaic-may-tournament",
+        visible_players: 14,
+      },
+    );
   });
 
   it("shows the top 8 players by default on mobile", () => {

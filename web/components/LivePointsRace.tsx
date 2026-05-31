@@ -9,6 +9,7 @@ import {
   type PublicStandingsClient,
   type PublicStandingsSnapshot,
 } from "../lib/public-standings";
+import { captureAnalyticsEvent } from "../lib/analytics";
 import { createPublicSupabaseClient } from "../lib/supabase";
 
 type SupabaseRealtimeClient = PublicStandingsClient & {
@@ -23,6 +24,7 @@ type RealtimeSnapshotPayload = {
 
 type LivePointsRaceProps = {
   eventId: string;
+  eventSlug?: string;
   initialSnapshot: PublicStandingsSnapshot;
   supabaseClient?: SupabaseRealtimeClient;
   fetchStandings?: (
@@ -60,6 +62,7 @@ function createRealtimeClient(): SupabaseRealtimeClient {
 
 export function LivePointsRace({
   eventId,
+  eventSlug,
   initialSnapshot,
   supabaseClient,
   fetchStandings = fetchPublicStandings,
@@ -76,6 +79,12 @@ export function LivePointsRace({
   const snapshot =
     snapshotState.eventId === eventId ? snapshotState.snapshot : initialSnapshot;
   const status = statusState.eventId === eventId ? statusState.status : "idle";
+
+  useEffect(() => {
+    if (eventSlug) {
+      captureAnalyticsEvent("points_race_viewed", { event_slug: eventSlug });
+    }
+  }, [eventSlug]);
 
   useEffect(() => {
     let isCurrentEvent = true;
@@ -202,6 +211,7 @@ export function LivePointsRace({
   return (
     <>
       <PointsRaceChart
+        eventSlug={eventSlug}
         eventTitle={snapshot.eventTitle}
         updatedAt={snapshot.updatedAt}
         pointsTimeline={snapshot.pointsTimeline}

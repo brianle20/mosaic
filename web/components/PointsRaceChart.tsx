@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState, useSyncExternalStore } from "react";
+import { captureAnalyticsEvent } from "../lib/analytics";
 
 export type PointsTimelinePlayer = {
   eventGuestId: string;
@@ -17,6 +18,7 @@ export type PointsTimelineHand = {
 };
 
 type PointsRaceChartProps = {
+  eventSlug?: string;
   eventTitle: string;
   updatedAt: string | null;
   pointsTimeline?: PointsTimelineHand[];
@@ -234,6 +236,7 @@ function lineClassName(
 }
 
 export function PointsRaceChart({
+  eventSlug,
   eventTitle,
   updatedAt,
   pointsTimeline = [],
@@ -492,7 +495,18 @@ export function PointsRaceChart({
           <button
             className="points-race-toggle"
             type="button"
-            onClick={() => setShowEveryone((current) => !current)}
+            onClick={() => {
+              setShowEveryone((current) => {
+                const nextShowEveryone = !current;
+                if (nextShowEveryone && eventSlug) {
+                  captureAnalyticsEvent("points_race_show_everyone_clicked", {
+                    event_slug: eventSlug,
+                    visible_players: series.length,
+                  });
+                }
+                return nextShowEveryone;
+              });
+            }}
           >
             {showEveryone ? "Show top players" : "Show everyone"}
           </button>

@@ -11,6 +11,7 @@ import {
   type PublicFinalsLeaderboardTable,
   type PublicStandingsSnapshot,
 } from "../lib/public-standings";
+import { captureAnalyticsEvent } from "../lib/analytics";
 import { createPublicSupabaseClient } from "../lib/supabase";
 
 type SupabaseRealtimeClient = PublicStandingsClient & {
@@ -25,6 +26,7 @@ type RealtimeSnapshotPayload = {
 
 type LiveStandingsProps = {
   eventId: string;
+  eventSlug?: string;
   initialSnapshot: PublicStandingsSnapshot;
   supabaseClient?: SupabaseRealtimeClient;
   fetchStandings?: (
@@ -114,6 +116,7 @@ function getScoreChanges(
 
 export function LiveStandings({
   eventId,
+  eventSlug,
   initialSnapshot,
   supabaseClient,
   fetchStandings = fetchPublicStandings,
@@ -144,6 +147,12 @@ export function LiveStandings({
   const status = statusState.eventId === eventId ? statusState.status : "idle";
   const scoreChanges =
     scoreChangesState.eventId === eventId ? scoreChangesState.scoreChanges : {};
+
+  useEffect(() => {
+    if (eventSlug) {
+      captureAnalyticsEvent("public_standings_viewed", { event_slug: eventSlug });
+    }
+  }, [eventSlug]);
 
   useEffect(() => {
     let isCurrentEvent = true;

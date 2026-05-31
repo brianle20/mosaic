@@ -1,7 +1,12 @@
 import { act, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { captureAnalyticsEvent } from "../lib/analytics";
 import { LiveStandings } from "./LiveStandings";
 import type { PublicStandingsSnapshot } from "../lib/public-standings";
+
+vi.mock("../lib/analytics", () => ({
+  captureAnalyticsEvent: vi.fn(),
+}));
 
 function createSupabaseClient() {
   const callbacks: Array<(payload: { new?: Record<string, unknown> }) => void> = [];
@@ -24,6 +29,29 @@ function createSupabaseClient() {
 }
 
 describe("LiveStandings", () => {
+  it("tracks a public standings view without player data", () => {
+    const realtime = createSupabaseClient();
+
+    render(
+      <LiveStandings
+        eventId="event-1"
+        eventSlug="fv-mahjong-1"
+        initialSnapshot={{
+          eventTitle: "Mosaic May Tournament",
+          leaderboard: [],
+          bonusResults: [],
+          updatedAt: null,
+        }}
+        supabaseClient={realtime.client}
+        fetchStandings={vi.fn()}
+      />,
+    );
+
+    expect(captureAnalyticsEvent).toHaveBeenCalledWith("public_standings_viewed", {
+      event_slug: "fv-mahjong-1",
+    });
+  });
+
   it("subscribes to the public standings snapshot and applies streamed payloads without refetching", async () => {
     vi.useFakeTimers();
     const realtime = createSupabaseClient();

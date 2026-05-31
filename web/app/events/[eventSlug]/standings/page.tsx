@@ -4,6 +4,7 @@ import {
   fetchPublicStandings,
   type PublicStandingsClient,
 } from "../../../../lib/public-standings";
+import { eventTitleFromSlug, publicEventMetadata } from "../../../../lib/public-metadata";
 import { createPublicSupabaseClient } from "../../../../lib/supabase";
 
 type StandingsPageProps = {
@@ -15,37 +16,15 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: StandingsPageProps): Promise<Metadata> {
   const { eventSlug } = await params;
   const canonicalPath = `/events/${eventSlug}/standings`;
-  const title = "Mosaic Live Standings";
-  const description = "Live mahjong standings for this Mosaic event.";
+  const eventTitle = eventTitleFromSlug(eventSlug);
+  const title = `${eventTitle} Live Standings`;
+  const description = `Live mahjong standings for ${eventTitle}.`;
 
-  return {
+  return publicEventMetadata({
     title,
     description,
-    alternates: {
-      canonical: canonicalPath,
-    },
-    openGraph: {
-      title,
-      description,
-      url: canonicalPath,
-      siteName: "Mosaic",
-      type: "website",
-      images: [
-        {
-          url: "/mosaic-app-icon.png",
-          width: 1024,
-          height: 1024,
-          alt: "Mosaic app icon",
-        },
-      ],
-    },
-    twitter: {
-      card: "summary",
-      title,
-      description,
-      images: ["/mosaic-app-icon.png"],
-    },
-  };
+    canonicalPath,
+  });
 }
 
 export default async function StandingsPage({ params }: StandingsPageProps) {
@@ -78,6 +57,7 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
       ) : null}
       <LiveStandings
         eventId={initialSnapshot.eventId ?? eventSlug}
+        eventSlug={eventSlug}
         initialSnapshot={initialSnapshot}
       />
     </>

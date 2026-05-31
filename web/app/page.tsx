@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { SalesEmailLink } from "../components/SalesEmailLink";
 
 export const metadata: Metadata = {
   title: "Mosaic | Mahjong event software",
@@ -42,7 +43,6 @@ export const metadata: Metadata = {
 };
 
 const salesEmail = "sales@mosaicmahjong.com";
-const salesHref = `mailto:${salesEmail}`;
 
 const workflowSteps = ["Check in", "Seat tables", "Score hands", "Publish standings"];
 
@@ -69,9 +69,9 @@ export default function LandingPage() {
           <Image src="/mosaic-app-icon.png" alt="" width={40} height={40} priority />
           <span>Mosaic</span>
         </Link>
-        <a className="landing-header-email" href={salesHref}>
+        <SalesEmailLink className="landing-header-email" location="header">
           {salesEmail}
-        </a>
+        </SalesEmailLink>
       </header>
 
       <main>
@@ -83,9 +83,9 @@ export default function LandingPage() {
               Check-in, seating, scoring, standings, finals, and prizes in one calm tool.
             </p>
             <div className="landing-actions">
-              <a className="landing-primary-link" href={salesHref}>
+              <SalesEmailLink className="landing-primary-link" location="hero">
                 Email sales
-              </a>
+              </SalesEmailLink>
               <p>For clubs, leagues, pop-ups, and private events.</p>
             </div>
           </div>
@@ -110,7 +110,7 @@ export default function LandingPage() {
 
         <section className="closing-cta" aria-labelledby="closing-title">
           <h2 id="closing-title">Interested in Mosaic?</h2>
-          <a href={salesHref}>{salesEmail}</a>
+          <SalesEmailLink location="closing">{salesEmail}</SalesEmailLink>
         </section>
       </main>
     </div>
