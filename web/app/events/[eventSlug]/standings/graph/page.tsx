@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { LivePointsRace } from "../../../../../components/LivePointsRace";
 import {
   fetchPublicStandings,
+  isPublicEventUnavailableError,
   type PublicStandingsClient,
   type PublicStandingsSnapshot,
 } from "../../../../../lib/public-standings";
@@ -39,6 +41,10 @@ export default async function PointsRacePage({ params }: PointsRacePageProps) {
     const publicClient = createPublicSupabaseClient() as unknown as PublicStandingsClient;
     initialSnapshot = await fetchPublicStandings(publicClient, eventSlug);
   } catch (error) {
+    if (isPublicEventUnavailableError(error)) {
+      notFound();
+    }
+
     initialSnapshot = {
       eventId: eventSlug,
       eventSlug,

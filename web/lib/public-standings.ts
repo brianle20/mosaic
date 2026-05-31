@@ -165,6 +165,19 @@ export type PublicStandingsSnapshotClient = {
 export type PublicStandingsClient = PublicStandingsRpcClient &
   Partial<PublicStandingsSnapshotClient>;
 
+export class PublicEventUnavailableError extends Error {
+  constructor(message = "Public event not found.") {
+    super(message);
+    this.name = "PublicEventUnavailableError";
+  }
+}
+
+export function isPublicEventUnavailableError(
+  error: unknown,
+): error is PublicEventUnavailableError {
+  return error instanceof PublicEventUnavailableError;
+}
+
 export function mapLeaderboardRow(row: PublicLeaderboardRpcRow): PublicLeaderboardRow {
   return {
     eventGuestId: row.event_guest_id,
@@ -670,7 +683,7 @@ async function resolvePublicEventId(
 
   const resolution = (result.data?.[0] ?? null) as PublicEventResolutionRpcRow | null;
   if (!resolution?.event_id) {
-    throw new Error("Public event not found.");
+    throw new PublicEventUnavailableError();
   }
 
   return resolution;
@@ -752,6 +765,9 @@ export async function fetchPublicStandings(
   }
 
   const eventSummary = (summaryResult.data?.[0] ?? null) as PublicEventSummaryRpcRow | null;
+  if (!eventSummary?.event_id) {
+    throw new PublicEventUnavailableError();
+  }
 
   return {
     eventId: eventSummary?.event_id ?? eventId,

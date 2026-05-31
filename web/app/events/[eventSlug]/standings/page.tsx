@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { LiveStandings } from "../../../../components/LiveStandings";
 import {
   fetchPublicStandings,
+  isPublicEventUnavailableError,
   type PublicStandingsClient,
 } from "../../../../lib/public-standings";
 import { eventTitleFromSlug, publicEventMetadata } from "../../../../lib/public-metadata";
@@ -36,6 +38,10 @@ export default async function StandingsPage({ params }: StandingsPageProps) {
     const publicClient = createPublicSupabaseClient() as unknown as PublicStandingsClient;
     initialSnapshot = await fetchPublicStandings(publicClient, eventSlug);
   } catch (error) {
+    if (isPublicEventUnavailableError(error)) {
+      notFound();
+    }
+
     initialSnapshot = {
       eventId: eventSlug,
       eventSlug,

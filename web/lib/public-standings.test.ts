@@ -93,6 +93,17 @@ describe("public standings data mapping", () => {
     });
   });
 
+  it("treats missing public summaries as unavailable events", async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValue({ data: [], error: null });
+
+    await expect(fetchPublicStandings({ rpc }, "event-1")).rejects.toThrow(
+      "Public event not found.",
+    );
+  });
+
   it("loads public standings snapshots by event slug and exposes the resolved event id", async () => {
     const maybeSingle = vi.fn().mockResolvedValue({
       data: {
