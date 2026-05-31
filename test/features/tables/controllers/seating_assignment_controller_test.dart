@@ -396,6 +396,76 @@ void main() {
     );
   });
 
+  test('sudden death scope keeps only champions sudden death seating',
+      () async {
+    final guests = [
+      _guest(
+        id: 'gst_01',
+        displayName: 'Champion One',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+      _guest(
+        id: 'gst_02',
+        displayName: 'Champion Two',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+      _guest(
+        id: 'gst_03',
+        displayName: 'Redemption Player',
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+    ];
+    final controller = SeatingAssignmentController(
+      seatingRepository: _FakeSeatingRepository(
+        loadedAssignments: [
+          _assignment(
+            id: 'sd_01',
+            guestId: 'gst_01',
+            displayName: 'Champion One',
+            assignmentType: SeatingAssignmentType.bonus,
+            bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
+          ),
+          _assignment(
+            id: 'sd_02',
+            guestId: 'gst_02',
+            displayName: 'Champion Two',
+            seatIndex: 1,
+            assignmentType: SeatingAssignmentType.bonus,
+            bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
+          ),
+          _assignment(
+            id: 'redemption_01',
+            tableId: 'tbl_02',
+            tableLabel: 'Table 2',
+            guestId: 'gst_03',
+            displayName: 'Redemption Player',
+            assignmentType: SeatingAssignmentType.bonus,
+            bonusTableRole: BonusTableRole.tableOfRedemption,
+          ),
+        ],
+      ),
+      guestRepository: _FakeGuestRepository(
+        guests: guests,
+        assignments: {
+          for (final guest in guests)
+            guest.id: _tagAssignment(guestId: guest.id),
+        },
+      ),
+      sessionRepository: _FakeSessionRepository(),
+      bonusTableRoleFilter: BonusTableRole.tableOfChampionsSuddenDeath,
+      showUnassignedGuests: false,
+    );
+
+    await controller.load('evt_01');
+
+    expect(
+      controller.assignments.map((assignment) => assignment.displayName),
+      ['Champion One', 'Champion Two'],
+    );
+    expect(controller.tableGroups, hasLength(1));
+    expect(controller.unassignedGuests, isEmpty);
+  });
+
   test(
       'eligible tournament players must be qualified checked-in tagged players',
       () async {
@@ -482,6 +552,8 @@ SeatingAssignmentRecord _assignment({
   String guestId = 'gst_01',
   String displayName = 'Player',
   int seatIndex = 0,
+  SeatingAssignmentType assignmentType = SeatingAssignmentType.random,
+  BonusTableRole? bonusTableRole,
 }) {
   return SeatingAssignmentRecord(
     id: id,
@@ -493,6 +565,8 @@ SeatingAssignmentRecord _assignment({
     seatIndex: seatIndex,
     assignmentRound: 1,
     status: 'active',
+    assignmentType: assignmentType,
+    bonusTableRole: bonusTableRole,
   );
 }
 

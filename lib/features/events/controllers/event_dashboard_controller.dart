@@ -587,15 +587,18 @@ class EventDashboardController extends ChangeNotifier {
   }) {
     assignments
         .sort((left, right) => left.seatIndex.compareTo(right.seatIndex));
+    final bonusTableRole = assignments.first.bonusTableRole;
     final activeSession = sessions.firstWhereOrNull(
       (session) =>
           session.scoringPhase == EventScoringPhase.bonus &&
+          _matchesBonusTableRole(session, bonusTableRole) &&
           (session.status == SessionStatus.active ||
               session.status == SessionStatus.paused),
     );
     final latestEndedSession = sessions.firstWhereOrNull(
       (session) =>
           session.scoringPhase == EventScoringPhase.bonus &&
+          _matchesBonusTableRole(session, bonusTableRole) &&
           (session.status == SessionStatus.completed ||
               session.status == SessionStatus.endedEarly),
     );
@@ -623,6 +626,13 @@ class EventDashboardController extends ChangeNotifier {
           ),
       ],
     );
+  }
+
+  bool _matchesBonusTableRole(
+    TableSessionRecord session,
+    BonusTableRole? bonusTableRole,
+  ) {
+    return bonusTableRole == null || session.bonusTableRole == bonusTableRole;
   }
 
   Future<void> completeEvent() async {

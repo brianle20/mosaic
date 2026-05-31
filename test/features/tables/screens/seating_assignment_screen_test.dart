@@ -337,7 +337,8 @@ void main() {
 
     expect(find.text('Table 1'), findsOneWidget);
     expect(find.text('Ava East'), findsOneWidget);
-    expect(find.text('Round seating appears after starting a tournament round.'),
+    expect(
+        find.text('Round seating appears after starting a tournament round.'),
         findsNothing);
   });
 
@@ -466,6 +467,90 @@ void main() {
     expect(find.text('Eli Waiting'), findsOneWidget);
   });
 
+  testWidgets('sudden death seating hides non-champions and unassigned guests',
+      (tester) async {
+    final guests = [
+      _guest(id: 'gst_01', displayName: 'Champion One'),
+      _guest(id: 'gst_02', displayName: 'Champion Two'),
+      _guest(id: 'gst_03', displayName: 'Redemption Player'),
+      _guest(id: 'gst_04', displayName: 'Waiting Player'),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          seatingRepository: _FakeSeatingRepository(
+            loadedAssignments: [
+              _assignment(
+                id: 'sd_01',
+                tableId: 'tbl_sd',
+                tableLabel: 'Table 1A',
+                guestId: 'gst_01',
+                displayName: 'Champion One',
+                assignmentType: SeatingAssignmentType.bonus,
+                bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
+              ),
+              _assignment(
+                id: 'sd_02',
+                tableId: 'tbl_sd',
+                tableLabel: 'Table 1A',
+                guestId: 'gst_02',
+                displayName: 'Champion Two',
+                seatIndex: 1,
+                assignmentType: SeatingAssignmentType.bonus,
+                bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
+              ),
+              _assignment(
+                id: 'redemption_01',
+                tableId: 'tbl_redemption',
+                tableLabel: 'Table 1B',
+                guestId: 'gst_03',
+                displayName: 'Redemption Player',
+                assignmentType: SeatingAssignmentType.bonus,
+                bonusTableRole: BonusTableRole.tableOfRedemption,
+              ),
+            ],
+          ),
+          guestRepository: _FakeGuestRepository(
+            guests: guests,
+            assignments: {
+              for (final guest in guests)
+                guest.id: _tagAssignment(guestId: guest.id),
+            },
+          ),
+          sessionRepository: const _FakeSessionRepository(),
+          bonusTableRoleFilter: BonusTableRole.tableOfChampionsSuddenDeath,
+          showUnassignedGuests: false,
+          enterTableScoringPhase: EventScoringPhase.bonus,
+          minimumTableSize: 2,
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.startSessionRoute) {
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Start Session')),
+              settings: settings,
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Table 1A'), findsOneWidget);
+    expect(find.text('Champion One'), findsOneWidget);
+    expect(find.text('Champion Two'), findsOneWidget);
+    expect(find.text('Table 1B'), findsNothing);
+    expect(find.text('Redemption Player'), findsNothing);
+    expect(find.text('Unassigned'), findsNothing);
+    expect(find.text('Waiting Player'), findsNothing);
+
+    await tester.tap(find.text('Enter Table'));
+    await tester.pumpAndSettle();
+    expect(find.text('Start Session'), findsOneWidget);
+  });
+
   testWidgets('live session warning does not expose seating mutation actions',
       (tester) async {
     final repository = _FakeSeatingRepository(
@@ -507,6 +592,8 @@ SeatingAssignmentRecord _assignment({
   String guestId = 'gst_01',
   String displayName = 'Player',
   int seatIndex = 0,
+  SeatingAssignmentType assignmentType = SeatingAssignmentType.random,
+  BonusTableRole? bonusTableRole,
 }) {
   return SeatingAssignmentRecord(
     id: id,
@@ -518,6 +605,8 @@ SeatingAssignmentRecord _assignment({
     seatIndex: seatIndex,
     assignmentRound: 1,
     status: 'active',
+    assignmentType: assignmentType,
+    bonusTableRole: bonusTableRole,
   );
 }
 

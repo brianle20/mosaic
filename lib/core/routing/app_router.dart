@@ -293,6 +293,10 @@ class AppRouter {
             guestRepository: guestRepository,
             sessionRepository: sessionRepository,
             initialAssignments: args.initialAssignments,
+            bonusTableRoleFilter: args.bonusTableRoleFilter,
+            showUnassignedGuests: args.showUnassignedGuests,
+            enterTableScoringPhase: args.enterTableScoringPhase,
+            minimumTableSize: args.minimumTableSize,
           ),
           settings: settings,
         );
@@ -480,10 +484,18 @@ class SeatingAssignmentsArgs {
   const SeatingAssignmentsArgs({
     required this.eventId,
     this.initialAssignments = const [],
+    this.bonusTableRoleFilter,
+    this.showUnassignedGuests = true,
+    this.enterTableScoringPhase = EventScoringPhase.tournament,
+    this.minimumTableSize = 4,
   });
 
   final String eventId;
   final List<SeatingAssignmentRecord> initialAssignments;
+  final BonusTableRole? bonusTableRoleFilter;
+  final bool showUnassignedGuests;
+  final EventScoringPhase enterTableScoringPhase;
+  final int minimumTableSize;
 }
 
 class SessionDetailArgs {

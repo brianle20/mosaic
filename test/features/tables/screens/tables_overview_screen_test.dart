@@ -1799,7 +1799,7 @@ void main() {
 
     expect(find.text('Sudden Death Required'), findsOneWidget);
     expect(find.text('Table of Champions'), findsOneWidget);
-    expect(find.text('Complete'), findsWidgets);
+    expect(find.text('Not Started'), findsWidgets);
     expect(find.text('View Session'), findsNothing);
     expect(find.text('Start Sudden Death'), findsOneWidget);
 

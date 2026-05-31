@@ -183,4 +183,41 @@ void main() {
     );
     expect(migration, contains("select pg_notify('pgrst', 'reload schema')"));
   });
+
+  test('sudden death RPC qualifies bonus round id updates', () {
+    final originalMigration = File(
+      'supabase/migrations/20260526130000_finals_sudden_death.sql',
+    ).readAsStringSync();
+    final fixMigrationFile = File(
+      'supabase/migrations/20260530200000_fix_sudden_death_ambiguous_id.sql',
+    );
+
+    expect(
+      originalMigration,
+      isNot(contains('where id = bonus_round_row.id;')),
+    );
+    expect(
+      originalMigration,
+      contains('where bonus_round.id = bonus_round_row.id;'),
+    );
+    expect(fixMigrationFile.existsSync(), isTrue);
+
+    final fixMigration = fixMigrationFile.readAsStringSync();
+
+    expect(
+      fixMigration,
+      contains(
+          'create or replace function public.start_bonus_round_sudden_death'),
+    );
+    expect(
+      fixMigration,
+      isNot(contains('where id = bonus_round_row.id;')),
+    );
+    expect(
+      fixMigration,
+      contains('where bonus_round.id = bonus_round_row.id;'),
+    );
+    expect(
+        fixMigration, contains("select pg_notify('pgrst', 'reload schema')"));
+  });
 }

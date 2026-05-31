@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
@@ -176,6 +177,10 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         arguments: SeatingAssignmentsArgs(
           eventId: widget.eventId,
           initialAssignments: assignments,
+          bonusTableRoleFilter: BonusTableRole.tableOfChampionsSuddenDeath,
+          showUnassignedGuests: false,
+          enterTableScoringPhase: EventScoringPhase.bonus,
+          minimumTableSize: 2,
         ),
       );
     }

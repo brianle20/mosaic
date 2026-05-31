@@ -18,6 +18,10 @@ class SeatingAssignmentScreen extends StatefulWidget {
     required this.guestRepository,
     required this.sessionRepository,
     this.initialAssignments = const [],
+    this.bonusTableRoleFilter,
+    this.showUnassignedGuests = true,
+    this.enterTableScoringPhase = EventScoringPhase.tournament,
+    this.minimumTableSize = 4,
   });
 
   final String eventId;
@@ -25,6 +29,10 @@ class SeatingAssignmentScreen extends StatefulWidget {
   final GuestRepository guestRepository;
   final SessionRepository sessionRepository;
   final List<SeatingAssignmentRecord> initialAssignments;
+  final BonusTableRole? bonusTableRoleFilter;
+  final bool showUnassignedGuests;
+  final EventScoringPhase enterTableScoringPhase;
+  final int minimumTableSize;
 
   @override
   State<SeatingAssignmentScreen> createState() =>
@@ -42,6 +50,8 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
       guestRepository: widget.guestRepository,
       sessionRepository: widget.sessionRepository,
       initialAssignments: widget.initialAssignments,
+      bonusTableRoleFilter: widget.bonusTableRoleFilter,
+      showUnassignedGuests: widget.showUnassignedGuests,
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
@@ -75,7 +85,7 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
           'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
           'default_rotation_policy_config_json': const <String, dynamic>{},
         }),
-        scoringPhase: EventScoringPhase.tournament,
+        scoringPhase: widget.enterTableScoringPhase,
         allowAssignedTableEntry: true,
       ),
     );
@@ -120,6 +130,7 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
                 _TableSeatingCard(
                   group: group,
                   onEnterTable: () => _enterTable(group),
+                  minimumTableSize: widget.minimumTableSize,
                 ),
                 const SizedBox(height: 12),
               ],
@@ -170,10 +181,12 @@ class _TableSeatingCard extends StatelessWidget {
   const _TableSeatingCard({
     required this.group,
     required this.onEnterTable,
+    required this.minimumTableSize,
   });
 
   final SeatingTableGroup group;
   final VoidCallback onEnterTable;
+  final int minimumTableSize;
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +212,9 @@ class _TableSeatingCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: group.seats.length == 4 ? onEnterTable : null,
+                onPressed: group.seats.length >= minimumTableSize
+                    ? onEnterTable
+                    : null,
                 icon: const Icon(Icons.login),
                 label: const Text('Enter Table'),
               ),

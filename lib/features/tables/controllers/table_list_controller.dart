@@ -609,7 +609,10 @@ class TableListController extends ChangeNotifier {
 
     final tableStatus = state.suddenDeathStatus == 'required'
         ? TournamentRoundTableStatus.notStarted
-        : _bonusSessionStatusFor(tableId);
+        : _bonusSessionStatusFor(
+            tableId,
+            bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
+          );
     final activeCount =
         tableStatus == TournamentRoundTableStatus.active ? 1 : 0;
     final pausedCount =
@@ -651,10 +654,12 @@ class TableListController extends ChangeNotifier {
           activeSessionId: _matchingLiveSession(
             eventTableId: tableId,
             scoringPhase: EventScoringPhase.bonus,
+            bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
           )?.id,
           latestEndedSessionId: _matchingLatestEndedSession(
             eventTableId: tableId,
             scoringPhase: EventScoringPhase.bonus,
+            bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
           )?.id,
           assignedPlayers: assignments.isNotEmpty
               ? [
@@ -672,10 +677,14 @@ class TableListController extends ChangeNotifier {
     );
   }
 
-  TournamentRoundTableStatus _bonusSessionStatusFor(String tableId) {
+  TournamentRoundTableStatus _bonusSessionStatusFor(
+    String tableId, {
+    BonusTableRole? bonusTableRole,
+  }) {
     final activeSession = _matchingLiveSession(
       eventTableId: tableId,
       scoringPhase: EventScoringPhase.bonus,
+      bonusTableRole: bonusTableRole,
     );
     return switch (activeSession?.status) {
       SessionStatus.active => TournamentRoundTableStatus.active,
@@ -683,6 +692,7 @@ class TableListController extends ChangeNotifier {
       _ => _matchingLatestEndedSession(
                 eventTableId: tableId,
                 scoringPhase: EventScoringPhase.bonus,
+                bonusTableRole: bonusTableRole,
               ) ==
               null
           ? TournamentRoundTableStatus.notStarted
@@ -728,10 +738,12 @@ class TableListController extends ChangeNotifier {
     final activeSession = _matchingLiveSession(
       eventTableId: eventTableId,
       scoringPhase: EventScoringPhase.bonus,
+      bonusTableRole: assignments.first.bonusTableRole,
     );
     final latestEndedSession = _matchingLatestEndedSession(
       eventTableId: eventTableId,
       scoringPhase: EventScoringPhase.bonus,
+      bonusTableRole: assignments.first.bonusTableRole,
     );
     final status = switch (activeSession?.status) {
       SessionStatus.active => TournamentRoundTableStatus.active,
@@ -762,9 +774,13 @@ class TableListController extends ChangeNotifier {
   TableSessionRecord? _matchingLiveSession({
     required String eventTableId,
     required EventScoringPhase scoringPhase,
+    BonusTableRole? bonusTableRole,
   }) {
     final session = activeSessionsByTableId[eventTableId];
     if (session == null || session.scoringPhase != scoringPhase) {
+      return null;
+    }
+    if (bonusTableRole != null && session.bonusTableRole != bonusTableRole) {
       return null;
     }
     return session;
@@ -773,10 +789,14 @@ class TableListController extends ChangeNotifier {
   TableSessionRecord? _matchingLatestEndedSession({
     required String eventTableId,
     required EventScoringPhase scoringPhase,
+    BonusTableRole? bonusTableRole,
   }) {
     for (final session
         in sessionsByTableId[eventTableId] ?? const <TableSessionRecord>[]) {
       if (session.scoringPhase != scoringPhase) {
+        continue;
+      }
+      if (bonusTableRole != null && session.bonusTableRole != bonusTableRole) {
         continue;
       }
       if (session.status == SessionStatus.completed ||

@@ -262,21 +262,23 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   _FakeSeatingRepository({
     this.bonusRoundState,
     this.suddenDeathAssignments = const [],
+    this.assignments = const [],
   });
 
   BonusRoundState? bonusRoundState;
   List<SeatingAssignmentRecord> suddenDeathAssignments;
+  List<SeatingAssignmentRecord> assignments;
   final startedSuddenDeathTables = <String>[];
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
     String eventId,
   ) async =>
-      const [];
+      assignments;
 
   @override
   Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
-      const [];
+      assignments;
 
   @override
   Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
@@ -925,6 +927,71 @@ void main() {
     expect(assignments, [assignment]);
     expect(controller.error, isNull);
   });
+
+  test('active sudden death ignores completed champions session on same table',
+      () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_champions',
+      'event_id': 'evt_01',
+      'label': 'Table 1A',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final completedChampionsSession = _session(
+      id: 'ses_champions',
+      tableId: table.id,
+      status: 'completed',
+      scoringPhase: EventScoringPhase.bonus,
+      bonusTableRole: BonusTableRole.tableOfChampions,
+    );
+    final seatingRepository = _FakeSeatingRepository(
+      bonusRoundState: const BonusRoundState(
+        bonusRoundId: 'bonus_01',
+        eventId: 'evt_01',
+        status: 'active',
+        suddenDeathStatus: 'active',
+        suddenDeathTableId: 'tbl_champions',
+      ),
+      assignments: [
+        _bonusAssignment(
+          table: table,
+          seatIndex: 0,
+          displayName: 'Alice Chen',
+          seedRank: 1,
+          role: BonusTableRole.tableOfChampionsSuddenDeath,
+        ),
+        _bonusAssignment(
+          table: table,
+          seatIndex: 1,
+          displayName: 'Ben Wong',
+          seedRank: 2,
+          role: BonusTableRole.tableOfChampionsSuddenDeath,
+        ),
+      ],
+    );
+    final controller = TableListController(
+      tableRepository: _FakeTableRepository(cachedTables: [table]),
+      sessionRepository: _FakeSessionRepository(
+        cachedSessions: [completedChampionsSession],
+      ),
+      guestRepository: _FakeGuestRepository(const []),
+      seatingRepository: seatingRepository,
+      scoringPhase: EventScoringPhase.bonus,
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.isSuddenDeathActive, isTrue);
+    expect(controller.tournamentRoundSummary.completeTableCount, 0);
+    expect(controller.tournamentRoundSummary.notStartedTableCount, 1);
+    expect(
+      controller.currentRoundCards.single.currentRoundSummary?.status,
+      TournamentRoundTableStatus.notStarted,
+    );
+  });
 }
 
 EventGuestRecord _guest(String id, String name) {
@@ -949,6 +1016,7 @@ TableSessionRecord _session({
   int currentDealerSeatIndex = 0,
   int handCount = 0,
   EventScoringPhase scoringPhase = EventScoringPhase.qualification,
+  BonusTableRole? bonusTableRole,
   int? assignmentRound,
   String startedAt = '2026-04-24T19:00:00-07:00',
 }) {
@@ -962,6 +1030,14 @@ TableSessionRecord _session({
     'rotation_policy_config_json': const {},
     'status': status,
     'scoring_phase': eventScoringPhaseToJson(scoringPhase),
+    'bonus_table_role': bonusTableRole == null
+        ? null
+        : switch (bonusTableRole) {
+            BonusTableRole.tableOfChampions => 'table_of_champions',
+            BonusTableRole.tableOfRedemption => 'table_of_redemption',
+            BonusTableRole.tableOfChampionsSuddenDeath =>
+              'table_of_champions_sudden_death',
+          },
     'assignment_round': assignmentRound,
     'initial_east_seat_index': 0,
     'current_dealer_seat_index': currentDealerSeatIndex,

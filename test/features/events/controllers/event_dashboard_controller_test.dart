@@ -10,6 +10,7 @@ import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
@@ -296,12 +297,26 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   }
 }
 
+class _FakeTableRepository extends ThrowingTableRepository {
+  const _FakeTableRepository(this.tables);
+
+  final List<EventTableRecord> tables;
+
+  @override
+  Future<List<EventTableRecord>> listTables(String eventId) async => tables;
+
+  @override
+  Future<List<EventTableRecord>> readCachedTables(String eventId) async =>
+      tables;
+}
+
 class _FakeSeatingRepository extends ThrowingSeatingRepository {
   _FakeSeatingRepository({
     this.onGenerate,
     this.onLoadRoundSummary,
     this.cachedRoundSummary,
     this.bonusRoundState,
+    this.assignments = const [],
   });
 
   final Future<List<SeatingAssignmentRecord>> Function(String eventId)?
@@ -310,6 +325,7 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
       onLoadRoundSummary;
   final TournamentRoundSummary? cachedRoundSummary;
   final BonusRoundState? bonusRoundState;
+  final List<SeatingAssignmentRecord> assignments;
 
   @override
   Future<List<SeatingAssignmentRecord>> generateTournamentRound(
@@ -342,6 +358,16 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   @override
   Future<BonusRoundState?> loadBonusRoundState(String eventId) async =>
       bonusRoundState;
+
+  @override
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
+      assignments;
+
+  @override
+  Future<List<SeatingAssignmentRecord>> readCachedAssignments(
+    String eventId,
+  ) async =>
+      assignments;
 }
 
 TournamentRoundSummary _roundSummary(int roundNumber) {
@@ -361,6 +387,78 @@ TournamentRoundSummary _roundSummary(int roundNumber) {
     notStartedTableCount: 0,
     currentRoundTables: const [],
     otherTables: const [],
+  );
+}
+
+EventTableRecord _table({
+  required String id,
+  required String label,
+  int displayOrder = 1,
+}) {
+  return EventTableRecord.fromJson({
+    'id': id,
+    'event_id': 'evt_01',
+    'label': label,
+    'display_order': displayOrder,
+    'nfc_tag_id': 'tag_$id',
+    'default_ruleset_id': 'HK_STANDARD',
+    'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+    'default_rotation_policy_config_json': const {},
+  });
+}
+
+TableSessionRecord _session({
+  required String id,
+  required String tableId,
+  required String status,
+  required BonusTableRole bonusTableRole,
+}) {
+  return TableSessionRecord.fromJson({
+    'id': id,
+    'event_id': 'evt_01',
+    'event_table_id': tableId,
+    'session_number_for_table': 1,
+    'ruleset_id': 'HK_STANDARD',
+    'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+    'rotation_policy_config_json': const {},
+    'status': status,
+    'scoring_phase': 'bonus',
+    'bonus_table_role': switch (bonusTableRole) {
+      BonusTableRole.tableOfChampions => 'table_of_champions',
+      BonusTableRole.tableOfRedemption => 'table_of_redemption',
+      BonusTableRole.tableOfChampionsSuddenDeath =>
+        'table_of_champions_sudden_death',
+    },
+    'initial_east_seat_index': 0,
+    'current_dealer_seat_index': 0,
+    'dealer_pass_count': 0,
+    'completed_games_count': 0,
+    'hand_count': 4,
+    'started_at': '2026-04-24T19:00:00-07:00',
+    'started_by_user_id': 'usr_01',
+  });
+}
+
+SeatingAssignmentRecord _bonusAssignment({
+  required EventTableRecord table,
+  required String guestId,
+  required String displayName,
+  required int seatIndex,
+  required BonusTableRole role,
+}) {
+  return SeatingAssignmentRecord(
+    id: 'asg_${table.id}_$seatIndex',
+    eventId: 'evt_01',
+    eventTableId: table.id,
+    tableLabel: table.label,
+    eventGuestId: guestId,
+    displayName: displayName,
+    seatIndex: seatIndex,
+    assignmentRound: 4,
+    status: 'active',
+    assignmentType: SeatingAssignmentType.bonus,
+    bonusRoundId: 'bonus_01',
+    bonusTableRole: role,
   );
 }
 
@@ -705,6 +803,89 @@ void main() {
     expect(
       controller.bonusRoundResults.suddenDeathStatus?.statusLabel,
       'Sudden death active',
+    );
+  });
+
+  test('active sudden death ignores completed champions session on same table',
+      () async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'bonus',
+    });
+    final championsTable = _table(id: 'tbl_champions', label: 'Table 1A');
+    const suddenDeathState = BonusRoundState(
+      bonusRoundId: 'bonus_01',
+      eventId: 'evt_01',
+      status: 'active',
+      suddenDeathStatus: 'active',
+      championResolutionMethod: 'sudden_death',
+      suddenDeathTableId: 'tbl_champions',
+      tiedTopPlayers: [
+        BonusRoundTiedPlayer(
+          eventGuestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          bonusScorePoints: 120,
+          seedRank: 1,
+        ),
+        BonusRoundTiedPlayer(
+          eventGuestId: 'gst_bob',
+          displayName: 'Bob Lee',
+          bonusScorePoints: 120,
+          seedRank: 2,
+        ),
+      ],
+    );
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(cachedEvents: [event]),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      seatingRepository: _FakeSeatingRepository(
+        bonusRoundState: suddenDeathState,
+        assignments: [
+          _bonusAssignment(
+            table: championsTable,
+            guestId: 'gst_alice',
+            displayName: 'Alice Wong',
+            seatIndex: 0,
+            role: BonusTableRole.tableOfChampionsSuddenDeath,
+          ),
+          _bonusAssignment(
+            table: championsTable,
+            guestId: 'gst_bob',
+            displayName: 'Bob Lee',
+            seatIndex: 1,
+            role: BonusTableRole.tableOfChampionsSuddenDeath,
+          ),
+        ],
+      ),
+      sessionRepository: _FakeSessionRepository([
+        _session(
+          id: 'ses_champions',
+          tableId: championsTable.id,
+          status: 'completed',
+          bonusTableRole: BonusTableRole.tableOfChampions,
+        ),
+      ]),
+      tableRepository: _FakeTableRepository([championsTable]),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.isSuddenDeathActive, isTrue);
+    expect(controller.finalsRoundSummary.completeTableCount, 0);
+    expect(controller.finalsRoundSummary.notStartedTableCount, 1);
+    expect(
+      controller.finalsRoundSummary.currentRoundTables.single.status,
+      TournamentRoundTableStatus.notStarted,
     );
   });
 

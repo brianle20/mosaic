@@ -695,7 +695,7 @@ begin
     sudden_death_status = 'active',
     sudden_death_table_id = selected_sudden_death_table_id,
     sudden_death_session_id = null
-  where id = bonus_round_row.id;
+  where bonus_round.id = bonus_round_row.id;
 
   return query
   select *

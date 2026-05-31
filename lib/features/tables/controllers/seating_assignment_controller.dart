@@ -14,14 +14,19 @@ class SeatingAssignmentController extends ChangeNotifier {
     required GuestRepository guestRepository,
     required SessionRepository sessionRepository,
     List<SeatingAssignmentRecord> initialAssignments = const [],
+    this.bonusTableRoleFilter,
+    this.showUnassignedGuests = true,
   })  : _seatingRepository = seatingRepository,
         _guestRepository = guestRepository,
         _sessionRepository = sessionRepository,
-        assignments = initialAssignments;
+        assignments =
+            _filterAssignments(initialAssignments, bonusTableRoleFilter);
 
   final SeatingRepository _seatingRepository;
   final GuestRepository _guestRepository;
   final SessionRepository _sessionRepository;
+  final BonusTableRole? bonusTableRoleFilter;
+  final bool showUnassignedGuests;
 
   bool isLoading = true;
   bool isSubmitting = false;
@@ -62,8 +67,9 @@ class SeatingAssignmentController extends ChangeNotifier {
     isLoading = true;
     error = null;
 
-    final cachedAssignments = await _seatingRepository.readCachedAssignments(
-      eventId,
+    final cachedAssignments = _filterAssignments(
+      await _seatingRepository.readCachedAssignments(eventId),
+      bonusTableRoleFilter,
     );
     if (assignments.isEmpty) {
       assignments = cachedAssignments;
@@ -71,8 +77,9 @@ class SeatingAssignmentController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final loadedAssignments = await _seatingRepository.loadAssignments(
-        eventId,
+      final loadedAssignments = _filterAssignments(
+        await _seatingRepository.loadAssignments(eventId),
+        bonusTableRoleFilter,
       );
       final loadedEligibleGuests = await _loadEligibleGuests(eventId);
       final loadedHasLiveSessions = await _loadHasLiveSessions(eventId);
@@ -106,7 +113,10 @@ class SeatingAssignmentController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      assignments = await _seatingRepository.generateRandomAssignments(eventId);
+      assignments = _filterAssignments(
+        await _seatingRepository.generateRandomAssignments(eventId),
+        bonusTableRoleFilter,
+      );
       await _refreshEligibleGuests(eventId);
       error = null;
     } catch (exception) {
@@ -130,7 +140,10 @@ class SeatingAssignmentController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      assignments = await _seatingRepository.clearAssignments(eventId);
+      assignments = _filterAssignments(
+        await _seatingRepository.clearAssignments(eventId),
+        bonusTableRoleFilter,
+      );
       _updateUnassignedGuests();
       error = null;
     } catch (exception) {
@@ -168,7 +181,7 @@ class SeatingAssignmentController extends ChangeNotifier {
   }
 
   void _updateUnassignedGuests() {
-    if (assignments.isEmpty) {
+    if (!showUnassignedGuests || assignments.isEmpty) {
       unassignedGuests = const [];
       return;
     }
@@ -189,6 +202,19 @@ class SeatingAssignmentController extends ChangeNotifier {
           session.status == SessionStatus.paused,
     );
   }
+}
+
+List<SeatingAssignmentRecord> _filterAssignments(
+  List<SeatingAssignmentRecord> assignments,
+  BonusTableRole? bonusTableRoleFilter,
+) {
+  if (bonusTableRoleFilter == null) {
+    return assignments;
+  }
+
+  return assignments
+      .where((assignment) => assignment.bonusTableRole == bonusTableRoleFilter)
+      .toList(growable: false);
 }
 
 class SeatingTableGroup {
