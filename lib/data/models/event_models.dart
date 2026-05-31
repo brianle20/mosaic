@@ -131,6 +131,7 @@ class EventRecord {
     this.venueAddress,
     this.publicSlug,
     this.endsAt,
+    this.archivedAt,
     this.rowVersion = 1,
   });
 
@@ -148,6 +149,7 @@ class EventRecord {
       createdAt: _optionalDateTime(json, 'created_at') ??
           _requiredDateTime(json, 'starts_at'),
       endsAt: _optionalDateTime(json, 'ends_at'),
+      archivedAt: _optionalDateTime(json, 'archived_at'),
       lifecycleStatus: _eventLifecycleStatusFromJson(
         _requiredString(json, 'lifecycle_status'),
       ),
@@ -183,6 +185,7 @@ class EventRecord {
   final DateTime startsAt;
   final DateTime createdAt;
   final DateTime? endsAt;
+  final DateTime? archivedAt;
   final EventLifecycleStatus lifecycleStatus;
   final bool checkinOpen;
   final bool scoringOpen;
@@ -192,6 +195,8 @@ class EventRecord {
   final EventScoringPhase currentScoringPhase;
   final EventSeatingMode seatingMode;
   final int rowVersion;
+
+  bool get isArchived => archivedAt != null;
 
   Map<String, dynamic> toJson() {
     return {
@@ -206,6 +211,7 @@ class EventRecord {
       'starts_at': startsAt.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
       'ends_at': endsAt?.toIso8601String(),
+      'archived_at': archivedAt?.toIso8601String(),
       'lifecycle_status': lifecycleStatus.name,
       'checkin_open': checkinOpen,
       'scoring_open': scoringOpen,

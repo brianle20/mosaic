@@ -89,6 +89,30 @@ void main() {
     expect(controller.roleForEvent('evt_02'), MosaicAccessRole.owner);
   });
 
+  test('load hides archived cached and remote events', () async {
+    final keeper = _eventRecord('evt_keep', 'FV Mahjong 2');
+    final archivedCached = _eventRecord(
+      'evt_archived_cached',
+      'Old Cached Event',
+      archivedAt: '2026-05-30T19:00:00Z',
+    );
+    final archivedRemote = _eventRecord(
+      'evt_archived_remote',
+      'Old Remote Event',
+      archivedAt: '2026-05-30T19:05:00Z',
+    );
+    final controller = EventListController(
+      eventRepository: _FakeEventRepository(
+        cachedEvents: [archivedCached, keeper],
+        remoteEventsFuture: Future.value([archivedRemote, keeper]),
+      ),
+    );
+
+    await controller.load();
+
+    expect(controller.events, [keeper]);
+  });
+
   test('load does not notify after dispose while async work is in flight',
       () async {
     final completer = Completer<List<EventRecord>>();
@@ -107,7 +131,7 @@ void main() {
   });
 }
 
-EventRecord _eventRecord(String id, String title) {
+EventRecord _eventRecord(String id, String title, {String? archivedAt}) {
   return EventRecord.fromJson({
     'id': id,
     'owner_user_id': 'owner_01',
@@ -121,6 +145,7 @@ EventRecord _eventRecord(String id, String title) {
     'cover_charge_cents': 2000,
     'default_ruleset_id': 'HK_STANDARD',
     'prevailing_wind': 'east',
+    if (archivedAt != null) 'archived_at': archivedAt,
   });
 }
 

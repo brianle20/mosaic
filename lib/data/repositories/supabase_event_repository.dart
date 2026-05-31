@@ -207,6 +207,7 @@ class SupabaseEventRepository implements EventRepository {
     final rows = await client
         .from('events')
         .select()
+        .filter('archived_at', 'is', null)
         .order('created_at', ascending: false);
 
     final records =

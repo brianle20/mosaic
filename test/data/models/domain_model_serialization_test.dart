@@ -85,6 +85,27 @@ void main() {
       expect(record.seatingMode, EventSeatingMode.random);
       expect(record.toJson()['seating_mode'], 'random');
     });
+
+    test('round-trips archived timestamp from JSON', () {
+      final record = EventRecord.fromJson(const {
+        'id': 'evt_01',
+        'owner_user_id': 'usr_01',
+        'title': 'Friday Night Mahjong',
+        'timezone': 'America/Los_Angeles',
+        'starts_at': '2026-04-24T19:00:00-07:00',
+        'lifecycle_status': 'draft',
+        'checkin_open': false,
+        'scoring_open': false,
+        'cover_charge_cents': 2000,
+        'default_ruleset_id': 'HK_STANDARD',
+        'prevailing_wind': 'east',
+        'archived_at': '2026-05-30T19:00:00Z',
+      });
+
+      expect(record.archivedAt, DateTime.parse('2026-05-30T19:00:00Z'));
+      expect(record.isArchived, isTrue);
+      expect(record.toJson()['archived_at'], '2026-05-30T19:00:00.000Z');
+    });
   });
 
   group('SeatingAssignmentRecord', () {

@@ -83,13 +83,15 @@ class EventListController extends ChangeNotifier {
   }
 
   List<EventRecord> _filterAccessible(List<EventRecord> records) {
+    final unarchivedRecords =
+        records.where((record) => !record.isArchived).toList(growable: false);
     final accessState = _accessState;
     if (accessState == null) {
-      return records;
+      return unarchivedRecords;
     }
     final eventIds =
         accessState.events.map((accessEvent) => accessEvent.eventId).toSet();
-    return records
+    return unarchivedRecords
         .where(
           (record) =>
               eventIds.contains(record.id) ||
