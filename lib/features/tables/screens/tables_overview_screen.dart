@@ -49,6 +49,8 @@ class TablesOverviewScreen extends StatefulWidget {
 
 class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   late final TableListController _controller;
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   Timer? _roundTimer;
 
   bool get _isQualificationPhase =>
@@ -67,6 +69,8 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
+    _searchController.addListener(_handleUpdate);
+    _searchFocusNode.addListener(_handleUpdate);
     _roundTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       _controller.refreshRoundTimers();
     });
@@ -76,6 +80,12 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   void dispose() {
     _roundTimer?.cancel();
     _controller
+      ..removeListener(_handleUpdate)
+      ..dispose();
+    _searchController
+      ..removeListener(_handleUpdate)
+      ..dispose();
+    _searchFocusNode
       ..removeListener(_handleUpdate)
       ..dispose();
     super.dispose();
@@ -280,6 +290,24 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final searchQuery = _searchController.text.trim().toLowerCase();
+    final hasSearch = searchQuery.isNotEmpty;
+    final filteredCards = _controller.cards
+        .where((card) => _matchesSearch(card, searchQuery))
+        .toList(growable: false);
+    final filteredCurrentRoundCards = _controller.currentRoundCards
+        .where((card) => _matchesSearch(card, searchQuery))
+        .toList(growable: false);
+    final filteredOtherCards = _controller.otherCards
+        .where((card) => _matchesSearch(card, searchQuery))
+        .toList(growable: false);
+    final hasCurrentRoundSections = _controller.currentRoundCards.isNotEmpty;
+    final hasSearchableTables =
+        _controller.tables.isNotEmpty || hasCurrentRoundSections;
+    final hasFilteredTables = hasCurrentRoundSections
+        ? filteredCurrentRoundCards.isNotEmpty || filteredOtherCards.isNotEmpty
+        : filteredCards.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Tables')),
       body: AsyncBody(
@@ -287,6 +315,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         error: _controller.error,
         onRetry: () => _controller.load(widget.eventId),
         child: ListView(
+          key: const ValueKey('tables-overview-list'),
           padding: const EdgeInsets.all(16),
           children: [
             if (!widget.readOnly && widget.canManageTables) ...[
@@ -308,6 +337,10 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                     'This event is locked. Tables and tag bindings can no longer be changed.',
               ),
             ],
+            if (hasSearchableTables) ...[
+              const SizedBox(height: 12),
+              _buildSearchField(),
+            ],
             const SizedBox(height: 16),
             if (_controller.tournamentRoundSummary.hasCurrentRound) ...[
               _buildCurrentRoundStatusBoard(
@@ -315,25 +348,35 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               ),
               const SizedBox(height: 16),
             ],
-            if (_controller.currentRoundCards.isNotEmpty) ...[
-              _buildSectionHeader(
-                _controller.effectiveScoringPhase == EventScoringPhase.bonus
-                    ? 'Finals Tables'
-                    : 'Current Round',
-              ),
-              const SizedBox(height: 8),
-              for (final cardData in _controller.currentRoundCards)
-                _buildCurrentRoundTableCard(cardData),
-              if (_controller.otherCards.isNotEmpty) ...[
+            if (hasCurrentRoundSections && hasFilteredTables) ...[
+              if (filteredCurrentRoundCards.isNotEmpty) ...[
+                _buildSectionHeader(
+                  _controller.effectiveScoringPhase == EventScoringPhase.bonus
+                      ? 'Finals Tables'
+                      : 'Current Round',
+                ),
+                const SizedBox(height: 8),
+                for (final cardData in filteredCurrentRoundCards)
+                  _buildCurrentRoundTableCard(cardData),
+              ],
+              if (filteredOtherCards.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 _buildSectionHeader('Other Tables'),
                 const SizedBox(height: 8),
-                for (final cardData in _controller.otherCards)
+                for (final cardData in filteredOtherCards)
                   _buildTableCard(cardData),
               ],
-            ] else
-              for (final cardData in _controller.cards)
-                _buildTableCard(cardData),
+            ] else if (!hasCurrentRoundSections)
+              for (final cardData in filteredCards) _buildTableCard(cardData),
+            if (hasSearch && hasSearchableTables && !hasFilteredTables)
+              const Padding(
+                padding: EdgeInsets.only(top: 24),
+                child: EmptyStateCard(
+                  icon: Icons.search_off,
+                  title: 'No matching tables',
+                  message: 'Try a different table or player search.',
+                ),
+              ),
             if (_controller.tables.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 24),
@@ -349,6 +392,67 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildSearchField() {
+    return TextField(
+      controller: _searchController,
+      focusNode: _searchFocusNode,
+      textInputAction: TextInputAction.search,
+      onSubmitted: (_) => _searchFocusNode.unfocus(),
+      decoration: InputDecoration(
+        labelText: 'Search tables',
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: _buildSearchSuffixIcon(),
+      ),
+    );
+  }
+
+  Widget? _buildSearchSuffixIcon() {
+    final hasSearchText = _searchController.text.isNotEmpty;
+    final isFocused = _searchFocusNode.hasFocus;
+    if (!hasSearchText && !isFocused) {
+      return null;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (hasSearchText)
+          IconButton(
+            tooltip: 'Clear search',
+            onPressed: _searchController.clear,
+            icon: const Icon(Icons.clear),
+          ),
+        if (isFocused)
+          IconButton(
+            tooltip: 'Dismiss keyboard',
+            onPressed: _searchFocusNode.unfocus,
+            icon: const Icon(Icons.keyboard_hide),
+          ),
+      ],
+    );
+  }
+
+  bool _matchesSearch(TableOverviewCardData cardData, String searchQuery) {
+    if (searchQuery.isEmpty) {
+      return true;
+    }
+
+    final searchableValues = [
+      cardData.table.label,
+      cardData.assignmentTitle,
+      cardData.assignmentSubtitle,
+      for (final player in cardData.currentRoundSummary?.assignedPlayers ??
+          const <TournamentRoundAssignedPlayer>[])
+        player.displayName,
+      for (final seat in cardData.liveSummary?.seats ?? const <SeatSummary>[])
+        seat.guestName,
+    ];
+
+    return searchableValues.whereType<String>().any(
+          (value) => value.toLowerCase().contains(searchQuery),
+        );
   }
 
   Widget _buildCurrentRoundStatusBoard(TournamentRoundSummary summary) {

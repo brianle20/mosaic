@@ -25,6 +25,7 @@ import 'package:mosaic/features/tables/screens/table_form_screen.dart';
 import 'package:mosaic/features/tables/screens/start_session_screen.dart';
 import 'package:mosaic/features/tables/screens/tables_overview_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/services/qr/qr_scanner_service.dart';
 
 class AppRouter {
   const AppRouter({
@@ -38,6 +39,7 @@ class AppRouter {
     required this.seatingRepository,
     this.staffRepository,
     required this.nfcService,
+    required this.qrScannerService,
     this.accessState,
   });
 
@@ -51,6 +53,7 @@ class AppRouter {
   final SeatingRepository seatingRepository;
   final StaffRepository? staffRepository;
   final NfcService nfcService;
+  final QrScannerService qrScannerService;
   final MosaicAccessState? accessState;
 
   static const eventListRoute = '/';
@@ -218,6 +221,7 @@ class AppRouter {
             guestRepository: guestRepository,
             sessionRepository: sessionRepository,
             nfcService: nfcService,
+            qrScannerService: qrScannerService,
           ),
           settings: settings,
         );

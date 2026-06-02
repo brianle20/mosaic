@@ -10,6 +10,7 @@ import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/screens/hand_entry_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/services/qr/qr_scanner_service.dart';
 
 class _RecordingSessionRepository implements SessionRepository {
   RecordHandResultInput? recordedInput;
@@ -237,7 +238,29 @@ class _QueuedPlayerNfcService implements NfcService {
   }
 }
 
+class _QueuedQrScannerService implements QrScannerService {
+  _QueuedQrScannerService(this.results);
+
+  final List<Object?> results;
+
+  @override
+  Future<QrScanResult?> scanPlayerCode(BuildContext context) async {
+    final next = results.removeAt(0);
+    if (next is Exception) {
+      throw next;
+    }
+    return next as QrScanResult?;
+  }
+}
+
 void main() {
+  Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+    await tester.ensureVisible(finder);
+    await tester.pumpAndSettle();
+    await tester.tap(finder);
+    await tester.pumpAndSettle();
+  }
+
   SessionDetailRecord buildDetail({
     int currentDealerSeatIndex = 0,
     EventScoringPhase scoringPhase = EventScoringPhase.qualification,
@@ -306,6 +329,59 @@ void main() {
     'gst_north': 'Dee Wu',
   };
 
+  testWidgets('seat buttons select a self-draw winner', (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilledButton, 'East\nBob Lee'));
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Fan Count'), '3');
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput?.winnerSeatIndex, 1);
+    expect(repository.recordedInput?.winType, HandWinType.selfDraw);
+  });
+
+  testWidgets('seat buttons select winner then discarder in discard mode',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tapVisible(tester, find.text('Discard'));
+    await tester.tap(find.widgetWithText(FilledButton, 'East\nBob Lee'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'South\nCarol Ng'));
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Fan Count'), '5');
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput?.winnerSeatIndex, 1);
+    expect(repository.recordedInput?.discarderSeatIndex, 2);
+    expect(repository.recordedInput?.winType, HandWinType.discard);
+  });
+
   testWidgets('toggles conditional fields, shows preview, and saves',
       (tester) async {
     final repository = _RecordingSessionRepository();
@@ -325,17 +401,14 @@ void main() {
     expect(find.text('Discard'), findsOneWidget);
     expect(find.text('Discarder'), findsNothing);
 
-    await tester.tap(find.text('Discard'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Discard'));
     expect(find.text('Discarder'), findsOneWidget);
 
-    await tester.tap(find.text('Winner'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Winner'));
     await tester.tap(find.text('Alice Wong (East)').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Discarder'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Discarder'));
     await tester.tap(find.text('Bob Lee (South)').last);
     await tester.pumpAndSettle();
 
@@ -367,15 +440,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Winner'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Winner'));
     await tester.tap(find.text('Alice Wong (East)').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Discard'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Discarder'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Discard'));
+    await tapVisible(tester, find.text('Discarder'));
 
     expect(find.text('Alice Wong (East)'), findsOneWidget);
     expect(find.text('Bob Lee (South)'), findsOneWidget);
@@ -418,8 +488,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Winner'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Winner'));
 
     expect(find.text('Bob Lee (East)'), findsOneWidget);
     expect(find.text('Carol Ng (South)'), findsOneWidget);
@@ -442,8 +511,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Winner'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Winner'));
     await tester.tap(find.text('Alice Wong (East)').last);
     await tester.pumpAndSettle();
 
@@ -484,8 +552,7 @@ void main() {
 
     expect(find.text('Round time has expired.'), findsOneWidget);
 
-    await tester.tap(find.text('Winner'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Winner'));
     await tester.tap(find.text('Alice Wong (East)').last);
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -734,8 +801,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Scan Winner'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Scan NFC for winner'));
 
     expect(find.text('Bob Lee (East)'), findsOneWidget);
     expect(find.text('Scan Target'), findsNothing);
@@ -777,17 +843,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Scan Target'), findsNothing);
-    expect(find.text('Scan Winner'), findsOneWidget);
+    expect(find.text('Scan NFC for winner'), findsOneWidget);
+    expect(find.text('Scan Winner'), findsNothing);
     expect(find.text('Scan Discarder'), findsNothing);
 
-    await tester.tap(find.text('Scan Winner'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Scan NFC for winner'));
 
     expect(find.text('Bob Lee (East)'), findsOneWidget);
-    expect(find.text('Scan Discarder'), findsOneWidget);
+    expect(find.text('Scan NFC for discarder'), findsOneWidget);
 
-    await tester.tap(find.text('Scan Discarder'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Scan NFC for discarder'));
 
     expect(find.text('Carol Ng (South)'), findsOneWidget);
 
@@ -800,6 +865,154 @@ void main() {
 
     expect(repository.recordedInput?.winnerSeatIndex, 1);
     expect(repository.recordedInput?.discarderSeatIndex, 2);
+  });
+
+  testWidgets('QR scan selects the active player target', (tester) async {
+    final repository = _RecordingSessionRepository();
+    final qrScanner = _QueuedQrScannerService([
+      const QrScanResult(
+        rawPayload: 'mosaic:tag:player-south',
+        normalizedUid: 'PLAYER-SOUTH',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+          guestNamesById: seatNames,
+          guestTagAssignmentsByGuestId: {
+            'gst_south': _assignment('gst_south', 'PLAYER-SOUTH'),
+          },
+          sessionRepository: repository,
+          qrScannerService: qrScanner,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tapVisible(tester, find.text('Scan QR for winner'));
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Fan Count'), '3');
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput?.winnerSeatIndex, 1);
+  });
+
+  testWidgets('scanner cannot select winner as discarder', (tester) async {
+    final repository = _RecordingSessionRepository();
+    final qrScanner = _QueuedQrScannerService([
+      const QrScanResult(
+        rawPayload: 'mosaic:tag:player-south',
+        normalizedUid: 'PLAYER-SOUTH',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+          guestNamesById: seatNames,
+          guestTagAssignmentsByGuestId: {
+            'gst_south': _assignment('gst_south', 'PLAYER-SOUTH'),
+          },
+          sessionRepository: repository,
+          qrScannerService: qrScanner,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'East\nBob Lee'));
+    await tester.pumpAndSettle();
+    final scanQrButton =
+        find.widgetWithText(FilledButton, 'Scan QR for discarder');
+    await tester.ensureVisible(scanQrButton);
+    await tester.pumpAndSettle();
+    await tester.tap(scanQrButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Discarder cannot be the winner.'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'East\nBob Lee'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Fan Count'),
+      '3',
+    );
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput, isNull);
+  });
+
+  testWidgets('NFC backup scan still selects the active player target',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+    final nfcService = _QueuedPlayerNfcService([
+      const TagScanResult(
+        rawUid: 'player-west',
+        normalizedUid: 'PLAYER-WEST',
+        isManualEntry: false,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+          guestNamesById: seatNames,
+          guestTagAssignmentsByGuestId: {
+            'gst_west': _assignment('gst_west', 'PLAYER-WEST'),
+          },
+          sessionRepository: repository,
+          nfcService: nfcService,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tapVisible(tester, find.text('Scan NFC for winner'));
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Fan Count'), '4');
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput?.winnerSeatIndex, 2);
+  });
+
+  testWidgets('unknown QR scan shows a local error', (tester) async {
+    final repository = _RecordingSessionRepository();
+    final qrScanner = _QueuedQrScannerService([
+      const QrScanResult(
+        rawPayload: 'mosaic:tag:missing',
+        normalizedUid: 'MISSING',
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+          guestNamesById: seatNames,
+          guestTagAssignmentsByGuestId: {
+            'gst_south': _assignment('gst_south', 'PLAYER-SOUTH'),
+          },
+          sessionRepository: repository,
+          qrScannerService: qrScanner,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tapVisible(tester, find.text('Scan QR for winner'));
+
+    expect(
+      find.text('Scanned code is not assigned to this table.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('shows void action for an existing hand', (tester) async {
@@ -837,8 +1050,7 @@ void main() {
 
     expect(find.text('Void Hand'), findsOneWidget);
 
-    await tester.tap(find.text('Void Hand'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Void Hand'));
 
     expect(repository.voidedInput, isNotNull);
     expect(repository.voidedInput!.handResultId, 'hand_01');

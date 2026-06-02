@@ -9,6 +9,7 @@ import 'package:mosaic/features/scoring/controllers/session_detail_controller.da
 import 'package:mosaic/features/scoring/models/session_detail_view_models.dart';
 import 'package:mosaic/features/scoring/screens/hand_entry_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/services/qr/qr_scanner_service.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
@@ -21,6 +22,7 @@ class SessionDetailScreen extends StatefulWidget {
     required this.guestRepository,
     required this.sessionRepository,
     this.nfcService,
+    this.qrScannerService,
     this.now,
   });
 
@@ -30,6 +32,7 @@ class SessionDetailScreen extends StatefulWidget {
   final GuestRepository guestRepository;
   final SessionRepository sessionRepository;
   final NfcService? nfcService;
+  final QrScannerService? qrScannerService;
   final DateTime Function()? now;
 
   @override
@@ -86,6 +89,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
               _controller.activeTagAssignmentsByGuestId,
           sessionRepository: widget.sessionRepository,
           nfcService: widget.nfcService,
+          qrScannerService: widget.qrScannerService,
           initialHand: hand,
         ),
       ),

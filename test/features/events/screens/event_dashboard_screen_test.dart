@@ -28,6 +28,7 @@ import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 import 'package:mosaic/features/tables/screens/seating_assignment_screen.dart';
 import 'package:mosaic/services/nfc/native_nfc_reader.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/services/qr/qr_scanner_service.dart';
 import 'package:mosaic/widgets/app_actions.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
 
@@ -663,6 +664,13 @@ class _NfcService implements NfcService {
   }
 }
 
+class _QrScannerService implements QrScannerService {
+  const _QrScannerService();
+
+  @override
+  Future<QrScanResult?> scanPlayerCode(BuildContext context) async => null;
+}
+
 class _CompletingTableScanNfcService implements NfcService {
   _CompletingTableScanNfcService(this.tableScanCompleter);
 
@@ -1217,6 +1225,7 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: const _NfcService(),
+      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1480,6 +1489,7 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: const _NfcService(),
+      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1515,6 +1525,7 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: const _NfcService(),
+      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1703,6 +1714,7 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
+      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1800,6 +1812,7 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
+      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1846,6 +1859,7 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
+      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1884,6 +1898,7 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
+      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(

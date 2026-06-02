@@ -10,6 +10,7 @@ import 'package:mosaic/features/scoring/controllers/hand_entry_controller.dart';
 import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import 'package:mosaic/services/qr/qr_scanner_service.dart';
 
 enum _PlayerScanTarget { winner, discarder }
 
@@ -21,6 +22,7 @@ class HandEntryScreen extends StatefulWidget {
     required this.sessionRepository,
     this.guestTagAssignmentsByGuestId = const {},
     this.nfcService,
+    this.qrScannerService,
     this.initialHand,
   });
 
@@ -29,6 +31,7 @@ class HandEntryScreen extends StatefulWidget {
   final Map<String, GuestTagAssignmentSummary> guestTagAssignmentsByGuestId;
   final SessionRepository sessionRepository;
   final NfcService? nfcService;
+  final QrScannerService? qrScannerService;
   final HandResultRecord? initialHand;
 
   @override
@@ -44,7 +47,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   int? _penaltySeatIndex;
   bool? _dealerWasWaitingAtDraw;
   String? _scanError;
-  _PlayerScanTarget _playerScanTarget = _PlayerScanTarget.winner;
   late final TextEditingController _fanCountController;
   StreamSubscription<TagScanResult>? _playerTagSubscription;
 
@@ -91,42 +93,11 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     TagScanResult scanResult, {
     _PlayerScanTarget? targetOverride,
   }) {
-    if (_resultType != HandResultType.win) {
-      return;
-    }
-
-    final scannedSeatIndex = _seatIndexForPlayerTag(scanResult.normalizedUid);
-    if (scannedSeatIndex == null || !mounted) {
-      if (mounted) {
-        setState(() {
-          _scanError = 'Scanned tag is not assigned to this table.';
-        });
-      }
-      return;
-    }
-
-    setState(() {
-      _scanError = null;
-      _winType ??= HandWinType.selfDraw;
-      final target = targetOverride ?? _playerScanTarget;
-      final scanSetsDiscarder = _winType == HandWinType.discard &&
-          target == _PlayerScanTarget.discarder;
-      if (scanSetsDiscarder) {
-        if (_winnerSeatIndex != scannedSeatIndex) {
-          _discarderSeatIndex = scannedSeatIndex;
-        } else {
-          _scanError = 'Discarder cannot be the winner.';
-        }
-      } else {
-        _winnerSeatIndex = scannedSeatIndex;
-        if (_discarderSeatIndex == scannedSeatIndex) {
-          _discarderSeatIndex = null;
-        }
-        if (_winType == HandWinType.discard) {
-          _playerScanTarget = _PlayerScanTarget.discarder;
-        }
-      }
-    });
+    _handleScannedPlayerUid(
+      scanResult.normalizedUid,
+      targetOverride: targetOverride,
+      unknownError: 'Scanned tag is not assigned to this table.',
+    );
   }
 
   int? _seatIndexForPlayerTag(String normalizedUid) {
@@ -166,6 +137,60 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
         _scanError = exception.toString();
       });
     }
+  }
+
+  Future<void> _scanPlayerQr() async {
+    final qrScannerService = widget.qrScannerService;
+    if (qrScannerService == null) {
+      return;
+    }
+
+    final scanTarget = _activePlayerTarget;
+    try {
+      final result = await qrScannerService.scanPlayerCode(context);
+      if (!mounted || result == null) {
+        return;
+      }
+
+      _handleScannedPlayerUid(
+        result.normalizedUid,
+        targetOverride: scanTarget,
+        unknownError: 'Scanned code is not assigned to this table.',
+      );
+    } catch (exception) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _scanError = exception.toString();
+      });
+    }
+  }
+
+  void _handleScannedPlayerUid(
+    String normalizedUid, {
+    _PlayerScanTarget? targetOverride,
+    required String unknownError,
+  }) {
+    if (_resultType != HandResultType.win) {
+      return;
+    }
+
+    final scannedSeatIndex = _seatIndexForPlayerTag(normalizedUid);
+    if (scannedSeatIndex == null || !mounted) {
+      if (mounted) {
+        setState(() {
+          _scanError = unknownError;
+        });
+      }
+      return;
+    }
+
+    _selectSeat(
+      scannedSeatIndex,
+      targetOverride: targetOverride ?? _activePlayerTarget,
+    );
   }
 
   int get _drawDealerSeatIndex =>
@@ -270,9 +295,166 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     ];
   }
 
-  bool get _canScanPlayers =>
-      widget.nfcService != null &&
-      widget.guestTagAssignmentsByGuestId.isNotEmpty;
+  _PlayerScanTarget get _activePlayerTarget {
+    if (_resultType == HandResultType.win &&
+        _winType == HandWinType.discard &&
+        _winnerSeatIndex != null) {
+      return _PlayerScanTarget.discarder;
+    }
+    return _PlayerScanTarget.winner;
+  }
+
+  String get _seatButtonPrompt {
+    if (_activePlayerTarget == _PlayerScanTarget.discarder) {
+      return 'Choose discarder';
+    }
+    return 'Choose winner';
+  }
+
+  void _selectSeat(int seatIndex, {_PlayerScanTarget? targetOverride}) {
+    if (_resultType != HandResultType.win) {
+      return;
+    }
+
+    setState(() {
+      _scanError = null;
+      _winType ??= HandWinType.selfDraw;
+      final target = targetOverride ?? _activePlayerTarget;
+      if (_winType == HandWinType.discard &&
+          target == _PlayerScanTarget.discarder) {
+        if (_winnerSeatIndex == seatIndex) {
+          _scanError = 'Discarder cannot be the winner.';
+          return;
+        }
+        _discarderSeatIndex = seatIndex;
+        return;
+      }
+
+      _winnerSeatIndex = seatIndex;
+      if (_discarderSeatIndex == seatIndex) {
+        _discarderSeatIndex = null;
+      }
+    });
+  }
+
+  Widget _buildSeatButtonGrid() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _seatButtonPrompt,
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        const SizedBox(height: 8),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: widget.sessionDetail.seats.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: 2.4,
+          ),
+          itemBuilder: (context, index) {
+            final seat = widget.sessionDetail.seats[index];
+            final isDealer = seat.seatIndex == _labelEastSeatIndex;
+            final isWinner = seat.seatIndex == _winnerSeatIndex;
+            final isDiscarder = seat.seatIndex == _discarderSeatIndex;
+            final selectingDiscarder =
+                _activePlayerTarget == _PlayerScanTarget.discarder;
+            final disabled =
+                selectingDiscarder && seat.seatIndex == _winnerSeatIndex;
+            final selected = selectingDiscarder ? isDiscarder : isWinner;
+            final label = _seatLabelLines(seat.seatIndex);
+
+            return FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: selected
+                    ? colorScheme.primary
+                    : isDealer
+                        ? colorScheme.secondaryContainer
+                        : null,
+                foregroundColor: selected
+                    ? colorScheme.onPrimary
+                    : isDealer
+                        ? colorScheme.onSecondaryContainer
+                        : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              onPressed: disabled ? null : () => _selectSeat(seat.seatIndex),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  String _seatLabelLines(int seatIndex) {
+    final relativeSeatIndex = (seatIndex - _labelEastSeatIndex) % 4;
+    final wind = switch (relativeSeatIndex) {
+      0 => 'East',
+      1 => 'South',
+      2 => 'West',
+      3 => 'North',
+      _ => 'Seat',
+    };
+    return '$wind\n${_seatName(seatIndex)}';
+  }
+
+  Widget _buildScannerActions() {
+    final canScanQr = widget.qrScannerService != null &&
+        widget.guestTagAssignmentsByGuestId.isNotEmpty;
+    final canScanNfc = widget.nfcService != null &&
+        widget.guestTagAssignmentsByGuestId.isNotEmpty;
+
+    if (!canScanQr && !canScanNfc) {
+      return const SizedBox.shrink();
+    }
+
+    final targetLabel = _activePlayerTarget == _PlayerScanTarget.discarder
+        ? 'discarder'
+        : 'winner';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (canScanQr)
+              FilledButton.icon(
+                onPressed: _scanPlayerQr,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: Text('Scan QR for $targetLabel'),
+              ),
+            if (canScanNfc)
+              OutlinedButton.icon(
+                onPressed: () => _scanPlayerTag(_activePlayerTarget),
+                icon: const Icon(Icons.nfc),
+                label: Text('Scan NFC for $targetLabel'),
+              ),
+          ],
+        ),
+        if (_scanError != null) ...[
+          const SizedBox(height: 6),
+          Text(_scanError!),
+        ],
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -290,238 +472,219 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
           child: Text(_controller.isSubmitting ? 'Saving...' : 'Save Hand'),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (_roundExpired) ...[
-            Text(
-              'Round time has expired.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                    fontWeight: FontWeight.w700,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_roundExpired) ...[
+                Text(
+                  'Round time has expired.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 16),
+              ],
+              SegmentedButton<HandResultType>(
+                segments: const [
+                  ButtonSegment(
+                    value: HandResultType.win,
+                    label: Text('Win'),
                   ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          SegmentedButton<HandResultType>(
-            segments: const [
-              ButtonSegment(
-                value: HandResultType.win,
-                label: Text('Win'),
-              ),
-              ButtonSegment(
-                value: HandResultType.washout,
-                label: Text('Draw'),
-              ),
-              ButtonSegment(
-                value: HandResultType.falseWinPenalty,
-                label: Text('False Win'),
-              ),
-            ],
-            selected: {_resultType},
-            onSelectionChanged: (selection) {
-              setState(() {
-                _resultType = selection.first;
-                if (_resultType == HandResultType.washout) {
-                  _winnerSeatIndex = null;
-                  _discarderSeatIndex = null;
-                  _penaltySeatIndex = null;
-                  _winType = null;
-                  _playerScanTarget = _PlayerScanTarget.winner;
-                } else if (_resultType == HandResultType.falseWinPenalty) {
-                  _winnerSeatIndex = null;
-                  _discarderSeatIndex = null;
-                  _dealerWasWaitingAtDraw = null;
-                  _winType = null;
-                  _playerScanTarget = _PlayerScanTarget.winner;
-                } else {
-                  _winType ??= HandWinType.selfDraw;
-                  _penaltySeatIndex = null;
-                  _dealerWasWaitingAtDraw = null;
-                }
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          if (_resultType == HandResultType.win) ...[
-            if (_canScanPlayers) ...[
-              FilledButton(
-                onPressed: () => _scanPlayerTag(_PlayerScanTarget.winner),
-                child: const Text('Scan Winner'),
-              ),
-              if (_scanError != null) ...[
-                const SizedBox(height: 6),
-                Text(_scanError!),
-              ],
-              const SizedBox(height: 12),
-            ],
-            DropdownButtonFormField<int>(
-              initialValue: _winnerSeatIndex,
-              decoration: const InputDecoration(labelText: 'Winner'),
-              items: winnerItems,
-              onChanged: (value) {
-                setState(() {
-                  _winnerSeatIndex = value;
-                  if (_discarderSeatIndex == value) {
-                    _discarderSeatIndex = null;
-                  }
-                  if (_winType == HandWinType.discard && value != null) {
-                    _playerScanTarget = _PlayerScanTarget.discarder;
-                  }
-                });
-              },
-            ),
-            if (_draft.winnerSeatError != null) ...[
-              const SizedBox(height: 6),
-              Text(_draft.winnerSeatError!),
-            ],
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              children: [
-                ChoiceChip(
-                  label: const Text('Self-draw'),
-                  selected: _winType == HandWinType.selfDraw,
-                  onSelected: (_) {
-                    setState(() {
-                      _winType = HandWinType.selfDraw;
-                      _discarderSeatIndex = null;
-                      _playerScanTarget = _PlayerScanTarget.winner;
-                    });
-                  },
-                ),
-                ChoiceChip(
-                  label: const Text('Discard'),
-                  selected: _winType == HandWinType.discard,
-                  onSelected: (_) {
-                    setState(() {
-                      _winType = HandWinType.discard;
-                      _playerScanTarget = _winnerSeatIndex == null
-                          ? _PlayerScanTarget.winner
-                          : _PlayerScanTarget.discarder;
-                    });
-                  },
-                ),
-              ],
-            ),
-            if (_draft.winTypeError != null) ...[
-              const SizedBox(height: 6),
-              Text(_draft.winTypeError!),
-            ],
-            const SizedBox(height: 16),
-            if (_winType == HandWinType.discard) ...[
-              if (_canScanPlayers && _winnerSeatIndex != null) ...[
-                FilledButton(
-                  onPressed: () => _scanPlayerTag(
-                    _PlayerScanTarget.discarder,
+                  ButtonSegment(
+                    value: HandResultType.washout,
+                    label: Text('Draw'),
                   ),
-                  child: const Text('Scan Discarder'),
-                ),
-                const SizedBox(height: 12),
-              ],
-              DropdownButtonFormField<int>(
-                initialValue: _discarderSeatIndex,
-                decoration: const InputDecoration(labelText: 'Discarder'),
-                items: discarderItems,
-                onChanged: (value) {
+                  ButtonSegment(
+                    value: HandResultType.falseWinPenalty,
+                    label: Text('False Win'),
+                  ),
+                ],
+                selected: {_resultType},
+                onSelectionChanged: (selection) {
                   setState(() {
-                    _discarderSeatIndex = value;
+                    _resultType = selection.first;
+                    if (_resultType == HandResultType.washout) {
+                      _winnerSeatIndex = null;
+                      _discarderSeatIndex = null;
+                      _penaltySeatIndex = null;
+                      _winType = null;
+                    } else if (_resultType == HandResultType.falseWinPenalty) {
+                      _winnerSeatIndex = null;
+                      _discarderSeatIndex = null;
+                      _dealerWasWaitingAtDraw = null;
+                      _winType = null;
+                    } else {
+                      _winType ??= HandWinType.selfDraw;
+                      _penaltySeatIndex = null;
+                      _dealerWasWaitingAtDraw = null;
+                    }
                   });
                 },
               ),
-              if (_draft.discarderSeatError != null) ...[
-                const SizedBox(height: 6),
-                Text(_draft.discarderSeatError!),
-              ],
               const SizedBox(height: 16),
-            ],
-            TextFormField(
-              controller: _fanCountController,
-              decoration: const InputDecoration(labelText: 'Fan Count'),
-              keyboardType: TextInputType.number,
-              onChanged: (_) => setState(() {}),
-            ),
-            if (_draft.fanCountError != null) ...[
-              const SizedBox(height: 6),
-              Text(_draft.fanCountError!),
-            ],
-          ],
-          if (_draft.washoutFieldError != null) ...[
-            const SizedBox(height: 6),
-            Text(_draft.washoutFieldError!),
-          ],
-          if (_resultType == HandResultType.washout) ...[
-            Text(
-              'Dealer: ${_seatName(_drawDealerSeatIndex)}',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-            const SizedBox(height: 8),
-            SegmentedButton<bool>(
-              segments: const [
-                ButtonSegment(
-                  value: true,
-                  label: Text('Waiting'),
+              if (_resultType == HandResultType.win) ...[
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Self-draw'),
+                      selected: _winType == HandWinType.selfDraw,
+                      onSelected: (_) {
+                        setState(() {
+                          _winType = HandWinType.selfDraw;
+                          _discarderSeatIndex = null;
+                        });
+                      },
+                    ),
+                    ChoiceChip(
+                      label: const Text('Discard'),
+                      selected: _winType == HandWinType.discard,
+                      onSelected: (_) {
+                        setState(() {
+                          _winType = HandWinType.discard;
+                        });
+                      },
+                    ),
+                  ],
                 ),
-                ButtonSegment(
-                  value: false,
-                  label: Text('Not waiting'),
+                if (_draft.winTypeError != null) ...[
+                  const SizedBox(height: 6),
+                  Text(_draft.winTypeError!),
+                ],
+                const SizedBox(height: 16),
+                _buildSeatButtonGrid(),
+                const SizedBox(height: 12),
+                _buildScannerActions(),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int>(
+                  initialValue: _winnerSeatIndex,
+                  decoration: const InputDecoration(labelText: 'Winner'),
+                  items: winnerItems,
+                  onChanged: (value) {
+                    if (value != null) {
+                      _selectSeat(value,
+                          targetOverride: _PlayerScanTarget.winner);
+                    }
+                  },
+                ),
+                if (_draft.winnerSeatError != null) ...[
+                  const SizedBox(height: 6),
+                  Text(_draft.winnerSeatError!),
+                ],
+                const SizedBox(height: 16),
+                if (_winType == HandWinType.discard) ...[
+                  DropdownButtonFormField<int>(
+                    initialValue: _discarderSeatIndex,
+                    decoration: const InputDecoration(labelText: 'Discarder'),
+                    items: discarderItems,
+                    onChanged: (value) {
+                      if (value != null) {
+                        _selectSeat(
+                          value,
+                          targetOverride: _PlayerScanTarget.discarder,
+                        );
+                      }
+                    },
+                  ),
+                  if (_draft.discarderSeatError != null) ...[
+                    const SizedBox(height: 6),
+                    Text(_draft.discarderSeatError!),
+                  ],
+                  const SizedBox(height: 16),
+                ],
+                TextFormField(
+                  controller: _fanCountController,
+                  decoration: const InputDecoration(labelText: 'Fan Count'),
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {}),
+                ),
+                if (_draft.fanCountError != null) ...[
+                  const SizedBox(height: 6),
+                  Text(_draft.fanCountError!),
+                ],
+              ],
+              if (_draft.washoutFieldError != null) ...[
+                const SizedBox(height: 6),
+                Text(_draft.washoutFieldError!),
+              ],
+              if (_resultType == HandResultType.washout) ...[
+                Text(
+                  'Dealer: ${_seatName(_drawDealerSeatIndex)}',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<bool>(
+                  segments: const [
+                    ButtonSegment(
+                      value: true,
+                      label: Text('Waiting'),
+                    ),
+                    ButtonSegment(
+                      value: false,
+                      label: Text('Not waiting'),
+                    ),
+                  ],
+                  selected: _dealerWasWaitingAtDraw == null
+                      ? const <bool>{}
+                      : {_dealerWasWaitingAtDraw!},
+                  emptySelectionAllowed: true,
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _dealerWasWaitingAtDraw =
+                          selection.isEmpty ? null : selection.first;
+                    });
+                  },
+                ),
+                if (_draft.washoutDealerWaitingError != null) ...[
+                  const SizedBox(height: 6),
+                  Text(_draft.washoutDealerWaitingError!),
+                ],
+              ],
+              if (_resultType == HandResultType.falseWinPenalty) ...[
+                DropdownButtonFormField<int>(
+                  initialValue: _penaltySeatIndex,
+                  decoration: const InputDecoration(labelText: 'Caller'),
+                  items: winnerItems,
+                  onChanged: (value) {
+                    setState(() {
+                      _penaltySeatIndex = value;
+                    });
+                  },
+                ),
+                if (_draft.falseWinPenaltySeatError != null) ...[
+                  const SizedBox(height: 6),
+                  Text(_draft.falseWinPenaltySeatError!),
+                ],
+                const SizedBox(height: 8),
+                const Text('6 fan to each player.'),
+              ],
+              if (_draft.canBuildPreview) ...[
+                const SizedBox(height: 20),
+                const Text(
+                  'Scoring Preview',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(_buildPreviewText()),
+              ],
+              if (widget.initialHand != null) ...[
+                const SizedBox(height: 20),
+                OutlinedButton(
+                  onPressed: _controller.isSubmitting ? null : _voidHand,
+                  child: const Text('Void Hand'),
                 ),
               ],
-              selected: _dealerWasWaitingAtDraw == null
-                  ? const <bool>{}
-                  : {_dealerWasWaitingAtDraw!},
-              emptySelectionAllowed: true,
-              onSelectionChanged: (selection) {
-                setState(() {
-                  _dealerWasWaitingAtDraw =
-                      selection.isEmpty ? null : selection.first;
-                });
-              },
-            ),
-            if (_draft.washoutDealerWaitingError != null) ...[
-              const SizedBox(height: 6),
-              Text(_draft.washoutDealerWaitingError!),
+              if (_controller.submitError != null) ...[
+                const SizedBox(height: 12),
+                Text(_controller.submitError!),
+              ],
             ],
-          ],
-          if (_resultType == HandResultType.falseWinPenalty) ...[
-            DropdownButtonFormField<int>(
-              initialValue: _penaltySeatIndex,
-              decoration: const InputDecoration(labelText: 'Caller'),
-              items: winnerItems,
-              onChanged: (value) {
-                setState(() {
-                  _penaltySeatIndex = value;
-                });
-              },
-            ),
-            if (_draft.falseWinPenaltySeatError != null) ...[
-              const SizedBox(height: 6),
-              Text(_draft.falseWinPenaltySeatError!),
-            ],
-            const SizedBox(height: 8),
-            const Text('6 fan to each player.'),
-          ],
-          if (_draft.canBuildPreview) ...[
-            const SizedBox(height: 20),
-            const Text(
-              'Scoring Preview',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(_buildPreviewText()),
-          ],
-          if (widget.initialHand != null) ...[
-            const SizedBox(height: 20),
-            OutlinedButton(
-              onPressed: _controller.isSubmitting ? null : _voidHand,
-              child: const Text('Void Hand'),
-            ),
-          ],
-          if (_controller.submitError != null) ...[
-            const SizedBox(height: 12),
-            Text(_controller.submitError!),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }

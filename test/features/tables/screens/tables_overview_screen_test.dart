@@ -274,6 +274,19 @@ String _sessionStatusJson(SessionStatus status) {
   };
 }
 
+Future<void> _scrollTablesOverviewUntilVisible(
+  WidgetTester tester,
+  Finder finder, {
+  Offset moveStep = const Offset(0, -300),
+}) async {
+  await tester.dragUntilVisible(
+    finder,
+    find.byKey(const ValueKey('tables-overview-list')),
+    moveStep,
+  );
+  await tester.pumpAndSettle();
+}
+
 class _FakeSeatingRepository extends ThrowingSeatingRepository {
   _FakeSeatingRepository({
     required this.summary,
@@ -521,6 +534,7 @@ void main() {
 
     expect(find.text('Tables'), findsOneWidget);
     expect(find.text('Table 1'), findsOneWidget);
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Table 2'));
     expect(find.text('Table 2'), findsOneWidget);
     expect(find.text('Points Table'), findsNothing);
     expect(find.text('Casual Table'), findsNothing);
@@ -1161,16 +1175,14 @@ void main() {
     expect(find.text('Dealer: Alice Chen'), findsOneWidget);
     expect(find.text('Open Session'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('Chris Lee'), 300);
-    await tester.pumpAndSettle();
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Chris Lee'));
 
     expect(find.text('Chris Lee'), findsOneWidget);
     expect(find.text('Dana Park'), findsOneWidget);
     expect(find.text('Chris Lee, Dana Park'), findsNothing);
     expect(find.text('Enter Table'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('Eli Ho'), 300);
-    await tester.pumpAndSettle();
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Eli Ho'));
 
     expect(find.text('Eli Ho'), findsOneWidget);
     expect(find.text('Fran Ng'), findsOneWidget);
@@ -1178,8 +1190,7 @@ void main() {
     expect(find.text('Hand 4'), findsOneWidget);
     expect(find.text('View Session'), findsOneWidget);
 
-    await tester.scrollUntilVisible(find.text('Other Tables'), 300);
-    await tester.pumpAndSettle();
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Other Tables'));
 
     expect(find.text('Other Tables'), findsOneWidget);
     expect(find.text('Open Play'), findsOneWidget);
@@ -1356,6 +1367,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Enter Table'));
     await tester.tap(find.text('Enter Table'));
     await tester.pumpAndSettle();
 
@@ -1604,6 +1616,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Enter Table'));
     await tester.tap(find.text('Enter Table'));
     await tester.pumpAndSettle();
 
@@ -1693,6 +1706,10 @@ void main() {
     expect(find.text('Alice Chen'), findsOneWidget);
     expect(find.text('Ben Wong'), findsOneWidget);
 
+    await _scrollTablesOverviewUntilVisible(
+      tester,
+      find.text('Start Sudden Death'),
+    );
     await tester.tap(find.text('Start Sudden Death'));
     await tester.pumpAndSettle();
 
@@ -1803,6 +1820,10 @@ void main() {
     expect(find.text('View Session'), findsNothing);
     expect(find.text('Start Sudden Death'), findsOneWidget);
 
+    await _scrollTablesOverviewUntilVisible(
+      tester,
+      find.text('Start Sudden Death'),
+    );
     await tester.tap(find.text('Start Sudden Death'));
     await tester.pumpAndSettle();
 
@@ -1955,6 +1976,258 @@ void main() {
     expect(find.text('Table of Champions Sudden Death'), findsOneWidget);
     expect(find.text('Alice Chen'), findsOneWidget);
     expect(find.text('Seed One'), findsNothing);
+  });
+
+  testWidgets('searches tables by table label and preserves sections',
+      (tester) async {
+    final currentTable = _table('tbl_dragon', 'Dragon Table');
+    final otherTable = _table('tbl_bamboo', 'Bamboo Table', order: 2);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([currentTable, otherTable]),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+          seatingRepository: _FakeSeatingRepository(
+            summary: _roundSummary(
+              notStarted: 1,
+              currentTables: [
+                _roundTable(
+                  table: currentTable,
+                  status: TournamentRoundTableStatus.notStarted,
+                  names: const ['Alice Chen', 'Ben Wong'],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final bodySearchField = find.descendant(
+      of: find.byKey(const ValueKey('tables-overview-list')),
+      matching: find.widgetWithText(TextField, 'Search tables'),
+    );
+    expect(bodySearchField, findsOneWidget);
+    expect(
+      tester.getTopLeft(bodySearchField).dy,
+      greaterThan(tester.getTopLeft(find.text('Friday Night Mahjong')).dy),
+    );
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search tables'),
+      'table',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Current Round'), findsOneWidget);
+    expect(find.text('Dragon Table'), findsOneWidget);
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Other Tables'));
+
+    expect(find.text('Other Tables'), findsOneWidget);
+    expect(find.text('Bamboo Table'), findsOneWidget);
+
+    await _scrollTablesOverviewUntilVisible(
+      tester,
+      find.widgetWithText(TextField, 'Search tables'),
+      moveStep: const Offset(0, 300),
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search tables'),
+      'dragon',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Current Round'), findsOneWidget);
+    expect(find.text('Other Tables'), findsNothing);
+    expect(find.text('Dragon Table'), findsOneWidget);
+    expect(find.text('Bamboo Table'), findsNothing);
+  });
+
+  testWidgets('searches current round tables by assigned player',
+      (tester) async {
+    final aliceTable = _table('tbl_alice', 'Table 1');
+    final danaTable = _table('tbl_dana', 'Table 2', order: 2);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([aliceTable, danaTable]),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+          seatingRepository: _FakeSeatingRepository(
+            summary: _roundSummary(
+              notStarted: 2,
+              currentTables: [
+                _roundTable(
+                  table: aliceTable,
+                  status: TournamentRoundTableStatus.notStarted,
+                  names: const ['Alice Chen', 'Ben Wong'],
+                ),
+                _roundTable(
+                  table: danaTable,
+                  status: TournamentRoundTableStatus.notStarted,
+                  names: const ['Chris Lee', 'Dana Park'],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search tables'),
+      'dana',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Current Round'), findsOneWidget);
+    expect(find.text('Table 1'), findsNothing);
+    expect(find.text('Alice Chen'), findsNothing);
+    expect(find.text('Table 2'), findsOneWidget);
+    expect(find.text('Dana Park'), findsOneWidget);
+  });
+
+  testWidgets('search shows no-match empty state', (tester) async {
+    final table = _table('tbl_dragon', 'Dragon Table');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search tables'),
+      'missing',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No matching tables'), findsOneWidget);
+    expect(
+      find.text('Try a different table or player search.'),
+      findsOneWidget,
+    );
+    expect(find.text('Dragon Table'), findsNothing);
+  });
+
+  testWidgets('current round search shows no-match empty state',
+      (tester) async {
+    final table = _table('tbl_alice', 'Table 1');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+          seatingRepository: _FakeSeatingRepository(
+            summary: _roundSummary(
+              notStarted: 1,
+              currentTables: [
+                _roundTable(
+                  table: table,
+                  status: TournamentRoundTableStatus.notStarted,
+                  names: const ['Alice Chen', 'Ben Wong'],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Current Round'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Search tables'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search tables'),
+      'missing',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Current Round'), findsNothing);
+    expect(find.text('No matching tables'), findsOneWidget);
+    expect(
+      find.text('Try a different table or player search.'),
+      findsOneWidget,
+    );
+    expect(find.text('Table 1'), findsNothing);
+    expect(find.text('Alice Chen'), findsNothing);
+  });
+
+  testWidgets('search clear and keyboard dismiss suffix controls work',
+      (tester) async {
+    final table = _table('tbl_dragon', 'Dragon Table');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    EditableText editableText() => tester.widget<EditableText>(
+          find.descendant(
+            of: find.widgetWithText(TextField, 'Search tables'),
+            matching: find.byType(EditableText),
+          ),
+        );
+
+    await tester.tap(find.widgetWithText(TextField, 'Search tables'));
+    await tester.pump();
+
+    expect(editableText().focusNode.hasFocus, isTrue);
+    expect(find.byTooltip('Dismiss keyboard'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search tables'),
+      'missing',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Clear search'), findsOneWidget);
+    expect(find.text('Dragon Table'), findsNothing);
+
+    await tester.tap(find.byTooltip('Clear search'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dragon Table'), findsOneWidget);
+    expect(find.text('No matching tables'), findsNothing);
+
+    await tester.tap(find.byTooltip('Dismiss keyboard'));
+    await tester.pump();
+
+    expect(editableText().focusNode.hasFocus, isFalse);
   });
 
   testWidgets('table options can open previous session history',
