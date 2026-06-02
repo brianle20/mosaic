@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
@@ -905,6 +906,7 @@ TagScanResult _tableScanResult([String uid = 'TABLE-001']) {
 Future<void> _pumpDashboard(
   WidgetTester tester, {
   required EventRecord event,
+  MosaicAccessRole callerRole = MosaicAccessRole.owner,
   LeaderboardRepository? leaderboardRepository,
   PrizeRepository? prizeRepository,
   TableRepository? tableRepository,
@@ -915,7 +917,10 @@ Future<void> _pumpDashboard(
   await tester.pumpWidget(
     MaterialApp(
       home: EventDashboardScreen(
-        args: EventDashboardArgs(eventId: event.id),
+        args: EventDashboardArgs(
+          eventId: event.id,
+          callerRole: callerRole,
+        ),
         eventRepository: _EventRepository(event),
         guestRepository: _GuestRepository(),
         leaderboardRepository:
@@ -2039,6 +2044,43 @@ void main() {
     expect(operationsTop, lessThan(optionsTop));
   });
 
+  testWidgets('qualification scorers open guests without check-in permission',
+      (tester) async {
+    GuestRosterArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: EventDashboardArgs(
+            eventId: activeEvent.id,
+            callerRole: MosaicAccessRole.qualificationScorer,
+          ),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.guestRosterRoute) {
+            openedArgs = settings.arguments! as GuestRosterArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Guests opened')),
+              settings: settings,
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Guests').first);
+    await tester.pumpAndSettle();
+
+    expect(openedArgs?.canCheckIn, isFalse);
+    expect(openedArgs?.canAssignTags, isFalse);
+    expect(openedArgs?.canManageGuests, isFalse);
+  });
+
   testWidgets('live console renders event title once', (tester) async {
     await _pumpDashboard(
       tester,
@@ -2179,6 +2221,8 @@ void main() {
       ),
     ];
 
+    TablesOverviewArgs? openedTablesArgs;
+
     await tester.pumpWidget(
       MaterialApp(
         home: EventDashboardScreen(
@@ -2189,11 +2233,27 @@ void main() {
             qualificationRows: const [],
           ),
           leaderboardRepository: _LeaderboardRepository(),
-          tableRepository:
-              _TableRepository(resolvedTable: _table(eventId: 'evt_04')),
+          tableRepository: _TableRepository(
+            tables: [
+              _table(eventId: 'evt_04'),
+              _table(id: 'tbl_02', eventId: 'evt_04', label: 'Table 2'),
+            ],
+            resolvedTable: _table(eventId: 'evt_04'),
+          ),
           sessionRepository: const _SessionRepository(),
           nfcService: _NfcService(tableScanResult: _tableScanResult()),
         ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedTablesArgs = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(
+                body: Text('Opened Tables'),
+              ),
+            );
+          }
+          return null;
+        },
       ),
     );
     await tester.pumpAndSettle();
@@ -2201,8 +2261,9 @@ void main() {
     expect(find.text('Start Qualification'), findsOneWidget);
     expect(find.text('Open Scoring'), findsNothing);
     expect(find.text('Qualification'), findsAtLeastNWidgets(1));
-    expect(find.text('Checked In'), findsOneWidget);
-    expect(find.text('3'), findsOneWidget);
+    expect(find.text('Tables'), findsOneWidget);
+    expect(find.text('Checked In'), findsNothing);
+    expect(find.text('2'), findsOneWidget);
     expect(find.text('Qualifying'), findsOneWidget);
     expect(find.text('1'), findsNWidgets(2));
     expect(find.text('Qualified'), findsOneWidget);
@@ -2214,6 +2275,17 @@ void main() {
     );
     expect(find.text('Prize Pool'), findsNothing);
     expect(find.text('Leader'), findsNothing);
+
+    await tester.tap(find.text('Tables'));
+    await tester.pumpAndSettle();
+
+    expect(openedTablesArgs?.eventId, 'evt_04');
+    expect(openedTablesArgs?.eventTitle, activeCheckinOnlyEvent.title);
+    expect(openedTablesArgs?.scoringOpen, isFalse);
+    expect(find.text('Opened Tables'), findsOneWidget);
+
+    Navigator.of(tester.element(find.text('Opened Tables'))).pop();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Start Qualification'));
     await tester.pumpAndSettle();

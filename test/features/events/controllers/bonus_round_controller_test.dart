@@ -14,7 +14,7 @@ import 'package:mosaic/features/events/controllers/bonus_round_controller.dart';
 void main() {
   test('loads champions and redemption seats from the leaderboard', () async {
     final controller = BonusRoundController(
-      leaderboardRepository: _LeaderboardRepository(_leaderboard()),
+      leaderboardRepository: _LeaderboardRepository(_leaderboard(count: 12)),
       tableRepository: _TableRepository([_table(id: 'tbl_1')]),
       sessionRepository: const _SessionRepository(),
       seatingRepository: _SeatingRepository(),
@@ -36,15 +36,14 @@ void main() {
       '#1',
     ]);
     expect(controller.redemptionSeats.map((seat) => seat.seedLabel), [
-      '#5',
-      '#6',
-      '#7',
-      '#8',
+      '#9',
+      '#10',
+      '#11',
+      '#12',
     ]);
   });
 
-  test('uses non-champion remainder players for six player redemption',
-      () async {
+  test('uses bottom four players for six player redemption', () async {
     final controller = BonusRoundController(
       leaderboardRepository: _LeaderboardRepository(_leaderboard(count: 6)),
       tableRepository: _TableRepository([_table(id: 'tbl_1')]),
@@ -61,13 +60,14 @@ void main() {
       '#1',
     ]);
     expect(controller.redemptionSeats.map((seat) => seat.seedLabel), [
+      '#3',
+      '#4',
       '#5',
       '#6',
     ]);
   });
 
-  test('uses non-champion remainder players for seven player redemption',
-      () async {
+  test('uses bottom four players for seven player redemption', () async {
     final controller = BonusRoundController(
       leaderboardRepository: _LeaderboardRepository(_leaderboard(count: 7)),
       tableRepository: _TableRepository([_table(id: 'tbl_1')]),
@@ -78,6 +78,7 @@ void main() {
     await controller.load('evt_01');
 
     expect(controller.redemptionSeats.map((seat) => seat.seedLabel), [
+      '#4',
       '#5',
       '#6',
       '#7',
@@ -300,7 +301,7 @@ void main() {
     expect(seatingRepository.generatedEventId, 'evt_01');
   });
 
-  test('does not require exactly four redemption seats to create finals',
+  test('creates four-seat bottom redemption finals for six eligible players',
       () async {
     final seatingRepository = _SeatingRepository();
     final controller = BonusRoundController(
@@ -325,7 +326,12 @@ void main() {
     final created = await controller.createBonusRound('evt_01');
 
     expect(created, isTrue);
-    expect(controller.redemptionSeats, hasLength(2));
+    expect(controller.redemptionSeats.map((seat) => seat.seedLabel), [
+      '#3',
+      '#4',
+      '#5',
+      '#6',
+    ]);
     expect(seatingRepository.generatedRedemptionTableId, 'tbl_redemption');
   });
 

@@ -168,7 +168,8 @@ void main() {
 
     expect(find.text('Table of Champions'), findsOneWidget);
     expect(find.text('Table of Redemption'), findsOneWidget);
-    expect(find.text('#4 Player 4'), findsOneWidget);
+    expect(find.text('#3 Player 3'), findsNWidgets(2));
+    expect(find.text('#4 Player 4'), findsNWidgets(2));
     expect(find.text('#5 Player 5'), findsOneWidget);
     expect(find.text('#6 Player 6'), findsOneWidget);
     expect(find.text('#1 Player 1'), findsOneWidget);
@@ -185,7 +186,7 @@ void main() {
     expect(seatingRepository.generatedChampionsTableId, isNull);
   });
 
-  testWidgets('creates two-seat redemption finals for six eligible players',
+  testWidgets('creates four-seat redemption finals for six eligible players',
       (tester) async {
     final seatingRepository = _SeatingRepository();
 

@@ -225,8 +225,9 @@ class BonusRoundController extends ChangeNotifier {
     }
 
     final ranked = _rankedEntries(entries);
-    final remainingFinalists = ranked.skip(4).take(4).toList(growable: false);
-    return _redemptionSeatPreviews(remainingFinalists);
+    final redemptionFinalists =
+        ranked.skip(ranked.length - 4).toList(growable: false);
+    return _redemptionSeatPreviews(redemptionFinalists);
   }
 
   List<LeaderboardEntry> _standingsEligibleEntries(

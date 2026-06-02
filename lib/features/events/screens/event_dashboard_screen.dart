@@ -112,7 +112,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventId: event.id,
         eventTitle: event.title,
         eventCoverChargeCents: event.coverChargeCents,
-        canCheckIn: _controller.canScoreQualification,
+        canCheckIn: _controller.canManageEvent,
         canManageGuests: _controller.canManageEvent,
         canManageCover: _controller.canManageEvent,
         canAssignTags: _controller.canManageEvent,
@@ -935,10 +935,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               if (showQualificationSetup)
                 _QualificationSetupMetricsRow(
                   guestCount: _controller.guestCount,
-                  checkedInCount: _controller.checkedInGuestCount,
+                  tableCount: _controller.tableCount,
                   qualifyingCount: _controller.qualifyingGuestCount,
                   qualifiedCount: _controller.qualifiedGuestCount,
                   onGuests: _openGuests,
+                  onTables: _openTables,
                   onQualifying: _openGuests,
                   onQualified: _openGuests,
                 )
@@ -1612,19 +1613,21 @@ class _LiveMetricsRow extends StatelessWidget {
 class _QualificationSetupMetricsRow extends StatelessWidget {
   const _QualificationSetupMetricsRow({
     required this.guestCount,
-    required this.checkedInCount,
+    required this.tableCount,
     required this.qualifyingCount,
     required this.qualifiedCount,
     required this.onGuests,
+    required this.onTables,
     required this.onQualifying,
     required this.onQualified,
   });
 
   final int guestCount;
-  final int checkedInCount;
+  final int tableCount;
   final int qualifyingCount;
   final int qualifiedCount;
   final VoidCallback onGuests;
+  final VoidCallback onTables;
   final VoidCallback onQualifying;
   final VoidCallback onQualified;
 
@@ -1644,9 +1647,9 @@ class _QualificationSetupMetricsRow extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: MetricTile(
-                label: 'Checked In',
-                value: checkedInCount.toString(),
-                onTap: onGuests,
+                label: 'Tables',
+                value: tableCount.toString(),
+                onTap: onTables,
               ),
             ),
           ],
