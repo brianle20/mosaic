@@ -115,7 +115,7 @@ class SupabaseAuthRepository implements AuthRepository {
 
   @override
   Future<void> sendEmailOtp({required String email}) {
-    return _sendEmailOtpAction(email: email, shouldCreateUser: false);
+    return _sendEmailOtpAction(email: email, shouldCreateUser: true);
   }
 
   @override

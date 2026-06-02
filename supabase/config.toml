@@ -1,15 +1,15 @@
 project_id = "uznzxjjdzjcqremvfqnp"
 
 [auth]
-site_url = "http://localhost:3000"
-additional_redirect_urls = []
+site_url = "https://www.mosaicmahjong.com"
+additional_redirect_urls = ["https://mosaicmahjong.com", "https://www.mosaicmahjong.com"]
 
 [auth.mfa.totp]
 enroll_enabled = true
 verify_enabled = true
 
 [auth.email]
-enable_confirmations = true
+enable_confirmations = false
 max_frequency = "1m0s"
 otp_length = 6
 

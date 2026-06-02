@@ -10,6 +10,9 @@ void main() {
     ).readAsStringSync();
 
     expect(config, contains('[auth.email.template.magic_link]'));
+    expect(config, contains('site_url = "https://www.mosaicmahjong.com"'));
+    expect(config, isNot(contains('http://localhost:3000')));
+    expect(config, contains('enable_confirmations = false'));
     expect(config, contains('otp_length = 6'));
     expect(config,
         contains('content_path = "./supabase/templates/magic_link.html"'));

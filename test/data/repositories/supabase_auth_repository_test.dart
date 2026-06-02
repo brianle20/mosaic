@@ -146,7 +146,7 @@ void main() {
         required String email,
         required bool shouldCreateUser,
       }) async {
-        expect(shouldCreateUser, isFalse);
+        expect(shouldCreateUser, isTrue);
       },
       verifyEmailOtpAction: ({
         required String email,
@@ -208,7 +208,7 @@ void main() {
     expect(repository.currentHost, isNull);
   });
 
-  test('sends and verifies email OTP through injected Supabase actions',
+  test('sends email OTP with auth user creation enabled for first-time staff',
       () async {
     User? currentUser;
     String? sentOtpEmail;
@@ -261,7 +261,7 @@ void main() {
 
     await repository.sendEmailOtp(email: 'helper@example.com');
     expect(sentOtpEmail, 'helper@example.com');
-    expect(shouldCreateOtpUser, isFalse);
+    expect(shouldCreateOtpUser, isTrue);
 
     expect(
       await repository.verifyEmailOtp(
