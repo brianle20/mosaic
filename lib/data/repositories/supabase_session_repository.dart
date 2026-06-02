@@ -15,6 +15,10 @@ typedef SessionRpcSingleRunner = Future<Map<String, dynamic>> Function(
   String functionName,
   Map<String, dynamic> params,
 );
+typedef SessionRpcListRunner = Future<List<Map<String, dynamic>>> Function(
+  String functionName,
+  Map<String, dynamic> params,
+);
 typedef SessionDetailLoader = Future<Map<String, dynamic>> Function(
   String sessionId,
 );
@@ -29,12 +33,14 @@ class SupabaseSessionRepository implements SessionRepository {
     SessionListLoader? sessionListLoader,
     SessionSeatsLoader? sessionSeatsLoader,
     SessionRpcSingleRunner? rpcSingleRunner,
+    SessionRpcListRunner? rpcListRunner,
     SessionDetailLoader? sessionDetailLoader,
     SessionTableLabelLoader? sessionTableLabelLoader,
     SessionEventHandLedgerLoader? eventHandLedgerLoader,
   })  : _sessionListLoader = sessionListLoader,
         _sessionSeatsLoader = sessionSeatsLoader,
         _rpcSingleRunner = rpcSingleRunner,
+        _rpcListRunner = rpcListRunner,
         _sessionDetailLoader = sessionDetailLoader,
         _sessionTableLabelLoader = sessionTableLabelLoader,
         _eventHandLedgerLoader = eventHandLedgerLoader;
@@ -44,6 +50,7 @@ class SupabaseSessionRepository implements SessionRepository {
   final SessionListLoader? _sessionListLoader;
   final SessionSeatsLoader? _sessionSeatsLoader;
   final SessionRpcSingleRunner? _rpcSingleRunner;
+  final SessionRpcListRunner? _rpcListRunner;
   final SessionDetailLoader? _sessionDetailLoader;
   final SessionTableLabelLoader? _sessionTableLabelLoader;
   final SessionEventHandLedgerLoader? _eventHandLedgerLoader;
@@ -125,6 +132,32 @@ class SupabaseSessionRepository implements SessionRepository {
       input.toRpcParams(),
     );
     return _buildStartedSession(sessionRow);
+  }
+
+  @override
+  Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
+    String eventId,
+  ) async {
+    final rows = await _runRpcList(
+      'start_current_tournament_round_sessions',
+      {'target_event_id': eventId},
+    );
+    final startedSessions = rows
+        .map((row) => TableSessionRecord.fromJson(row))
+        .toList(growable: false);
+
+    final currentSessions = await readCachedSessions(eventId);
+    final startedSessionIds =
+        startedSessions.map((session) => session.id).toSet();
+    final mergedSessions = [
+      ...currentSessions.where(
+        (session) => !startedSessionIds.contains(session.id),
+      ),
+      ...startedSessions,
+    ]..sort(_compareSessionsNewestFirst);
+    await cache.saveSessions(eventId, mergedSessions);
+
+    return startedSessions;
   }
 
   Future<StartedTableSessionRecord> _buildStartedSession(
@@ -342,6 +375,27 @@ class SupabaseSessionRepository implements SessionRepository {
     );
   }
 
+  Future<List<Map<String, dynamic>>> _runRpcList(
+    String functionName,
+    Map<String, dynamic> params,
+  ) async {
+    final runner = _rpcListRunner;
+    if (runner != null) {
+      return runner(functionName, params);
+    }
+
+    final response = await client.rpc(functionName, params: params);
+    if (response is List) {
+      return response
+          .map((row) => (row as Map).cast<String, dynamic>())
+          .toList(growable: false);
+    }
+
+    throw StateError(
+      'Expected a row list from $functionName but received ${response.runtimeType}.',
+    );
+  }
+
   Future<void> _mergeSessionIntoCache(TableSessionRecord session) async {
     final currentSessions = await readCachedSessions(session.eventId);
     final mergedSessions = [
@@ -349,5 +403,22 @@ class SupabaseSessionRepository implements SessionRepository {
       session,
     ]..sort((left, right) => right.startedAt.compareTo(left.startedAt));
     await cache.saveSessions(session.eventId, mergedSessions);
+  }
+
+  int _compareSessionsNewestFirst(
+    TableSessionRecord left,
+    TableSessionRecord right,
+  ) {
+    final startedAtComparison = right.startedAt.compareTo(left.startedAt);
+    if (startedAtComparison != 0) {
+      return startedAtComparison;
+    }
+
+    final tableComparison = left.eventTableId.compareTo(right.eventTableId);
+    if (tableComparison != 0) {
+      return tableComparison;
+    }
+
+    return left.id.compareTo(right.id);
   }
 }

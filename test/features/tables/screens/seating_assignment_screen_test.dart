@@ -158,9 +158,16 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
 }
 
 class _FakeSessionRepository extends ThrowingSessionRepository {
-  const _FakeSessionRepository({this.sessions = const []});
+  const _FakeSessionRepository({
+    this.sessions = const [],
+    this.sessionsAfterBulkStart = const [],
+    this.bulkStartError,
+  });
 
   final List<TableSessionRecord> sessions;
+  final List<TableSessionRecord> sessionsAfterBulkStart;
+  final Object? bulkStartError;
+  static int bulkStartCallCount = 0;
 
   @override
   Future<SessionDetailRecord> editHand(EditHandResultInput input) {
@@ -187,7 +194,7 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 
   @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async =>
-      sessions;
+      bulkStartCallCount > 0 ? sessionsAfterBulkStart : sessions;
 
   @override
   Future<SessionDetailRecord> pauseSession(String sessionId) {
@@ -225,12 +232,28 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   }
 
   @override
+  Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
+    String eventId,
+  ) async {
+    bulkStartCallCount += 1;
+    final error = bulkStartError;
+    if (error != null) {
+      throw error;
+    }
+    return sessionsAfterBulkStart;
+  }
+
+  @override
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
     throw UnimplementedError();
   }
 }
 
 void main() {
+  setUp(() {
+    _FakeSessionRepository.bulkStartCallCount = 0;
+  });
+
   testWidgets('shows empty state without seating mutation actions',
       (tester) async {
     await tester.pumpWidget(
@@ -309,6 +332,97 @@ void main() {
     expect(find.text('Dia North'), findsOneWidget);
     expect(find.text('Generate Seating'), findsNothing);
     expect(find.text('Clear Assignments'), findsNothing);
+  });
+
+  testWidgets(
+      'start all tables appears for tournament seating and starts bulk sessions',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          seatingRepository: _FakeSeatingRepository(
+            loadedAssignments: [
+              _assignment(displayName: 'Ava East', seatIndex: 0),
+              _assignment(
+                id: 'a2',
+                guestId: 'gst_02',
+                displayName: 'Ben South',
+                seatIndex: 1,
+              ),
+            ],
+          ),
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            sessionsAfterBulkStart: [_session(SessionStatus.active)],
+          ),
+          minimumTableSize: 2,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start All Tables'), findsOneWidget);
+
+    await tester.tap(find.text('Start All Tables'));
+    await tester.pumpAndSettle();
+
+    expect(_FakeSessionRepository.bulkStartCallCount, 1);
+    expect(find.text(seatingChangeBlockedMessage), findsOneWidget);
+    expect(find.text('Start All Tables'), findsNothing);
+  });
+
+  testWidgets('start all tables stays hidden without seating', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          seatingRepository: _FakeSeatingRepository(),
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: const _FakeSessionRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start All Tables'), findsNothing);
+  });
+
+  testWidgets('start all tables shows inline error after backend rejection',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          seatingRepository: _FakeSeatingRepository(
+            loadedAssignments: [
+              _assignment(displayName: 'Ava East', seatIndex: 0),
+              _assignment(
+                id: 'a2',
+                guestId: 'gst_02',
+                displayName: 'Ben South',
+                seatIndex: 1,
+              ),
+            ],
+          ),
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            bulkStartError: Exception('No current tournament round seating'),
+          ),
+          minimumTableSize: 2,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Start All Tables'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('No current tournament round seating'),
+      findsOneWidget,
+    );
+    expect(find.text('Table 1'), findsOneWidget);
   });
 
   testWidgets('renders initial assignments before loading remote seating',
@@ -545,6 +659,7 @@ void main() {
     expect(find.text('Redemption Player'), findsNothing);
     expect(find.text('Unassigned'), findsNothing);
     expect(find.text('Waiting Player'), findsNothing);
+    expect(find.text('Start All Tables'), findsNothing);
 
     await tester.tap(find.text('Enter Table'));
     await tester.pumpAndSettle();

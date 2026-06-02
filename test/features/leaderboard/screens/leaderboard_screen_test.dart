@@ -99,6 +99,13 @@ class _LedgerSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
+    String eventId,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<SessionDetailRecord> pauseSession(String sessionId) {
     throw UnimplementedError();
   }

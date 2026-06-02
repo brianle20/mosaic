@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/supabase_session_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -341,6 +342,70 @@ void main() {
       expect(startedSession.session.id, 'ses_01');
     });
 
+    test('starts current tournament round sessions and caches returned rows',
+        () async {
+      final cache = await LocalCache.create();
+      await cache.saveSessions('evt_01', [
+        TableSessionRecord.fromJson(
+          _sessionJson(
+            id: 'ses_01',
+            tableId: 'tbl_replaced',
+            startedAt: '2026-06-01T18:00:00Z',
+          ),
+        ),
+        TableSessionRecord.fromJson(
+          _sessionJson(
+            id: 'ses_existing',
+            tableId: 'tbl_03',
+            startedAt: '2026-06-01T18:30:00Z',
+          ),
+        ),
+      ]);
+      final repository = SupabaseSessionRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcListRunner: (functionName, params) async {
+          expect(functionName, 'start_current_tournament_round_sessions');
+          expect(params, {'target_event_id': 'evt_01'});
+          return [
+            _sessionJson(
+              id: 'ses_02',
+              tableId: 'tbl_02',
+              startedAt: '2026-06-01T19:00:00Z',
+            ),
+            _sessionJson(
+              id: 'ses_01',
+              tableId: 'tbl_01',
+              startedAt: '2026-06-01T19:00:00Z',
+            ),
+          ];
+        },
+      );
+
+      final sessions =
+          await repository.startCurrentTournamentRoundSessions('evt_01');
+      final cached = await repository.readCachedSessions('evt_01');
+
+      expect(sessions.map((session) => session.id), ['ses_02', 'ses_01']);
+      expect(
+        sessions.map((session) => session.startedAt.toUtc()).toSet(),
+        {DateTime.parse('2026-06-01T19:00:00Z')},
+      );
+      expect(cached.map((session) => session.id), [
+        'ses_01',
+        'ses_02',
+        'ses_existing',
+      ]);
+      expect(cached.map((session) => session.eventTableId), [
+        'tbl_01',
+        'tbl_02',
+        'tbl_03',
+      ]);
+      expect(cached.first.scoringPhase, EventScoringPhase.tournament);
+      expect(cached.first.tournamentRoundId, 'rnd_01');
+      expect(cached.first.assignmentRound, 2);
+    });
+
     test('loads and caches table label with session detail', () async {
       final cache = await LocalCache.create();
       final loadedTableIds = <String>[];
@@ -417,6 +482,33 @@ void main() {
       expect(detail.tableLabel, isNull);
     });
   });
+}
+
+Map<String, dynamic> _sessionJson({
+  required String id,
+  required String tableId,
+  required String startedAt,
+}) {
+  return {
+    'id': id,
+    'event_id': 'evt_01',
+    'event_table_id': tableId,
+    'session_number_for_table': 1,
+    'ruleset_id': 'HK_STANDARD',
+    'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+    'rotation_policy_config_json': {},
+    'status': 'active',
+    'scoring_phase': 'tournament',
+    'initial_east_seat_index': 0,
+    'current_dealer_seat_index': 0,
+    'dealer_pass_count': 0,
+    'completed_games_count': 0,
+    'hand_count': 0,
+    'started_at': startedAt,
+    'started_by_user_id': 'usr_01',
+    'tournament_round_id': 'rnd_01',
+    'assignment_round': 2,
+  };
 }
 
 Map<String, Object?> _eventHandLedgerJson({

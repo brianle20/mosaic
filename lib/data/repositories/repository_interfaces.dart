@@ -203,6 +203,10 @@ abstract interface class SessionRepository {
     StartAssignedTableSessionInput input,
   );
 
+  Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
+    String eventId,
+  );
+
   Future<SessionDetailRecord> pauseSession(String sessionId);
 
   Future<SessionDetailRecord> resumeSession(String sessionId);

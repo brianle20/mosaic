@@ -276,6 +276,13 @@ class _FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
+    String eventId,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
     throw UnimplementedError();
   }

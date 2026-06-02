@@ -162,6 +162,13 @@ class _RecordingSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
+    String eventId,
+  ) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) async {
     voidedInput = input;
     return _detailFromStatus(HandResultStatus.voided);

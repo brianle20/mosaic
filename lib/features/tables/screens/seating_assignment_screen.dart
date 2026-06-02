@@ -95,9 +95,17 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
     }
   }
 
+  Future<void> _startAllTables() async {
+    await _controller.startAllTables(widget.eventId);
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasAssignments = _controller.assignments.isNotEmpty;
+    final canStartAllTables =
+        widget.enterTableScoringPhase == EventScoringPhase.tournament &&
+            widget.bonusTableRoleFilter == null &&
+            _controller.canStartAllTables;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Seating')),
@@ -116,6 +124,21 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
             ],
             if (_controller.hasLiveSessions) ...[
               const InfoPanel(message: seatingChangeBlockedMessage),
+              const SizedBox(height: 12),
+            ],
+            if (canStartAllTables) ...[
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _controller.isSubmitting ? null : _startAllTables,
+                  icon: const Icon(Icons.play_arrow),
+                  label: Text(
+                    _controller.isSubmitting
+                        ? 'Starting Tables...'
+                        : 'Start All Tables',
+                  ),
+                ),
+              ),
               const SizedBox(height: 12),
             ],
             if (!hasAssignments)
