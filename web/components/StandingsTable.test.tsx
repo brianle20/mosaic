@@ -95,6 +95,49 @@ describe("StandingsTable", () => {
     expect(screen.getAllByText("Dana K.")[0]).toBeVisible();
   });
 
+  it("renders withdrawn players in the not prize eligible section", () => {
+    const { container } = render(
+      <StandingsTable
+        rows={[
+          {
+            eventGuestId: "guest-1",
+            publicDisplayName: "Alice C.",
+            tournamentStatus: "qualified",
+            totalPoints: 40,
+            handsPlayed: 8,
+            wins: 2,
+            selfDrawWins: 1,
+            discardWins: 1,
+            discardLosses: 0,
+            rank: 1,
+          },
+          {
+            eventGuestId: "guest-2",
+            publicDisplayName: "Brian L.",
+            tournamentStatus: "withdrawn",
+            totalPoints: 64,
+            handsPlayed: 8,
+            wins: 3,
+            selfDrawWins: 1,
+            discardWins: 2,
+            discardLosses: 1,
+            rank: 2,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: /prize eligible standings/i })).toBeVisible();
+    expect(screen.getByRole("heading", { name: /not prize eligible/i })).toBeVisible();
+    expect(screen.getAllByText("Alice C.")[0]).toBeVisible();
+    expect(screen.getAllByText("Brian L.")[0]).toBeVisible();
+    expect(
+      Array.from(container.querySelectorAll(".standings-table .rank-cell")).map((cell) =>
+        cell.textContent?.trim(),
+      ),
+    ).toEqual(["#1", "N/A"]);
+  });
+
   it("marks top-four prize placements for visual emphasis", () => {
     render(
       <StandingsTable

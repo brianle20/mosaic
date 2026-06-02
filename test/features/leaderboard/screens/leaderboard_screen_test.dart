@@ -275,6 +275,51 @@ void main() {
     expect(find.text('East Guest'), findsOneWidget);
   });
 
+  testWidgets('shows withdrawn scored players as not prize eligible',
+      (tester) async {
+    final repository = _RecordingLeaderboardRepository(
+      entries: const [
+        LeaderboardEntry(
+          eventGuestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          tournamentStatus: EventTournamentStatus.qualified,
+          totalPoints: 64,
+          handsPlayed: 8,
+          handsWon: 3,
+          selfDrawWins: 1,
+          discardWins: 2,
+          rank: 1,
+        ),
+        LeaderboardEntry(
+          eventGuestId: 'gst_brian',
+          displayName: 'Brian Le',
+          tournamentStatus: EventTournamentStatus.withdrawn,
+          totalPoints: 48,
+          handsPlayed: 8,
+          handsWon: 2,
+          selfDrawWins: 0,
+          discardWins: 2,
+          rank: 2,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LeaderboardScreen(
+          eventId: 'evt_01',
+          leaderboardRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prize Placements'), findsOneWidget);
+    expect(find.text('Not Prize Eligible'), findsOneWidget);
+    expect(find.text('Alice Wong'), findsOneWidget);
+    expect(find.text('Brian Le'), findsOneWidget);
+  });
+
   testWidgets('shows qualification standings in a separate tab', (
     tester,
   ) async {

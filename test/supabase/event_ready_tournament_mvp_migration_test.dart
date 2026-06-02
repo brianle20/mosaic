@@ -173,13 +173,19 @@ void main() {
     );
   });
 
-  test('official leaderboard uses qualified tournament participants', () {
+  test('official leaderboard shows qualified and withdrawn tournament players',
+      () {
     final leaderboardSql = _extractFunction(
       migrationsSql,
       'public.get_event_leaderboard',
     );
 
-    expect(leaderboardSql, contains("guest.tournament_status = 'qualified'"));
+    expect(leaderboardSql, contains('tournament_status text'));
+    expect(leaderboardSql, contains('guest.tournament_status'));
+    expect(
+      leaderboardSql,
+      contains('guest.tournament_status in (\'qualified\', \'withdrawn\')'),
+    );
     expect(leaderboardSql, contains('discard_losses'));
     expect(
       leaderboardSql,
@@ -368,8 +374,12 @@ void main() {
           'create or replace function public.get_public_event_leaderboard'),
     );
     expect(publicLeaderboardSql, contains('public_display_name'));
-    expect(publicLeaderboardSql,
-        contains("guest.tournament_status = 'qualified'"));
+    expect(publicLeaderboardSql, contains('tournament_status text'));
+    expect(publicLeaderboardSql, contains('guest.tournament_status'));
+    expect(
+      publicLeaderboardSql,
+      contains('guest.tournament_status in (\'qualified\', \'withdrawn\')'),
+    );
     expect(publicLeaderboardSql,
         contains("guest.attendance_status = 'checked_in'"));
     expect(publicLeaderboardSql, contains('discard_losses'));
@@ -481,7 +491,8 @@ void main() {
     expect(publicTimelineSql, contains("hand_result.status = 'recorded'"));
     expect(publicTimelineSql, contains('session.bonus_round_id is null'));
     expect(publicTimelineSql, contains('coalesce(delta.points_delta, 0)'));
-    expect(publicTimelineSql, contains('sum(timeline_points.points_delta) over'));
+    expect(
+        publicTimelineSql, contains('sum(timeline_points.points_delta) over'));
     expect(
       publicTimelineSql,
       contains('partition by cumulative_points.hand_index'),

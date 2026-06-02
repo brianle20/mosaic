@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
+import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -72,6 +73,7 @@ class LeaderboardController extends ChangeNotifier {
 
   int get minimumHandsForPrize {
     final scoredHands = entries
+        .where(_canQualifyForPrize)
         .map((entry) => entry.handsPlayed)
         .where((handsPlayed) => handsPlayed > 0)
         .toList()
@@ -95,7 +97,10 @@ class LeaderboardController extends ChangeNotifier {
     }
 
     return entries
-        .where((entry) => entry.handsPlayed >= minimumHands)
+        .where(
+          (entry) =>
+              _canQualifyForPrize(entry) && entry.handsPlayed >= minimumHands,
+        )
         .toList(growable: false);
   }
 
@@ -121,12 +126,21 @@ class LeaderboardController extends ChangeNotifier {
   List<LeaderboardEntry> get notPrizeEligibleEntries {
     final minimumHands = minimumHandsForPrize;
     if (minimumHands <= 0) {
-      return const [];
+      return entries
+          .where((entry) => !_canQualifyForPrize(entry))
+          .toList(growable: false);
     }
 
     return entries
-        .where((entry) => entry.handsPlayed < minimumHands)
+        .where(
+          (entry) =>
+              !_canQualifyForPrize(entry) || entry.handsPlayed < minimumHands,
+        )
         .toList(growable: false);
+  }
+
+  bool _canQualifyForPrize(LeaderboardEntry entry) {
+    return entry.tournamentStatus == EventTournamentStatus.qualified;
   }
 
   List<FinalsLeaderboardTable> get finalsTables {

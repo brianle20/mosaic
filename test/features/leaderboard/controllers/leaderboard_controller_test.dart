@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/leaderboard/controllers/leaderboard_controller.dart';
@@ -136,6 +137,94 @@ void main() {
     expect(
       controller.prizePlacementRows.map((row) => row.placement),
       [1, 1, 3],
+    );
+  });
+
+  test('keeps withdrawn players on leaderboard but out of prize placements',
+      () async {
+    final controller = LeaderboardController(
+      leaderboardRepository: _FakeLeaderboardRepository(
+        cachedEntries: const [
+          LeaderboardEntry(
+            eventGuestId: 'gst_alice',
+            displayName: 'Alice Wong',
+            tournamentStatus: EventTournamentStatus.qualified,
+            totalPoints: 64,
+            handsPlayed: 8,
+            handsWon: 3,
+            selfDrawWins: 1,
+            discardWins: 2,
+            rank: 1,
+          ),
+          LeaderboardEntry(
+            eventGuestId: 'gst_brian',
+            displayName: 'Brian Le',
+            tournamentStatus: EventTournamentStatus.withdrawn,
+            totalPoints: 48,
+            handsPlayed: 8,
+            handsWon: 2,
+            selfDrawWins: 0,
+            discardWins: 2,
+            rank: 2,
+          ),
+          LeaderboardEntry(
+            eventGuestId: 'gst_carla',
+            displayName: 'Carla Park',
+            tournamentStatus: EventTournamentStatus.qualified,
+            totalPoints: 24,
+            handsPlayed: 1,
+            handsWon: 1,
+            selfDrawWins: 0,
+            discardWins: 1,
+            rank: 3,
+          ),
+        ],
+      ),
+    );
+
+    await controller.load('evt_01');
+
+    expect(
+      controller.entries.map((entry) => entry.displayName),
+      ['Alice Wong', 'Brian Le', 'Carla Park'],
+    );
+    expect(
+      controller.prizePlacementEntries.map((entry) => entry.displayName),
+      ['Alice Wong'],
+    );
+    expect(
+      controller.notPrizeEligibleEntries.map((entry) => entry.displayName),
+      ['Brian Le', 'Carla Park'],
+    );
+  });
+
+  test('still lists withdrawn players when no qualified players remain',
+      () async {
+    final controller = LeaderboardController(
+      leaderboardRepository: _FakeLeaderboardRepository(
+        cachedEntries: const [
+          LeaderboardEntry(
+            eventGuestId: 'gst_brian',
+            displayName: 'Brian Le',
+            tournamentStatus: EventTournamentStatus.withdrawn,
+            totalPoints: 48,
+            handsPlayed: 8,
+            handsWon: 2,
+            selfDrawWins: 0,
+            discardWins: 2,
+            rank: 1,
+          ),
+        ],
+      ),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.minimumHandsForPrize, 0);
+    expect(controller.prizePlacementEntries, isEmpty);
+    expect(
+      controller.notPrizeEligibleEntries.map((entry) => entry.displayName),
+      ['Brian Le'],
     );
   });
 

@@ -67,6 +67,7 @@ class LeaderboardEntry {
   const LeaderboardEntry({
     required this.eventGuestId,
     required this.displayName,
+    this.tournamentStatus = EventTournamentStatus.qualified,
     required this.totalPoints,
     required this.handsPlayed,
     required this.handsWon,
@@ -80,6 +81,7 @@ class LeaderboardEntry {
     return LeaderboardEntry(
       eventGuestId: _requiredString(json, 'event_guest_id'),
       displayName: _requiredString(json, 'display_name'),
+      tournamentStatus: _tournamentStatusOrDefault(json),
       totalPoints: _requiredInt(json, 'total_points'),
       handsPlayed: _requiredInt(json, 'hands_played'),
       handsWon: _requiredInt(json, 'hands_won'),
@@ -92,6 +94,7 @@ class LeaderboardEntry {
 
   final String eventGuestId;
   final String displayName;
+  final EventTournamentStatus tournamentStatus;
   final int totalPoints;
   final int handsPlayed;
   final int handsWon;
@@ -104,6 +107,7 @@ class LeaderboardEntry {
     return {
       'event_guest_id': eventGuestId,
       'display_name': displayName,
+      'tournament_status': eventTournamentStatusToJson(tournamentStatus),
       'total_points': totalPoints,
       'hands_played': handsPlayed,
       'hands_won': handsWon,
@@ -113,6 +117,15 @@ class LeaderboardEntry {
       'rank': rank,
     };
   }
+}
+
+EventTournamentStatus _tournamentStatusOrDefault(Map<String, dynamic> json) {
+  final value = json['tournament_status'];
+  if (value is String && value.trim().isNotEmpty) {
+    return eventTournamentStatusFromJson(value);
+  }
+
+  return EventTournamentStatus.qualified;
 }
 
 @immutable

@@ -1,6 +1,7 @@
 export type PublicLeaderboardRpcRow = {
   event_guest_id: string;
   public_display_name: string | null;
+  tournament_status?: string | null;
   total_points: number | null;
   hands_played: number | null;
   wins: number | null;
@@ -62,6 +63,7 @@ export type PublicEventResolutionRpcRow = {
 export type PublicLeaderboardRow = {
   eventGuestId: string;
   publicDisplayName: string;
+  tournamentStatus?: PublicTournamentStatus;
   totalPoints: number;
   handsPlayed: number;
   wins: number;
@@ -70,6 +72,8 @@ export type PublicLeaderboardRow = {
   discardLosses: number;
   rank: number;
 };
+
+export type PublicTournamentStatus = "qualified" | "withdrawn";
 
 export type PublicPrizePlacementRow = {
   row: PublicLeaderboardRow;
@@ -179,7 +183,7 @@ export function isPublicEventUnavailableError(
 }
 
 export function mapLeaderboardRow(row: PublicLeaderboardRpcRow): PublicLeaderboardRow {
-  return {
+  return withTournamentStatus({
     eventGuestId: row.event_guest_id,
     publicDisplayName: row.public_display_name?.trim() || "Player",
     totalPoints: Number(row.total_points ?? 0),
@@ -189,7 +193,7 @@ export function mapLeaderboardRow(row: PublicLeaderboardRpcRow): PublicLeaderboa
     discardWins: Number(row.discard_wins ?? 0),
     discardLosses: Number(row.discard_losses ?? 0),
     rank: Number(row.rank ?? 0),
-  };
+  }, row.tournament_status);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -222,10 +226,37 @@ function readNullableString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+function readTournamentStatus(value: unknown): PublicTournamentStatus | undefined {
+  if (value === "withdrawn") {
+    return "withdrawn";
+  }
+
+  if (value === "qualified") {
+    return "qualified";
+  }
+
+  return undefined;
+}
+
+function withTournamentStatus<T extends PublicLeaderboardRow>(
+  row: Omit<T, "tournamentStatus">,
+  status: unknown,
+): T {
+  const tournamentStatus = readTournamentStatus(status);
+  return (
+    tournamentStatus === undefined
+      ? row
+      : {
+          ...row,
+          tournamentStatus,
+        }
+  ) as T;
+}
+
 function mapSnapshotLeaderboardRow(row: unknown): PublicLeaderboardRow {
   const record = asRecord(row) ?? {};
 
-  return {
+  return withTournamentStatus({
     eventGuestId: readString(record.eventGuestId, ""),
     publicDisplayName: readString(record.publicDisplayName, "Player"),
     totalPoints: readNumber(record.totalPoints),
@@ -235,7 +266,7 @@ function mapSnapshotLeaderboardRow(row: unknown): PublicLeaderboardRow {
     discardWins: readNumber(record.discardWins),
     discardLosses: readNumber(record.discardLosses),
     rank: readNumber(record.rank),
-  };
+  }, record.tournamentStatus);
 }
 
 function mapSnapshotBonusResult(row: unknown): PublicBonusResult {
@@ -457,6 +488,7 @@ export function mapPublicStandingsSnapshotPayload(
 
 export function getMinimumHandsForPrize(rows: PublicLeaderboardRow[]): number {
   const scoredHands = rows
+    .filter(canQualifyForPrize)
     .map((row) => row.handsPlayed)
     .filter((handsPlayed) => handsPlayed > 0)
     .sort((a, b) => a - b);
@@ -479,16 +511,24 @@ export function getPrizeEligibleRows(rows: PublicLeaderboardRow[]): PublicLeader
     return [];
   }
 
-  return rows.filter((row) => row.handsPlayed >= minimumHands);
+  return rows.filter(
+    (row) => canQualifyForPrize(row) && row.handsPlayed >= minimumHands,
+  );
 }
 
 export function getNotPrizeEligibleRows(rows: PublicLeaderboardRow[]): PublicLeaderboardRow[] {
   const minimumHands = getMinimumHandsForPrize(rows);
   if (minimumHands <= 0) {
-    return [];
+    return rows.filter((row) => !canQualifyForPrize(row));
   }
 
-  return rows.filter((row) => row.handsPlayed < minimumHands);
+  return rows.filter(
+    (row) => !canQualifyForPrize(row) || row.handsPlayed < minimumHands,
+  );
+}
+
+function canQualifyForPrize(row: PublicLeaderboardRow): boolean {
+  return row.tournamentStatus !== "withdrawn";
 }
 
 export function getPrizePlacementRows(rows: PublicLeaderboardRow[]): PublicPrizePlacementRow[] {
