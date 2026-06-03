@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
@@ -275,6 +276,7 @@ void main() {
     );
     expect(find.text('Generate Seating'), findsNothing);
     expect(find.text('Clear Assignments'), findsNothing);
+    expect(find.text('Copy Seating'), findsNothing);
   });
 
   testWidgets('displays seating by table and wind', (tester) async {
@@ -332,6 +334,82 @@ void main() {
     expect(find.text('Dia North'), findsOneWidget);
     expect(find.text('Generate Seating'), findsNothing);
     expect(find.text('Clear Assignments'), findsNothing);
+  });
+
+  testWidgets('copies seating assignments as plain text', (tester) async {
+    String? copiedText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copiedText = (call.arguments as Map)['text'] as String?;
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          seatingRepository: _FakeSeatingRepository(
+            loadedAssignments: [
+              _assignment(
+                id: 'a2',
+                tableId: 'tbl_01',
+                tableLabel: 'Table 1',
+                guestId: 'gst_02',
+                displayName: 'Ben South',
+                seatIndex: 1,
+              ),
+              _assignment(
+                id: 'a1',
+                tableId: 'tbl_01',
+                tableLabel: 'Table 1',
+                displayName: 'Ava East',
+                seatIndex: 0,
+              ),
+              _assignment(
+                id: 'a3',
+                tableId: 'tbl_02',
+                tableLabel: 'Table 2',
+                guestId: 'gst_03',
+                displayName: 'Cam East',
+                seatIndex: 0,
+              ),
+              _assignment(
+                id: 'a4',
+                tableId: 'tbl_02',
+                tableLabel: 'Table 2',
+                guestId: 'gst_04',
+                displayName: 'Dia South',
+                seatIndex: 1,
+              ),
+            ],
+          ),
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: const _FakeSessionRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Copy Seating'));
+    await tester.pump();
+
+    expect(
+      copiedText,
+      'Table 1\n'
+      'East: Ava East\n'
+      'South: Ben South\n'
+      '\n'
+      'Table 2\n'
+      'East: Cam East\n'
+      'South: Dia South',
+    );
+    expect(find.text('Seating copied.'), findsOneWidget);
   });
 
   testWidgets(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
@@ -99,6 +100,22 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
     await _controller.startAllTables(widget.eventId);
   }
 
+  Future<void> _copySeatingAssignments() async {
+    await Clipboard.setData(
+      ClipboardData(
+        text: _formatSeatingAssignmentsForClipboard(_controller.tableGroups),
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Seating copied.')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasAssignments = _controller.assignments.isNotEmpty;
@@ -124,6 +141,17 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
             ],
             if (_controller.hasLiveSessions) ...[
               const InfoPanel(message: seatingChangeBlockedMessage),
+              const SizedBox(height: 12),
+            ],
+            if (hasAssignments) ...[
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _copySeatingAssignments,
+                  icon: const Icon(Icons.content_copy),
+                  label: const Text('Copy Seating'),
+                ),
+              ),
               const SizedBox(height: 12),
             ],
             if (canStartAllTables) ...[
@@ -287,4 +315,15 @@ String _windLabel(int seatIndex) {
     3 => 'North',
     _ => 'Seat ${seatIndex + 1}',
   };
+}
+
+String _formatSeatingAssignmentsForClipboard(List<SeatingTableGroup> groups) {
+  return groups.map((group) {
+    final lines = [
+      group.tableLabel,
+      for (final seat in group.seats)
+        '${_windLabel(seat.seatIndex)}: ${seat.displayName}',
+    ];
+    return lines.join('\n');
+  }).join('\n\n');
 }
