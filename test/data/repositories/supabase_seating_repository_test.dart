@@ -371,6 +371,38 @@ void main() {
       expect(cached!.round!.assignmentRound, 3);
     });
 
+    test('loads tournament summary through a single summary RPC', () async {
+      final calls = <({String functionName, Map<String, dynamic> params})>[];
+      final cache = await LocalCache.create();
+      final repository = SupabaseSeatingRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcJsonRunner: (functionName, params) async {
+          calls.add((functionName: functionName, params: params));
+          if (functionName == 'get_tournament_round_summary') {
+            return {
+              'round': null,
+              'assigned_table_count': 0,
+              'complete_table_count': 0,
+              'active_table_count': 0,
+              'paused_table_count': 0,
+              'not_started_table_count': 0,
+              'current_round_tables': const [],
+              'other_tables': const [],
+            };
+          }
+          throw StateError('Unexpected RPC call: $functionName.');
+        },
+      );
+
+      await repository.loadTournamentRoundSummary('evt_01');
+
+      expect(
+        calls.map((call) => call.functionName),
+        ['get_tournament_round_summary'],
+      );
+    });
+
     test(
         'generates tournament round through RPC and refreshes assignments cache',
         () async {

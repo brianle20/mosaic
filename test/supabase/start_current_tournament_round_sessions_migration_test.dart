@@ -28,9 +28,11 @@ void main() {
         "perform app_private.require_event_for_phase_scoring(target_event_id, 'tournament');",
       ),
     );
-    expect(sql, isNot(contains('perform app_private.require_event_for_scoring')));
+    expect(
+        sql, isNot(contains('perform app_private.require_event_for_scoring')));
     expect(sql, contains('bulk_started_at timestamptz := now();'));
-    expect(sql, contains('current_round public.event_tournament_rounds%rowtype;'));
+    expect(
+        sql, contains('current_round public.event_tournament_rounds%rowtype;'));
     expect(sql, contains('current_round.status in (\'seating\', \'active\')'));
     expect(sql, contains('limit 1\n  for update;'));
     expect(sql, contains('assignment.status = \'active\''));
@@ -71,13 +73,21 @@ void main() {
     expect(sql, contains('auth.uid()'));
     expect(sql, contains("status = 'active'"));
     expect(sql, contains('insert into public.table_session_seats'));
-    expect(sql, contains("initial_winds text[] := array['east', 'south', 'west', 'north'];"));
-    expect(sql, contains('initial_winds[assignment_rows[assignment_index].seat_index + 1]'));
+    expect(
+        sql,
+        contains(
+            "initial_winds text[] := array['east', 'south', 'west', 'north'];"));
+    expect(
+        sql,
+        contains(
+            'initial_winds[assignment_rows[assignment_index].seat_index + 1]'));
     expect(sql, isNot(contains('created_session_count')));
     expect(sql, contains('if exists ('));
-    expect(sql, contains('started_session.tournament_round_id = current_round.id'));
+    expect(sql,
+        contains('started_session.tournament_round_id = current_round.id'));
     expect(sql, contains("started_session.scoring_phase = 'tournament'"));
-    expect(sql, isNot(contains("started_session.status in ('active', 'paused')")));
+    expect(
+        sql, isNot(contains("started_session.status in ('active', 'paused')")));
     expect(sql, contains('started_at = coalesce(started_at, bulk_started_at)'));
     expect(
       sql,
@@ -87,4 +97,35 @@ void main() {
     );
     expect(sql, contains("select pg_notify('pgrst', 'reload schema');"));
   });
+
+  test(
+    'bulk start allows short current-round tables while normal recalc still assumes four seats',
+    () {
+      final bulkStartMigration = File(
+        'supabase/migrations/20260601130000_start_current_tournament_round_sessions.sql',
+      );
+      final latestRecalcMigration = Directory('supabase/migrations')
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.readAsStringSync().contains(
+              'create or replace function app_private.recalculate_session_unowned'))
+          .toList()
+        ..sort((left, right) => left.path.compareTo(right.path));
+
+      expect(bulkStartMigration.existsSync(), isTrue);
+      expect(latestRecalcMigration, isNotEmpty);
+
+      final bulkStartSql = bulkStartMigration.readAsStringSync();
+      final latestRecalcSql = latestRecalcMigration.last.readAsStringSync();
+
+      expect(
+        bulkStartSql,
+        contains('array_length(assignment_rows, 1) between 2 and 4'),
+      );
+      expect(
+        latestRecalcSql,
+        contains('array_length(seat_guest_ids, 1) <> 4'),
+      );
+    },
+  );
 }

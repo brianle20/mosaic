@@ -16,6 +16,7 @@ class _RecordingSessionRepository implements SessionRepository {
   RecordHandResultInput? recordedInput;
   EditHandResultInput? editedInput;
   VoidHandResultInput? voidedInput;
+  SessionStatus recordHandSessionStatus = SessionStatus.active;
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -35,7 +36,13 @@ class _RecordingSessionRepository implements SessionRepository {
         'ruleset_id': 'HK_STANDARD',
         'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
         'rotation_policy_config_json': {},
-        'status': 'active',
+        'status': switch (recordHandSessionStatus) {
+          SessionStatus.active => 'active',
+          SessionStatus.paused => 'paused',
+          SessionStatus.completed => 'completed',
+          SessionStatus.endedEarly => 'ended_early',
+          SessionStatus.aborted => 'aborted',
+        },
         'initial_east_seat_index': 0,
         'current_dealer_seat_index': 0,
         'dealer_pass_count': 0,
@@ -88,7 +95,8 @@ class _RecordingSessionRepository implements SessionRepository {
           'east_seat_index_before_hand': 0,
           'east_seat_index_after_hand': 0,
           'dealer_rotated': false,
-          'session_completed_after_hand': false,
+          'session_completed_after_hand':
+              recordHandSessionStatus == SessionStatus.completed,
           'status': status.name,
           'entered_by_user_id': 'usr_01',
           'entered_at': '2026-04-24T19:05:00-07:00',
@@ -530,24 +538,41 @@ void main() {
     expect(repository.recordedInput, isNull);
   });
 
-  testWidgets('expired round warns but still allows saving a hand',
+  testWidgets(
+      'expired round can save the final hand and returns completed detail',
       (tester) async {
-    final repository = _RecordingSessionRepository();
+    final repository = _RecordingSessionRepository()
+      ..recordHandSessionStatus = SessionStatus.completed;
+    SessionDetailRecord? routeResult;
+    final sessionDetail = buildDetail(
+      scoringPhase: EventScoringPhase.tournament,
+      startedAt: DateTime.now()
+          .subtract(const Duration(minutes: 61))
+          .toIso8601String(),
+    );
 
     await tester.pumpWidget(
       MaterialApp(
-        home: HandEntryScreen(
-          sessionDetail: buildDetail(
-            scoringPhase: EventScoringPhase.tournament,
-            startedAt: DateTime.now()
-                .subtract(const Duration(minutes: 61))
-                .toIso8601String(),
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              routeResult =
+                  await Navigator.of(context).push<SessionDetailRecord>(
+                MaterialPageRoute(
+                  builder: (_) => HandEntryScreen(
+                    sessionDetail: sessionDetail,
+                    guestNamesById: seatNames,
+                    sessionRepository: repository,
+                  ),
+                ),
+              );
+            },
+            child: const Text('Open hand entry'),
           ),
-          guestNamesById: seatNames,
-          sessionRepository: repository,
         ),
       ),
     );
+    await tester.tap(find.text('Open hand entry'));
     await tester.pumpAndSettle();
 
     expect(find.text('Round time has expired.'), findsOneWidget);
@@ -564,6 +589,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.recordedInput, isNotNull);
+    expect(routeResult?.session.status, SessionStatus.completed);
   });
 
   testWidgets('round warning respects paused timer time', (tester) async {

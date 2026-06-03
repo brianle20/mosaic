@@ -179,6 +179,7 @@ class _FakeSessionRepository implements SessionRepository {
   _FakeSessionRepository({required this.detail});
 
   SessionDetailRecord detail;
+  SessionDetailRecord? recordHandDetail;
   String? endedReason;
 
   @override
@@ -244,8 +245,9 @@ class _FakeSessionRepository implements SessionRepository {
   }
 
   @override
-  Future<SessionDetailRecord> recordHand(RecordHandResultInput input) {
-    throw UnimplementedError();
+  Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
+    detail = recordHandDetail ?? detail;
+    return detail;
   }
 
   @override
@@ -294,6 +296,7 @@ SessionDetailRecord _buildDetail(
   String startedAt = '2026-04-24T19:00:00-07:00',
   EventScoringPhase scoringPhase = EventScoringPhase.qualification,
   int? assignmentRound,
+  int currentDealerSeatIndex = 1,
   List<Map<String, Object?>>? hands,
 }) {
   return SessionDetailRecord.fromJson({
@@ -316,7 +319,7 @@ SessionDetailRecord _buildDetail(
       'scoring_phase': eventScoringPhaseToJson(scoringPhase),
       'assignment_round': assignmentRound,
       'initial_east_seat_index': 0,
-      'current_dealer_seat_index': 1,
+      'current_dealer_seat_index': currentDealerSeatIndex,
       'dealer_pass_count': 1,
       'completed_games_count': 1,
       'hand_count': hasHands ? 1 : 0,
@@ -459,6 +462,74 @@ void main() {
     now = now.add(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
     expect(find.text('Time expired'), findsOneWidget);
+  });
+
+  testWidgets('final hand completion blocks further hand entry',
+      (tester) async {
+    final startedAt =
+        DateTime.now().subtract(const Duration(minutes: 61)).toIso8601String();
+    final sessionRepository = _FakeSessionRepository(
+      detail: _buildDetail(
+        SessionStatus.active,
+        hasHands: false,
+        scoringPhase: EventScoringPhase.tournament,
+        startedAt: startedAt,
+        currentDealerSeatIndex: 0,
+      ),
+    )..recordHandDetail = _buildDetail(
+        SessionStatus.completed,
+        scoringPhase: EventScoringPhase.tournament,
+        startedAt: startedAt,
+        currentDealerSeatIndex: 0,
+        hands: const [
+          {
+            'id': 'hand_01',
+            'table_session_id': 'ses_01',
+            'hand_number': 1,
+            'result_type': 'win',
+            'winner_seat_index': 0,
+            'win_type': 'self_draw',
+            'discarder_seat_index': null,
+            'fan_count': 3,
+            'base_points': 8,
+            'east_seat_index_before_hand': 0,
+            'east_seat_index_after_hand': 0,
+            'dealer_rotated': false,
+            'session_completed_after_hand': true,
+            'status': 'recorded',
+            'entered_by_user_id': 'usr_01',
+            'entered_at': '2026-04-24T19:05:00-07:00',
+          },
+        ],
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: sessionRepository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Record Hand').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'East\nAlice Wong'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Fan Count'),
+      '3',
+    );
+    await tester.ensureVisible(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Completed'), findsOneWidget);
+    expect(find.text('Record Hand'), findsNothing);
   });
 
   testWidgets('tournament session shows assignment round wind before hands',

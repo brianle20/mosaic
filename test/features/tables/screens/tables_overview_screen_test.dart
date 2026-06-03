@@ -1451,6 +1451,60 @@ void main() {
     expect(seatingRepository.loadCount, greaterThanOrEqualTo(2));
   });
 
+  testWidgets('completed current-round board hides bulk timer actions',
+      (tester) async {
+    final tableOne = _table('tbl_done_1', 'Table 1');
+    final tableTwo = _table('tbl_done_2', 'Table 2', order: 2);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          tableRepository: _FakeTableRepository([tableOne, tableTwo]),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+          seatingRepository: _FakeSeatingRepository(
+            summary: _roundSummary(
+              status: TournamentRoundStatus.complete,
+              assigned: 2,
+              complete: 2,
+              active: 0,
+              paused: 0,
+              notStarted: 0,
+              currentTables: [
+                _roundTable(
+                  table: tableOne,
+                  status: TournamentRoundTableStatus.complete,
+                  names: const ['Alice Chen', 'Ben Wong'],
+                ),
+                _roundTable(
+                  table: tableTwo,
+                  status: TournamentRoundTableStatus.complete,
+                  names: const ['Chris Lee', 'Dana Park'],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Round 2'), findsOneWidget);
+    expect(find.text('Complete'), findsAtLeastNWidgets(1));
+    expect(find.text('2 / 2 tables complete'), findsOneWidget);
+    expect(find.text('Start Next Round'), findsOneWidget);
+    expect(find.text('Begin Finals'), findsOneWidget);
+    expect(find.text('Pause All Timers'), findsNothing);
+    expect(find.text('Resume All Timers'), findsNothing);
+    expect(find.text('Table 1'), findsOneWidget);
+
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Table 2'));
+    expect(find.text('Table 2'), findsOneWidget);
+  });
+
   testWidgets('finals mode renders finals assignments instead of stale round',
       (tester) async {
     final table = _table('tbl_champions', 'Table 1');
