@@ -131,6 +131,17 @@ class _ImmediateEventRepository extends ThrowingEventRepository {
   Future<List<EventRecord>> readCachedEvents() async => const [];
 }
 
+class _FailingEventRepository extends ThrowingEventRepository {
+  const _FailingEventRepository(this.exception);
+
+  final Object exception;
+
+  @override
+  Future<EventRecord> createEvent(CreateEventInput input) async {
+    throw exception;
+  }
+}
+
 final _validDraft = EventFormDraft(
   title: 'Friday Night Mahjong',
   timezone: 'America/Los_Angeles',
@@ -225,5 +236,26 @@ void main() {
     expect(repository.capturedUpdateInput, isNotNull);
     expect(repository.capturedUpdateInput!.id, 'evt_01');
     expect(repository.capturedUpdateInput!.title, 'Friday Night Mahjong');
+  });
+
+  test('submit shows friendly message for event creation permission failures',
+      () async {
+    final controller = EventFormController(
+      eventRepository: const _FailingEventRepository(
+        'PostgrestException(message: new row violates row-level security '
+        'policy for table "events", code: 42501, details: Forbidden, '
+        'hint: null)',
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    final event = await controller.submit(_validDraft);
+
+    expect(event, isNull);
+    expect(
+      controller.submitError,
+      'Only event owners can create events. Sign out and use an owner account.',
+    );
+    expect(controller.submitError, isNot(contains('PostgrestException')));
   });
 }

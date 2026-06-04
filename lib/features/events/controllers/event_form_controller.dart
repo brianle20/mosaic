@@ -45,10 +45,22 @@ class EventFormController extends ChangeNotifier {
       _notifyIfActive();
       return event;
     } catch (exception) {
-      submitError = exception.toString();
+      submitError = _submitErrorMessageFor(exception);
       isSubmitting = false;
       _notifyIfActive();
       return null;
     }
+  }
+
+  String _submitErrorMessageFor(Object exception) {
+    final message = exception.toString();
+    final normalizedMessage = message.toLowerCase();
+    if (normalizedMessage.contains('42501') &&
+        normalizedMessage.contains('row-level security') &&
+        normalizedMessage.contains('events')) {
+      return 'Only event owners can create events. Sign out and use an owner account.';
+    }
+
+    return message;
   }
 }

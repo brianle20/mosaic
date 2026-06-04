@@ -29,17 +29,26 @@ class EventListScreen extends StatefulWidget {
 }
 
 class _EventListScreenState extends State<EventListScreen> {
-  late final EventListController _controller;
+  late EventListController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = EventListController(
-      eventRepository: widget.eventRepository,
-      accessState: widget.accessState,
-    )
-      ..addListener(_handleUpdate)
-      ..load();
+    _controller = _createController()..load();
+  }
+
+  @override
+  void didUpdateWidget(covariant EventListScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.eventRepository == widget.eventRepository &&
+        oldWidget.accessState == widget.accessState) {
+      return;
+    }
+
+    _controller
+      ..removeListener(_handleUpdate)
+      ..dispose();
+    _controller = _createController()..load();
   }
 
   @override
@@ -54,6 +63,13 @@ class _EventListScreenState extends State<EventListScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  EventListController _createController() {
+    return EventListController(
+      eventRepository: widget.eventRepository,
+      accessState: widget.accessState,
+    )..addListener(_handleUpdate);
   }
 
   Future<void> _openCreateEvent() async {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
@@ -586,5 +587,72 @@ void main() {
 
     expect(find.text('Test Event 1'), findsOneWidget);
     expect(find.text('Test Event 2'), findsOneWidget);
+  });
+
+  testWidgets('removes create action when access changes to staff only',
+      (tester) async {
+    final repository = _FakeEventRepository([
+      EventRecord.fromJson(const {
+        'id': 'evt_01',
+        'owner_user_id': 'usr_01',
+        'title': 'Friday Night Mahjong',
+        'timezone': 'America/Los_Angeles',
+        'starts_at': '2026-04-24T19:00:00-07:00',
+        'lifecycle_status': 'draft',
+        'checkin_open': false,
+        'scoring_open': false,
+        'cover_charge_cents': 2000,
+        'default_ruleset_id': 'HK_STANDARD',
+        'prevailing_wind': 'east',
+      }),
+    ]);
+    const ownerAccess = MosaicAccessState(
+      userId: 'usr_01',
+      isActive: true,
+      events: [
+        MosaicAccessEvent(
+          eventId: 'evt_01',
+          title: 'Friday Night Mahjong',
+          role: MosaicAccessRole.owner,
+        ),
+      ],
+    );
+    const staffOnlyAccess = MosaicAccessState(
+      userId: 'usr_02',
+      isActive: true,
+      events: [
+        MosaicAccessEvent(
+          eventId: 'evt_01',
+          title: 'Friday Night Mahjong',
+          role: MosaicAccessRole.qualificationScorer,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(
+          eventRepository: repository,
+          accessState: ownerAccess,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Event'), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventListScreen(
+          eventRepository: repository,
+          accessState: staffOnlyAccess,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Event'), findsNothing);
+    expect(find.text('Friday Night Mahjong'), findsOneWidget);
+    expect(find.text('Qualification Scorer'), findsOneWidget);
   });
 }
