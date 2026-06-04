@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 
 const seatingChangeBlockedMessage =
@@ -210,17 +209,10 @@ class SeatingAssignmentController extends ChangeNotifier {
 
   Future<List<EventGuestRecord>> _loadEligibleGuests(String eventId) async {
     final guests = await _guestRepository.listGuests(eventId);
-    final assignmentsByGuestId =
-        await _guestRepository.listActiveTagAssignments(eventId);
 
     return guests.where((guest) {
-      final tagAssignment = assignmentsByGuestId[guest.id];
       return guest.isCheckedIn &&
-          guest.tournamentStatus == EventTournamentStatus.qualified &&
-          tagAssignment != null &&
-          tagAssignment.isActive &&
-          tagAssignment.tag.defaultTagType == NfcTagType.player &&
-          tagAssignment.tag.status == NfcTagStatus.active;
+          guest.tournamentStatus == EventTournamentStatus.qualified;
     }).toList(growable: false)
       ..sort((left, right) => left.displayName.compareTo(right.displayName));
   }

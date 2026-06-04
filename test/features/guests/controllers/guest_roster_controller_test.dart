@@ -132,6 +132,81 @@ void main() {
     expect(repository.coverCalls, 0);
     expect(repository.tournamentMutationCalls, 0);
   });
+
+  test('checkInForPlayMode checks in an open-play guest without tags',
+      () async {
+    final repository = _FakeGuestRepository([
+      _guest(id: 'gst_01', name: 'Alice Wong'),
+    ]);
+    final controller = GuestRosterController(guestRepository: repository);
+
+    await controller.load('event-1');
+    await controller.checkInForPlayMode(
+      guestId: 'gst_01',
+      status: EventTournamentStatus.openPlayOnly,
+    );
+
+    expect(repository.checkInCalls, 1);
+    expect(
+      repository.statusUpdates['gst_01'],
+      EventTournamentStatus.openPlayOnly,
+    );
+    expect(repository.assignTagCalls, 0);
+    expect(controller.guests.single.isCheckedIn, isTrue);
+    expect(
+      controller.guests.single.tournamentStatus,
+      EventTournamentStatus.openPlayOnly,
+    );
+  });
+
+  test('checkInForPlayMode checks in a qualifying guest without tags',
+      () async {
+    final repository = _FakeGuestRepository([
+      _guest(id: 'gst_01', name: 'Alice Wong'),
+    ]);
+    final controller = GuestRosterController(guestRepository: repository);
+
+    await controller.load('event-1');
+    await controller.checkInForPlayMode(
+      guestId: 'gst_01',
+      status: EventTournamentStatus.qualifying,
+    );
+
+    expect(repository.checkInCalls, 1);
+    expect(
+        repository.statusUpdates['gst_01'], EventTournamentStatus.qualifying);
+    expect(repository.assignTagCalls, 0);
+    expect(controller.guests.single.isCheckedIn, isTrue);
+    expect(
+      controller.guests.single.tournamentStatus,
+      EventTournamentStatus.qualifying,
+    );
+  });
+
+  test('checkIn uses the guest current tournament status', () async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ]);
+    final controller = GuestRosterController(guestRepository: repository);
+
+    await controller.load('event-1');
+    await controller.checkIn('gst_01');
+
+    expect(repository.checkInCalls, 1);
+    expect(repository.tournamentMutationCalls, 1);
+    expect(
+        repository.statusUpdates['gst_01'], EventTournamentStatus.qualifying);
+    expect(repository.assignTagCalls, 0);
+    expect(controller.guests.single.isCheckedIn, isTrue);
+    expect(
+      controller.guests.single.tournamentStatus,
+      EventTournamentStatus.qualifying,
+    );
+  });
 }
 
 class _FakeGuestRepository extends ThrowingGuestRepository {
@@ -145,6 +220,7 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   int assignTagCalls = 0;
   int coverCalls = 0;
   int tournamentMutationCalls = 0;
+  final statusUpdates = <String, EventTournamentStatus>{};
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
@@ -178,7 +254,30 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) async {
     checkInCalls += 1;
-    throw StateError('identifyGuestByTag must not check in guests');
+    final guest = _guests.firstWhere((entry) => entry.id == guestId);
+    final updated = EventGuestRecord(
+      id: guest.id,
+      eventId: guest.eventId,
+      guestProfileId: guest.guestProfileId,
+      displayName: guest.displayName,
+      normalizedName: guest.normalizedName,
+      publicDisplayName: guest.publicDisplayName,
+      phoneE164: guest.phoneE164,
+      emailLower: guest.emailLower,
+      instagramHandle: guest.instagramHandle,
+      attendanceStatus: AttendanceStatus.checkedIn,
+      tournamentStatus: guest.tournamentStatus,
+      coverStatus: guest.coverStatus,
+      coverAmountCents: guest.coverAmountCents,
+      isComped: guest.isComped,
+      hasScoredPlay: guest.hasScoredPlay,
+      note: guest.note,
+      checkedInAt: DateTime.parse('2026-06-04T12:00:00-07:00'),
+      rowVersion: guest.rowVersion,
+    );
+    final index = _guests.indexWhere((entry) => entry.id == guestId);
+    _guests[index] = updated;
+    return GuestDetailRecord(guest: updated);
   }
 
   @override
@@ -209,13 +308,38 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     required EventTournamentStatus status,
   }) async {
     tournamentMutationCalls += 1;
-    throw StateError('identifyGuestByTag must not update tournament status');
+    statusUpdates[eventGuestId] = status;
+    final guest = _guests.firstWhere((entry) => entry.id == eventGuestId);
+    final updated = EventGuestRecord(
+      id: guest.id,
+      eventId: guest.eventId,
+      guestProfileId: guest.guestProfileId,
+      displayName: guest.displayName,
+      normalizedName: guest.normalizedName,
+      publicDisplayName: guest.publicDisplayName,
+      phoneE164: guest.phoneE164,
+      emailLower: guest.emailLower,
+      instagramHandle: guest.instagramHandle,
+      attendanceStatus: guest.attendanceStatus,
+      tournamentStatus: status,
+      coverStatus: guest.coverStatus,
+      coverAmountCents: guest.coverAmountCents,
+      isComped: guest.isComped,
+      hasScoredPlay: guest.hasScoredPlay,
+      note: guest.note,
+      checkedInAt: guest.checkedInAt,
+      rowVersion: guest.rowVersion,
+    );
+    final index = _guests.indexWhere((entry) => entry.id == eventGuestId);
+    _guests[index] = updated;
+    return updated;
   }
 }
 
 EventGuestRecord _guest({
   required String id,
   required String name,
+  EventTournamentStatus tournamentStatus = EventTournamentStatus.openPlayOnly,
 }) {
   return EventGuestRecord.fromJson({
     'id': id,
@@ -227,7 +351,7 @@ EventGuestRecord _guest({
     'cover_amount_cents': 0,
     'is_comped': false,
     'has_scored_play': false,
-    'tournament_status': 'open_play_only',
+    'tournament_status': eventTournamentStatusToJson(tournamentStatus),
   });
 }
 

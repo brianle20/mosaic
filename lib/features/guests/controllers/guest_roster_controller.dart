@@ -208,11 +208,27 @@ class GuestRosterController extends ChangeNotifier {
     }
   }
 
-  Future<bool> checkIn(String guestId) async {
+  Future<bool> checkIn(String guestId) {
+    return checkInForPlayMode(
+      guestId: guestId,
+      status: _guestById(guestId).tournamentStatus,
+    );
+  }
+
+  Future<bool> checkInForPlayMode({
+    required String guestId,
+    required EventTournamentStatus status,
+  }) async {
     await _runGuestAction(guestId, () async {
       final checkedInDetail = await _guestRepository.checkInGuest(guestId);
       _mergeGuest(checkedInDetail.guest);
       _mergeAssignment(guestId, checkedInDetail.activeTagAssignment);
+
+      final updated = await _guestRepository.updateEventGuestTournamentStatus(
+        eventGuestId: guestId,
+        status: status,
+      );
+      _mergeGuest(updated);
     });
     return true;
   }
@@ -241,13 +257,6 @@ class GuestRosterController extends ChangeNotifier {
       );
       _mergeGuest(assignedDetail.guest);
       _mergeAssignment(guestId, assignedDetail.activeTagAssignment);
-      if (guest.tournamentStatus == EventTournamentStatus.openPlayOnly) {
-        final updated = await _guestRepository.updateEventGuestTournamentStatus(
-          eventGuestId: guestId,
-          status: EventTournamentStatus.qualifying,
-        );
-        _mergeGuest(updated);
-      }
       didAssign = true;
     });
     return didAssign;

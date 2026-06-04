@@ -495,9 +495,7 @@ void main() {
     expect(controller.unassignedGuests, isEmpty);
   });
 
-  test(
-      'eligible tournament players must be qualified checked-in tagged players',
-      () async {
+  test('eligible tournament players are qualified checked-in guests', () async {
     final guests = [
       _guest(
         id: 'gst_qualified',
@@ -548,7 +546,7 @@ void main() {
 
     expect(
       controller.eligibleGuests.map((guest) => guest.displayName),
-      ['Qualified Player'],
+      ['No Active Tag', 'Qualified Player'],
     );
   });
 

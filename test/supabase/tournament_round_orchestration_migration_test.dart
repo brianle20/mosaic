@@ -280,10 +280,7 @@ void main() {
       ),
     );
     expect(sql, contains('Event not found for current host.'));
-    expect(
-        sql,
-        contains(
-            'At least 2 qualified, checked-in, tagged players are required.'));
+    expect(sql, contains('generate_tournament_round'));
     expect(sql, contains('Add or tag more tables before starting this round.'));
     expect(
         sql, contains('No prize-eligible players are available for finals.'));

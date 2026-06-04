@@ -167,31 +167,22 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     );
   }
 
-  Future<void> _checkInGuest(EventGuestRecord guest) async {
+  Future<void> _checkInGuest(
+    EventGuestRecord guest,
+    EventTournamentStatus status,
+  ) async {
     if (!widget.canCheckIn) {
       return;
     }
+    final isQualifying = status == EventTournamentStatus.qualifying;
     await _runQuickAction(
-      () => _controller.checkIn(guest.id),
-      successMessage:
-          guest.tournamentStatus == EventTournamentStatus.openPlayOnly
-              ? '${guest.displayName} is checked in for open play.'
-              : '${guest.displayName} is checked in.',
-    );
-  }
-
-  Future<void> _assignTag(EventGuestRecord guest) async {
-    if (!widget.canAssignTags) {
-      return;
-    }
-    await _runQuickAction(
-      () => _controller.assignTag(
+      () => _controller.checkInForPlayMode(
         guestId: guest.id,
-        scanForTag: () => widget.nfcService.scanPlayerTagForAssignment(context),
+        status: status,
       ),
-      successMessage: guest.isCheckedIn
-          ? 'Player tag assigned to ${guest.displayName}.'
-          : '${guest.displayName} is checked in and tagged.',
+      successMessage: isQualifying
+          ? '${guest.displayName} is checked in for qualifying.'
+          : '${guest.displayName} is checked in for open play.',
     );
   }
 
@@ -540,8 +531,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                 child: EmptyStateCard(
                   icon: Icons.people_outline,
                   title: 'No guests yet',
-                  message:
-                      'Add guests to start check-in, tag assignment, and live seating.',
+                  message: 'Add guests to start check-in and live seating.',
                 ),
               ),
           ],
@@ -779,21 +769,10 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   Widget? _primaryActionForGuest(EventGuestRecord guest) {
-    final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
     final isSubmitting = _controller.isSubmittingGuest(guest.id);
 
     if (!guest.isCheckedIn) {
       return null;
-    }
-
-    if (!hasTag) {
-      if (!widget.canAssignTags) {
-        return null;
-      }
-      return FilledButton(
-        onPressed: isSubmitting ? null : () => _assignTag(guest),
-        child: const Text('Assign Tag'),
-      );
     }
 
     if (!widget.canManageTournamentStatus) {
@@ -846,7 +825,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     if (widget.canManageCover) {
       actions.add(_GuestRosterOverflowAction.addCoverEntry);
     }
-    final hasTag = _controller.activeTagAssignments.containsKey(guest.id);
     if (_canRemoveGuest(guest)) {
       actions.add(_GuestRosterOverflowAction.removeGuest);
     }
@@ -857,10 +835,10 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
 
     switch (guest.tournamentStatus) {
       case EventTournamentStatus.openPlayOnly:
-        if (hasTag) {
-          actions.add(_GuestRosterOverflowAction.markQualified);
-        }
-        actions.add(_GuestRosterOverflowAction.withdraw);
+        actions.addAll(const [
+          _GuestRosterOverflowAction.markQualified,
+          _GuestRosterOverflowAction.withdraw,
+        ]);
       case EventTournamentStatus.qualifying:
         actions.addAll(const [
           _GuestRosterOverflowAction.moveToOpenPlayOnly,
@@ -872,13 +850,11 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
           _GuestRosterOverflowAction.withdraw,
         ]);
       case EventTournamentStatus.withdrawn:
-        if (hasTag) {
-          actions.addAll(const [
-            _GuestRosterOverflowAction.markQualifying,
-            _GuestRosterOverflowAction.markQualified,
-          ]);
-        }
-        actions.add(_GuestRosterOverflowAction.moveToOpenPlayOnly);
+        actions.addAll(const [
+          _GuestRosterOverflowAction.markQualifying,
+          _GuestRosterOverflowAction.markQualified,
+          _GuestRosterOverflowAction.moveToOpenPlayOnly,
+        ]);
     }
 
     return actions;
@@ -970,37 +946,37 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     }
 
     if (!guest.isCheckedIn) {
-      final actions = <Widget>[];
-      if (widget.canCheckIn) {
-        actions.add(
-          Expanded(
-            child: OutlinedButton(
-              style: _compactActionButtonStyle(),
-              onPressed: isSubmitting ? null : () => _checkInGuest(guest),
-              child: _singleLineButtonLabel('Check In'),
-            ),
-          ),
-        );
-      }
-      if (widget.canAssignTags) {
-        if (actions.isNotEmpty) {
-          actions.add(const SizedBox(width: 8));
-        }
-        actions.add(
-          Expanded(
-            child: FilledButton(
-              style: _compactActionButtonStyle(),
-              onPressed: isSubmitting ? null : () => _assignTag(guest),
-              child: _singleLineButtonLabel('Assign Tag'),
-            ),
-          ),
-        );
-      }
-      if (actions.isEmpty) {
+      if (!widget.canCheckIn) {
         return const SizedBox.shrink();
       }
       return Row(
-        children: actions,
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              style: _compactActionButtonStyle(),
+              onPressed: isSubmitting
+                  ? null
+                  : () => _checkInGuest(
+                        guest,
+                        EventTournamentStatus.openPlayOnly,
+                      ),
+              child: _singleLineButtonLabel('Check In: Open Play'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: FilledButton(
+              style: _compactActionButtonStyle(),
+              onPressed: isSubmitting
+                  ? null
+                  : () => _checkInGuest(
+                        guest,
+                        EventTournamentStatus.qualifying,
+                      ),
+              child: _singleLineButtonLabel('Check In: Qualifying'),
+            ),
+          ),
+        ],
       );
     }
 
@@ -1117,33 +1093,18 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   String _rowSummary(EventGuestRecord guest) {
-    final assignment = _controller.activeTagAssignments[guest.id];
-    if (guest.isCheckedIn &&
-        guest.isEligibleForPlayerTagAssignment &&
-        assignment != null) {
-      return 'Ready to Play - ${_tagSummary(assignment)}';
-    }
     if (!guest.isEligibleForPlayerTagAssignment) {
-      return 'Needs payment or comp before tag assignment';
+      return 'Needs payment or comp';
     }
     if (!guest.isCheckedIn) {
       return 'Ready for check-in';
     }
-    if (assignment == null) {
-      if (guest.tournamentStatus == EventTournamentStatus.openPlayOnly) {
-        return 'Checked in for open play';
-      }
-      return 'Needs player tag';
-    }
-    return 'Operational status available';
-  }
-
-  String _tagSummary(GuestTagAssignmentSummary assignment) {
-    final label = assignment.tag.displayLabel?.trim();
-    if (label != null && label.isNotEmpty) {
-      return 'Tag $label';
-    }
-    return 'UID ${_shortUid(assignment.tag.uidHex)}';
+    return switch (guest.tournamentStatus) {
+      EventTournamentStatus.openPlayOnly => 'Checked in for open play',
+      EventTournamentStatus.qualifying => 'Ready for qualifying play',
+      EventTournamentStatus.qualified => 'Qualified for tournament play',
+      EventTournamentStatus.withdrawn => 'Withdrawn from tournament play',
+    };
   }
 
   String _tagIdentificationLabel(GuestTagAssignmentSummary assignment) {
@@ -1152,14 +1113,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       return 'Tag $label';
     }
     return 'UID ${assignment.tag.uidHex.trim()}';
-  }
-
-  String _shortUid(String uid) {
-    final normalizedUid = uid.trim();
-    if (normalizedUid.length <= 12) {
-      return normalizedUid;
-    }
-    return '${normalizedUid.substring(0, 12)}...';
   }
 
   String _formatActionError(Object exception) {

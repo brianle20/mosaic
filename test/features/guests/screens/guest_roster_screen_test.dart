@@ -504,8 +504,7 @@ void main() {
 
     expect(find.text('No guests yet'), findsOneWidget);
     expect(
-      find.text(
-          'Add guests to start check-in, tag assignment, and live seating.'),
+      find.text('Add guests to start check-in and live seating.'),
       findsOneWidget,
     );
     expect(find.text('Add Guest'), findsOneWidget);
@@ -670,6 +669,7 @@ void main() {
           name: 'Tao',
           attendanceStatus: AttendanceStatus.checkedIn,
           coverStatus: CoverStatus.paid,
+          tournamentStatus: EventTournamentStatus.qualifying,
         ),
         _guest(
           id: 'gst_done',
@@ -691,13 +691,15 @@ void main() {
     expect(find.byTooltip('More actions for Uma'), findsOneWidget);
     expect(find.text('Mark Paid Manually'), findsNothing);
     expect(find.text('Mark Comped'), findsOneWidget);
-    expect(find.text('Check In'), findsOneWidget);
+    expect(find.text('Check In: Open Play'), findsOneWidget);
+    expect(find.text('Check In: Qualifying'), findsOneWidget);
+    expect(find.text('Check In'), findsNothing);
     expect(find.text('Check In & Tag'), findsNothing);
-    expect(find.text('Assign Tag'), findsAtLeastNWidgets(1));
+    expect(find.text('Assign Tag'), findsNothing);
     expect(find.text('Add Cover Entry'), findsOneWidget);
     expect(find.text('Open Play Only'), findsAtLeastNWidgets(1));
     expect(find.text('Mark Qualifying', skipOffstage: false), findsOneWidget);
-    expect(find.text('Mark Qualified'), findsNothing);
+    expect(find.text('Mark Qualified'), findsAtLeastNWidgets(1));
     expect(find.text('Withdraw'), findsNothing);
     expect(
       find.byWidgetPredicate(
@@ -707,7 +709,7 @@ void main() {
     );
     expect(find.text('Tag Assigned'), findsNothing);
     expect(
-      find.text('Ready to Play - UID FASTDONE', skipOffstage: false),
+      find.text('Ready for qualifying play', skipOffstage: false),
       findsOneWidget,
     );
     expect(
@@ -737,8 +739,7 @@ void main() {
     final chipRect = tester.getRect(find.byWidgetPredicate(
       (widget) => widget is StatusChip && widget.label == 'Unpaid',
     ));
-    final summaryRect = tester
-        .getRect(find.text('Needs payment or comp before tag assignment'));
+    final summaryRect = tester.getRect(find.text('Needs payment or comp'));
     final nameToChipsGap = chipRect.top - nameRect.bottom;
     final chipsToSummaryGap = summaryRect.top - chipRect.bottom;
     final summaryToActionsGap = addCoverRect.top - summaryRect.bottom;
@@ -759,7 +760,7 @@ void main() {
     await tester.tap(find.byTooltip('More actions for Gia'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Mark Qualified'), findsOneWidget);
+    expect(find.text('Mark Qualified'), findsAtLeastNWidgets(1));
     expect(find.text('Withdraw'), findsOneWidget);
     expect(find.text('Add Cover Entry'), findsAtLeastNWidgets(2));
   });
@@ -978,9 +979,9 @@ void main() {
     expect(find.text('Mark Qualified'), findsNothing);
   });
 
-  testWidgets('open-play-only guests need a tag before qualification actions', (
-    tester,
-  ) async {
+  testWidgets(
+      'open-play-only checked-in guests can mark qualifying without a tag',
+      (tester) async {
     tester.view.physicalSize = const Size(800, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -998,14 +999,44 @@ void main() {
     await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
     await tester.pumpAndSettle();
 
-    expect(find.text('Assign Tag'), findsOneWidget);
-    expect(find.text('Mark Qualifying'), findsNothing);
+    expect(find.text('Assign Tag'), findsNothing);
+    expect(find.text('Mark Qualifying'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.tap(find.text('Mark Qualifying'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Mark Qualified'), findsNothing);
-    expect(find.text('Withdraw'), findsOneWidget);
+    expect(
+      repository.statusUpdates['gst_01'],
+      EventTournamentStatus.qualifying,
+    );
+  });
+
+  testWidgets('untagged qualifying guests can mark qualified', (tester) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Assign Tag'), findsNothing);
+    expect(find.text('Mark Qualified'), findsOneWidget);
+
+    await tester.tap(find.text('Mark Qualified'));
+    await tester.pumpAndSettle();
+
+    expect(repository.statusUpdates['gst_01'], EventTournamentStatus.qualified);
   });
 
   testWidgets('secondary tournament actions live behind the row menu', (
@@ -1396,7 +1427,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Paid'), findsOneWidget);
-    expect(find.text('Check In'), findsOneWidget);
+    expect(find.text('Check In: Open Play'), findsOneWidget);
+    expect(find.text('Check In: Qualifying'), findsOneWidget);
     expect(find.text('Alice Wong is now marked paid.'), findsOneWidget);
   });
 
@@ -1417,11 +1449,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Comped'), findsOneWidget);
-    expect(find.text('Check In'), findsOneWidget);
+    expect(find.text('Check In: Open Play'), findsOneWidget);
+    expect(find.text('Check In: Qualifying'), findsOneWidget);
     expect(find.text('Alice Wong is now marked comped.'), findsOneWidget);
   });
 
-  testWidgets('checks in open-play-only guests without scanning a tag',
+  testWidgets('open-play check-in does not scan NFC and keeps open play',
       (tester) async {
     final nfcService = _CountingNfcService();
     final repository = _FakeGuestRepository([
@@ -1441,124 +1474,54 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Check In'));
+    await tester.tap(find.text('Check In: Open Play'));
     await tester.pumpAndSettle();
 
     expect(nfcService.assignmentScanCount, 0);
+    expect(
+      repository.statusUpdates['gst_01'],
+      EventTournamentStatus.openPlayOnly,
+    );
     expect(find.text('Checked in for open play'), findsOneWidget);
-    expect(find.text('Assign Tag'), findsOneWidget);
+    expect(find.text('Assign Tag'), findsNothing);
     expect(
-        find.text('Alice Wong is checked in for open play.'), findsOneWidget);
-  });
-
-  testWidgets('eligible expected guests can check in without scanning a tag',
-      (tester) async {
-    final nfcService = _CountingNfcService();
-    final repository = _FakeGuestRepository([
-      _guest(
-        id: 'gst_01',
-        name: 'Alice Wong',
-        attendanceStatus: AttendanceStatus.expected,
-        coverStatus: CoverStatus.paid,
-        tournamentStatus: EventTournamentStatus.qualifying,
-      ),
-    ]);
-
-    await tester.pumpWidget(
-      _buildRosterApp(
-        guestRepository: repository,
-        nfcService: nfcService,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Check In'), findsOneWidget);
-    expect(find.text('Assign Tag'), findsOneWidget);
-    expect(find.text('Check In & Tag'), findsNothing);
-
-    await tester.tap(find.text('Check In'));
-    await tester.pumpAndSettle();
-
-    expect(nfcService.assignmentScanCount, 0);
-    expect(find.text('Needs player tag'), findsOneWidget);
-    expect(find.text('Assign Tag'), findsOneWidget);
-    expect(find.text('Alice Wong is checked in.'), findsOneWidget);
-  });
-
-  testWidgets('assigning a tag also checks in expected guests', (tester) async {
-    final repository = _FakeGuestRepository([
-      _guest(
-        id: 'gst_01',
-        name: 'Alice Wong',
-        attendanceStatus: AttendanceStatus.expected,
-        coverStatus: CoverStatus.paid,
-        tournamentStatus: EventTournamentStatus.qualifying,
-      ),
-    ]);
-
-    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Check In'), findsOneWidget);
-    expect(find.text('Assign Tag'), findsOneWidget);
-    expect(find.text('Check In & Tag'), findsNothing);
-
-    await tester.tap(find.text('Assign Tag'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Ready to Play - UID FASTTAG01'), findsOneWidget);
-    expect(find.text('Alice Wong is checked in and tagged.'), findsOneWidget);
-  });
-
-  testWidgets('assigning a tag promotes open-play-only guests to qualifying', (
-    tester,
-  ) async {
-    final repository = _FakeGuestRepository([
-      _guest(
-        id: 'gst_01',
-        name: 'Alice Wong',
-        attendanceStatus: AttendanceStatus.checkedIn,
-        coverStatus: CoverStatus.paid,
-        tournamentStatus: EventTournamentStatus.openPlayOnly,
-      ),
-    ]);
-
-    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Assign Tag'));
-    await tester.pumpAndSettle();
-
-    expect(
-        repository.statusUpdates['gst_01'], EventTournamentStatus.qualifying);
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is StatusChip && widget.label == 'Qualifying',
-      ),
+      find.text('Alice Wong is checked in for open play.'),
       findsOneWidget,
     );
-    expect(find.text('Mark Qualified'), findsOneWidget);
-    expect(find.text('Mark Qualifying'), findsNothing);
   });
 
-  testWidgets('assigns a tag for an already checked-in guest', (tester) async {
+  testWidgets('qualifying check-in does not scan NFC and marks qualifying',
+      (tester) async {
+    final nfcService = _CountingNfcService();
     final repository = _FakeGuestRepository([
       _guest(
         id: 'gst_01',
         name: 'Alice Wong',
-        attendanceStatus: AttendanceStatus.checkedIn,
+        attendanceStatus: AttendanceStatus.expected,
         coverStatus: CoverStatus.paid,
       ),
     ]);
 
-    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpWidget(
+      _buildRosterApp(
+        guestRepository: repository,
+        nfcService: nfcService,
+      ),
+    );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Assign Tag'));
+    await tester.tap(find.text('Check In: Qualifying'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ready to Play - UID FASTTAG01'), findsOneWidget);
-    expect(find.text('Player tag assigned to Alice Wong.'), findsOneWidget);
+    expect(nfcService.assignmentScanCount, 0);
+    expect(
+      repository.statusUpdates['gst_01'],
+      EventTournamentStatus.qualifying,
+    );
+    expect(find.text('Ready for qualifying play'), findsOneWidget);
+    expect(find.text('Assign Tag'), findsNothing);
+    expect(
+        find.text('Alice Wong is checked in for qualifying.'), findsOneWidget);
   });
 
   testWidgets('adds a cover entry from the roster and stays in place',
