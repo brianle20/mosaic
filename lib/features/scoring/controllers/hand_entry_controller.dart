@@ -27,7 +27,11 @@ class HandEntryController extends ChangeNotifier {
               draft.toRecordInput(tableSessionId: tableSessionId),
             )
           : await sessionRepository.editHand(
-              draft.toEditInput(handResultId: existingHand.id),
+              draft.toEditInput(
+                handResultId: existingHand.id,
+                legacyDealerWasWaitingAtDraw:
+                    existingHand.dealerWasWaitingAtDraw,
+              ),
             );
       return detail;
     } catch (err) {

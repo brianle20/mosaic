@@ -75,36 +75,27 @@ void main() {
       expect(draft.isValid, isFalse);
     });
 
-    test('draw requires whether dealer was waiting', () {
-      const missingWaitingDraft = HandResultDraft(
+    test('draw does not require or send dealer waiting state', () {
+      const draft = HandResultDraft(
         resultType: HandResultType.washout,
       );
-      const dealerWaitingDraft = HandResultDraft(
+      const legacyDealerWaitingDraft = HandResultDraft(
         resultType: HandResultType.washout,
         dealerWasWaitingAtDraw: true,
       );
-      const dealerNotWaitingDraft = HandResultDraft(
-        resultType: HandResultType.washout,
-        dealerWasWaitingAtDraw: false,
-      );
 
+      expect(draft.washoutDealerWaitingError, isNull);
+      expect(draft.isValid, isTrue);
       expect(
-        missingWaitingDraft.washoutDealerWaitingError,
-        'Select whether dealer was waiting.',
+        draft.toRecordInput(tableSessionId: 'ses_01').dealerWasWaitingAtDraw,
+        isNull,
       );
-      expect(missingWaitingDraft.isValid, isFalse);
-      expect(dealerWaitingDraft.isValid, isTrue);
+      expect(legacyDealerWaitingDraft.isValid, isTrue);
       expect(
-          dealerWaitingDraft
+          legacyDealerWaitingDraft
               .toRecordInput(tableSessionId: 'ses_01')
               .dealerWasWaitingAtDraw,
-          isTrue);
-      expect(dealerNotWaitingDraft.isValid, isTrue);
-      expect(
-          dealerNotWaitingDraft
-              .toRecordInput(tableSessionId: 'ses_01')
-              .dealerWasWaitingAtDraw,
-          isFalse);
+          isNull);
     });
 
     test('false win penalty requires caller and clears win-only fields', () {

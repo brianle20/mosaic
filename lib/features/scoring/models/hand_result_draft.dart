@@ -94,11 +94,6 @@ class HandResultDraft {
   }
 
   String? get washoutDealerWaitingError {
-    if (resultType == HandResultType.washout &&
-        dealerWasWaitingAtDraw == null) {
-      return 'Select whether dealer was waiting.';
-    }
-
     if (resultType == HandResultType.win && dealerWasWaitingAtDraw != null) {
       return 'Wins cannot include dealer waiting state.';
     }
@@ -131,14 +126,16 @@ class HandResultDraft {
           ? penaltySeatIndex
           : null,
       fanCount: resultType == HandResultType.win ? fanCount : null,
-      dealerWasWaitingAtDraw:
-          resultType == HandResultType.washout ? dealerWasWaitingAtDraw : null,
+      dealerWasWaitingAtDraw: null,
       correctionNote:
           correctionNote.trim().isEmpty ? null : correctionNote.trim(),
     );
   }
 
-  EditHandResultInput toEditInput({required String handResultId}) {
+  EditHandResultInput toEditInput({
+    required String handResultId,
+    bool? legacyDealerWasWaitingAtDraw,
+  }) {
     return EditHandResultInput(
       handResultId: handResultId,
       resultType: resultType,
@@ -151,8 +148,9 @@ class HandResultDraft {
           ? penaltySeatIndex
           : null,
       fanCount: resultType == HandResultType.win ? fanCount : null,
-      dealerWasWaitingAtDraw:
-          resultType == HandResultType.washout ? dealerWasWaitingAtDraw : null,
+      dealerWasWaitingAtDraw: resultType == HandResultType.washout
+          ? legacyDealerWasWaitingAtDraw
+          : null,
       correctionNote:
           correctionNote.trim().isEmpty ? null : correctionNote.trim(),
     );

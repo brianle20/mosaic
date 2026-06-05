@@ -45,7 +45,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   int? _winnerSeatIndex;
   int? _discarderSeatIndex;
   int? _penaltySeatIndex;
-  bool? _dealerWasWaitingAtDraw;
   String? _scanError;
   late final TextEditingController _fanCountController;
   StreamSubscription<TagScanResult>? _playerTagSubscription;
@@ -62,7 +61,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     _winnerSeatIndex = initialHand?.winnerSeatIndex;
     _discarderSeatIndex = initialHand?.discarderSeatIndex;
     _penaltySeatIndex = initialHand?.penaltySeatIndex;
-    _dealerWasWaitingAtDraw = initialHand?.dealerWasWaitingAtDraw;
     _fanCountController = TextEditingController(
       text: initialHand?.fanCount?.toString() ?? '',
     );
@@ -220,9 +218,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
         fanCount: _resultType == HandResultType.win
             ? int.tryParse(_fanCountController.text)
             : null,
-        dealerWasWaitingAtDraw: _resultType == HandResultType.washout
-            ? _dealerWasWaitingAtDraw
-            : null,
+        dealerWasWaitingAtDraw: null,
       );
 
   bool get _roundExpired =>
@@ -515,12 +511,10 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                     } else if (_resultType == HandResultType.falseWinPenalty) {
                       _winnerSeatIndex = null;
                       _discarderSeatIndex = null;
-                      _dealerWasWaitingAtDraw = null;
                       _winType = null;
                     } else {
                       _winType ??= HandWinType.selfDraw;
                       _penaltySeatIndex = null;
-                      _dealerWasWaitingAtDraw = null;
                     }
                   });
                 },
@@ -616,33 +610,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                   'Dealer: ${_seatName(_drawDealerSeatIndex)}',
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
-                const SizedBox(height: 8),
-                SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment(
-                      value: true,
-                      label: Text('Waiting'),
-                    ),
-                    ButtonSegment(
-                      value: false,
-                      label: Text('Not waiting'),
-                    ),
-                  ],
-                  selected: _dealerWasWaitingAtDraw == null
-                      ? const <bool>{}
-                      : {_dealerWasWaitingAtDraw!},
-                  emptySelectionAllowed: true,
-                  onSelectionChanged: (selection) {
-                    setState(() {
-                      _dealerWasWaitingAtDraw =
-                          selection.isEmpty ? null : selection.first;
-                    });
-                  },
-                ),
-                if (_draft.washoutDealerWaitingError != null) ...[
-                  const SizedBox(height: 6),
-                  Text(_draft.washoutDealerWaitingError!),
-                ],
               ],
               if (_resultType == HandResultType.falseWinPenalty) ...[
                 DropdownButtonFormField<int>(
@@ -691,9 +658,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   String _buildPreviewText() {
     if (_resultType == HandResultType.washout) {
-      return _dealerWasWaitingAtDraw == false
-          ? 'Draw. Dealer rotates.'
-          : 'Draw. Dealer retains.';
+      return 'Draw. Dealer rotates.';
     }
 
     if (_resultType == HandResultType.falseWinPenalty) {

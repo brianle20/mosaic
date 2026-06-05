@@ -634,8 +634,7 @@ void main() {
     expect(find.text('Round time has expired.'), findsNothing);
   });
 
-  testWidgets('draw requires dealer waiting state before saving',
-      (tester) async {
+  testWidgets('draw saves without dealer waiting state', (tester) async {
     final repository = _RecordingSessionRepository();
 
     await tester.pumpWidget(
@@ -653,24 +652,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Dealer: Alice Wong'), findsOneWidget);
-    expect(find.text('Waiting'), findsOneWidget);
-    expect(find.text('Not waiting'), findsOneWidget);
-
-    await tester.tap(find.text('Save Hand'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Select whether dealer was waiting.'), findsOneWidget);
-    expect(repository.recordedInput, isNull);
-
-    await tester.tap(find.text('Not waiting'));
-    await tester.pumpAndSettle();
+    expect(find.text('Waiting'), findsNothing);
+    expect(find.text('Not waiting'), findsNothing);
     expect(find.text('Draw. Dealer rotates.'), findsOneWidget);
 
     await tester.tap(find.text('Save Hand'));
     await tester.pumpAndSettle();
 
     expect(repository.recordedInput?.resultType, HandResultType.washout);
-    expect(repository.recordedInput?.dealerWasWaitingAtDraw, isFalse);
+    expect(repository.recordedInput?.dealerWasWaitingAtDraw, isNull);
   });
 
   testWidgets('false win penalty records caller without win fields',
@@ -720,7 +710,7 @@ void main() {
     expect(repository.recordedInput?.fanCount, isNull);
   });
 
-  testWidgets('editing a draw labels the dealer from that hand',
+  testWidgets('editing a legacy draw preserves its dealer waiting state',
       (tester) async {
     final repository = _RecordingSessionRepository();
     final existingHand = HandResultRecord.fromJson(const {
@@ -757,6 +747,12 @@ void main() {
 
     expect(find.text('Dealer: Carol Ng'), findsOneWidget);
     expect(find.text('Dealer: Alice Wong'), findsNothing);
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.editedInput?.resultType, HandResultType.washout);
+    expect(repository.editedInput?.dealerWasWaitingAtDraw, isTrue);
   });
 
   testWidgets('player tag scan selects the matching seated winner',
