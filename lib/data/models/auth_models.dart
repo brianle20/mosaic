@@ -31,10 +31,14 @@ extension MosaicAccessRoleCapabilities on MosaicAccessRole {
   bool get canScoreQualification => true;
 
   bool get canScoreTournament =>
-      this == MosaicAccessRole.owner || this == MosaicAccessRole.eventScorer;
+      this == MosaicAccessRole.owner ||
+      this == MosaicAccessRole.eventScorer ||
+      this == MosaicAccessRole.qualificationScorer;
 
   bool get canScoreBonus =>
-      this == MosaicAccessRole.owner || this == MosaicAccessRole.eventScorer;
+      this == MosaicAccessRole.owner ||
+      this == MosaicAccessRole.eventScorer ||
+      this == MosaicAccessRole.qualificationScorer;
 
   bool get canViewAssignedEvent =>
       this == MosaicAccessRole.qualificationScorer ||

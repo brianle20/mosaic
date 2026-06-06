@@ -39,6 +39,35 @@ void main() {
         throwsFormatException,
       );
     });
+
+    test('create input serializes selected tournament status', () {
+      final input = CreateGuestInput(
+        eventId: 'evt_01',
+        displayName: 'Alice Wong',
+        normalizedName: 'alice wong',
+        tournamentStatus: EventTournamentStatus.qualified,
+        coverStatus: CoverStatus.paid,
+        coverAmountCents: 2000,
+        isComped: false,
+      );
+
+      expect(input.toInsertJson()['tournament_status'], 'qualified');
+    });
+
+    test('update input serializes selected tournament status', () {
+      final input = UpdateGuestInput(
+        id: 'gst_01',
+        eventId: 'evt_01',
+        displayName: 'Alice Wong',
+        normalizedName: 'alice wong',
+        tournamentStatus: EventTournamentStatus.qualifying,
+        coverStatus: CoverStatus.paid,
+        coverAmountCents: 2000,
+        isComped: false,
+      );
+
+      expect(input.toUpdateJson()['tournament_status'], 'qualifying');
+    });
   });
 
   group('public display names', () {

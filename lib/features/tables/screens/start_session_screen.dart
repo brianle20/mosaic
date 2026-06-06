@@ -17,7 +17,7 @@ class StartSessionScreen extends StatefulWidget {
     required this.seatingRepository,
     required this.sessionRepository,
     required this.nfcService,
-    this.scoringPhase = EventScoringPhase.qualification,
+    this.scoringPhase = EventScoringPhase.tournament,
     this.preverifiedTableTagUid,
     this.allowAssignedTableEntry = false,
   });

@@ -327,7 +327,7 @@ void main() {
     expect(find.text('Brian Le'), findsOneWidget);
   });
 
-  testWidgets('shows qualification standings in a separate tab', (
+  testWidgets('does not expose qualification standings', (
     tester,
   ) async {
     final leaderboardRepository = _RecordingLeaderboardRepository(
@@ -391,34 +391,20 @@ void main() {
         home: LeaderboardScreen(
           eventId: 'evt_01',
           leaderboardRepository: leaderboardRepository,
-          guestRepository: guestRepository,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Tournament'), findsOneWidget);
-    expect(find.text('Qualification'), findsOneWidget);
+    expect(find.text('Qualification'), findsNothing);
+    expect(find.text('Qualification Standings'), findsNothing);
     expect(find.text('Alice Wong'), findsNothing);
-
-    await tester.tap(find.text('Qualification'));
-    await tester.pumpAndSettle();
-
-    expect(guestRepository.fetchCount, 1);
-    expect(find.text('Qualification Standings'), findsOneWidget);
-    expect(find.text('Alice Wong'), findsOneWidget);
-    expect(find.text('16 pts'), findsOneWidget);
-    expect(find.text('1 hand • 1 win'), findsOneWidget);
-    expect(find.text('Brian Le'), findsOneWidget);
-    expect(find.text('Carla Park'), findsOneWidget);
-    expect(find.text('Dan Yu'), findsOneWidget);
-    expect(find.text('#1'), findsOneWidget);
-    expect(find.text('#2'), findsNWidgets(2));
-    expect(find.text('#3'), findsNothing);
-    expect(find.text('#4'), findsOneWidget);
+    expect(guestRepository.fetchCount, 0);
   });
 
-  testWidgets('orders leaderboard tabs by event phase', (tester) async {
+  testWidgets('orders remaining leaderboard tabs by event phase',
+      (tester) async {
     final repository = _RecordingLeaderboardRepository(entries: const []);
 
     await tester.pumpWidget(
@@ -431,11 +417,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final qualificationLeft = tester.getTopLeft(find.text('Qualification')).dx;
     final tournamentLeft = tester.getTopLeft(find.text('Tournament')).dx;
     final finalsLeft = tester.getTopLeft(find.text('Finals')).dx;
 
-    expect(qualificationLeft, lessThan(tournamentLeft));
     expect(tournamentLeft, lessThan(finalsLeft));
   });
 

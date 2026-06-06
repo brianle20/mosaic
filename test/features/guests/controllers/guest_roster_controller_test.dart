@@ -5,9 +5,42 @@ import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/guests/controllers/guest_roster_controller.dart';
-import 'package:mosaic/services/nfc/nfc_service.dart';
 
 void main() {
+  test(
+      'load leaves active tag assignment state unknown while cached guests show',
+      () async {
+    final alice = _guest(id: 'gst_01', name: 'Alice Wong');
+    final repository = _FakeGuestRepository(
+      [alice],
+      cachedGuests: [alice],
+      activeAssignments: {
+        'gst_01': _tagAssignment(guestId: 'gst_01'),
+      },
+    )..activeAssignmentsGate = Completer<void>();
+    final controller = GuestRosterController(guestRepository: repository);
+    final cachedGuestsLoaded = Completer<void>();
+    controller.addListener(() {
+      if (controller.guests.isNotEmpty &&
+          !controller.hasLoadedActiveTagAssignments &&
+          !cachedGuestsLoaded.isCompleted) {
+        cachedGuestsLoaded.complete();
+      }
+    });
+
+    final load = controller.load('evt_01');
+    await cachedGuestsLoaded.future;
+
+    expect(controller.guests.map((guest) => guest.id), ['gst_01']);
+    expect(controller.hasLoadedActiveTagAssignments, isFalse);
+
+    repository.activeAssignmentsGate!.complete();
+    await load;
+
+    expect(controller.hasLoadedActiveTagAssignments, isTrue);
+    expect(controller.activeTagAssignments, contains('gst_01'));
+  });
+
   test('removeGuest deletes the guest from the loaded roster', () async {
     final alice = _guest(id: 'gst_01', name: 'Alice Wong');
     final bob = _guest(id: 'gst_02', name: 'Bob Lee');
@@ -19,118 +52,6 @@ void main() {
 
     expect(repository.removedGuestIds, ['gst_01']);
     expect(controller.guests.map((guest) => guest.displayName), ['Bob Lee']);
-  });
-
-  test('identifyGuestByTag returns found result and caches assignment',
-      () async {
-    final repository = _FakeGuestRepository([])
-      ..tagLookupResult = GuestTagLookupResult(
-        guest: _guest(id: 'guest-1', name: 'Caren Ly'),
-        assignment: _assignment(eventGuestId: 'guest-1'),
-      );
-    final controller = GuestRosterController(guestRepository: repository);
-
-    final result = await controller.identifyGuestByTag(
-      eventId: 'event-1',
-      scanForTag: () async => const TagScanResult(
-        rawUid: '0a0b0c',
-        normalizedUid: '0A0B0C',
-        isManualEntry: false,
-      ),
-    );
-
-    expect(result.status, GuestTagIdentificationStatus.found);
-    expect(result.lookup!.guest.displayName, 'Caren Ly');
-    expect(controller.guests.single.id, 'guest-1');
-    expect(controller.activeTagAssignments['guest-1']!.tag.uidHex, '0A0B0C');
-    expect(repository.lookupCalls, 1);
-  });
-
-  test('identifyGuestByTag returns notFound for an unassigned tag', () async {
-    final repository = _FakeGuestRepository([]);
-    final controller = GuestRosterController(guestRepository: repository);
-
-    final result = await controller.identifyGuestByTag(
-      eventId: 'event-1',
-      scanForTag: () async => const TagScanResult(
-        rawUid: 'missing',
-        normalizedUid: 'MISSING',
-        isManualEntry: false,
-      ),
-    );
-
-    expect(result.status, GuestTagIdentificationStatus.notFound);
-    expect(result.scannedUid, 'MISSING');
-    expect(controller.guests, isEmpty);
-    expect(repository.lookupCalls, 1);
-  });
-
-  test('identifyGuestByTag returns cancelled when scan is cancelled', () async {
-    final repository = _FakeGuestRepository([]);
-    final controller = GuestRosterController(guestRepository: repository);
-
-    final result = await controller.identifyGuestByTag(
-      eventId: 'event-1',
-      scanForTag: () async => null,
-    );
-
-    expect(result.status, GuestTagIdentificationStatus.cancelled);
-    expect(repository.lookupCalls, 0);
-  });
-
-  test('identifyGuestByTag returns cancelled while already identifying',
-      () async {
-    final repository = _FakeGuestRepository([]);
-    final controller = GuestRosterController(guestRepository: repository);
-    final scanCompleter = Completer<TagScanResult?>();
-
-    final firstScan = controller.identifyGuestByTag(
-      eventId: 'event-1',
-      scanForTag: () => scanCompleter.future,
-    );
-
-    expect(controller.isIdentifyingTag, isTrue);
-
-    final secondScan = await controller.identifyGuestByTag(
-      eventId: 'event-1',
-      scanForTag: () async => const TagScanResult(
-        rawUid: '0a0b0c',
-        normalizedUid: '0A0B0C',
-        isManualEntry: false,
-      ),
-    );
-
-    expect(secondScan.status, GuestTagIdentificationStatus.cancelled);
-    expect(repository.lookupCalls, 0);
-
-    scanCompleter.complete(null);
-    await firstScan;
-
-    expect(controller.isIdentifyingTag, isFalse);
-  });
-
-  test('identifyGuestByTag does not mutate guest state outside lookup',
-      () async {
-    final repository = _FakeGuestRepository([])
-      ..tagLookupResult = GuestTagLookupResult(
-        guest: _guest(id: 'guest-1', name: 'Caren Ly'),
-        assignment: _assignment(eventGuestId: 'guest-1'),
-      );
-    final controller = GuestRosterController(guestRepository: repository);
-
-    await controller.identifyGuestByTag(
-      eventId: 'event-1',
-      scanForTag: () async => const TagScanResult(
-        rawUid: '0a0b0c',
-        normalizedUid: '0A0B0C',
-        isManualEntry: false,
-      ),
-    );
-
-    expect(repository.checkInCalls, 0);
-    expect(repository.assignTagCalls, 0);
-    expect(repository.coverCalls, 0);
-    expect(repository.tournamentMutationCalls, 0);
   });
 
   test('checkInForPlayMode checks in an open-play guest without tags',
@@ -151,7 +72,6 @@ void main() {
       repository.statusUpdates['gst_01'],
       EventTournamentStatus.openPlayOnly,
     );
-    expect(repository.assignTagCalls, 0);
     expect(controller.guests.single.isCheckedIn, isTrue);
     expect(
       controller.guests.single.tournamentStatus,
@@ -175,7 +95,6 @@ void main() {
     expect(repository.checkInCalls, 1);
     expect(
         repository.statusUpdates['gst_01'], EventTournamentStatus.qualifying);
-    expect(repository.assignTagCalls, 0);
     expect(controller.guests.single.isCheckedIn, isTrue);
     expect(
       controller.guests.single.tournamentStatus,
@@ -200,31 +119,275 @@ void main() {
     expect(repository.tournamentMutationCalls, 1);
     expect(
         repository.statusUpdates['gst_01'], EventTournamentStatus.qualifying);
-    expect(repository.assignTagCalls, 0);
     expect(controller.guests.single.isCheckedIn, isTrue);
     expect(
       controller.guests.single.tournamentStatus,
       EventTournamentStatus.qualifying,
     );
   });
+
+  test('qualifyCheckedInConsidered promotes only checked-in considered guests',
+      () async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_checked_considered',
+        name: 'Checked Considered',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_expected_considered',
+        name: 'Expected Considered',
+        attendanceStatus: AttendanceStatus.expected,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_checked_open',
+        name: 'Checked Open',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
+      ),
+    ]);
+    final controller = GuestRosterController(guestRepository: repository);
+
+    await controller.load('event-1');
+    final count = await controller.qualifyCheckedInConsidered();
+
+    expect(count, 1);
+    expect(repository.statusUpdates, {
+      'gst_checked_considered': EventTournamentStatus.qualified,
+    });
+  });
+
+  test('qualifyCheckedInConsidered only promotes guests in provided ID set',
+      () async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_visible',
+        name: 'Visible Considered',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_hidden',
+        name: 'Hidden Considered',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_pending',
+        name: 'Pending Considered',
+        attendanceStatus: AttendanceStatus.expected,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ]);
+    final controller = GuestRosterController(guestRepository: repository);
+
+    await controller.load('event-1');
+    final count = await controller.qualifyCheckedInConsidered(
+      guestIds: {'gst_visible', 'gst_pending'},
+    );
+
+    expect(count, 1);
+    expect(repository.statusUpdates, {
+      'gst_visible': EventTournamentStatus.qualified,
+    });
+  });
+
+  test('qualifyCheckedInConsidered marks promoted guests submitting', () async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_checked_considered',
+        name: 'Checked Considered',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_expected_considered',
+        name: 'Expected Considered',
+        attendanceStatus: AttendanceStatus.expected,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ])
+      ..tournamentUpdateStarted = Completer<void>()
+      ..tournamentUpdateGate = Completer<void>();
+    final controller = GuestRosterController(guestRepository: repository);
+
+    await controller.load('event-1');
+    final future = controller.qualifyCheckedInConsidered();
+    await repository.tournamentUpdateStarted!.future;
+
+    expect(controller.isSubmittingGuest('gst_checked_considered'), isTrue);
+    expect(controller.isSubmittingGuest('gst_expected_considered'), isFalse);
+
+    repository.tournamentUpdateGate!.complete();
+    await future;
+
+    expect(controller.isSubmittingGuest('gst_checked_considered'), isFalse);
+  });
+
+  test('qualifyCheckedInConsidered exposes global in-flight state', () async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_checked_considered',
+        name: 'Checked Considered',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ])
+      ..tournamentUpdateStarted = Completer<void>()
+      ..tournamentUpdateGate = Completer<void>();
+    final controller = GuestRosterController(guestRepository: repository);
+
+    await controller.load('event-1');
+
+    expect(controller.isQualifyingCheckedInConsidered, isFalse);
+
+    final future = controller.qualifyCheckedInConsidered();
+    await repository.tournamentUpdateStarted!.future;
+
+    expect(controller.isQualifyingCheckedInConsidered, isTrue);
+
+    repository.tournamentUpdateGate!.complete();
+    await future;
+
+    expect(controller.isQualifyingCheckedInConsidered, isFalse);
+  });
+
+  test(
+      'qualifyCheckedInConsidered keeps successful updates merged when a later '
+      'update fails', () async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_first',
+        name: 'First',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_fails',
+        name: 'Fails',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ])
+      ..failingTournamentUpdateIds.add('gst_fails');
+    final controller = GuestRosterController(guestRepository: repository);
+
+    await controller.load('event-1');
+
+    await expectLater(
+      controller.qualifyCheckedInConsidered(),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(
+      controller.guests
+          .firstWhere((guest) => guest.id == 'gst_first')
+          .tournamentStatus,
+      EventTournamentStatus.qualified,
+    );
+    expect(
+      controller.guests
+          .firstWhere((guest) => guest.id == 'gst_fails')
+          .tournamentStatus,
+      EventTournamentStatus.qualifying,
+    );
+  });
+
+  test('qualifyCheckedInConsidered returns 0 while bulk action is in flight',
+      () async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_first',
+        name: 'First',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ])
+      ..tournamentUpdateStarted = Completer<void>()
+      ..tournamentUpdateGate = Completer<void>();
+    final controller = GuestRosterController(guestRepository: repository);
+
+    await controller.load('event-1');
+    final firstBulk = controller.qualifyCheckedInConsidered();
+    await repository.tournamentUpdateStarted!.future;
+
+    final secondCount = await controller.qualifyCheckedInConsidered();
+
+    expect(secondCount, 0);
+    expect(repository.tournamentMutationCalls, 1);
+
+    repository.tournamentUpdateGate!.complete();
+    expect(await firstBulk, 1);
+  });
+
+  test('qualifyCheckedInConsidered skips guests already submitting', () async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_already_submitting',
+        name: 'Already Submitting',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_bulk_target',
+        name: 'Bulk Target',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ])
+      ..gatedTournamentUpdateIds.add('gst_already_submitting')
+      ..tournamentUpdateStarted = Completer<void>()
+      ..tournamentUpdateGate = Completer<void>();
+    final controller = GuestRosterController(guestRepository: repository);
+
+    await controller.load('event-1');
+    final perGuestUpdate = controller.updateTournamentStatus(
+      guestId: 'gst_already_submitting',
+      status: EventTournamentStatus.qualified,
+    );
+    await repository.tournamentUpdateStarted!.future;
+
+    final bulkCount = await controller.qualifyCheckedInConsidered();
+
+    expect(bulkCount, 1);
+    expect(
+      repository.statusUpdates['gst_bulk_target'],
+      EventTournamentStatus.qualified,
+    );
+    expect(controller.isSubmittingGuest('gst_already_submitting'), isTrue);
+
+    repository.tournamentUpdateGate!.complete();
+    await perGuestUpdate;
+  });
 }
 
 class _FakeGuestRepository extends ThrowingGuestRepository {
-  _FakeGuestRepository(this._guests);
+  _FakeGuestRepository(
+    this._guests, {
+    List<EventGuestRecord> cachedGuests = const [],
+    Map<String, GuestTagAssignmentSummary> activeAssignments = const {},
+  })  : _cachedGuests = List<EventGuestRecord>.from(cachedGuests),
+        _activeAssignments =
+            Map<String, GuestTagAssignmentSummary>.from(activeAssignments);
 
   final List<EventGuestRecord> _guests;
+  final List<EventGuestRecord> _cachedGuests;
+  final Map<String, GuestTagAssignmentSummary> _activeAssignments;
   final removedGuestIds = <String>[];
-  GuestTagLookupResult? tagLookupResult;
-  int lookupCalls = 0;
   int checkInCalls = 0;
-  int assignTagCalls = 0;
-  int coverCalls = 0;
   int tournamentMutationCalls = 0;
+  Completer<void>? tournamentUpdateStarted;
+  Completer<void>? tournamentUpdateGate;
+  Completer<void>? activeAssignmentsGate;
+  final gatedTournamentUpdateIds = <String>{};
+  final failingTournamentUpdateIds = <String>{};
   final statusUpdates = <String, EventTournamentStatus>{};
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
-      const [];
+      List<EventGuestRecord>.from(_cachedGuests);
 
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async =>
@@ -233,16 +396,9 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   @override
   Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
     String eventId,
-  ) async =>
-      const {};
-
-  @override
-  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
-    required String eventId,
-    required String scannedUid,
-  }) async {
-    lookupCalls += 1;
-    return tagLookupResult;
+  ) async {
+    await activeAssignmentsGate?.future;
+    return Map<String, GuestTagAssignmentSummary>.from(_activeAssignments);
   }
 
   @override
@@ -281,16 +437,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   }
 
   @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) async {
-    assignTagCalls += 1;
-    throw StateError('identifyGuestByTag must not assign tags');
-  }
-
-  @override
   Future<GuestDetailRecord> recordCoverEntry({
     required String guestId,
     required int amountCents,
@@ -298,8 +444,7 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     required DateTime transactionOn,
     String? note,
   }) async {
-    coverCalls += 1;
-    throw StateError('identifyGuestByTag must not record cover');
+    throw StateError('recordCoverEntry is not used in these tests');
   }
 
   @override
@@ -308,6 +453,16 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     required EventTournamentStatus status,
   }) async {
     tournamentMutationCalls += 1;
+    if (tournamentUpdateStarted?.isCompleted == false) {
+      tournamentUpdateStarted!.complete();
+    }
+    if (gatedTournamentUpdateIds.isEmpty ||
+        gatedTournamentUpdateIds.contains(eventGuestId)) {
+      await tournamentUpdateGate?.future;
+    }
+    if (failingTournamentUpdateIds.contains(eventGuestId)) {
+      throw StateError('Failed to update $eventGuestId');
+    }
     statusUpdates[eventGuestId] = status;
     final guest = _guests.firstWhere((entry) => entry.id == eventGuestId);
     final updated = EventGuestRecord(
@@ -336,9 +491,31 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   }
 }
 
+GuestTagAssignmentSummary _tagAssignment({
+  required String guestId,
+  String uid = 'FASTDONE',
+}) {
+  final json = {
+    'assignment_id': 'asg_$guestId',
+    'event_id': 'event-1',
+    'event_guest_id': guestId,
+    'status': 'assigned',
+    'assigned_at': '2026-04-24T19:15:00-07:00',
+    'nfc_tag': {
+      'id': 'tag_$guestId',
+      'uid_hex': uid,
+      'uid_fingerprint': uid,
+      'default_tag_type': 'player',
+      'status': 'active',
+    },
+  };
+  return GuestTagAssignmentSummary.fromJson(json);
+}
+
 EventGuestRecord _guest({
   required String id,
   required String name,
+  AttendanceStatus attendanceStatus = AttendanceStatus.expected,
   EventTournamentStatus tournamentStatus = EventTournamentStatus.openPlayOnly,
 }) {
   return EventGuestRecord.fromJson({
@@ -346,29 +523,16 @@ EventGuestRecord _guest({
     'event_id': 'event-1',
     'display_name': name,
     'normalized_name': name.toLowerCase(),
-    'attendance_status': 'expected',
+    'attendance_status': switch (attendanceStatus) {
+      AttendanceStatus.expected => 'expected',
+      AttendanceStatus.checkedIn => 'checked_in',
+      AttendanceStatus.checkedOut => 'checked_out',
+      AttendanceStatus.noShow => 'no_show',
+    },
     'cover_status': 'unpaid',
     'cover_amount_cents': 0,
     'is_comped': false,
     'has_scored_play': false,
     'tournament_status': eventTournamentStatusToJson(tournamentStatus),
-  });
-}
-
-GuestTagAssignmentSummary _assignment({required String eventGuestId}) {
-  return GuestTagAssignmentSummary.fromJson({
-    'assignment_id': 'assignment-1',
-    'event_id': 'event-1',
-    'event_guest_id': eventGuestId,
-    'status': 'assigned',
-    'assigned_at': '2026-05-30T00:00:00Z',
-    'nfc_tag': {
-      'id': 'tag-1',
-      'uid_hex': '0A0B0C',
-      'uid_fingerprint': 'fingerprint-1',
-      'default_tag_type': 'player',
-      'status': 'active',
-      'display_label': 'UID 1F',
-    },
   });
 }

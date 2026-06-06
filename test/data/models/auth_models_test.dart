@@ -46,7 +46,7 @@ void main() {
     ]);
     expect(access.roleForEvent('evt_02'), MosaicAccessRole.qualificationScorer);
     expect(access.canManageStaff('evt_01'), isTrue);
-    expect(access.canScoreTournament('evt_02'), isFalse);
+    expect(access.canScoreTournament('evt_02'), isTrue);
     expect(access.canScoreBonus('evt_03'), isTrue);
   });
 }

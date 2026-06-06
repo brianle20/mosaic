@@ -30,6 +30,7 @@ class GuestFormController extends ChangeNotifier {
     required GuestFormDraft draft,
     GuestProfileRecord? selectedProfile,
     EventGuestRecord? existingGuest,
+    EventTournamentStatus? tournamentStatus,
   }) async {
     if (!draft.isValid) {
       _notifyIfActive();
@@ -52,6 +53,7 @@ class GuestFormController extends ChangeNotifier {
               draft.toUpdateInput(
                 id: existingGuest.id,
                 eventId: eventId,
+                tournamentStatus: tournamentStatus,
               ),
             );
 

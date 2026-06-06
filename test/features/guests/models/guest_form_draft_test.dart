@@ -70,6 +70,41 @@ void main() {
       expect(input.publicDisplayName, 'Brian L.');
     });
 
+    test('defaults tournament qualification to prequalified', () {
+      const draft = GuestFormDraft(displayName: 'Alice Wong');
+
+      expect(draft.tournamentStatus, EventTournamentStatus.qualified);
+      expect(
+        draft.toCreateInput(eventId: 'evt_01').tournamentStatus,
+        EventTournamentStatus.qualified,
+      );
+    });
+
+    test('update input carries explicit non-qualified tournament status', () {
+      const draft = GuestFormDraft(displayName: 'Alice Wong');
+
+      final input = draft.toUpdateInput(
+        id: 'gst_01',
+        eventId: 'evt_01',
+        tournamentStatus: EventTournamentStatus.withdrawn,
+      );
+
+      expect(input.tournamentStatus, EventTournamentStatus.withdrawn);
+      expect(input.toUpdateJson()['tournament_status'], 'withdrawn');
+    });
+
+    test('plain update input omits default tournament qualification', () {
+      const draft = GuestFormDraft(displayName: 'Alice Wong');
+
+      final input = draft.toUpdateInput(
+        id: 'gst_01',
+        eventId: 'evt_01',
+      );
+
+      expect(input.tournamentStatus, isNull);
+      expect(input.toUpdateJson(), isNot(contains('tournament_status')));
+    });
+
     test('rejects invalid phone numbers', () {
       const draft = GuestFormDraft(
         displayName: 'Alice',

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
@@ -6,31 +8,29 @@ import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
-import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository(
     List<EventGuestRecord> guests, {
+    List<EventGuestRecord>? cachedGuests,
     Map<String, GuestTagAssignmentSummary> activeAssignments = const {},
     Map<String, List<GuestCoverEntryRecord>> coverEntries = const {},
-    Map<String, GuestTagLookupResult> tagLookupResults = const {},
   })  : _guests = List<EventGuestRecord>.from(guests),
+        _cachedGuests = List<EventGuestRecord>.from(cachedGuests ?? guests),
         _activeAssignments =
             Map<String, GuestTagAssignmentSummary>.from(activeAssignments),
         _coverEntries = Map<String, List<GuestCoverEntryRecord>>.from(
           coverEntries,
-        ),
-        _tagLookupResults = Map<String, GuestTagLookupResult>.from(
-          tagLookupResults,
         );
 
   final List<EventGuestRecord> _guests;
+  final List<EventGuestRecord> _cachedGuests;
   final Map<String, GuestTagAssignmentSummary> _activeAssignments;
   final Map<String, List<GuestCoverEntryRecord>> _coverEntries;
-  final Map<String, GuestTagLookupResult> _tagLookupResults;
   final statusUpdates = <String, EventTournamentStatus>{};
   final removedGuestIds = <String>[];
+  Completer<void>? activeAssignmentsGate;
 
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
@@ -124,19 +124,14 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   @override
   Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
     String eventId,
-  ) async =>
-      _activeAssignments;
-
-  @override
-  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
-    required String eventId,
-    required String scannedUid,
-  }) async =>
-      _tagLookupResults[scannedUid];
+  ) async {
+    await activeAssignmentsGate?.future;
+    return _activeAssignments;
+  }
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
-      _guests;
+      List<EventGuestRecord>.from(_cachedGuests);
 
   @override
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
@@ -289,112 +284,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   }
 }
 
-class _FakeNfcService implements NfcService {
-  const _FakeNfcService();
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-    BuildContext context,
-  ) async {
-    return const TagScanResult(
-      rawUid: 'FASTTAG01',
-      normalizedUid: 'FASTTAG01',
-      isManualEntry: true,
-    );
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-    BuildContext context,
-  ) async {
-    return null;
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<TagScanResult?> scanTableTag(BuildContext context) {
-    throw UnimplementedError();
-  }
-}
-
-class _CountingNfcService implements NfcService {
-  int assignmentScanCount = 0;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-    BuildContext context,
-  ) async {
-    assignmentScanCount += 1;
-    return const TagScanResult(
-      rawUid: 'FASTTAG01',
-      normalizedUid: 'FASTTAG01',
-      isManualEntry: true,
-    );
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-    BuildContext context,
-  ) async {
-    return null;
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<TagScanResult?> scanTableTag(BuildContext context) {
-    throw UnimplementedError();
-  }
-}
-
-class _IdentifyingNfcService implements NfcService {
-  _IdentifyingNfcService(this.identificationResult);
-
-  final TagScanResult? identificationResult;
-  int identificationScanCount = 0;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-    BuildContext context,
-  ) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-    BuildContext context,
-  ) async {
-    identificationScanCount += 1;
-    return identificationResult;
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<TagScanResult?> scanTableTag(BuildContext context) {
-    throw UnimplementedError();
-  }
-}
-
 GuestTagAssignmentSummary _tagAssignment({
   required String guestId,
   String uid = 'FASTDONE',
@@ -455,10 +344,9 @@ EventGuestRecord _guest({
 
 Widget _buildRosterApp({
   required GuestRepository guestRepository,
-  NfcService nfcService = const _FakeNfcService(),
   int eventCoverChargeCents = 1500,
   bool canManageGuests = true,
-  bool canAssignTags = true,
+  bool canManageTournamentStatus = true,
 }) {
   return MaterialApp(
     onGenerateRoute: (settings) {
@@ -485,9 +373,8 @@ Widget _buildRosterApp({
       eventTitle: 'Friday Night Mahjong',
       eventCoverChargeCents: eventCoverChargeCents,
       canManageGuests: canManageGuests,
-      canAssignTags: canAssignTags,
+      canManageTournamentStatus: canManageTournamentStatus,
       guestRepository: guestRepository,
-      nfcService: nfcService,
     ),
   );
 }
@@ -525,7 +412,7 @@ void main() {
     expect(find.text('Default cover: 2500'), findsOneWidget);
   });
 
-  testWidgets('scan player tag shows identified guest sheet and opens detail', (
+  testWidgets('roster hides player tag identification entry point', (
     tester,
   ) async {
     final guest = _guest(
@@ -535,73 +422,23 @@ void main() {
       coverStatus: CoverStatus.paid,
       tournamentStatus: EventTournamentStatus.qualified,
     );
-    const scannedUid = 'ALICE0123456789';
-    final assignment = _tagAssignment(guestId: 'gst_01', uid: scannedUid);
-    final repository = _FakeGuestRepository(
-      [guest],
-      tagLookupResults: {
-        scannedUid: GuestTagLookupResult(
-          guest: guest,
-          assignment: assignment,
-        ),
-      },
-    );
-    final nfcService = _IdentifyingNfcService(
-      const TagScanResult(
-        rawUid: scannedUid,
-        normalizedUid: scannedUid,
-        isManualEntry: true,
-      ),
-    );
+    final repository = _FakeGuestRepository([guest]);
 
     await tester.pumpWidget(
       _buildRosterApp(
         guestRepository: repository,
-        nfcService: nfcService,
         canManageGuests: false,
-        canAssignTags: false,
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Add Guest'), findsNothing);
-    expect(find.text('Scan Player Tag'), findsOneWidget);
-
-    await tester.tap(find.text('Scan Player Tag'));
-    await tester.pumpAndSettle();
-
-    expect(nfcService.identificationScanCount, 1);
-    expect(find.text('Tag Identified'), findsOneWidget);
-    expect(find.text('Alice Wong'), findsAtLeastNWidgets(1));
-    expect(find.text('UID ALICE0123456789'), findsOneWidget);
-    expect(find.text('UID ALICE012345...'), findsNothing);
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is StatusChip && widget.label == 'Paid',
-      ),
-      findsAtLeastNWidgets(1),
-    );
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is StatusChip && widget.label == 'Checked In',
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is StatusChip && widget.label == 'Qualified',
-      ),
-      findsAtLeastNWidgets(1),
-    );
-
-    await tester.tap(find.text('View Guest'));
-    await tester.pumpAndSettle();
-
+    expect(find.text('Scan Player Tag'), findsNothing);
     expect(find.text('Tag Identified'), findsNothing);
-    expect(find.text('Guest Detail Placeholder'), findsOneWidget);
+    expect(find.text('No Guest Found'), findsNothing);
   });
 
-  testWidgets('scan player tag shows not-found sheet with scanned UID', (
+  testWidgets('roster does not expose tag not-found identification sheet', (
     tester,
   ) async {
     final repository = _FakeGuestRepository([
@@ -612,35 +449,17 @@ void main() {
         coverStatus: CoverStatus.paid,
       ),
     ]);
-    const scannedUid = 'MISSING0123456789';
-    final nfcService = _IdentifyingNfcService(
-      const TagScanResult(
-        rawUid: scannedUid,
-        normalizedUid: scannedUid,
-        isManualEntry: true,
-      ),
-    );
-
     await tester.pumpWidget(
       _buildRosterApp(
         guestRepository: repository,
-        nfcService: nfcService,
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Scan Player Tag'));
-    await tester.pumpAndSettle();
-
-    expect(nfcService.identificationScanCount, 1);
-    expect(find.text('No Guest Found'), findsOneWidget);
-    expect(find.text('UID MISSING0123456789'), findsOneWidget);
-    expect(find.text('UID MISSING01234...'), findsNothing);
-
-    await tester.tap(find.text('Close'));
-    await tester.pumpAndSettle();
-
+    expect(find.text('Scan Player Tag'), findsNothing);
     expect(find.text('No Guest Found'), findsNothing);
+    expect(find.text('UID MISSING0123456789'), findsNothing);
+    expect(find.text('UID MISSING01234...'), findsNothing);
     expect(find.text('Guests'), findsOneWidget);
   });
 
@@ -691,15 +510,18 @@ void main() {
     expect(find.byTooltip('More actions for Uma'), findsOneWidget);
     expect(find.text('Mark Paid Manually'), findsNothing);
     expect(find.text('Mark Comped'), findsOneWidget);
-    expect(find.text('Check In: Open Play'), findsOneWidget);
-    expect(find.text('Check In: Qualifying'), findsOneWidget);
+    expect(find.text('Check In: Not Playing Tournament'), findsOneWidget);
+    expect(find.text('Check In: Open Play'), findsNothing);
+    expect(find.text('Check In: Qualifying'), findsNothing);
     expect(find.text('Check In'), findsNothing);
     expect(find.text('Check In & Tag'), findsNothing);
     expect(find.text('Assign Tag'), findsNothing);
+    expect(find.text('Replace Tag'), findsNothing);
     expect(find.text('Add Cover Entry'), findsOneWidget);
-    expect(find.text('Open Play Only'), findsAtLeastNWidgets(1));
-    expect(find.text('Mark Qualifying', skipOffstage: false), findsOneWidget);
-    expect(find.text('Mark Qualified'), findsAtLeastNWidgets(1));
+    expect(find.text('Not Playing Tournament'), findsAtLeastNWidgets(1));
+    expect(find.text('Open Play Only'), findsNothing);
+    expect(find.text('Mark Qualifying', skipOffstage: false), findsNothing);
+    expect(find.text('Mark Qualified'), findsNothing);
     expect(find.text('Withdraw'), findsNothing);
     expect(
       find.byWidgetPredicate(
@@ -709,7 +531,7 @@ void main() {
     );
     expect(find.text('Tag Assigned'), findsNothing);
     expect(
-      find.text('Ready for qualifying play', skipOffstage: false),
+      find.text('Checked in as considered', skipOffstage: false),
       findsOneWidget,
     );
     expect(
@@ -760,7 +582,7 @@ void main() {
     await tester.tap(find.byTooltip('More actions for Gia'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Mark Qualified'), findsAtLeastNWidgets(1));
+    expect(find.text('Mark Qualified'), findsNothing);
     expect(find.text('Withdraw'), findsOneWidget);
     expect(find.text('Add Cover Entry'), findsAtLeastNWidgets(2));
   });
@@ -901,9 +723,11 @@ void main() {
     await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
     await tester.pumpAndSettle();
 
-    expect(find.text('Qualifying'), findsAtLeastNWidgets(1));
+    expect(find.text('Considered'), findsAtLeastNWidgets(1));
     expect(find.text('Qualified'), findsAtLeastNWidgets(1));
-    expect(find.text('Open Play Only'), findsAtLeastNWidgets(1));
+    expect(find.text('Not Playing Tournament'), findsAtLeastNWidgets(1));
+    expect(find.text('Qualifying'), findsNothing);
+    expect(find.text('Open Play Only'), findsNothing);
     expect(find.text('Withdrawn'), findsAtLeastNWidgets(1));
 
     await tester.tap(find.text('Qualified').first);
@@ -914,14 +738,189 @@ void main() {
     expect(find.text('Opal Open'), findsNothing);
     expect(find.text('Wendy Withdrawn'), findsNothing);
 
-    await tester.tap(find.text('Open Play Only'));
+    await tester.tap(find.text('Not Playing Tournament'));
     await tester.pumpAndSettle();
 
     expect(find.text('Opal Open'), findsOneWidget);
     expect(find.text('Quincy Qualified'), findsNothing);
   });
 
-  testWidgets('event-day primary tournament action advances status', (
+  testWidgets('checked-in guest cards hide individual tournament progression', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_open',
+        name: 'Opal Open',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
+      ),
+      _guest(
+        id: 'gst_considered',
+        name: 'Connie Considered',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_qualified',
+        name: 'Quincy Qualified',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is StatusChip && widget.label == 'Not Playing Tournament',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Considered',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is StatusChip && widget.label == 'Qualified',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Checked in; not playing tournament'), findsOneWidget);
+    expect(find.text('Checked in as considered'), findsOneWidget);
+    expect(find.text('Qualified for tournament play'), findsOneWidget);
+    expect(find.text('Mark Qualifying', skipOffstage: false), findsNothing);
+    expect(find.text('Mark Qualified', skipOffstage: false), findsNothing);
+  });
+
+  testWidgets('bulk qualifies checked-in considered guests with feedback', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_checked_considered',
+        name: 'Connie Considered',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_pending_considered',
+        name: 'Penny Pending',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Qualify Checked-In Considered'), findsOneWidget);
+
+    await tester.tap(find.text('Qualify Checked-In Considered'));
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.statusUpdates['gst_checked_considered'],
+      EventTournamentStatus.qualified,
+    );
+    expect(
+      repository.statusUpdates['gst_pending_considered'],
+      isNull,
+    );
+    expect(find.text('Qualified 1 considered guest.'), findsOneWidget);
+  });
+
+  testWidgets('bulk qualify only affects visible checked-in considered guests',
+      (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_visible',
+        name: 'Alice Visible',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+      _guest(
+        id: 'gst_hidden',
+        name: 'Bianca Hidden',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search guests'),
+      'alice',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice Visible'), findsOneWidget);
+    expect(find.text('Bianca Hidden'), findsNothing);
+    expect(find.text('Qualify Checked-In Considered'), findsOneWidget);
+
+    await tester.tap(find.text('Qualify Checked-In Considered'));
+    await tester.pumpAndSettle();
+
+    expect(repository.statusUpdates, {
+      'gst_visible': EventTournamentStatus.qualified,
+    });
+    expect(find.text('Qualified 1 considered guest.'), findsOneWidget);
+  });
+
+  testWidgets('bulk considered action is host-only', (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_checked_considered',
+        name: 'Connie Considered',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualifying,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      _buildRosterApp(
+        guestRepository: repository,
+        canManageTournamentStatus: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Qualify Checked-In Considered'), findsNothing);
+  });
+
+  testWidgets('overflow keeps exception tournament actions only', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(800, 1000);
@@ -935,88 +934,65 @@ void main() {
         name: 'Alice Wong',
         attendanceStatus: AttendanceStatus.checkedIn,
         coverStatus: CoverStatus.paid,
-      ),
-    ], activeAssignments: {
-      'gst_01': _tagAssignment(guestId: 'gst_01', uid: 'ALICE01'),
-    });
-
-    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is StatusChip && widget.label == 'Open Play Only',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Mark Qualifying'), findsOneWidget);
-    expect(find.text('Mark Qualified'), findsNothing);
-
-    await tester.tap(find.text('Mark Qualifying'));
-    await tester.pumpAndSettle();
-    expect(
-      repository.statusUpdates['gst_01'],
-      EventTournamentStatus.qualifying,
-    );
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is StatusChip && widget.label == 'Qualifying',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Mark Qualified'), findsOneWidget);
-    expect(find.text('Mark Qualifying'), findsNothing);
-
-    await tester.tap(find.text('Mark Qualified'));
-    await tester.pumpAndSettle();
-    expect(repository.statusUpdates['gst_01'], EventTournamentStatus.qualified);
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is StatusChip && widget.label == 'Qualified',
-      ),
-      findsOneWidget,
-    );
-    expect(find.text('Mark Qualified'), findsNothing);
-  });
-
-  testWidgets(
-      'open-play-only checked-in guests can mark qualifying without a tag',
-      (tester) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    final repository = _FakeGuestRepository([
-      _guest(
-        id: 'gst_01',
-        name: 'Alice Wong',
-        attendanceStatus: AttendanceStatus.checkedIn,
-        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualified,
       ),
     ]);
 
     await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
     await tester.pumpAndSettle();
 
-    expect(find.text('Assign Tag'), findsNothing);
-    expect(find.text('Mark Qualifying'), findsOneWidget);
+    expect(find.text('Mark Qualified'), findsNothing);
+    expect(find.text('Mark Qualifying'), findsNothing);
+    expect(find.text('Move to Open Play Only'), findsNothing);
+    expect(find.text('Withdraw'), findsNothing);
 
-    await tester.tap(find.text('Mark Qualifying'));
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Mark Qualified'), findsNothing);
+    expect(find.text('Mark Qualifying'), findsNothing);
+    expect(find.text('Move to Open Play Only'), findsNothing);
+    expect(find.text('Withdraw'), findsOneWidget);
+
+    await tester.tap(find.text('Not Playing Tournament').last);
+    await tester.pumpAndSettle();
     expect(
       repository.statusUpdates['gst_01'],
-      EventTournamentStatus.qualifying,
+      EventTournamentStatus.openPlayOnly,
     );
+
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Withdraw'));
+    await tester.pumpAndSettle();
+    expect(repository.statusUpdates['gst_01'], EventTournamentStatus.withdrawn);
   });
 
-  testWidgets('untagged qualifying guests can mark qualified', (tester) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('withdrawn checked-in guests show withdrawn row summary', (
+    tester,
+  ) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Wendy Withdrawn',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.withdrawn,
+      ),
+    ]);
 
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Withdrawn from tournament play'), findsOneWidget);
+    expect(find.text('Check In: Not Playing Tournament'), findsNothing);
+    expect(find.text('Mark Qualified'), findsNothing);
+    expect(find.text('Mark Qualifying'), findsNothing);
+  });
+
+  testWidgets('untagged checked-in considered guests rely on bulk qualifying', (
+    tester,
+  ) async {
     final repository = _FakeGuestRepository([
       _guest(
         id: 'gst_01',
@@ -1031,61 +1007,46 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Assign Tag'), findsNothing);
-    expect(find.text('Mark Qualified'), findsOneWidget);
+    expect(find.text('Mark Qualified'), findsNothing);
+    expect(find.text('Qualify Checked-In Considered'), findsOneWidget);
 
-    await tester.tap(find.text('Mark Qualified'));
+    await tester.tap(find.text('Qualify Checked-In Considered'));
     await tester.pumpAndSettle();
 
     expect(repository.statusUpdates['gst_01'], EventTournamentStatus.qualified);
   });
 
-  testWidgets('secondary tournament actions live behind the row menu', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
+  testWidgets('pending considered check-in preserves status without tag action',
+      (tester) async {
     final repository = _FakeGuestRepository([
       _guest(
         id: 'gst_01',
         name: 'Alice Wong',
-        attendanceStatus: AttendanceStatus.checkedIn,
+        attendanceStatus: AttendanceStatus.expected,
         coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualifying,
       ),
-    ], activeAssignments: {
-      'gst_01': _tagAssignment(guestId: 'gst_01', uid: 'ALICE01'),
-    });
+    ]);
 
-    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpWidget(
+      _buildRosterApp(
+        guestRepository: repository,
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('Mark Qualified'), findsNothing);
-    expect(find.text('Move to Open Play Only'), findsNothing);
-    expect(find.text('Withdraw'), findsNothing);
+    expect(find.text('Check In: Considered'), findsOneWidget);
+    expect(find.text('Check In: Qualifying'), findsNothing);
 
-    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.tap(find.text('Check In: Considered'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Mark Qualified'));
-    await tester.pumpAndSettle();
-    expect(repository.statusUpdates['gst_01'], EventTournamentStatus.qualified);
-
-    await tester.tap(find.byTooltip('More actions for Alice Wong'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Move to Open Play Only'));
-    await tester.pumpAndSettle();
     expect(
       repository.statusUpdates['gst_01'],
-      EventTournamentStatus.openPlayOnly,
+      EventTournamentStatus.qualifying,
     );
-
-    await tester.tap(find.byTooltip('More actions for Alice Wong'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Withdraw'));
-    await tester.pumpAndSettle();
-    expect(repository.statusUpdates['gst_01'], EventTournamentStatus.withdrawn);
+    expect(find.text('Checked in as considered'), findsOneWidget);
+    expect(find.text('Assign Tag'), findsNothing);
   });
 
   testWidgets('accidental guests can be removed after confirmation', (
@@ -1120,6 +1081,55 @@ void main() {
     expect(repository.removedGuestIds, ['gst_01']);
     expect(find.text('Ethan Kwan'), findsNothing);
     expect(find.text('No guests yet'), findsOneWidget);
+  });
+
+  testWidgets('cached tagged guests hide remove until assignments are loaded', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final repository = _FakeGuestRepository(
+      [
+        _guest(
+          id: 'gst_01',
+          name: 'Alice Wong',
+          attendanceStatus: AttendanceStatus.expected,
+          coverStatus: CoverStatus.unpaid,
+        ),
+      ],
+      activeAssignments: {
+        'gst_01': _tagAssignment(guestId: 'gst_01', uid: 'ALICE01'),
+      },
+    )..activeAssignmentsGate = Completer<void>();
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    for (var i = 0;
+        i < 5 &&
+            find.byTooltip('More actions for Alice Wong').evaluate().isEmpty;
+        i += 1) {
+      await tester.pump();
+    }
+
+    expect(find.byTooltip('More actions for Alice Wong'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mark Paid Manually'), findsOneWidget);
+    expect(find.text('Remove Guest'), findsNothing);
+
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    repository.activeAssignmentsGate!.complete();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove Guest'), findsNothing);
   });
 
   testWidgets('remove guest is hidden once guest has event activity', (
@@ -1427,8 +1437,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Paid'), findsOneWidget);
-    expect(find.text('Check In: Open Play'), findsOneWidget);
-    expect(find.text('Check In: Qualifying'), findsOneWidget);
+    expect(find.text('Check In: Not Playing Tournament'), findsOneWidget);
+    expect(find.text('Check In: Open Play'), findsNothing);
+    expect(find.text('Check In: Qualifying'), findsNothing);
     expect(find.text('Alice Wong is now marked paid.'), findsOneWidget);
   });
 
@@ -1449,14 +1460,49 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Comped'), findsOneWidget);
-    expect(find.text('Check In: Open Play'), findsOneWidget);
-    expect(find.text('Check In: Qualifying'), findsOneWidget);
+    expect(find.text('Check In: Not Playing Tournament'), findsOneWidget);
+    expect(find.text('Check In: Open Play'), findsNothing);
+    expect(find.text('Check In: Qualifying'), findsNothing);
     expect(find.text('Alice Wong is now marked comped.'), findsOneWidget);
   });
 
-  testWidgets('open-play check-in does not scan NFC and keeps open play',
+  testWidgets('prequalified check-in preserves status without tag action',
       (tester) async {
-    final nfcService = _CountingNfcService();
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      _buildRosterApp(
+        guestRepository: repository,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prequalified'), findsOneWidget);
+    expect(find.text('Check In: Prequalified'), findsOneWidget);
+
+    await tester.tap(find.text('Check In: Prequalified'));
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.statusUpdates['gst_01'],
+      EventTournamentStatus.qualified,
+    );
+    expect(find.text('Qualified for tournament play'), findsOneWidget);
+    expect(find.text('Assign Tag'), findsNothing);
+    expect(
+        find.text('Alice Wong is checked in: prequalified.'), findsOneWidget);
+  });
+
+  testWidgets('not-playing check-in preserves status without tag action',
+      (tester) async {
     final repository = _FakeGuestRepository([
       _guest(
         id: 'gst_01',
@@ -1469,59 +1515,46 @@ void main() {
     await tester.pumpWidget(
       _buildRosterApp(
         guestRepository: repository,
-        nfcService: nfcService,
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Check In: Open Play'));
+    expect(find.text('Check In: Not Playing Tournament'), findsOneWidget);
+    expect(find.text('Check In: Open Play'), findsNothing);
+
+    await tester.tap(find.text('Check In: Not Playing Tournament'));
     await tester.pumpAndSettle();
 
-    expect(nfcService.assignmentScanCount, 0);
     expect(
       repository.statusUpdates['gst_01'],
       EventTournamentStatus.openPlayOnly,
     );
-    expect(find.text('Checked in for open play'), findsOneWidget);
+    expect(find.text('Checked in; not playing tournament'), findsOneWidget);
     expect(find.text('Assign Tag'), findsNothing);
     expect(
-      find.text('Alice Wong is checked in for open play.'),
+      find.text('Alice Wong is checked in: not playing tournament.'),
       findsOneWidget,
     );
   });
 
-  testWidgets('qualifying check-in does not scan NFC and marks qualifying',
+  testWidgets('withdrawn pending guest does not show check-in button',
       (tester) async {
-    final nfcService = _CountingNfcService();
     final repository = _FakeGuestRepository([
       _guest(
         id: 'gst_01',
-        name: 'Alice Wong',
+        name: 'Wendy Withdrawn',
         attendanceStatus: AttendanceStatus.expected,
         coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.withdrawn,
       ),
     ]);
 
-    await tester.pumpWidget(
-      _buildRosterApp(
-        guestRepository: repository,
-        nfcService: nfcService,
-      ),
-    );
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Check In: Qualifying'));
-    await tester.pumpAndSettle();
-
-    expect(nfcService.assignmentScanCount, 0);
-    expect(
-      repository.statusUpdates['gst_01'],
-      EventTournamentStatus.qualifying,
-    );
-    expect(find.text('Ready for qualifying play'), findsOneWidget);
-    expect(find.text('Assign Tag'), findsNothing);
-    expect(
-        find.text('Alice Wong is checked in for qualifying.'), findsOneWidget);
+    expect(find.text('Withdrawn'), findsAtLeastNWidgets(1));
+    expect(find.text('Withdrawn from tournament play'), findsOneWidget);
+    expect(find.textContaining('Check In:'), findsNothing);
   });
 
   testWidgets('adds a cover entry from the roster and stays in place',

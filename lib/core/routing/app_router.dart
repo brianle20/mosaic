@@ -133,10 +133,8 @@ class AppRouter {
             canCheckIn: args.canCheckIn,
             canManageGuests: args.canManageGuests,
             canManageCover: args.canManageCover,
-            canAssignTags: args.canAssignTags,
             canManageTournamentStatus: args.canManageTournamentStatus,
             guestRepository: guestRepository,
-            nfcService: nfcService,
           ),
           settings: settings,
         );
@@ -161,9 +159,7 @@ class AppRouter {
             canCheckIn: args.canCheckIn,
             canManageGuests: args.canManageGuests,
             canManageCover: args.canManageCover,
-            canAssignTags: args.canAssignTags,
             guestRepository: guestRepository,
-            nfcService: nfcService,
           ),
           settings: settings,
         );
@@ -231,10 +227,8 @@ class AppRouter {
           builder: (_) => LeaderboardScreen(
             eventId: args.eventId,
             leaderboardRepository: leaderboardRepository,
-            guestRepository: guestRepository,
             sessionRepository: sessionRepository,
             seatingRepository: seatingRepository,
-            initialQualificationTab: args.initialQualificationTab,
           ),
           settings: settings,
         );
@@ -370,7 +364,6 @@ class GuestRosterArgs {
     this.canCheckIn = true,
     this.canManageGuests = true,
     this.canManageCover = true,
-    this.canAssignTags = true,
     this.canManageTournamentStatus = true,
   });
 
@@ -380,7 +373,6 @@ class GuestRosterArgs {
   final bool canCheckIn;
   final bool canManageGuests;
   final bool canManageCover;
-  final bool canAssignTags;
   final bool canManageTournamentStatus;
 }
 
@@ -421,7 +413,6 @@ class GuestDetailArgs {
     this.canCheckIn = true,
     this.canManageGuests = true,
     this.canManageCover = true,
-    this.canAssignTags = true,
   });
 
   final String eventId;
@@ -429,7 +420,6 @@ class GuestDetailArgs {
   final bool canCheckIn;
   final bool canManageGuests;
   final bool canManageCover;
-  final bool canAssignTags;
 }
 
 class TablesOverviewArgs {
@@ -472,7 +462,7 @@ class StartSessionArgs {
   const StartSessionArgs({
     required this.eventId,
     required this.table,
-    this.scoringPhase = EventScoringPhase.qualification,
+    this.scoringPhase = EventScoringPhase.tournament,
     this.preverifiedTableTagUid,
     this.allowAssignedTableEntry = false,
   });
@@ -517,11 +507,9 @@ class SessionDetailArgs {
 class LeaderboardArgs {
   const LeaderboardArgs({
     required this.eventId,
-    this.initialQualificationTab = false,
   });
 
   final String eventId;
-  final bool initialQualificationTab;
 }
 
 class PrizePlanArgs {

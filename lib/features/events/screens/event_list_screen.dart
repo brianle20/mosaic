@@ -120,7 +120,7 @@ class _EventListScreenState extends State<EventListScreen> {
 
   String _activeScoringLabel(EventScoringPhase phase) {
     return switch (phase) {
-      EventScoringPhase.qualification => 'Qualification Open',
+      EventScoringPhase.qualification => 'Tournament Live',
       EventScoringPhase.tournament => 'Tournament Live',
       EventScoringPhase.bonus => 'Finals Live',
     };
@@ -154,7 +154,7 @@ class _EventListScreenState extends State<EventListScreen> {
   String _roleLabel(MosaicAccessRole role) {
     return switch (role) {
       MosaicAccessRole.owner => 'Owner',
-      MosaicAccessRole.qualificationScorer => 'Qualification Scorer',
+      MosaicAccessRole.qualificationScorer => 'Event Scorer',
       MosaicAccessRole.eventScorer => 'Event Scorer',
     };
   }

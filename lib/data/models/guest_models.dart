@@ -127,6 +127,7 @@ class CreateGuestInput {
     required this.coverStatus,
     required this.coverAmountCents,
     required this.isComped,
+    this.tournamentStatus = EventTournamentStatus.qualified,
     this.publicDisplayName,
     this.phoneE164,
     this.emailLower,
@@ -138,6 +139,7 @@ class CreateGuestInput {
   final String eventId;
   final String displayName;
   final String normalizedName;
+  final EventTournamentStatus tournamentStatus;
   final String? publicDisplayName;
   final String? guestProfileId;
   final String? phoneE164;
@@ -160,9 +162,7 @@ class CreateGuestInput {
       'phone_e164': phoneE164,
       'email_lower': emailLower,
       'attendance_status': 'expected',
-      'tournament_status': _eventTournamentStatusToJson(
-        EventTournamentStatus.openPlayOnly,
-      ),
+      'tournament_status': _eventTournamentStatusToJson(tournamentStatus),
       'cover_status': _coverStatusToJson(coverStatus),
       'cover_amount_cents': coverAmountCents,
       'is_comped': isComped,
@@ -182,6 +182,7 @@ class UpdateGuestInput {
     required this.coverStatus,
     required this.coverAmountCents,
     required this.isComped,
+    this.tournamentStatus,
     this.publicDisplayName,
     this.phoneE164,
     this.emailLower,
@@ -193,6 +194,7 @@ class UpdateGuestInput {
   final String eventId;
   final String displayName;
   final String normalizedName;
+  final EventTournamentStatus? tournamentStatus;
   final String? publicDisplayName;
   final String? phoneE164;
   final String? emailLower;
@@ -209,6 +211,8 @@ class UpdateGuestInput {
       'public_display_name': publicDisplayName,
       'phone_e164': phoneE164,
       'email_lower': emailLower,
+      if (tournamentStatus != null)
+        'tournament_status': _eventTournamentStatusToJson(tournamentStatus!),
       'cover_status': _coverStatusToJson(coverStatus),
       'cover_amount_cents': coverAmountCents,
       'is_comped': isComped,

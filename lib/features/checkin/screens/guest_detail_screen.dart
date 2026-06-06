@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/guest_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/controllers/guest_check_in_controller.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
 import 'package:mosaic/features/checkin/screens/add_cover_entry_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
-import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 class GuestDetailScreen extends StatefulWidget {
@@ -18,9 +16,7 @@ class GuestDetailScreen extends StatefulWidget {
     this.canCheckIn = true,
     this.canManageGuests = true,
     this.canManageCover = true,
-    this.canAssignTags = true,
     required this.guestRepository,
-    required this.nfcService,
   });
 
   final String guestId;
@@ -28,9 +24,7 @@ class GuestDetailScreen extends StatefulWidget {
   final bool canCheckIn;
   final bool canManageGuests;
   final bool canManageCover;
-  final bool canAssignTags;
   final GuestRepository guestRepository;
-  final NfcService nfcService;
 
   @override
   State<GuestDetailScreen> createState() => _GuestDetailScreenState();
@@ -152,7 +146,6 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
   Widget build(BuildContext context) {
     final detail = _controller.detail;
     final guest = detail?.guest;
-    final assignment = detail?.activeTagAssignment;
 
     return Scaffold(
       appBar: AppBar(
@@ -205,22 +198,6 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                   ? StatusChipTone.neutral
                   : _coverStatusTone(guest.coverStatus),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Player Tag',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 8),
-            StatusChip(
-              label: assignment == null ? 'Tag Unassigned' : 'Tag Assigned',
-              tone: assignment == null
-                  ? StatusChipTone.warning
-                  : StatusChipTone.success,
-            ),
-            if (assignment != null) ...[
-              const SizedBox(height: 8),
-              Text(_tagDetailText(assignment)),
-            ],
             const SizedBox(height: 24),
             Row(
               children: [
@@ -273,7 +250,7 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Mark this guest paid or comped before assigning a player tag.',
+                        'Mark this guest paid or comped before check-in.',
                       ),
                       SizedBox(height: 8),
                       Text(
@@ -283,83 +260,23 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                   ),
                 ),
               ),
-            if (guest != null && guest.isEligibleForPlayerTagAssignment) ...[
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
+            if (guest != null &&
+                guest.isEligibleForPlayerTagAssignment &&
+                !guest.isCheckedIn &&
+                widget.canCheckIn &&
+                guest.tournamentStatus != EventTournamentStatus.withdrawn)
+              FilledButton(
+                onPressed: _controller.isSubmitting
+                    ? null
+                    : () => _controller.checkIn(
+                          guestId: widget.guestId,
+                        ),
                 child: Text(
-                  assignment == null
-                      ? _tagPromptForGuest(guest)
-                      : 'This guest already has a player tag. Replace it only if needed.',
+                  _controller.isSubmitting
+                      ? 'Saving...'
+                      : _checkInLabel(guest.tournamentStatus),
                 ),
               ),
-              if (!guest.isCheckedIn &&
-                  assignment == null &&
-                  (widget.canCheckIn || widget.canAssignTags))
-                Row(
-                  children: [
-                    if (widget.canCheckIn)
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _controller.isSubmitting
-                              ? null
-                              : () => _controller.checkIn(
-                                    guestId: widget.guestId,
-                                  ),
-                          child: Text(
-                            _controller.isSubmitting ? 'Saving...' : 'Check In',
-                          ),
-                        ),
-                      ),
-                    if (widget.canCheckIn && widget.canAssignTags)
-                      const SizedBox(width: 12),
-                    if (widget.canAssignTags)
-                      Expanded(
-                        child: FilledButton(
-                          onPressed: _controller.isSubmitting
-                              ? null
-                              : () => _controller.assignTag(
-                                    guestId: widget.guestId,
-                                    scanForTag: () => widget.nfcService
-                                        .scanPlayerTagForAssignment(context),
-                                  ),
-                          child: Text(
-                            _controller.isSubmitting
-                                ? 'Saving...'
-                                : 'Assign Tag',
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              if (guest.isCheckedIn &&
-                  assignment == null &&
-                  widget.canAssignTags)
-                FilledButton(
-                  onPressed: _controller.isSubmitting
-                      ? null
-                      : () => _controller.assignTag(
-                            guestId: widget.guestId,
-                            scanForTag: () => widget.nfcService
-                                .scanPlayerTagForAssignment(context),
-                          ),
-                  child: Text(
-                    _controller.isSubmitting ? 'Saving...' : 'Assign Tag',
-                  ),
-                ),
-              if (assignment != null && widget.canAssignTags)
-                FilledButton(
-                  onPressed: _controller.isSubmitting
-                      ? null
-                      : () => _controller.replaceTag(
-                            guestId: widget.guestId,
-                            scanForTag: () => widget.nfcService
-                                .scanPlayerTagForAssignment(context),
-                          ),
-                  child: Text(
-                    _controller.isSubmitting ? 'Saving...' : 'Replace Tag',
-                  ),
-                ),
-            ],
             if (_controller.actionError != null) ...[
               const SizedBox(height: 12),
               Text(_controller.actionError!),
@@ -381,24 +298,6 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
     };
     return '$methodLabel \$${_formatMoneyCents(entry.amountCents)} - '
         '${_formatDate(entry.transactionOn)}';
-  }
-
-  String _tagDetailText(GuestTagAssignmentSummary assignment) {
-    final label = assignment.tag.displayLabel?.trim();
-    if (label != null && label.isNotEmpty) {
-      return 'Tag: $label - UID ${assignment.tag.uidHex}';
-    }
-    return 'UID: ${assignment.tag.uidHex}';
-  }
-
-  String _tagPromptForGuest(EventGuestRecord guest) {
-    if (guest.isCheckedIn) {
-      return 'This guest is ready for a player tag.';
-    }
-    if (guest.tournamentStatus == EventTournamentStatus.openPlayOnly) {
-      return 'This guest can check in for open play without a tag.';
-    }
-    return 'This guest is ready to check in and receive a player tag.';
   }
 
   String _formatMoneyCents(int cents) {
@@ -452,6 +351,15 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
       CoverStatus.partial => StatusChipTone.warning,
       CoverStatus.unpaid => StatusChipTone.warning,
       CoverStatus.refunded => StatusChipTone.neutral,
+    };
+  }
+
+  String _checkInLabel(EventTournamentStatus status) {
+    return switch (status) {
+      EventTournamentStatus.qualified => 'Check In: Prequalified',
+      EventTournamentStatus.qualifying => 'Check In: Considered',
+      EventTournamentStatus.openPlayOnly => 'Check In: Not Playing Tournament',
+      EventTournamentStatus.withdrawn => 'Check In',
     };
   }
 }

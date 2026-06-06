@@ -81,7 +81,6 @@ class EventDashboardController extends ChangeNotifier {
   int tableCount = 0;
   int? prizePoolCents;
   String leaderLabel = 'No scores';
-  List<QualificationLeaderboardRow> qualificationLeaderboard = const [];
   BonusRoundResultsSummary bonusRoundResults = const BonusRoundResultsSummary();
   TournamentRoundSummary tournamentRoundSummary =
       TournamentRoundSummary.empty();
@@ -147,7 +146,6 @@ class EventDashboardController extends ChangeNotifier {
     _updateGuestSummaries(cachedGuests);
     tableCount = cachedTables?.length ?? 0;
     leaderLabel = _formatLeader(cachedLeaderboard);
-    qualificationLeaderboard = const [];
     _bonusLedgerEntries = cachedLedger ?? const [];
     _leaderboardEntries = cachedLeaderboard ?? const [];
     _rebuildBonusRoundResults();
@@ -248,20 +246,6 @@ class EventDashboardController extends ChangeNotifier {
     }
     bonusRoundState = loadedBonusRoundState;
     _rebuildBonusRoundResults();
-
-    try {
-      final loadedQualificationLeaderboard = await _guestRepository
-          .fetchQualificationLeaderboard(eventId: eventId);
-      if (!_isCurrentStateRequest(requestToken)) {
-        return;
-      }
-      qualificationLeaderboard = loadedQualificationLeaderboard;
-    } catch (_) {
-      if (!_isCurrentStateRequest(requestToken)) {
-        return;
-      }
-      qualificationLeaderboard = const [];
-    }
 
     if (!_isCurrentStateRequest(requestToken)) {
       return;

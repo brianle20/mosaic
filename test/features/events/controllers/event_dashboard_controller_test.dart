@@ -497,7 +497,7 @@ void main() {
     expect(controller.canScoreBonus, isTrue);
   });
 
-  test('qualification scorers cannot score tournament or bonus phases', () {
+  test('legacy qualification scorers can score current phases', () {
     final controller = EventDashboardController(
       eventRepository: _FakeEventRepository(cachedEvents: const []),
       guestRepository: _FakeGuestRepository(cachedGuests: const []),
@@ -507,8 +507,8 @@ void main() {
     expect(controller.canManageEvent, isFalse);
     expect(controller.canManageStaff, isFalse);
     expect(controller.canScoreQualification, isTrue);
-    expect(controller.canScoreTournament, isFalse);
-    expect(controller.canScoreBonus, isFalse);
+    expect(controller.canScoreTournament, isTrue);
+    expect(controller.canScoreBonus, isTrue);
   });
 
   test('loads cached dashboard data when remote fetches fail', () async {
@@ -662,7 +662,7 @@ void main() {
     expect(controller.leaderLabel, 'Brian Le');
   });
 
-  test('defaults to qualification phase and loads qualification leaderboard',
+  test('defaults to tournament phase without loading qualification leaderboard',
       () async {
     final event = EventRecord.fromJson(const {
       'id': 'evt_01',
@@ -684,10 +684,7 @@ void main() {
 
     await controller.load('evt_01');
 
-    expect(
-        controller.event?.currentScoringPhase, EventScoringPhase.qualification);
-    expect(controller.qualificationLeaderboard.single.fullName, 'Brian Le');
-    expect(controller.qualificationLeaderboard.single.qualificationPoints, 48);
+    expect(controller.event?.currentScoringPhase, EventScoringPhase.tournament);
   });
 
   test('loads bonus round sudden death state with finals data', () async {

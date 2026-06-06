@@ -393,9 +393,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(StatusChip, 'Check-In Open'), findsOneWidget);
+    expect(find.widgetWithText(StatusChip, 'Qualification Open'), findsNothing);
     expect(
-        find.widgetWithText(StatusChip, 'Qualification Open'), findsOneWidget);
-    expect(find.widgetWithText(StatusChip, 'Tournament Live'), findsOneWidget);
+        find.widgetWithText(StatusChip, 'Tournament Live'), findsNWidgets(2));
     expect(find.widgetWithText(StatusChip, 'Finals Live'), findsOneWidget);
     expect(find.widgetWithText(StatusChip, 'Scoring Open'), findsNothing);
     expect(find.text('Apr 29, 10:00 PM'), findsNWidgets(4));
@@ -411,7 +411,7 @@ void main() {
     expect(
       tester
           .widget<StatusChip>(
-            find.widgetWithText(StatusChip, 'Qualification Open'),
+            find.widgetWithText(StatusChip, 'Tournament Live').first,
           )
           .tone,
       StatusChipTone.info,
@@ -419,7 +419,7 @@ void main() {
     expect(
       tester
           .widget<StatusChip>(
-            find.widgetWithText(StatusChip, 'Tournament Live'),
+            find.widgetWithText(StatusChip, 'Tournament Live').last,
           )
           .tone,
       StatusChipTone.info,
@@ -653,6 +653,6 @@ void main() {
 
     expect(find.text('Create Event'), findsNothing);
     expect(find.text('Friday Night Mahjong'), findsOneWidget);
-    expect(find.text('Qualification Scorer'), findsOneWidget);
+    expect(find.text('Event Scorer'), findsOneWidget);
   });
 }

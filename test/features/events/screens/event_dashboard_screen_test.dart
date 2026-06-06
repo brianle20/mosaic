@@ -1122,8 +1122,7 @@ void main() {
     expect(find.text('Activity'), findsOneWidget);
   });
 
-  testWidgets(
-      'dashboard links to qualification standings without embedding them',
+  testWidgets('dashboard does not link to qualification standings',
       (tester) async {
     final event = EventRecord.fromJson({
       ...activeEvent.toJson(),
@@ -1132,7 +1131,7 @@ void main() {
 
     await _pumpDashboard(tester, event: event);
 
-    expect(find.text('Qualification Open'), findsOneWidget);
+    expect(find.text('Tournament Live'), findsOneWidget);
 
     await tester.drag(find.byType(ListView), const Offset(0, -700));
     await tester.pumpAndSettle();
@@ -1141,7 +1140,7 @@ void main() {
     expect(find.text('Qualification'), findsNothing);
     expect(find.text('Tournament'), findsNothing);
     expect(find.text('Bonus'), findsNothing);
-    expect(find.text('View Qualification Standings'), findsOneWidget);
+    expect(find.text('View Qualification Standings'), findsNothing);
     expect(find.text('Qualification Leaderboard'), findsNothing);
     expect(find.text('Alice Wong'), findsNothing);
     expect(find.text('72 pts'), findsNothing);
@@ -2077,7 +2076,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(openedArgs?.canCheckIn, isFalse);
-    expect(openedArgs?.canAssignTags, isFalse);
     expect(openedArgs?.canManageGuests, isFalse);
   });
 
@@ -2172,17 +2170,17 @@ void main() {
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 
-    expect(find.text('Start Qualification'), findsOneWidget);
+    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Start Qualification'), findsNothing);
     expect(find.text('Scan Table'), findsOneWidget);
 
-    final openScoringTop =
-        tester.getTopLeft(find.text('Start Qualification')).dy;
+    final openScoringTop = tester.getTopLeft(find.text('Open Scoring')).dy;
     final scanTableTop = tester.getTopLeft(find.text('Scan Table')).dy;
 
     expect(openScoringTop, lessThan(scanTableTop));
   });
 
-  testWidgets('qualification setup dashboard shows event-day next step',
+  testWidgets('active check-in dashboard opens tournament scoring',
       (tester) async {
     final eventRepository = _EventRepository(
       activeCheckinOnlyEvent,
@@ -2258,23 +2256,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Start Qualification'), findsOneWidget);
-    expect(find.text('Open Scoring'), findsNothing);
-    expect(find.text('Qualification'), findsAtLeastNWidgets(1));
+    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Start Qualification'), findsNothing);
+    expect(find.text('Qualification'), findsNothing);
+    expect(find.text('Guests'), findsOneWidget);
     expect(find.text('Tables'), findsOneWidget);
     expect(find.text('Checked In'), findsNothing);
-    expect(find.text('2'), findsOneWidget);
-    expect(find.text('Qualifying'), findsOneWidget);
-    expect(find.text('1'), findsNWidgets(2));
-    expect(find.text('Qualified'), findsOneWidget);
-    expect(find.text('Live Operations'), findsNothing);
+    expect(find.text('Qualifying'), findsNothing);
+    expect(find.text('Qualified'), findsNothing);
+    expect(find.text('Live Operations'), findsOneWidget);
     expect(
       find.text(
           'Start qualification when hosts are ready to log open-play games.'),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Prize Pool'), findsNothing);
-    expect(find.text('Leader'), findsNothing);
+    expect(find.text('Prize Pool'), findsOneWidget);
+    expect(find.text('Leader'), findsOneWidget);
 
     await tester.tap(find.text('Tables'));
     await tester.pumpAndSettle();
@@ -2287,7 +2284,7 @@ void main() {
     Navigator.of(tester.element(find.text('Opened Tables'))).pop();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Start Qualification'));
+    await tester.tap(find.text('Open Scoring'));
     await tester.pumpAndSettle();
 
     expect(eventRepository.event.scoringOpen, isTrue);
@@ -2580,7 +2577,8 @@ void main() {
     expect(find.text('Check-In Open'), findsOneWidget);
     expect(find.text('Scoring Not Open'), findsOneWidget);
     expect(find.text('Close Check-In'), findsNothing);
-    expect(find.text('Start Qualification'), findsOneWidget);
+    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Start Qualification'), findsNothing);
   });
 
   testWidgets('active event exposes operational flag actions', (tester) async {
@@ -2605,15 +2603,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Qualification'), findsAtLeastNWidgets(1));
+    expect(find.text('Qualification'), findsNothing);
     expect(find.text('Check-In Open'), findsOneWidget);
     expect(find.text('Scoring Not Open'), findsOneWidget);
     expect(find.text('Close Check-In'), findsNothing);
-    expect(find.text('Start Qualification'), findsOneWidget);
+    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Start Qualification'), findsNothing);
 
-    await tester.ensureVisible(find.text('Start Qualification'));
+    await tester.ensureVisible(find.text('Open Scoring'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Start Qualification'));
+    await tester.tap(find.text('Open Scoring'));
     await tester.pumpAndSettle();
 
     await tester.drag(find.byType(ListView), const Offset(0, 400));
@@ -2624,7 +2623,8 @@ void main() {
     expect(find.text('Close Hand Entry'), findsOneWidget);
   });
 
-  testWidgets('qualification scoring exposes a clear start tournament action',
+  testWidgets(
+      'qualification scoring phase does not expose game tracking action',
       (tester) async {
     final event = EventRecord.fromJson({
       ...activeEvent.toJson(),
@@ -2634,12 +2634,12 @@ void main() {
 
     await _pumpDashboard(tester, event: event);
 
-    expect(find.text('Start Tournament'), findsOneWidget);
+    expect(find.text('Start Tournament'), findsNothing);
     expect(find.text('Pause Scoring'), findsNothing);
     expect(find.text('Close Hand Entry'), findsOneWidget);
-    expect(find.text('Qualification hand entry is open for hosts.'),
+    expect(find.text('Hand entry and check-in are open for hosts.'),
         findsOneWidget);
-    expect(find.text('Qualification Open'), findsOneWidget);
+    expect(find.text('Tournament Live'), findsOneWidget);
     expect(find.text('Scoring Phase'), findsNothing);
   });
 
@@ -2747,9 +2747,10 @@ void main() {
       ),
     );
 
-    expect(find.text('Tournament Round'), findsOneWidget);
-    expect(find.text('No tournament round generated'), findsOneWidget);
-    expect(find.text('Generate Tournament Round'), findsOneWidget);
+    expect(find.text('Tournament Round'), findsNothing);
+    expect(find.text('No tournament round generated'), findsNothing);
+    expect(find.text('Generate Tournament Round'), findsNothing);
+    expect(find.text('Scan Table'), findsOneWidget);
   });
 
   testWidgets('finals live dashboard ignores stale tournament round summary',
@@ -3037,7 +3038,7 @@ void main() {
     );
   });
 
-  testWidgets('start tournament opens seating with generated assignments',
+  testWidgets('qualification phase does not expose start tournament flow',
       (tester) async {
     _SeatingRepository.generatedRandomAssignmentCount = 0;
     _SeatingRepository.generatedTournamentRoundCount = 0;
@@ -3046,7 +3047,6 @@ void main() {
       'scoring_open': true,
       'current_scoring_phase': 'qualification',
     });
-    final generatedAssignments = [_assignment(eventId: event.id)];
 
     await tester.pumpWidget(
       MaterialApp(
@@ -3063,40 +3063,16 @@ void main() {
           ),
           guestRepository: _GuestRepository(),
           leaderboardRepository: _LeaderboardRepository(),
-          seatingRepository: _SeatingRepository(
-            generatedAssignments: generatedAssignments,
-          ),
+          seatingRepository: const _SeatingRepository(),
           sessionRepository: const _SessionRepository(),
         ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.seatingAssignmentsRoute) {
-            final args = settings.arguments! as SeatingAssignmentsArgs;
-            return MaterialPageRoute<void>(
-              builder: (_) => SeatingAssignmentScreen(
-                eventId: args.eventId,
-                seatingRepository: const _SeatingRepository(),
-                guestRepository: _GuestRepository(),
-                sessionRepository: const _SessionRepository(),
-                initialAssignments: args.initialAssignments,
-              ),
-              settings: settings,
-            );
-          }
-          return null;
-        },
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Start Tournament'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(SeatingAssignmentScreen), findsOneWidget);
-    expect(find.text('Table 1'), findsOneWidget);
-    expect(find.text('Ava East'), findsOneWidget);
-    expect(find.text('Generate random seating for checked-in players.'),
-        findsNothing);
-    expect(_SeatingRepository.generatedTournamentRoundCount, 1);
+    expect(find.text('Start Tournament'), findsNothing);
+    expect(find.byType(SeatingAssignmentScreen), findsNothing);
+    expect(_SeatingRepository.generatedTournamentRoundCount, 0);
     expect(_SeatingRepository.generatedRandomAssignmentCount, 0);
   });
 
@@ -3228,7 +3204,7 @@ void main() {
 
     await tester.drag(find.byType(ListView), const Offset(0, -240));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Start Qualification'));
+    await tester.tap(find.text('Open Scoring'));
     await tester.pumpAndSettle();
 
     expect(

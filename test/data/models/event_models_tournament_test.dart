@@ -40,13 +40,13 @@ void main() {
       }
     });
 
-    test('defaults missing scoring phase to qualification', () {
+    test('defaults missing scoring phase to tournament', () {
       final event = EventRecord.fromJson(
         _eventJson()..remove('current_scoring_phase'),
       );
 
-      expect(event.currentScoringPhase, EventScoringPhase.qualification);
-      expect(event.toJson()['current_scoring_phase'], 'qualification');
+      expect(event.currentScoringPhase, EventScoringPhase.tournament);
+      expect(event.toJson()['current_scoring_phase'], 'tournament');
     });
   });
 }

@@ -152,7 +152,7 @@ void main() {
             'cover_charge_cents': 2000,
             'default_ruleset_id': 'HK_STANDARD',
             'prevailing_wind': 'east',
-            'current_scoring_phase': 'qualification',
+            'current_scoring_phase': 'tournament',
           };
         },
       );
@@ -164,7 +164,7 @@ void main() {
       expect(copiedEvent.lifecycleStatus, EventLifecycleStatus.draft);
       expect(copiedEvent.checkinOpen, isFalse);
       expect(copiedEvent.scoringOpen, isFalse);
-      expect(copiedEvent.currentScoringPhase, EventScoringPhase.qualification);
+      expect(copiedEvent.currentScoringPhase, EventScoringPhase.tournament);
 
       final cachedEvent = cache.readEvent('evt_copy');
       expect(cachedEvent, isNotNull);
@@ -204,7 +204,7 @@ void main() {
             'cover_charge_cents': 1500,
             'default_ruleset_id': 'HK_STANDARD',
             'prevailing_wind': 'east',
-            'current_scoring_phase': 'qualification',
+            'current_scoring_phase': 'tournament',
             'venue_name': 'Club 88',
             'venue_address': '123 Bamboo Ave',
           };

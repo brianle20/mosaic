@@ -30,7 +30,7 @@ class _EventStaffScreenState extends State<EventStaffScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _nameController = TextEditingController();
-  EventStaffRole _role = EventStaffRole.qualificationScorer;
+  EventStaffRole _role = EventStaffRole.eventScorer;
 
   @override
   void initState() {
@@ -74,13 +74,13 @@ class _EventStaffScreenState extends State<EventStaffScreen> {
     _phoneController.clear();
     _nameController.clear();
     setState(() {
-      _role = EventStaffRole.qualificationScorer;
+      _role = EventStaffRole.eventScorer;
     });
   }
 
   String _roleLabel(EventStaffRole role) {
     return switch (role) {
-      EventStaffRole.qualificationScorer => 'Qualification Scorer',
+      EventStaffRole.qualificationScorer => 'Event Scorer',
       EventStaffRole.eventScorer => 'Event Scorer',
     };
   }
@@ -150,27 +150,9 @@ class _EventStaffScreenState extends State<EventStaffScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  SegmentedButton<EventStaffRole>(
-                    segments: [
-                      ButtonSegment(
-                        value: EventStaffRole.qualificationScorer,
-                        label: Text(
-                          _roleLabel(EventStaffRole.qualificationScorer),
-                        ),
-                      ),
-                      ButtonSegment(
-                        value: EventStaffRole.eventScorer,
-                        label: Text(_roleLabel(EventStaffRole.eventScorer)),
-                      ),
-                    ],
-                    selected: {_role},
-                    onSelectionChanged: _controller.isSubmitting
-                        ? null
-                        : (selection) {
-                            setState(() {
-                              _role = selection.single;
-                            });
-                          },
+                  InputDecorator(
+                    decoration: const InputDecoration(labelText: 'Role'),
+                    child: Text(_roleLabel(_role)),
                   ),
                   if (_controller.submitError != null) ...[
                     const SizedBox(height: 10),

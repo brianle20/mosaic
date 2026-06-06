@@ -11,7 +11,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
     });
 
-    test('creating a guest writes generated public names and open play status',
+    test('creating a guest writes generated public names and selected status',
         () async {
       final cache = await LocalCache.create();
       late Map<String, dynamic> capturedProfileInsert;
@@ -64,6 +64,7 @@ void main() {
           coverStatus: CoverStatus.paid,
           coverAmountCents: 2000,
           isComped: false,
+          tournamentStatus: EventTournamentStatus.qualifying,
         ),
       );
 
@@ -71,9 +72,9 @@ void main() {
       expect(capturedProfileInsert['public_display_name'], 'Brian L.');
       expect(capturedEventGuestInsert['display_name'], 'Brian Le');
       expect(capturedEventGuestInsert['public_display_name'], 'Brian L.');
-      expect(capturedEventGuestInsert['tournament_status'], 'open_play_only');
+      expect(capturedEventGuestInsert['tournament_status'], 'qualifying');
       expect(guest.publicDisplayName, 'Brian L.');
-      expect(guest.tournamentStatus, EventTournamentStatus.openPlayOnly);
+      expect(guest.tournamentStatus, EventTournamentStatus.qualifying);
     });
 
     test('creating a guest preserves an explicit public display name',

@@ -124,7 +124,7 @@ class EventRecord {
     required this.coverChargeCents,
     required this.defaultRulesetId,
     required this.prevailingWind,
-    this.currentScoringPhase = EventScoringPhase.qualification,
+    this.currentScoringPhase = EventScoringPhase.tournament,
     this.seatingMode = EventSeatingMode.random,
     this.description,
     this.venueName,
@@ -164,7 +164,7 @@ class EventRecord {
         _stringOrDefault(
           json,
           'current_scoring_phase',
-          'qualification',
+          'tournament',
         ),
       ),
       seatingMode: _eventSeatingModeFromJson(

@@ -115,7 +115,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         canCheckIn: _controller.canManageEvent,
         canManageGuests: _controller.canManageEvent,
         canManageCover: _controller.canManageEvent,
-        canAssignTags: _controller.canManageEvent,
         canManageTournamentStatus: _controller.canManageEvent,
       ),
     );
@@ -203,7 +202,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             table: table,
             scoringPhase: _controller.effectiveScoringPhase ??
                 _controller.event?.currentScoringPhase ??
-                EventScoringPhase.qualification,
+                EventScoringPhase.tournament,
             preverifiedTableTagUid: preverifiedTableTagUid,
           ),
         );
@@ -211,7 +210,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     }
   }
 
-  Future<void> _openLeaderboard({bool initialQualificationTab = false}) async {
+  Future<void> _openLeaderboard() async {
     final event = _controller.event;
     if (event == null) {
       return;
@@ -221,7 +220,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       AppRouter.leaderboardRoute,
       arguments: LeaderboardArgs(
         eventId: event.id,
-        initialQualificationTab: initialQualificationTab,
       ),
     );
     await _reloadDashboardAfterReturn(event.id);
@@ -320,28 +318,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     await Navigator.of(context).pushNamed(
       AppRouter.eventHandLedgerRoute,
       arguments: EventHandLedgerArgs(eventId: event.id),
-    );
-    await _reloadDashboardAfterReturn(event.id);
-  }
-
-  Future<void> _startTournament() async {
-    final event = _controller.event;
-    if (event == null) {
-      return;
-    }
-
-    final assignments = await _controller.startTournament();
-    if (!mounted || assignments == null) {
-      _scrollToTop();
-      return;
-    }
-
-    await Navigator.of(context).pushNamed(
-      AppRouter.seatingAssignmentsRoute,
-      arguments: SeatingAssignmentsArgs(
-        eventId: event.id,
-        initialAssignments: assignments,
-      ),
     );
     await _reloadDashboardAfterReturn(event.id);
   }
@@ -521,7 +497,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
   String _activeScoringLabel(EventScoringPhase phase) {
     return switch (phase) {
-      EventScoringPhase.qualification => 'Qualification Open',
+      EventScoringPhase.qualification => 'Tournament Live',
       EventScoringPhase.tournament => 'Tournament Live',
       EventScoringPhase.bonus => 'Finals Live',
     };
@@ -611,7 +587,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             _canScorePhase(
               _controller.effectiveScoringPhase ??
                   event?.currentScoringPhase ??
-                  EventScoringPhase.qualification,
+                  EventScoringPhase.tournament,
             );
     return Scaffold(
       appBar: AppBar(title: Text(event?.title ?? 'Event Dashboard')),
@@ -871,11 +847,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         lifecycleStatus != EventLifecycleStatus.completed &&
             lifecycleStatus != EventLifecycleStatus.finalized &&
             lifecycleStatus != EventLifecycleStatus.cancelled;
-    final showQualificationSetup = _usesQualificationSetupDashboard(event);
     final showTournamentCommandCenter = _controller.canManageEvent &&
         lifecycleStatus == EventLifecycleStatus.active &&
         event.scoringOpen &&
-        scoringPhase == EventScoringPhase.tournament;
+        scoringPhase == EventScoringPhase.tournament &&
+        _controller.tournamentRoundSummary.hasCurrentRound;
     final showFinalsCommandCenter = _controller.canManageEvent &&
         lifecycleStatus == EventLifecycleStatus.active &&
         event.scoringOpen &&
@@ -932,31 +908,19 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 scoringOpen: event.scoringOpen,
               ),
               const SizedBox(height: 14),
-              if (showQualificationSetup)
-                _QualificationSetupMetricsRow(
-                  guestCount: _controller.guestCount,
-                  tableCount: _controller.tableCount,
-                  qualifyingCount: _controller.qualifyingGuestCount,
-                  qualifiedCount: _controller.qualifiedGuestCount,
-                  onGuests: _openGuests,
-                  onTables: _openTables,
-                  onQualifying: _openGuests,
-                  onQualified: _openGuests,
-                )
-              else
-                _LiveMetricsRow(
-                  guestCount: _controller.guestCount,
-                  tableCount: _controller.tableCount,
-                  prizePoolLabel: _formatPrizePoolValue(
-                    _controller.prizePoolCents,
-                  ),
-                  leaderLabel: _controller.leaderLabel,
-                  onGuests: _openGuests,
-                  onTables: _openTables,
-                  onPrizes: _openPrizes,
-                  canOpenPrizes: _controller.canManageEvent,
-                  onLeaderboard: _openLeaderboard,
+              _LiveMetricsRow(
+                guestCount: _controller.guestCount,
+                tableCount: _controller.tableCount,
+                prizePoolLabel: _formatPrizePoolValue(
+                  _controller.prizePoolCents,
                 ),
+                leaderLabel: _controller.leaderLabel,
+                onGuests: _openGuests,
+                onTables: _openTables,
+                onPrizes: _openPrizes,
+                canOpenPrizes: _controller.canManageEvent,
+                onLeaderboard: _openLeaderboard,
+              ),
               if (_controller.bonusRoundResults.hasResults) ...[
                 const SizedBox(height: 12),
                 _BonusRoundResultsPanel(summary: _controller.bonusRoundResults),
@@ -1009,28 +973,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
               if (_controller.canManageEvent &&
                   lifecycleStatus == EventLifecycleStatus.active) ...[
                 _LiveOperationsStrip(
-                  isSubmitting: _controller.isSubmittingLifecycle,
                   scoringOpen: event.scoringOpen,
-                  title: showQualificationSetup
-                      ? 'Qualification'
-                      : 'Live Operations',
-                  openMessage: event.currentScoringPhase ==
-                          EventScoringPhase.qualification
-                      ? 'Qualification hand entry is open for hosts.'
-                      : 'Hand entry and check-in are open for hosts.',
-                  closedMessage: showQualificationSetup
-                      ? 'Start qualification when hosts are ready to log open-play games.'
-                      : 'Reopen hand entry when hosts are ready to score hands.',
-                  primaryActionLabel: event.currentScoringPhase ==
-                              EventScoringPhase.qualification &&
-                          event.scoringOpen
-                      ? 'Start Tournament'
-                      : null,
-                  onPrimaryAction: event.currentScoringPhase ==
-                              EventScoringPhase.qualification &&
-                          event.scoringOpen
-                      ? _startTournament
-                      : null,
+                  title: 'Live Operations',
+                  openMessage: 'Hand entry and check-in are open for hosts.',
+                  closedMessage:
+                      'Reopen hand entry when hosts are ready to score hands.',
                 ),
                 const SizedBox(height: 18),
               ],
@@ -1066,21 +1013,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                         )
                     : null,
               ),
-              if (lifecycleStatus == EventLifecycleStatus.active) ...[
-                const SizedBox(height: 14),
-                if (event.currentScoringPhase ==
-                    EventScoringPhase.qualification)
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _openLeaderboard(
-                        initialQualificationTab: true,
-                      ),
-                      icon: const Icon(Icons.leaderboard),
-                      label: const Text('View Qualification Standings'),
-                    ),
-                  ),
-              ],
             ],
           ),
         ),
@@ -1092,9 +1024,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.draft => 'Open Check-In',
       EventLifecycleStatus.active when event.scoringOpen => 'Scan Table',
-      EventLifecycleStatus.active
-          when _usesQualificationSetupDashboard(event) =>
-        'Start Qualification',
       EventLifecycleStatus.active => 'Open Scoring',
       EventLifecycleStatus.completed => 'Finalize Event',
       EventLifecycleStatus.finalized => 'View Leaderboard',
@@ -1106,9 +1035,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.draft => Icons.how_to_reg,
       EventLifecycleStatus.active when event.scoringOpen => Icons.nfc,
-      EventLifecycleStatus.active
-          when _usesQualificationSetupDashboard(event) =>
-        Icons.play_arrow,
       EventLifecycleStatus.active => Icons.play_arrow,
       EventLifecycleStatus.completed => Icons.verified,
       EventLifecycleStatus.finalized => Icons.leaderboard,
@@ -1154,12 +1080,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       EventLifecycleStatus.finalized => () => _openLeaderboard(),
       EventLifecycleStatus.cancelled => _openActivity,
     };
-  }
-
-  bool _usesQualificationSetupDashboard(EventRecord event) {
-    return event.lifecycleStatus == EventLifecycleStatus.active &&
-        !event.scoringOpen &&
-        event.currentScoringPhase == EventScoringPhase.qualification;
   }
 
   bool _canScorePhase(EventScoringPhase phase) {
@@ -1610,93 +1530,18 @@ class _LiveMetricsRow extends StatelessWidget {
   }
 }
 
-class _QualificationSetupMetricsRow extends StatelessWidget {
-  const _QualificationSetupMetricsRow({
-    required this.guestCount,
-    required this.tableCount,
-    required this.qualifyingCount,
-    required this.qualifiedCount,
-    required this.onGuests,
-    required this.onTables,
-    required this.onQualifying,
-    required this.onQualified,
-  });
-
-  final int guestCount;
-  final int tableCount;
-  final int qualifyingCount;
-  final int qualifiedCount;
-  final VoidCallback onGuests;
-  final VoidCallback onTables;
-  final VoidCallback onQualifying;
-  final VoidCallback onQualified;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: MetricTile(
-                label: 'Guests',
-                value: guestCount.toString(),
-                onTap: onGuests,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: MetricTile(
-                label: 'Tables',
-                value: tableCount.toString(),
-                onTap: onTables,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: MetricTile(
-                label: 'Qualifying',
-                value: qualifyingCount.toString(),
-                onTap: onQualifying,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: MetricTile(
-                label: 'Qualified',
-                value: qualifiedCount.toString(),
-                onTap: onQualified,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 class _LiveOperationsStrip extends StatelessWidget {
   const _LiveOperationsStrip({
-    required this.isSubmitting,
     required this.scoringOpen,
     required this.title,
     required this.openMessage,
     required this.closedMessage,
-    required this.primaryActionLabel,
-    required this.onPrimaryAction,
   });
 
-  final bool isSubmitting;
   final bool scoringOpen;
   final String title;
   final String openMessage;
   final String closedMessage;
-  final String? primaryActionLabel;
-  final VoidCallback? onPrimaryAction;
 
   @override
   Widget build(BuildContext context) {
@@ -1729,17 +1574,6 @@ class _LiveOperationsStrip extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (primaryActionLabel != null)
-                FilledButton(
-                  onPressed: isSubmitting ? null : onPrimaryAction,
-                  child: Text(primaryActionLabel!),
-                ),
-            ],
           ),
         ],
       ),

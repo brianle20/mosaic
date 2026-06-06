@@ -11,18 +11,14 @@ class LeaderboardScreen extends StatefulWidget {
     super.key,
     required this.eventId,
     required this.leaderboardRepository,
-    this.guestRepository,
     this.sessionRepository,
     this.seatingRepository,
-    this.initialQualificationTab = false,
   });
 
   final String eventId;
   final LeaderboardRepository leaderboardRepository;
-  final GuestRepository? guestRepository;
   final SessionRepository? sessionRepository;
   final SeatingRepository? seatingRepository;
-  final bool initialQualificationTab;
 
   @override
   State<LeaderboardScreen> createState() => _LeaderboardScreenState();
@@ -31,17 +27,11 @@ class LeaderboardScreen extends StatefulWidget {
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   late final LeaderboardController _controller;
   late _LeaderboardTab _selectedTab;
-  var _qualificationRows = const <QualificationLeaderboardRow>[];
-  var _qualificationLoading = false;
-  String? _qualificationError;
-  var _hasLoadedQualification = false;
 
   @override
   void initState() {
     super.initState();
-    _selectedTab = widget.initialQualificationTab
-        ? _LeaderboardTab.qualification
-        : _LeaderboardTab.tournament;
+    _selectedTab = _LeaderboardTab.tournament;
     _controller = LeaderboardController(
       leaderboardRepository: widget.leaderboardRepository,
       sessionRepository: widget.sessionRepository,
@@ -49,9 +39,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
-    if (_selectedTab == _LeaderboardTab.qualification) {
-      _loadQualificationStandings();
-    }
   }
 
   @override
@@ -68,57 +55,10 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
     }
   }
 
-  Future<void> _loadQualificationStandings({bool force = false}) async {
-    final repository = widget.guestRepository;
-    if (repository == null) {
-      setState(() {
-        _qualificationError = 'Qualification standings are not available.';
-      });
-      return;
-    }
-    if (_qualificationLoading || (_hasLoadedQualification && !force)) {
-      return;
-    }
-
-    setState(() {
-      _qualificationLoading = true;
-      _qualificationError = null;
-    });
-
-    try {
-      final rows = await repository.fetchQualificationLeaderboard(
-        eventId: widget.eventId,
-      );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _qualificationRows = rows;
-        _hasLoadedQualification = true;
-      });
-    } catch (err) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _qualificationError = err.toString();
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _qualificationLoading = false;
-        });
-      }
-    }
-  }
-
   void _selectTab(_LeaderboardTab tab) {
     setState(() {
       _selectedTab = tab;
     });
-    if (tab == _LeaderboardTab.qualification) {
-      _loadQualificationStandings();
-    }
   }
 
   @override
@@ -137,10 +77,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                 onSelectionChanged: (selection) => _selectTab(selection.single),
                 segments: const [
                   ButtonSegment(
-                    value: _LeaderboardTab.qualification,
-                    label: Text('Qualification'),
-                  ),
-                  ButtonSegment(
                     value: _LeaderboardTab.tournament,
                     label: Text('Tournament'),
                   ),
@@ -158,12 +94,6 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   controller: _controller,
                   onRetry: () => _controller.load(widget.eventId),
                 ),
-              _LeaderboardTab.qualification => _QualificationLeaderboardBody(
-                  isLoading: _qualificationLoading,
-                  error: _qualificationError,
-                  rows: _qualificationRows,
-                  onRetry: () => _loadQualificationStandings(force: true),
-                ),
               _LeaderboardTab.finals => _FinalsLeaderboardBody(
                   controller: _controller,
                   onRetry: () => _controller.load(widget.eventId),
@@ -176,7 +106,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
   }
 }
 
-enum _LeaderboardTab { tournament, qualification, finals }
+enum _LeaderboardTab { tournament, finals }
 
 class _TournamentLeaderboardBody extends StatelessWidget {
   const _TournamentLeaderboardBody({
@@ -242,79 +172,6 @@ class _TournamentLeaderboardBody extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _QualificationLeaderboardBody extends StatelessWidget {
-  const _QualificationLeaderboardBody({
-    required this.isLoading,
-    required this.error,
-    required this.rows,
-    required this.onRetry,
-  });
-
-  final bool isLoading;
-  final String? error;
-  final List<QualificationLeaderboardRow> rows;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return AsyncBody(
-      isLoading: isLoading,
-      error: error,
-      onRetry: onRetry,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (rows.isNotEmpty) ...[
-            const _SectionLabel('Qualification Standings'),
-            const SizedBox(height: 8),
-            for (final row in _rankedRows)
-              _QualificationLeaderboardCard(row: row),
-          ],
-          if (rows.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 24),
-              child: EmptyStateCard(
-                icon: Icons.fact_check,
-                title: 'No qualification results yet',
-                message:
-                    'Record qualification hands to see host-only standings.',
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  List<_RankedQualificationRow> get _rankedRows {
-    final sortedRows = [...rows]..sort((left, right) {
-        final pointsComparison = right.qualificationPoints.compareTo(
-          left.qualificationPoints,
-        );
-        if (pointsComparison != 0) {
-          return pointsComparison;
-        }
-        final winsComparison = right.wins.compareTo(left.wins);
-        if (winsComparison != 0) {
-          return winsComparison;
-        }
-        return left.fullName.compareTo(right.fullName);
-      });
-
-    final rankedRows = <_RankedQualificationRow>[];
-    var rank = 0;
-    int? previousPoints;
-    for (final indexedRow in sortedRows.indexed) {
-      final row = indexedRow.$2;
-      if (previousPoints != row.qualificationPoints) {
-        rank = indexedRow.$1 + 1;
-        previousPoints = row.qualificationPoints;
-      }
-      rankedRows.add(_RankedQualificationRow(row: row, rank: rank));
-    }
-    return rankedRows;
   }
 }
 
@@ -450,36 +307,6 @@ class _FinalsLeaderboardLine extends StatelessWidget {
                 ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _RankedQualificationRow {
-  const _RankedQualificationRow({required this.row, required this.rank});
-
-  final QualificationLeaderboardRow row;
-  final int rank;
-}
-
-class _QualificationLeaderboardCard extends StatelessWidget {
-  const _QualificationLeaderboardCard({required this.row});
-
-  final _RankedQualificationRow row;
-
-  @override
-  Widget build(BuildContext context) {
-    final detailLabel = [
-      _pluralize(row.row.handsPlayed, 'hand'),
-      _pluralize(row.row.wins, 'win'),
-    ].join(' • ');
-
-    return Card(
-      child: ListTile(
-        leading: Text('#${row.rank}'),
-        title: Text(row.row.fullName),
-        subtitle: Text(detailLabel),
-        trailing: Text('${row.row.qualificationPoints} pts'),
       ),
     );
   }

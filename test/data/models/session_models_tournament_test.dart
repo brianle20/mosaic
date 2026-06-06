@@ -13,13 +13,13 @@ void main() {
       expect(session.toJson()['scoring_phase'], 'bonus');
     });
 
-    test('defaults missing scoring phase to qualification', () {
+    test('defaults missing scoring phase to tournament', () {
       final session = TableSessionRecord.fromJson(
         _sessionJson()..remove('scoring_phase'),
       );
 
-      expect(session.scoringPhase, EventScoringPhase.qualification);
-      expect(session.toJson()['scoring_phase'], 'qualification');
+      expect(session.scoringPhase, EventScoringPhase.tournament);
+      expect(session.toJson()['scoring_phase'], 'tournament');
     });
   });
 

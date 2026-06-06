@@ -3,42 +3,6 @@ import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
-import 'package:mosaic/services/nfc/nfc_service.dart';
-
-enum GuestTagIdentificationStatus {
-  found,
-  notFound,
-  cancelled,
-}
-
-@immutable
-class GuestTagIdentificationResult {
-  const GuestTagIdentificationResult._({
-    required this.status,
-    this.lookup,
-    this.scannedUid,
-  });
-
-  GuestTagIdentificationResult.found(GuestTagLookupResult lookup)
-      : this._(
-          status: GuestTagIdentificationStatus.found,
-          lookup: lookup,
-          scannedUid: lookup.assignment.tag.uidHex,
-        );
-
-  const GuestTagIdentificationResult.notFound(String scannedUid)
-      : this._(
-          status: GuestTagIdentificationStatus.notFound,
-          scannedUid: scannedUid,
-        );
-
-  const GuestTagIdentificationResult.cancelled()
-      : this._(status: GuestTagIdentificationStatus.cancelled);
-
-  final GuestTagIdentificationStatus status;
-  final GuestTagLookupResult? lookup;
-  final String? scannedUid;
-}
 
 class GuestRosterController extends ChangeNotifier {
   GuestRosterController({required GuestRepository guestRepository})
@@ -47,15 +11,20 @@ class GuestRosterController extends ChangeNotifier {
   final GuestRepository _guestRepository;
 
   bool isLoading = true;
-  bool isIdentifyingTag = false;
   String? error;
   List<EventGuestRecord> guests = const [];
   Map<String, GuestTagAssignmentSummary> activeTagAssignments = const {};
+  bool hasLoadedActiveTagAssignments = false;
   final Set<String> _submittingGuestIds = <String>{};
+  final Set<String> _qualifyingCheckedInConsideredGuestIds = <String>{};
+  bool _isQualifyingCheckedInConsidered = false;
+
+  bool get isQualifyingCheckedInConsidered => _isQualifyingCheckedInConsidered;
 
   Future<void> load(String eventId) async {
     isLoading = true;
     error = null;
+    hasLoadedActiveTagAssignments = false;
     notifyListeners();
 
     final cachedGuests = await _guestRepository.readCachedGuests(eventId);
@@ -69,6 +38,7 @@ class GuestRosterController extends ChangeNotifier {
       guests = await _guestRepository.listGuests(eventId);
       activeTagAssignments =
           await _guestRepository.listActiveTagAssignments(eventId);
+      hasLoadedActiveTagAssignments = true;
     } catch (exception) {
       if (guests.isEmpty) {
         error = exception.toString();
@@ -80,7 +50,8 @@ class GuestRosterController extends ChangeNotifier {
   }
 
   bool isSubmittingGuest(String guestId) =>
-      _submittingGuestIds.contains(guestId);
+      _submittingGuestIds.contains(guestId) ||
+      _qualifyingCheckedInConsideredGuestIds.contains(guestId);
 
   Future<bool> markPaid(String guestId) async {
     final guest = _guestById(guestId);
@@ -149,6 +120,48 @@ class GuestRosterController extends ChangeNotifier {
     return true;
   }
 
+  Future<int> qualifyCheckedInConsidered({Set<String>? guestIds}) async {
+    if (_isQualifyingCheckedInConsidered) {
+      return 0;
+    }
+
+    final targets = guests
+        .where(
+          (guest) =>
+              guest.isCheckedIn &&
+              guest.tournamentStatus == EventTournamentStatus.qualifying &&
+              (guestIds == null || guestIds.contains(guest.id)) &&
+              !isSubmittingGuest(guest.id),
+        )
+        .toList(growable: false);
+
+    if (targets.isEmpty) {
+      return 0;
+    }
+
+    final targetIds = targets.map((guest) => guest.id).toSet();
+    _isQualifyingCheckedInConsidered = true;
+    _qualifyingCheckedInConsideredGuestIds.addAll(targetIds);
+    notifyListeners();
+
+    var promotedCount = 0;
+    try {
+      for (final guest in targets) {
+        final updated = await _guestRepository.updateEventGuestTournamentStatus(
+          eventGuestId: guest.id,
+          status: EventTournamentStatus.qualified,
+        );
+        _mergeGuest(updated);
+        promotedCount += 1;
+      }
+      return promotedCount;
+    } finally {
+      _qualifyingCheckedInConsideredGuestIds.removeAll(targetIds);
+      _isQualifyingCheckedInConsidered = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> removeGuest(String guestId) async {
     await _runGuestAction(
       guestId,
@@ -164,48 +177,6 @@ class GuestRosterController extends ChangeNotifier {
       },
     );
     return true;
-  }
-
-  Future<bool> checkInAndAssign({
-    required String guestId,
-    required Future<TagScanResult?> Function() scanForTag,
-  }) =>
-      assignTag(guestId: guestId, scanForTag: scanForTag);
-
-  Future<GuestTagIdentificationResult> identifyGuestByTag({
-    required String eventId,
-    required Future<TagScanResult?> Function() scanForTag,
-  }) async {
-    if (isIdentifyingTag) {
-      return const GuestTagIdentificationResult.cancelled();
-    }
-
-    isIdentifyingTag = true;
-    notifyListeners();
-
-    try {
-      final scanResult = await scanForTag();
-      if (scanResult == null) {
-        return const GuestTagIdentificationResult.cancelled();
-      }
-
-      final lookup = await _guestRepository.resolveGuestByActiveTag(
-        eventId: eventId,
-        scannedUid: scanResult.normalizedUid,
-      );
-
-      if (lookup == null) {
-        return GuestTagIdentificationResult.notFound(scanResult.normalizedUid);
-      }
-
-      _mergeGuest(lookup.guest);
-      _mergeAssignment(lookup.guest.id, lookup.assignment);
-
-      return GuestTagIdentificationResult.found(lookup);
-    } finally {
-      isIdentifyingTag = false;
-      notifyListeners();
-    }
   }
 
   Future<bool> checkIn(String guestId) {
@@ -231,35 +202,6 @@ class GuestRosterController extends ChangeNotifier {
       _mergeGuest(updated);
     });
     return true;
-  }
-
-  Future<bool> assignTag({
-    required String guestId,
-    required Future<TagScanResult?> Function() scanForTag,
-  }) async {
-    var didAssign = false;
-    await _runGuestAction(guestId, () async {
-      final guest = _guestById(guestId);
-      final scanResult = await scanForTag();
-      if (scanResult == null) {
-        return;
-      }
-
-      if (!guest.isCheckedIn) {
-        final checkedInDetail = await _guestRepository.checkInGuest(guestId);
-        _mergeGuest(checkedInDetail.guest);
-        _mergeAssignment(guestId, checkedInDetail.activeTagAssignment);
-      }
-
-      final assignedDetail = await _guestRepository.assignGuestTag(
-        guestId: guestId,
-        scannedUid: scanResult.normalizedUid,
-      );
-      _mergeGuest(assignedDetail.guest);
-      _mergeAssignment(guestId, assignedDetail.activeTagAssignment);
-      didAssign = true;
-    });
-    return didAssign;
   }
 
   Future<bool> recordCoverEntry({

@@ -33,7 +33,7 @@ class TableSessionRecord {
     required this.rotationPolicyType,
     required this.rotationPolicyConfig,
     required this.status,
-    this.scoringPhase = EventScoringPhase.qualification,
+    this.scoringPhase = EventScoringPhase.tournament,
     this.bonusTableRole,
     required this.initialEastSeatIndex,
     required this.currentDealerSeatIndex,
@@ -65,7 +65,7 @@ class TableSessionRecord {
       rotationPolicyConfig: _jsonObject(json, 'rotation_policy_config_json'),
       status: _sessionStatusFromJson(_requiredString(json, 'status')),
       scoringPhase: eventScoringPhaseFromJson(
-        _stringOrDefault(json, 'scoring_phase', 'qualification'),
+        _stringOrDefault(json, 'scoring_phase', 'tournament'),
       ),
       bonusTableRole: _optionalBonusTableRole(json, 'bonus_table_role'),
       initialEastSeatIndex: _requiredInt(json, 'initial_east_seat_index'),

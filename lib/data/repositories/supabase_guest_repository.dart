@@ -124,9 +124,6 @@ class SupabaseGuestRepository implements GuestRepository {
     final inserted = await _insertEventGuest({
       ...input.toInsertJson(guestProfileId: profile.id),
       'public_display_name': publicDisplayName,
-      'tournament_status': eventTournamentStatusToJson(
-        EventTournamentStatus.openPlayOnly,
-      ),
     });
 
     final guest = EventGuestRecord.fromJson(inserted);

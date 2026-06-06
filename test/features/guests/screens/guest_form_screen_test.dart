@@ -49,6 +49,9 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
       'phone_e164': input.phoneE164,
       'email_lower': input.emailLower,
       'instagram_handle': input.instagramHandle,
+      'tournament_status': eventTournamentStatusToJson(
+        input.tournamentStatus,
+      ),
       'note': input.note,
     });
   }
@@ -133,6 +136,9 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
       'phone_e164': input.phoneE164,
       'email_lower': input.emailLower,
       'instagram_handle': input.instagramHandle,
+      'tournament_status': eventTournamentStatusToJson(
+        input.tournamentStatus ?? EventTournamentStatus.openPlayOnly,
+      ),
       'note': input.note,
       'public_display_name': input.publicDisplayName,
     });
@@ -143,6 +149,7 @@ EventGuestRecord _guestRecord({
   required String id,
   required String name,
   String? guestProfileId,
+  EventTournamentStatus tournamentStatus = EventTournamentStatus.openPlayOnly,
 }) {
   return EventGuestRecord.fromJson({
     'id': id,
@@ -158,6 +165,7 @@ EventGuestRecord _guestRecord({
     'cover_amount_cents': 0,
     'is_comped': false,
     'has_scored_play': false,
+    'tournament_status': eventTournamentStatusToJson(tournamentStatus),
   });
 }
 
@@ -303,6 +311,154 @@ void main() {
 
     expect(repository.created, isNotNull);
     expect(repository.created!.coverAmountCents, 500);
+  });
+
+  testWidgets(
+    'new guest defaults to prequalified tournament qualification',
+    (tester) async {
+      final repository = _RecordingGuestRepository();
+      EventGuestRecord? createdGuest;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: GuestFormScreen(
+            eventId: 'evt_01',
+            existingGuests: const [],
+            guestRepository: repository,
+            onSaved: (guest) => createdGuest = guest,
+          ),
+        ),
+      );
+
+      await tester.drag(find.byType(ListView), const Offset(0, -1000));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Tournament Qualification'), findsOneWidget);
+      expect(find.text('Prequalified'), findsOneWidget);
+      expect(find.text('Considered'), findsOneWidget);
+      expect(find.text('Not Playing Tournament'), findsOneWidget);
+
+      await tester.drag(find.byType(ListView), const Offset(0, 1000));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(guestNameFieldKey), 'Alice Wong');
+      await tester.ensureVisible(find.text('Save Guest'));
+      await tester.tap(find.text('Save Guest'));
+      await tester.pumpAndSettle();
+
+      expect(repository.created?.tournamentStatus,
+          EventTournamentStatus.qualified);
+      expect(createdGuest?.tournamentStatus, EventTournamentStatus.qualified);
+    },
+  );
+
+  testWidgets('selecting considered saves qualifying tournament status', (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository();
+    EventGuestRecord? createdGuest;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          guestRepository: repository,
+          onSaved: (guest) => createdGuest = guest,
+        ),
+      ),
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -1000));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Considered'));
+    await tester.tap(find.text('Considered'));
+    await tester.drag(find.byType(ListView), const Offset(0, 1000));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(guestNameFieldKey), 'Alice Wong');
+    await tester.ensureVisible(find.text('Save Guest'));
+    await tester.tap(find.text('Save Guest'));
+    await tester.pumpAndSettle();
+
+    expect(
+        repository.created?.tournamentStatus, EventTournamentStatus.qualifying);
+    expect(createdGuest?.tournamentStatus, EventTournamentStatus.qualifying);
+  });
+
+  testWidgets('editing an open play guest preserves tournament status on save',
+      (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository();
+    EventGuestRecord? updatedGuest;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          initialGuest: _guestRecord(
+            id: 'gst_01',
+            name: 'Alice Wong',
+            tournamentStatus: EventTournamentStatus.openPlayOnly,
+          ),
+          guestRepository: repository,
+          onSaved: (guest) => updatedGuest = guest,
+        ),
+      ),
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tournament Qualification'), findsOneWidget);
+    expect(find.text('Not Playing Tournament'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Save Guest'));
+    await tester.tap(find.text('Save Guest'));
+    await tester.pumpAndSettle();
+
+    expect(repository.updated?.tournamentStatus,
+        EventTournamentStatus.openPlayOnly);
+    expect(updatedGuest?.tournamentStatus, EventTournamentStatus.openPlayOnly);
+  });
+
+  testWidgets('editing a withdrawn guest shows and preserves withdrawn status',
+      (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository();
+    EventGuestRecord? updatedGuest;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          initialGuest: _guestRecord(
+            id: 'gst_01',
+            name: 'Alice Wong',
+            tournamentStatus: EventTournamentStatus.withdrawn,
+          ),
+          guestRepository: repository,
+          onSaved: (guest) => updatedGuest = guest,
+        ),
+      ),
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tournament Qualification'), findsOneWidget);
+    expect(find.text('Withdrawn'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Save Guest'));
+    await tester.tap(find.text('Save Guest'));
+    await tester.pumpAndSettle();
+
+    expect(
+        repository.updated?.tournamentStatus, EventTournamentStatus.withdrawn);
+    expect(updatedGuest?.tournamentStatus, EventTournamentStatus.withdrawn);
   });
 
   testWidgets('shows an existing guest profile match and stores phone as E.164',

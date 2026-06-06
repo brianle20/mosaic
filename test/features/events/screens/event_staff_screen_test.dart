@@ -29,6 +29,22 @@ class _FakeStaffRepository implements StaffRepository {
 }
 
 void main() {
+  testWidgets('adds future staff as event scorers only', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: EventStaffScreen(
+          eventId: 'event-1',
+          eventTitle: 'FV Mahjong 2',
+          staffRepository: _FakeStaffRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Event Scorer'), findsOneWidget);
+    expect(find.text('Qualification Scorer'), findsNothing);
+  });
+
   testWidgets('uses a single left-side back button', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

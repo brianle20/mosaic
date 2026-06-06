@@ -14,6 +14,7 @@ class GuestFormDraft {
     this.note = '',
     this.coverAmountCents = 0,
     this.coverStatus = CoverStatus.unpaid,
+    this.tournamentStatus = EventTournamentStatus.qualified,
   });
 
   final String displayName;
@@ -25,6 +26,7 @@ class GuestFormDraft {
   final String note;
   final int coverAmountCents;
   final CoverStatus coverStatus;
+  final EventTournamentStatus tournamentStatus;
 
   String? get displayNameError {
     if (displayName.trim().isEmpty) {
@@ -115,6 +117,7 @@ class GuestFormDraft {
       note: note,
       coverAmountCents: coverAmountCents,
       coverStatus: coverStatus,
+      tournamentStatus: tournamentStatus,
     );
   }
 
@@ -129,6 +132,7 @@ class GuestFormDraft {
       note: note,
       coverAmountCents: coverAmountCents,
       coverStatus: coverStatus,
+      tournamentStatus: tournamentStatus,
     );
   }
 
@@ -188,6 +192,7 @@ class GuestFormDraft {
       emailLower: emailLowerValue(),
       instagramHandle: instagramHandleValue(),
       guestProfileId: guestProfileId,
+      tournamentStatus: tournamentStatus,
       coverStatus: coverStatus,
       coverAmountCents: coverAmountCents,
       isComped: coverStatus == CoverStatus.comped,
@@ -198,6 +203,7 @@ class GuestFormDraft {
   UpdateGuestInput toUpdateInput({
     required String id,
     required String eventId,
+    EventTournamentStatus? tournamentStatus,
   }) {
     final normalizedName = normalizedDisplayName();
     return UpdateGuestInput(
@@ -209,6 +215,7 @@ class GuestFormDraft {
       phoneE164: phoneE164Value(),
       emailLower: emailLowerValue(),
       instagramHandle: instagramHandleValue(),
+      tournamentStatus: tournamentStatus,
       coverStatus: coverStatus,
       coverAmountCents: coverAmountCents,
       isComped: coverStatus == CoverStatus.comped,

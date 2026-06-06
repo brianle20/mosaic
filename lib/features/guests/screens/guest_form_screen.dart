@@ -12,6 +12,8 @@ import 'package:mosaic/widgets/money_text_form_field.dart';
 const guestNameFieldKey = Key('guest-name-field');
 const guestPublicDisplayNameFieldKey = Key('guest-public-display-name-field');
 const guestCoverAmountFieldKey = Key('guest-cover-amount-field');
+const guestTournamentQualificationFieldKey =
+    Key('guest-tournament-qualification-field');
 const _profileMatchDebounceDuration = Duration(milliseconds: 400);
 
 class GuestFormScreen extends StatefulWidget {
@@ -46,6 +48,7 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
   late final TextEditingController _noteController;
   late final TextEditingController _coverAmountController;
   late CoverStatus _coverStatus;
+  late EventTournamentStatus _tournamentStatus;
   late final GuestFormController _controller;
   List<GuestProfileMatch> _profileMatches = const [];
   GuestProfileRecord? _selectedProfile;
@@ -80,6 +83,8 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
       ),
     );
     _coverStatus = guest?.coverStatus ?? CoverStatus.unpaid;
+    _tournamentStatus =
+        guest?.tournamentStatus ?? EventTournamentStatus.qualified;
     _controller = GuestFormController(guestRepository: widget.guestRepository)
       ..addListener(_handleUpdate);
     _nameController.addListener(_handleNameChanged);
@@ -131,6 +136,7 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
       note: _noteController.text,
       coverAmountCents: coverAmount.cents ?? -1,
       coverStatus: _coverStatus,
+      tournamentStatus: _tournamentStatus,
     );
   }
 
@@ -370,6 +376,58 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
     );
   }
 
+  Widget _buildTournamentQualificationField() {
+    final showWithdrawnSegment = widget.initialGuest?.tournamentStatus ==
+        EventTournamentStatus.withdrawn;
+    final segments = [
+      const ButtonSegment<EventTournamentStatus>(
+        value: EventTournamentStatus.qualified,
+        label: Text('Prequalified'),
+      ),
+      const ButtonSegment<EventTournamentStatus>(
+        value: EventTournamentStatus.qualifying,
+        label: Text('Considered'),
+      ),
+      const ButtonSegment<EventTournamentStatus>(
+        value: EventTournamentStatus.openPlayOnly,
+        label: Text('Not Playing Tournament'),
+      ),
+      if (showWithdrawnSegment)
+        const ButtonSegment<EventTournamentStatus>(
+          value: EventTournamentStatus.withdrawn,
+          label: Text('Withdrawn'),
+        ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Column(
+          key: guestTournamentQualificationFieldKey,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Tournament Qualification',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<EventTournamentStatus>(
+              direction:
+                  constraints.maxWidth < 520 ? Axis.vertical : Axis.horizontal,
+              segments: segments,
+              selected: {_tournamentStatus},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) {
+                setState(() {
+                  _tournamentStatus = selection.single;
+                });
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<bool> _confirmDuplicateGuest(EventGuestRecord duplicateGuest) async {
     final actionLabel =
         widget.initialGuest == null ? 'Add Anyway' : 'Save Anyway';
@@ -424,6 +482,7 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
       draft: draft,
       selectedProfile: _selectedProfile ?? _primaryIdentityMatch()?.profile,
       existingGuest: widget.initialGuest,
+      tournamentStatus: _tournamentStatus,
     );
     if (!mounted || savedGuest == null) {
       return;
@@ -528,6 +587,8 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
               labelText: 'Cover Amount',
               validator: _moneyFieldError,
             ),
+            const SizedBox(height: 12),
+            _buildTournamentQualificationField(),
             const SizedBox(height: 12),
             TextFormField(
               controller: _noteController,

@@ -2,20 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/guest_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
 import 'package:mosaic/features/checkin/screens/add_cover_entry_screen.dart';
 import 'package:mosaic/features/guests/controllers/guest_roster_controller.dart';
-import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 enum _GuestRosterOverflowAction {
   markPaidManually,
   addCoverEntry,
-  markQualifying,
-  markQualified,
   moveToOpenPlayOnly,
   withdraw,
   removeGuest,
@@ -46,10 +42,8 @@ class GuestRosterScreen extends StatefulWidget {
     this.canCheckIn = true,
     this.canManageGuests = true,
     this.canManageCover = true,
-    this.canAssignTags = true,
     this.canManageTournamentStatus = true,
     required this.guestRepository,
-    required this.nfcService,
   });
 
   final String eventId;
@@ -58,10 +52,8 @@ class GuestRosterScreen extends StatefulWidget {
   final bool canCheckIn;
   final bool canManageGuests;
   final bool canManageCover;
-  final bool canAssignTags;
   final bool canManageTournamentStatus;
   final GuestRepository guestRepository;
-  final NfcService nfcService;
 
   @override
   State<GuestRosterScreen> createState() => _GuestRosterScreenState();
@@ -138,7 +130,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         canCheckIn: widget.canCheckIn,
         canManageGuests: widget.canManageGuests,
         canManageCover: widget.canManageCover,
-        canAssignTags: widget.canAssignTags,
       ),
     );
     if (!mounted) {
@@ -167,163 +158,21 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     );
   }
 
-  Future<void> _checkInGuest(
-    EventGuestRecord guest,
-    EventTournamentStatus status,
-  ) async {
+  Future<void> _checkInGuest(EventGuestRecord guest) async {
     if (!widget.canCheckIn) {
       return;
     }
-    final isQualifying = status == EventTournamentStatus.qualifying;
+    final status = guest.tournamentStatus;
+    if (status == EventTournamentStatus.withdrawn) {
+      return;
+    }
     await _runQuickAction(
       () => _controller.checkInForPlayMode(
         guestId: guest.id,
         status: status,
       ),
-      successMessage: isQualifying
-          ? '${guest.displayName} is checked in for qualifying.'
-          : '${guest.displayName} is checked in for open play.',
-    );
-  }
-
-  Future<void> _identifyTag() async {
-    try {
-      final result = await _controller.identifyGuestByTag(
-        eventId: widget.eventId,
-        scanForTag: () =>
-            widget.nfcService.scanPlayerTagForIdentification(context),
-      );
-      if (!mounted) {
-        return;
-      }
-
-      switch (result.status) {
-        case GuestTagIdentificationStatus.found:
-          final lookup = result.lookup;
-          if (lookup == null) {
-            return;
-          }
-          await _showIdentifiedTagSheet(lookup);
-        case GuestTagIdentificationStatus.notFound:
-          final scannedUid = result.scannedUid;
-          if (scannedUid == null) {
-            return;
-          }
-          await _showTagNotFoundSheet(scannedUid);
-        case GuestTagIdentificationStatus.cancelled:
-          return;
-      }
-    } catch (exception) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage(_formatActionError(exception));
-    }
-  }
-
-  Future<void> _showIdentifiedTagSheet(GuestTagLookupResult lookup) async {
-    final guest = lookup.guest;
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Tag Identified',
-                  style: Theme.of(sheetContext).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  guest.displayName,
-                  style: Theme.of(sheetContext).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                Text(_tagIdentificationLabel(lookup.assignment)),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    StatusChip(
-                      label: _coverStatusLabel(guest.coverStatus),
-                      tone: _coverStatusTone(guest.coverStatus),
-                    ),
-                    StatusChip(
-                      label: _attendanceStatusLabel(guest.attendanceStatus),
-                      tone: _attendanceStatusTone(guest.attendanceStatus),
-                    ),
-                    StatusChip(
-                      label: _tournamentStatusLabel(guest.tournamentStatus),
-                      tone: _tournamentStatusTone(guest.tournamentStatus),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(sheetContext).pop(),
-                        child: const Text('Close'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: () {
-                          Navigator.of(sheetContext).pop();
-                          _openGuestDetail(guest);
-                        },
-                        child: const Text('View Guest'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _showTagNotFoundSheet(String scannedUid) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'No Guest Found',
-                  style: Theme.of(sheetContext).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text('UID ${scannedUid.trim()}'),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(sheetContext).pop(),
-                    child: const Text('Close'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      successMessage:
+          '${guest.displayName} is checked in: ${_checkInFeedbackLabel(status)}.',
     );
   }
 
@@ -340,8 +189,29 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         status: status,
       ),
       successMessage:
-          '${guest.displayName} is now ${_tournamentStatusLabel(status).toLowerCase()}.',
+          '${guest.displayName} is now ${_tournamentStatusStatusLabel(status, isCheckedIn: guest.isCheckedIn).toLowerCase()}.',
     );
+  }
+
+  Future<void> _qualifyCheckedInConsidered(Set<String> guestIds) async {
+    if (!widget.canManageTournamentStatus) {
+      return;
+    }
+    try {
+      final count = await _controller.qualifyCheckedInConsidered(
+        guestIds: guestIds,
+      );
+      if (!mounted || count == 0) {
+        return;
+      }
+      final suffix = count == 1 ? 'guest' : 'guests';
+      _showMessage('Qualified $count considered $suffix.');
+    } catch (exception) {
+      if (!mounted) {
+        return;
+      }
+      _showMessage(_formatActionError(exception));
+    }
   }
 
   Future<void> _confirmRemoveGuest(EventGuestRecord guest) async {
@@ -469,6 +339,11 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     final checkedInGuests = filteredGuests
         .where((guest) => guest.isCheckedIn)
         .toList(growable: false);
+    final checkedInConsideredGuestIds = checkedInGuests
+        .where(_isCheckedInConsideredGuest)
+        .map((guest) => guest.id)
+        .toSet();
+    final isBulkQualifying = _controller.isQualifyingCheckedInConsidered;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Guests')),
@@ -488,12 +363,20 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
               ),
               const SizedBox(height: 6),
             ],
-            OutlinedButton.icon(
-              style: _topActionButtonStyle(),
-              onPressed: _controller.isIdentifyingTag ? null : _identifyTag,
-              icon: const Icon(Icons.nfc),
-              label: const Text('Scan Player Tag'),
-            ),
+            if (widget.canManageTournamentStatus &&
+                checkedInConsideredGuestIds.isNotEmpty) ...[
+              FilledButton.icon(
+                style: _topActionButtonStyle(),
+                onPressed: isBulkQualifying
+                    ? null
+                    : () => _qualifyCheckedInConsidered(
+                          checkedInConsideredGuestIds,
+                        ),
+                icon: const Icon(Icons.emoji_events_outlined),
+                label: const Text('Qualify Checked-In Considered'),
+              ),
+              const SizedBox(height: 6),
+            ],
             const SizedBox(height: 12),
             Text(widget.eventTitle,
                 style: Theme.of(context).textTheme.titleMedium),
@@ -617,7 +500,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         ),
         _buildTournamentFilterChip(
           value: _GuestRosterTournamentFilter.qualifying,
-          label: 'Qualifying',
+          label: 'Considered',
         ),
         _buildTournamentFilterChip(
           value: _GuestRosterTournamentFilter.qualified,
@@ -625,7 +508,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         ),
         _buildTournamentFilterChip(
           value: _GuestRosterTournamentFilter.openPlayOnly,
-          label: 'Open Play Only',
+          label: 'Not Playing Tournament',
         ),
         _buildTournamentFilterChip(
           value: _GuestRosterTournamentFilter.withdrawn,
@@ -749,7 +632,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                     tone: _coverStatusTone(guest.coverStatus),
                   ),
                   StatusChip(
-                    label: _tournamentStatusLabel(guest.tournamentStatus),
+                    label: _tournamentStatusLabel(guest),
                     tone: _tournamentStatusTone(guest.tournamentStatus),
                   ),
                 ],
@@ -766,41 +649,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         ),
       ),
     );
-  }
-
-  Widget? _primaryActionForGuest(EventGuestRecord guest) {
-    final isSubmitting = _controller.isSubmittingGuest(guest.id);
-
-    if (!guest.isCheckedIn) {
-      return null;
-    }
-
-    if (!widget.canManageTournamentStatus) {
-      return null;
-    }
-
-    return switch (guest.tournamentStatus) {
-      EventTournamentStatus.openPlayOnly => FilledButton(
-          onPressed: isSubmitting
-              ? null
-              : () => _updateTournamentStatus(
-                    guest,
-                    EventTournamentStatus.qualifying,
-                  ),
-          child: const Text('Mark Qualifying'),
-        ),
-      EventTournamentStatus.qualifying => FilledButton(
-          onPressed: isSubmitting
-              ? null
-              : () => _updateTournamentStatus(
-                    guest,
-                    EventTournamentStatus.qualified,
-                  ),
-          child: const Text('Mark Qualified'),
-        ),
-      EventTournamentStatus.qualified => null,
-      EventTournamentStatus.withdrawn => null,
-    };
   }
 
   bool _hasOverflowActions(EventGuestRecord guest) {
@@ -836,7 +684,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     switch (guest.tournamentStatus) {
       case EventTournamentStatus.openPlayOnly:
         actions.addAll(const [
-          _GuestRosterOverflowAction.markQualified,
           _GuestRosterOverflowAction.withdraw,
         ]);
       case EventTournamentStatus.qualifying:
@@ -851,8 +698,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         ]);
       case EventTournamentStatus.withdrawn:
         actions.addAll(const [
-          _GuestRosterOverflowAction.markQualifying,
-          _GuestRosterOverflowAction.markQualified,
           _GuestRosterOverflowAction.moveToOpenPlayOnly,
         ]);
     }
@@ -864,9 +709,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     return switch (action) {
       _GuestRosterOverflowAction.markPaidManually => 'Mark Paid Manually',
       _GuestRosterOverflowAction.addCoverEntry => 'Add Cover Entry',
-      _GuestRosterOverflowAction.markQualifying => 'Mark Qualifying',
-      _GuestRosterOverflowAction.markQualified => 'Mark Qualified',
-      _GuestRosterOverflowAction.moveToOpenPlayOnly => 'Move to Open Play Only',
+      _GuestRosterOverflowAction.moveToOpenPlayOnly => 'Not Playing Tournament',
       _GuestRosterOverflowAction.withdraw => 'Withdraw',
       _GuestRosterOverflowAction.removeGuest => 'Remove Guest',
     };
@@ -874,6 +717,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
 
   bool _canRemoveGuest(EventGuestRecord guest) {
     return widget.canManageGuests &&
+        _controller.hasLoadedActiveTagAssignments &&
         guest.attendanceStatus == AttendanceStatus.expected &&
         guest.checkedInAt == null &&
         guest.coverStatus == CoverStatus.unpaid &&
@@ -891,10 +735,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         _markPaid(guest);
       case _GuestRosterOverflowAction.addCoverEntry:
         _addCoverEntry(guest);
-      case _GuestRosterOverflowAction.markQualifying:
-        _updateTournamentStatus(guest, EventTournamentStatus.qualifying);
-      case _GuestRosterOverflowAction.markQualified:
-        _updateTournamentStatus(guest, EventTournamentStatus.qualified);
       case _GuestRosterOverflowAction.moveToOpenPlayOnly:
         _updateTournamentStatus(guest, EventTournamentStatus.openPlayOnly);
       case _GuestRosterOverflowAction.withdraw:
@@ -902,18 +742,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       case _GuestRosterOverflowAction.removeGuest:
         _confirmRemoveGuest(guest);
     }
-  }
-
-  Widget _buildPrimaryActionForGuest(EventGuestRecord guest) {
-    final primaryAction = _primaryActionForGuest(guest);
-    if (primaryAction == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: primaryAction,
-    );
   }
 
   Widget _buildQuickActionsForGuest(EventGuestRecord guest) {
@@ -946,41 +774,23 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     }
 
     if (!guest.isCheckedIn) {
-      if (!widget.canCheckIn) {
+      if (!widget.canCheckIn ||
+          guest.tournamentStatus == EventTournamentStatus.withdrawn) {
         return const SizedBox.shrink();
       }
-      return Row(
-        children: [
-          Expanded(
-            child: OutlinedButton(
-              style: _compactActionButtonStyle(),
-              onPressed: isSubmitting
-                  ? null
-                  : () => _checkInGuest(
-                        guest,
-                        EventTournamentStatus.openPlayOnly,
-                      ),
-              child: _singleLineButtonLabel('Check In: Open Play'),
-            ),
+      return SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          style: _compactActionButtonStyle(),
+          onPressed: isSubmitting ? null : () => _checkInGuest(guest),
+          child: _singleLineButtonLabel(
+            _checkInActionLabel(guest.tournamentStatus),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: FilledButton(
-              style: _compactActionButtonStyle(),
-              onPressed: isSubmitting
-                  ? null
-                  : () => _checkInGuest(
-                        guest,
-                        EventTournamentStatus.qualifying,
-                      ),
-              child: _singleLineButtonLabel('Check In: Qualifying'),
-            ),
-          ),
-        ],
+        ),
       );
     }
 
-    return _buildPrimaryActionForGuest(guest);
+    return const SizedBox.shrink();
   }
 
   Widget _buildOverflowMenu(EventGuestRecord guest) {
@@ -1046,30 +856,46 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     };
   }
 
-  String _attendanceStatusLabel(AttendanceStatus status) {
-    return switch (status) {
-      AttendanceStatus.expected => 'Expected',
-      AttendanceStatus.checkedIn => 'Checked In',
-      AttendanceStatus.checkedOut => 'Checked Out',
-      AttendanceStatus.noShow => 'No Show',
-    };
+  bool _isCheckedInConsideredGuest(EventGuestRecord guest) {
+    return guest.isCheckedIn &&
+        guest.tournamentStatus == EventTournamentStatus.qualifying;
   }
 
-  StatusChipTone _attendanceStatusTone(AttendanceStatus status) {
-    return switch (status) {
-      AttendanceStatus.checkedIn => StatusChipTone.success,
-      AttendanceStatus.expected => StatusChipTone.neutral,
-      AttendanceStatus.checkedOut => StatusChipTone.neutral,
-      AttendanceStatus.noShow => StatusChipTone.warning,
-    };
+  String _tournamentStatusLabel(EventGuestRecord guest) {
+    return _tournamentStatusStatusLabel(
+      guest.tournamentStatus,
+      isCheckedIn: guest.isCheckedIn,
+    );
   }
 
-  String _tournamentStatusLabel(EventTournamentStatus status) {
+  String _tournamentStatusStatusLabel(
+    EventTournamentStatus status, {
+    required bool isCheckedIn,
+  }) {
     return switch (status) {
-      EventTournamentStatus.openPlayOnly => 'Open Play Only',
-      EventTournamentStatus.qualifying => 'Qualifying',
-      EventTournamentStatus.qualified => 'Qualified',
+      EventTournamentStatus.openPlayOnly => 'Not Playing Tournament',
+      EventTournamentStatus.qualifying => 'Considered',
+      EventTournamentStatus.qualified =>
+        isCheckedIn ? 'Qualified' : 'Prequalified',
       EventTournamentStatus.withdrawn => 'Withdrawn',
+    };
+  }
+
+  String _checkInActionLabel(EventTournamentStatus status) {
+    return switch (status) {
+      EventTournamentStatus.qualified => 'Check In: Prequalified',
+      EventTournamentStatus.qualifying => 'Check In: Considered',
+      EventTournamentStatus.openPlayOnly => 'Check In: Not Playing Tournament',
+      EventTournamentStatus.withdrawn => 'Check In',
+    };
+  }
+
+  String _checkInFeedbackLabel(EventTournamentStatus status) {
+    return switch (status) {
+      EventTournamentStatus.qualified => 'prequalified',
+      EventTournamentStatus.qualifying => 'considered',
+      EventTournamentStatus.openPlayOnly => 'not playing tournament',
+      EventTournamentStatus.withdrawn => 'withdrawn',
     };
   }
 
@@ -1093,6 +919,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   String _rowSummary(EventGuestRecord guest) {
+    if (guest.tournamentStatus == EventTournamentStatus.withdrawn) {
+      return 'Withdrawn from tournament play';
+    }
     if (!guest.isEligibleForPlayerTagAssignment) {
       return 'Needs payment or comp';
     }
@@ -1100,19 +929,12 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       return 'Ready for check-in';
     }
     return switch (guest.tournamentStatus) {
-      EventTournamentStatus.openPlayOnly => 'Checked in for open play',
-      EventTournamentStatus.qualifying => 'Ready for qualifying play',
+      EventTournamentStatus.openPlayOnly =>
+        'Checked in; not playing tournament',
+      EventTournamentStatus.qualifying => 'Checked in as considered',
       EventTournamentStatus.qualified => 'Qualified for tournament play',
       EventTournamentStatus.withdrawn => 'Withdrawn from tournament play',
     };
-  }
-
-  String _tagIdentificationLabel(GuestTagAssignmentSummary assignment) {
-    final label = assignment.tag.displayLabel?.trim();
-    if (label != null && label.isNotEmpty) {
-      return 'Tag $label';
-    }
-    return 'UID ${assignment.tag.uidHex.trim()}';
   }
 
   String _formatActionError(Object exception) {
