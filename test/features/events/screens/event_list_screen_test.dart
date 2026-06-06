@@ -624,7 +624,7 @@ void main() {
         MosaicAccessEvent(
           eventId: 'evt_01',
           title: 'Friday Night Mahjong',
-          role: MosaicAccessRole.qualificationScorer,
+          role: MosaicAccessRole.eventScorer,
         ),
       ],
     );

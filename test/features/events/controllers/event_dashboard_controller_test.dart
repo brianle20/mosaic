@@ -497,11 +497,11 @@ void main() {
     expect(controller.canScoreBonus, isTrue);
   });
 
-  test('legacy qualification scorers can score current phases', () {
+  test('event scorers can score legacy qualification phases', () {
     final controller = EventDashboardController(
       eventRepository: _FakeEventRepository(cachedEvents: const []),
       guestRepository: _FakeGuestRepository(cachedGuests: const []),
-      callerRole: MosaicAccessRole.qualificationScorer,
+      callerRole: MosaicAccessRole.eventScorer,
     );
 
     expect(controller.canManageEvent, isFalse);

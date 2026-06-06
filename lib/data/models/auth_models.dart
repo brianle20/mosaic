@@ -2,14 +2,13 @@ import 'package:meta/meta.dart';
 
 enum MosaicAccessRole {
   owner,
-  qualificationScorer,
   eventScorer,
 }
 
 MosaicAccessRole mosaicAccessRoleFromJson(String value) {
   return switch (value) {
     'owner' => MosaicAccessRole.owner,
-    'qualification_scorer' => MosaicAccessRole.qualificationScorer,
+    'qualification_scorer' => MosaicAccessRole.eventScorer,
     'event_scorer' => MosaicAccessRole.eventScorer,
     _ => throw ArgumentError('Unknown Mosaic access role: $value'),
   };
@@ -18,7 +17,6 @@ MosaicAccessRole mosaicAccessRoleFromJson(String value) {
 String mosaicAccessRoleToJson(MosaicAccessRole role) {
   return switch (role) {
     MosaicAccessRole.owner => 'owner',
-    MosaicAccessRole.qualificationScorer => 'qualification_scorer',
     MosaicAccessRole.eventScorer => 'event_scorer',
   };
 }
@@ -28,21 +26,15 @@ extension MosaicAccessRoleCapabilities on MosaicAccessRole {
 
   bool get canManageStaff => this == MosaicAccessRole.owner;
 
-  bool get canScoreQualification => true;
+  bool get canScoreQualification => canScoreTournament;
 
   bool get canScoreTournament =>
-      this == MosaicAccessRole.owner ||
-      this == MosaicAccessRole.eventScorer ||
-      this == MosaicAccessRole.qualificationScorer;
+      this == MosaicAccessRole.owner || this == MosaicAccessRole.eventScorer;
 
   bool get canScoreBonus =>
-      this == MosaicAccessRole.owner ||
-      this == MosaicAccessRole.eventScorer ||
-      this == MosaicAccessRole.qualificationScorer;
+      this == MosaicAccessRole.owner || this == MosaicAccessRole.eventScorer;
 
-  bool get canViewAssignedEvent =>
-      this == MosaicAccessRole.qualificationScorer ||
-      this == MosaicAccessRole.eventScorer;
+  bool get canViewAssignedEvent => this == MosaicAccessRole.eventScorer;
 }
 
 @immutable

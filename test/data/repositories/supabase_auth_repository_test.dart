@@ -392,7 +392,6 @@ void main() {
     expect(access.userId, 'usr_rows');
     expect(access.hasApprovedAccess, isTrue);
     expect(access.ownedEvents.single.eventId, 'evt_owner');
-    expect(access.assignedEvents.single.role,
-        MosaicAccessRole.qualificationScorer);
+    expect(access.assignedEvents.single.role, MosaicAccessRole.eventScorer);
   });
 }

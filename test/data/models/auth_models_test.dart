@@ -23,7 +23,7 @@ void main() {
     );
   });
 
-  test('MosaicAccessState parses owner and staff events', () {
+  test('MosaicAccessState parses owner and normalizes legacy staff events', () {
     final access = MosaicAccessState.fromJson(const {
       'userId': 'usr_01',
       'isActive': true,
@@ -44,7 +44,7 @@ void main() {
       'evt_02',
       'evt_03',
     ]);
-    expect(access.roleForEvent('evt_02'), MosaicAccessRole.qualificationScorer);
+    expect(access.roleForEvent('evt_02'), MosaicAccessRole.eventScorer);
     expect(access.canManageStaff('evt_01'), isTrue);
     expect(access.canScoreTournament('evt_02'), isTrue);
     expect(access.canScoreBonus('evt_03'), isTrue);

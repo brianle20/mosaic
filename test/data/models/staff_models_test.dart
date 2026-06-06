@@ -2,7 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/staff_models.dart';
 
 void main() {
-  test('EventStaffMembershipRecord parses staff rows', () {
+  test('EventStaffMembershipRecord normalizes legacy qualification role rows',
+      () {
     final record = EventStaffMembershipRecord.fromJson(const {
       'id': 'mem_01',
       'event_id': 'evt_01',
@@ -17,7 +18,7 @@ void main() {
     });
 
     expect(record.displayName, 'Michelle');
-    expect(record.role, EventStaffRole.qualificationScorer);
+    expect(record.role, EventStaffRole.eventScorer);
     expect(record.status, EventStaffStatus.active);
     expect(record.createdAt, DateTime.parse('2026-05-28T10:00:00Z'));
   });

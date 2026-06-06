@@ -154,7 +154,6 @@ class _EventListScreenState extends State<EventListScreen> {
   String _roleLabel(MosaicAccessRole role) {
     return switch (role) {
       MosaicAccessRole.owner => 'Owner',
-      MosaicAccessRole.qualificationScorer => 'Event Scorer',
       MosaicAccessRole.eventScorer => 'Event Scorer',
     };
   }

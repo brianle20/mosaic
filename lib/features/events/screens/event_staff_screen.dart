@@ -80,7 +80,6 @@ class _EventStaffScreenState extends State<EventStaffScreen> {
 
   String _roleLabel(EventStaffRole role) {
     return switch (role) {
-      EventStaffRole.qualificationScorer => 'Event Scorer',
       EventStaffRole.eventScorer => 'Event Scorer',
     };
   }

@@ -2043,7 +2043,7 @@ void main() {
     expect(operationsTop, lessThan(optionsTop));
   });
 
-  testWidgets('qualification scorers open guests without check-in permission',
+  testWidgets('event scorers open guests without check-in permission',
       (tester) async {
     GuestRosterArgs? openedArgs;
 
@@ -2052,7 +2052,7 @@ void main() {
         home: EventDashboardScreen(
           args: EventDashboardArgs(
             eventId: activeEvent.id,
-            callerRole: MosaicAccessRole.qualificationScorer,
+            callerRole: MosaicAccessRole.eventScorer,
           ),
           eventRepository: _EventRepository(activeEvent),
           guestRepository: _GuestRepository(),

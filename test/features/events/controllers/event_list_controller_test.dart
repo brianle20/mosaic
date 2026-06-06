@@ -20,7 +20,7 @@ void main() {
           MosaicAccessEvent(
             eventId: 'evt_01',
             title: 'Friday Night Mahjong',
-            role: MosaicAccessRole.qualificationScorer,
+            role: MosaicAccessRole.eventScorer,
           ),
         ],
       ),
@@ -29,7 +29,7 @@ void main() {
     expect(controller.canCreateEvents, isFalse);
     expect(
       controller.roleForEvent('evt_01'),
-      MosaicAccessRole.qualificationScorer,
+      MosaicAccessRole.eventScorer,
     );
   });
 

@@ -1,13 +1,12 @@
 import 'package:meta/meta.dart';
 
 enum EventStaffRole {
-  qualificationScorer,
   eventScorer,
 }
 
 EventStaffRole eventStaffRoleFromJson(String value) {
   return switch (value) {
-    'qualification_scorer' => EventStaffRole.qualificationScorer,
+    'qualification_scorer' => EventStaffRole.eventScorer,
     'event_scorer' => EventStaffRole.eventScorer,
     _ => throw ArgumentError('Unknown event staff role: $value'),
   };
@@ -15,7 +14,6 @@ EventStaffRole eventStaffRoleFromJson(String value) {
 
 String eventStaffRoleToJson(EventStaffRole role) {
   return switch (role) {
-    EventStaffRole.qualificationScorer => 'qualification_scorer',
     EventStaffRole.eventScorer => 'event_scorer',
   };
 }

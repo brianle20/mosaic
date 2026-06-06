@@ -9,11 +9,7 @@ void main() {
     migrationsSql = _readAllMigrationSql();
   });
 
-  test('qualification scorers cannot check in guests', () {
-    final checkInHelperSql = _extractLatestFunction(
-      migrationsSql,
-      'app_private.can_check_in_guests',
-    );
+  test('check-in no longer grants a qualification-only staff role', () {
     final requireGuestSql = _extractLatestFunction(
       migrationsSql,
       'app_private.require_guest_for_check_in',
@@ -22,20 +18,27 @@ void main() {
       migrationsSql,
       'app_private.can_score_qualification',
     );
-
-    expect(checkInHelperSql, contains('app_private.can_manage_event'));
-    expect(
-      checkInHelperSql,
-      isNot(contains('app_private.can_score_qualification')),
+    final tournamentScoringSql = _extractLatestFunction(
+      migrationsSql,
+      'app_private.can_score_tournament',
     );
-    expect(requireGuestSql, contains('app_private.can_check_in_guests'));
+
+    expect(requireGuestSql, contains('app_private.can_manage_event'));
+    expect(requireGuestSql, contains('app_private.can_score_tournament'));
     expect(
       requireGuestSql,
       isNot(contains('app_private.can_score_qualification')),
     );
     expect(
       qualificationScoringSql,
-      contains("in ('qualification_scorer', 'event_scorer')"),
+      isNot(contains("'qualification_scorer'")),
+    );
+    expect(
+        qualificationScoringSql, contains('app_private.can_score_tournament'));
+    expect(
+      tournamentScoringSql,
+      contains(
+          "app_private.event_staff_role(target_event_id, target_user_id) = 'event_scorer'"),
     );
   });
 }
