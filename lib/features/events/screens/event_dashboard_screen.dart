@@ -441,7 +441,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Copy this event?'),
         content: const Text(
-          'This creates a draft testing copy with guests, tables, and prize setup, but no check-ins, player tag assignments, sessions, scores, standings, or awards.',
+          'This creates a draft testing copy with guests, tables, and prize setup, but no check-ins, live activity, sessions, scores, standings, or awards.',
         ),
         actions: [
           TextButton(
@@ -1084,7 +1084,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
   bool _canScorePhase(EventScoringPhase phase) {
     return switch (phase) {
-      EventScoringPhase.qualification => _controller.canScoreQualification,
+      EventScoringPhase.qualification =>
+        _controller.canScoreLegacyQualification,
       EventScoringPhase.tournament => _controller.canScoreTournament,
       EventScoringPhase.bonus => _controller.canScoreBonus,
     };

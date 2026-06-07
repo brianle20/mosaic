@@ -26,6 +26,7 @@ void main() {
       'southPlayerUid',
       'westPlayerUid',
       'northPlayerUid',
+      'player tag assignments',
     ];
 
     final offenders = <String>[];

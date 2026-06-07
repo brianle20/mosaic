@@ -221,7 +221,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-
   @override
   Future<GuestDetailRecord> updateCoverEntry({
     required String guestId,
@@ -233,7 +232,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   }) {
     throw UnimplementedError();
   }
-
 }
 
 String _sessionStatusJson(SessionStatus status) {
@@ -346,7 +344,7 @@ void main() {
     expect(find.text('Add Table'), findsOneWidget);
   });
 
-  testWidgets('qualification ready tables open qualification entry directly',
+  testWidgets('legacy qualification table entry opens directly',
       (tester) async {
     final tableRepository = _FakeTableRepository([
       EventTableRecord.fromJson(const {
@@ -378,7 +376,7 @@ void main() {
             openedArgs = settings.arguments! as StartSessionArgs;
             return MaterialPageRoute<void>(
               builder: (context) => const Scaffold(
-                body: Text('Opened Qualification Table'),
+                body: Text('Opened Legacy Qualification Table'),
               ),
             );
           }
@@ -409,7 +407,7 @@ void main() {
     expect(openedArgs?.table.id, 'tbl_01');
     expect(openedArgs?.scoringPhase, EventScoringPhase.qualification);
     expect(openedArgs?.allowAssignedTableEntry, isFalse);
-    expect(find.text('Opened Qualification Table'), findsOneWidget);
+    expect(find.text('Opened Legacy Qualification Table'), findsOneWidget);
   });
 
   testWidgets('read-only table overview hides table mutation actions',
@@ -756,7 +754,7 @@ void main() {
     expect(find.text('Pause Timer'), findsOneWidget);
   });
 
-  testWidgets('qualification live table hides round timer', (tester) async {
+  testWidgets('legacy qualification table hides round timer', (tester) async {
     final table = EventTableRecord.fromJson(const {
       'id': 'tbl_points',
       'event_id': 'evt_01',

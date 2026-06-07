@@ -134,7 +134,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   final List<EventGuestRecord> cachedGuests;
   final Future<List<EventGuestRecord>> Function(String eventId)? guestLoader;
 
-
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
     throw UnimplementedError();
@@ -203,7 +202,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   }) {
     throw UnimplementedError();
   }
-
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
@@ -448,12 +446,12 @@ void main() {
 
     expect(controller.canManageEvent, isFalse);
     expect(controller.canManageStaff, isFalse);
-    expect(controller.canScoreQualification, isTrue);
+    expect(controller.canScoreLegacyQualification, isTrue);
     expect(controller.canScoreTournament, isTrue);
     expect(controller.canScoreBonus, isTrue);
   });
 
-  test('event scorers can score legacy qualification phases', () {
+  test('event scorers can score legacy qualification phase rows', () {
     final controller = EventDashboardController(
       eventRepository: _FakeEventRepository(cachedEvents: const []),
       guestRepository: _FakeGuestRepository(cachedGuests: const []),
@@ -462,7 +460,7 @@ void main() {
 
     expect(controller.canManageEvent, isFalse);
     expect(controller.canManageStaff, isFalse);
-    expect(controller.canScoreQualification, isTrue);
+    expect(controller.canScoreLegacyQualification, isTrue);
     expect(controller.canScoreTournament, isTrue);
     expect(controller.canScoreBonus, isTrue);
   });
@@ -977,7 +975,7 @@ void main() {
     expect(operations, ['generate:evt_01']);
   });
 
-  test('startTournament keeps qualification phase when generation fails',
+  test('startTournament keeps legacy qualification phase when generation fails',
       () async {
     final event = EventRecord.fromJson(const {
       'id': 'evt_01',

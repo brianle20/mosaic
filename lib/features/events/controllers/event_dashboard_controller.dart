@@ -92,7 +92,8 @@ class EventDashboardController extends ChangeNotifier {
 
   bool get canManageStaff => callerRole.canManageStaff;
 
-  bool get canScoreQualification => callerRole.canScoreQualification;
+  bool get canScoreLegacyQualification =>
+      callerRole.canScoreLegacyQualification;
 
   bool get canScoreTournament => callerRole.canScoreTournament;
 
@@ -994,7 +995,7 @@ class EventDashboardController extends ChangeNotifier {
   bool _canScoreCurrentPhase() {
     final phase = effectiveScoringPhase ?? event?.currentScoringPhase;
     return switch (phase) {
-      EventScoringPhase.qualification => canScoreQualification,
+      EventScoringPhase.qualification => canScoreLegacyQualification,
       EventScoringPhase.tournament => canScoreTournament,
       EventScoringPhase.bonus => canScoreBonus,
       null => false,

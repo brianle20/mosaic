@@ -195,7 +195,6 @@ class _GuestRepository extends ThrowingGuestRepository {
   ) async =>
       const [];
 
-
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
     throw UnimplementedError();
@@ -250,7 +249,6 @@ class _GuestRepository extends ThrowingGuestRepository {
   }) {
     throw UnimplementedError();
   }
-
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
@@ -595,7 +593,6 @@ class _NfcService implements NfcService {
     return tableScanResult;
   }
 }
-
 
 class _CompletingTableScanNfcService implements NfcService {
   _CompletingTableScanNfcService(this.tableScanCompleter);
@@ -2449,7 +2446,7 @@ void main() {
     expect(find.text('Copy this event?'), findsOneWidget);
     expect(
       find.text(
-        'This creates a draft testing copy with guests, tables, and prize setup, but no check-ins, player tag assignments, sessions, scores, standings, or awards.',
+        'This creates a draft testing copy with guests, tables, and prize setup, but no check-ins, live activity, sessions, scores, standings, or awards.',
       ),
       findsOneWidget,
     );
@@ -2534,7 +2531,7 @@ void main() {
   });
 
   testWidgets(
-      'qualification scoring phase does not expose game tracking action',
+      'legacy qualification scoring phase does not expose game tracking action',
       (tester) async {
     final event = EventRecord.fromJson({
       ...activeEvent.toJson(),
@@ -2948,7 +2945,8 @@ void main() {
     );
   });
 
-  testWidgets('qualification phase does not expose start tournament flow',
+  testWidgets(
+      'legacy qualification phase does not expose start tournament flow',
       (tester) async {
     _SeatingRepository.generatedRandomAssignmentCount = 0;
     _SeatingRepository.generatedTournamentRoundCount = 0;
