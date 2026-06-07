@@ -2180,11 +2180,6 @@ void main() {
     expect(find.text('Qualifying'), findsNothing);
     expect(find.text('Qualified'), findsNothing);
     expect(find.text('Live Operations'), findsOneWidget);
-    expect(
-      find.text(
-          'Start qualification when hosts are ready to log open-play games.'),
-      findsNothing,
-    );
     expect(find.text('Prize Pool'), findsOneWidget);
     expect(find.text('Leader'), findsOneWidget);
 

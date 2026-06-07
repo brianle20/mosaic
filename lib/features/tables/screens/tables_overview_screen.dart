@@ -1139,8 +1139,8 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         ? 'This table is locked with the finalized event.'
         : _isQualificationPhase
             ? widget.scoringOpen
-                ? 'Ready for qualification play. Enter the table to record qualifier hands.'
-                : 'Open scoring before recording qualifier hands at this table.'
+                ? 'Ready for assigned tournament seating. Enter the table to start assigned play.'
+                : 'Open scoring before starting assigned tournament seating at this table.'
             : hasTag
                 ? canStartSuddenDeath
                     ? 'Start sudden death at this table.'

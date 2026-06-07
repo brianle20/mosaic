@@ -392,7 +392,7 @@ void main() {
     expect(find.byKey(const ValueKey('table-card-tbl_01')), findsOneWidget);
     expect(
       find.text(
-        'Ready for qualification play. Enter the table to record qualifier hands.',
+        'Ready for assigned tournament seating. Enter the table to start assigned play.',
       ),
       findsOneWidget,
     );
