@@ -445,7 +445,7 @@ void main() {
     ].map(EventGuestRecord.fromJson).toList(growable: false);
   }
 
-  testWidgets('walks table then east south west north into review and confirm',
+  testWidgets('legacy qualification walks tags into review and confirm',
       (tester) async {
     final sessionRepository = _FakeSessionRepository();
     SessionDetailArgs? openedArgs;
@@ -466,7 +466,7 @@ void main() {
             'default_rotation_policy_config_json': {},
             'status': 'active',
           }),
-          scoringPhase: EventScoringPhase.tournament,
+          scoringPhase: EventScoringPhase.qualification,
           guestRepository: _FakeGuestRepository(
             guests: buildGuests(),
             assignments: buildAssignments(),
@@ -549,7 +549,7 @@ void main() {
     expect(find.text('Opened Session Detail'), findsOneWidget);
   });
 
-  testWidgets('shows native NFC scan errors while starting a session',
+  testWidgets('legacy qualification shows native NFC scan errors',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -567,7 +567,7 @@ void main() {
             'default_rotation_policy_config_json': {},
             'status': 'active',
           }),
-          scoringPhase: EventScoringPhase.tournament,
+          scoringPhase: EventScoringPhase.qualification,
           guestRepository: _FakeGuestRepository(
             guests: buildGuests(),
             assignments: buildAssignments(),
@@ -614,6 +614,7 @@ void main() {
             'default_rotation_policy_config_json': {},
             'status': 'active',
           }),
+          scoringPhase: EventScoringPhase.qualification,
           guestRepository: _FakeGuestRepository(
             guests: buildGuests(),
             assignments: buildAssignments(),
@@ -657,6 +658,7 @@ void main() {
             'default_rotation_policy_config_json': {},
             'status': 'active',
           }),
+          scoringPhase: EventScoringPhase.qualification,
           guestRepository: _FakeGuestRepository(
             guests: buildGuests(),
             assignments: buildAssignments(),
@@ -703,6 +705,7 @@ void main() {
               'default_rotation_policy_config_json': {},
               'status': 'active',
             }),
+            scoringPhase: EventScoringPhase.qualification,
             preverifiedTableTagUid: 'TABLE-001',
             guestRepository: _FakeGuestRepository(
               guests: buildGuests(),
@@ -769,7 +772,7 @@ void main() {
     },
   );
 
-  testWidgets('shows an inline error for a duplicate player scan',
+  testWidgets('legacy qualification shows duplicate player scan error',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -787,6 +790,7 @@ void main() {
             'default_rotation_policy_config_json': {},
             'status': 'active',
           }),
+          scoringPhase: EventScoringPhase.qualification,
           guestRepository: _FakeGuestRepository(
             guests: buildGuests(),
             assignments: buildAssignments(),
@@ -1041,6 +1045,58 @@ void main() {
     expect(
         sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
     expect(openedArgs?.sessionId, 'ses_01');
+  });
+
+  testWidgets('blocks tournament start when assigned seating is missing',
+      (tester) async {
+    final sessionRepository = _FakeSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StartSessionScreen(
+          eventId: 'evt_01',
+          table: EventTableRecord.fromJson(const {
+            'id': 'tbl_01',
+            'event_id': 'evt_01',
+            'label': 'Table 1',
+            'mode': 'points',
+            'display_order': 1,
+            'default_ruleset_id': 'HK_STANDARD',
+            'default_rotation_policy_type':
+                'dealer_cycle_return_to_initial_east',
+            'default_rotation_policy_config_json': {},
+            'status': 'active',
+          }),
+          scoringPhase: EventScoringPhase.tournament,
+          preverifiedTableTagUid: 'TABLE-001',
+          guestRepository: _FakeGuestRepository(
+            guests: buildGuests(),
+            assignments: buildAssignments(),
+          ),
+          sessionRepository: sessionRepository,
+          seatingRepository: const _FakeSeatingRepository(),
+          nfcService: _QueuedNfcService([
+            const TagScanResult(
+              rawUid: 'PLAYER-EAST',
+              normalizedUid: 'PLAYER-EAST',
+              isManualEntry: true,
+            ),
+          ]),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Assigned seating required'), findsOneWidget);
+    expect(
+      find.text('Generate seating assignments before entering this table.'),
+      findsOneWidget,
+    );
+    expect(find.text('Scan Next Tag'), findsNothing);
+    expect(find.text('Scan East Player Tag'), findsNothing);
+    expect(find.textContaining('Player Tag'), findsNothing);
+    expect(sessionRepository.startedInput, isNull);
+    expect(sessionRepository.startedAssignedInput, isNull);
   });
 
   testWidgets('starts short assigned table without scanning a fourth player',

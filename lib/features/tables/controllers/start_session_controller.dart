@@ -40,12 +40,22 @@ class StartSessionController extends ChangeNotifier {
   Map<String, GuestTagAssignmentSummary> assignmentsByGuestId = const {};
   Map<int, SeatingAssignmentRecord> expectedAssignmentsBySeatIndex = const {};
 
-  bool get hasAssignedTableSeating =>
+  bool get hasValidAssignedSeats =>
       expectedAssignmentsBySeatIndex.length >= 2 &&
-      expectedAssignmentsBySeatIndex.length <= 4 &&
+      expectedAssignmentsBySeatIndex.length <= 4;
+
+  bool get hasAssignedTableSeating =>
+      hasValidAssignedSeats &&
       (state.tableTagUid != null || allowAssignedTableEntry);
 
-  bool get canConfirmStart => hasAssignedTableSeating || state.canReview;
+  bool get isAssignedSeatingMissing =>
+      _shouldUseAssignedSeating && !hasValidAssignedSeats;
+
+  bool get canScanNextTag => !isAssignedSeatingMissing && !canConfirmStart;
+
+  bool get canConfirmStart =>
+      hasAssignedTableSeating ||
+      (!_shouldUseAssignedSeating && state.canReview);
 
   Future<void> load(String eventId) async {
     isLoading = true;
@@ -76,6 +86,10 @@ class StartSessionController extends ChangeNotifier {
   String get currentPrompt {
     if (hasAssignedTableSeating) {
       return 'Review assigned seating';
+    }
+
+    if (isAssignedSeatingMissing) {
+      return 'Assigned seating required';
     }
 
     final expectedAssignment = _expectedAssignmentForCurrentSeat;
@@ -135,6 +149,12 @@ class StartSessionController extends ChangeNotifier {
 
   void recordPlayerScan(String normalizedUid) {
     actionError = null;
+
+    if (isAssignedSeatingMissing) {
+      actionError = 'Generate seating assignments before entering this table.';
+      notifyListeners();
+      return;
+    }
 
     final assignment = _findAssignmentByUid(normalizedUid);
     if (assignment == null) {

@@ -965,18 +965,22 @@ TournamentRoundSummary _roundSummary({
 }
 
 SeatingAssignmentRecord _assignment({
+  String id = 'asg_01',
   String eventId = 'evt_01',
+  String tableId = 'tbl_01',
   String tableLabel = 'Table 1',
+  String guestId = 'gst_01',
   String displayName = 'Ava East',
+  int seatIndex = 0,
 }) {
   return SeatingAssignmentRecord(
-    id: 'asg_01',
+    id: id,
     eventId: eventId,
-    eventTableId: 'tbl_01',
+    eventTableId: tableId,
     tableLabel: tableLabel,
-    eventGuestId: 'gst_01',
+    eventGuestId: guestId,
     displayName: displayName,
-    seatIndex: 0,
+    seatIndex: seatIndex,
     assignmentRound: 1,
     status: 'active',
   );
@@ -1889,9 +1893,20 @@ void main() {
     expect(find.text('Resume Timer'), findsOneWidget);
   });
 
-  testWidgets('scan table starts preverified table flow at east player prompt',
+  testWidgets('scan table opens assigned table review without player prompts',
       (tester) async {
     final table = _table();
+    final seatingRepository = _SeatingRepository(
+      assignments: [
+        _assignment(displayName: 'Ava East'),
+        _assignment(
+          id: 'asg_02',
+          guestId: 'gst_02',
+          displayName: 'Ben South',
+          seatIndex: 1,
+        ),
+      ],
+    );
     final router = AppRouter(
       eventRepository: _EventRepository(activeEvent),
       guestRepository: _GuestRepository(),
@@ -1900,7 +1915,7 @@ void main() {
       leaderboardRepository: _LeaderboardRepository(),
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
-      seatingRepository: const _SeatingRepository(),
+      seatingRepository: seatingRepository,
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
       qrScannerService: const _QrScannerService(),
     );
@@ -1914,6 +1929,7 @@ void main() {
           leaderboardRepository: _LeaderboardRepository(),
           tableRepository: _TableRepository(resolvedTable: table),
           sessionRepository: const _SessionRepository(),
+          seatingRepository: seatingRepository,
           nfcService: _NfcService(tableScanResult: _tableScanResult()),
         ),
         onGenerateRoute: router.onGenerateRoute,
@@ -1927,7 +1943,10 @@ void main() {
     expect(find.text('Start Session'), findsOneWidget);
     expect(find.text('Table 1'), findsOneWidget);
     expect(find.text('Scan Table Tag'), findsNothing);
-    expect(find.text('Scan East Player Tag'), findsOneWidget);
+    expect(find.text('Review assigned seating'), findsOneWidget);
+    expect(find.text('Ava East'), findsOneWidget);
+    expect(find.text('Ben South'), findsOneWidget);
+    expect(find.textContaining('Player Tag'), findsNothing);
   });
 
   testWidgets('scan table shows message when scoring is closed',

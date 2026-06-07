@@ -100,7 +100,7 @@ void main() {
     );
   });
 
-  test('starting a table session stamps the event scoring phase', () {
+  test('starting a table session uses assigned flow for future events', () {
     final startSessionSql = _extractFunction(
       migrationsSql,
       'public.start_table_session',
@@ -114,12 +114,17 @@ void main() {
       'app_private.validate_random_seating_assignment',
     );
 
-    expect(startSessionSql, contains('current_scoring_phase'));
-    expect(startSessionSql, contains('effective_scoring_phase'));
-    expect(startSessionSql, contains('scoring_phase'));
-    expect(startSessionSql, contains('bonus_assignment_row.id is null'));
-    expect(startSessionSql, contains('then effective_scoring_phase'));
-    expect(startSessionSql, contains("else 'bonus'"));
+    expect(startSessionSql, contains('event_row.archived_at is null'));
+    expect(
+      startSessionSql,
+      contains(
+        'Player tag session start is no longer available. Use assigned seating.',
+      ),
+    );
+    expect(
+      startSessionSql,
+      contains('public.start_table_session_legacy_player_tags'),
+    );
     expect(seatingValidationSql, contains('current_scoring_phase'));
     expect(
       seatingValidationSql,

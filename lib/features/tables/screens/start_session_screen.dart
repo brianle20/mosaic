@@ -163,9 +163,14 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
             if (_controller.actionError != null) ...[
               const SizedBox(height: 12),
               Text(_controller.actionError!),
+            ] else if (_controller.isAssignedSeatingMissing) ...[
+              const SizedBox(height: 12),
+              const Text(
+                'Generate seating assignments before entering this table.',
+              ),
             ],
             const SizedBox(height: 20),
-            if (!_controller.canConfirmStart)
+            if (_controller.canScanNextTag)
               FilledButton(
                 onPressed: _isScanningTag ? null : _scanNext,
                 child: Text(_isScanningTag ? 'Scanning...' : 'Scan Next Tag'),

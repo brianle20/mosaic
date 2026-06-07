@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -308,8 +309,7 @@ void main() {
     });
   }
 
-  test(
-      'does not use assigned seating when short table seats are not contiguous',
+  test('blocks tournament start when assigned seats are not contiguous',
       () async {
     final sessionRepository = _FakeSessionRepository();
     final controller = _buildController(
@@ -324,7 +324,33 @@ void main() {
     await controller.load('evt_01');
 
     expect(controller.hasAssignedTableSeating, isFalse);
-    expect(controller.currentPrompt, 'Scan Table Tag');
+    expect(controller.currentPrompt, 'Assigned seating required');
+
+    final started = await controller.confirmStart();
+
+    expect(started, isNull);
+    expect(sessionRepository.startedAssignedInput, isNull);
+  });
+
+  test('tournament table without assigned seats does not scan player tags',
+      () async {
+    final sessionRepository = _FakeSessionRepository();
+    final controller = _buildController(
+      sessionRepository: sessionRepository,
+      preverifiedTableTagUid: 'TABLE-001',
+    );
+
+    await controller.load('evt_01');
+    controller.recordPlayerScan('PLAYER-EAST');
+
+    expect(controller.hasAssignedTableSeating, isFalse);
+    expect(controller.canConfirmStart, isFalse);
+    expect(controller.currentPrompt, 'Assigned seating required');
+    expect(
+      controller.actionError,
+      'Generate seating assignments before entering this table.',
+    );
+    expect(controller.state.scannedPlayerUids, isEmpty);
 
     final started = await controller.confirmStart();
 
@@ -363,9 +389,12 @@ void main() {
     expect(controller.state.scannedPlayerUids, ['PLAYER-EAST']);
   });
 
-  test('manual mode without assignment rows preserves generic scan behavior',
+  test(
+      'legacy qualification mode without assignment rows preserves scan behavior',
       () async {
-    final controller = _buildController();
+    final controller = _buildController(
+      scoringPhase: EventScoringPhase.qualification,
+    );
 
     await controller.load('evt_01');
     controller.recordTableScan('TABLE-001');
@@ -382,9 +411,11 @@ StartSessionController _buildController({
   SessionRepository? sessionRepository,
   String? preverifiedTableTagUid,
   bool allowAssignedTableEntry = false,
+  EventScoringPhase scoringPhase = EventScoringPhase.tournament,
 }) {
   return StartSessionController(
     table: _table(),
+    scoringPhase: scoringPhase,
     guestRepository: _FakeGuestRepository(
       guests: _guests(),
       tagAssignments: _tagAssignments(),
