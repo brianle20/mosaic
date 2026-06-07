@@ -279,12 +279,6 @@ class _FakeGuestRepository implements GuestRepository {
   }) {
     throw UnimplementedError();
   }
-
-  @override
-  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
-    required String eventId,
-  }) async =>
-      const [];
 }
 
 class _FakeTableRepository implements TableRepository {

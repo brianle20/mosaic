@@ -187,24 +187,9 @@ class _EventRepository extends ThrowingEventRepository {
 class _GuestRepository extends ThrowingGuestRepository {
   const _GuestRepository({
     this.guests = const [],
-    this.qualificationRows = const [
-      QualificationLeaderboardRow(
-        eventGuestId: 'gst_alice',
-        guestProfileId: 'prf_alice',
-        fullName: 'Alice Wong',
-        tournamentStatus: EventTournamentStatus.qualifying,
-        qualificationPoints: 72,
-        handsPlayed: 9,
-        wins: 3,
-        selfDrawWins: 1,
-        discardWins: 2,
-        rank: 1,
-      ),
-    ],
   });
 
   final List<EventGuestRecord> guests;
-  final List<QualificationLeaderboardRow> qualificationRows;
 
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
@@ -252,12 +237,6 @@ class _GuestRepository extends ThrowingGuestRepository {
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       guests;
-
-  @override
-  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
-    required String eventId,
-  }) async =>
-      qualificationRows;
 
   @override
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
@@ -2245,10 +2224,7 @@ void main() {
         home: EventDashboardScreen(
           args: const EventDashboardArgs(eventId: 'evt_04'),
           eventRepository: eventRepository,
-          guestRepository: _GuestRepository(
-            guests: guests,
-            qualificationRows: const [],
-          ),
+          guestRepository: _GuestRepository(guests: guests),
           leaderboardRepository: _LeaderboardRepository(),
           tableRepository: _TableRepository(
             tables: [

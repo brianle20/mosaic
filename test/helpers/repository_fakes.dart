@@ -139,12 +139,6 @@ class ThrowingGuestRepository implements GuestRepository {
       throw UnimplementedError();
 
   @override
-  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
-    required String eventId,
-  }) =>
-      throw UnimplementedError();
-
-  @override
   Future<GuestDetailRecord> recordCoverEntry({
     required String guestId,
     required int amountCents,

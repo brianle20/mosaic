@@ -261,40 +261,6 @@ void main() {
       final cachedGuests = cache.readGuests('evt_01');
       expect(cachedGuests.map((guest) => guest.id), ['gst_02']);
     });
-
-    test('fetches qualification leaderboard from the host-only RPC', () async {
-      final cache = await LocalCache.create();
-      final repository = SupabaseGuestRepository(
-        client: SupabaseClient('https://example.com', 'publishable-key'),
-        cache: cache,
-        rpcListRunner: (functionName, params) async {
-          expect(functionName, 'get_event_qualification_leaderboard');
-          expect(params, {'target_event_id': 'evt_01'});
-          return const [
-            {
-              'event_guest_id': 'gst_01',
-              'guest_profile_id': 'prf_01',
-              'full_name': 'Brian Le',
-              'tournament_status': 'qualified',
-              'qualification_points': 0,
-              'hands_played': 0,
-              'wins': 0,
-              'self_draw_wins': 0,
-              'discard_wins': 0,
-              'rank': 1,
-            },
-          ];
-        },
-      );
-
-      final rows = await repository.fetchQualificationLeaderboard(
-        eventId: 'evt_01',
-      );
-
-      expect(rows.single.fullName, 'Brian Le');
-      expect(rows.single.tournamentStatus, EventTournamentStatus.qualified);
-      expect(rows.single.qualificationPoints, 0);
-    });
   });
 }
 

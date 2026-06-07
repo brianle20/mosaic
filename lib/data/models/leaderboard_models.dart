@@ -128,65 +128,6 @@ EventTournamentStatus _tournamentStatusOrDefault(Map<String, dynamic> json) {
   return EventTournamentStatus.qualified;
 }
 
-@immutable
-class QualificationLeaderboardRow {
-  const QualificationLeaderboardRow({
-    required this.eventGuestId,
-    required this.guestProfileId,
-    required this.fullName,
-    required this.tournamentStatus,
-    required this.qualificationPoints,
-    required this.handsPlayed,
-    required this.wins,
-    required this.selfDrawWins,
-    required this.discardWins,
-    required this.rank,
-  });
-
-  factory QualificationLeaderboardRow.fromJson(Map<String, dynamic> json) {
-    return QualificationLeaderboardRow(
-      eventGuestId: _requiredString(json, 'event_guest_id'),
-      guestProfileId: _requiredString(json, 'guest_profile_id'),
-      fullName: _requiredString(json, 'full_name'),
-      tournamentStatus: eventTournamentStatusFromJson(
-        _requiredString(json, 'tournament_status'),
-      ),
-      qualificationPoints: _requiredInt(json, 'qualification_points'),
-      handsPlayed: _requiredInt(json, 'hands_played'),
-      wins: _requiredInt(json, 'wins'),
-      selfDrawWins: _requiredInt(json, 'self_draw_wins'),
-      discardWins: _requiredInt(json, 'discard_wins'),
-      rank: _requiredInt(json, 'rank'),
-    );
-  }
-
-  final String eventGuestId;
-  final String guestProfileId;
-  final String fullName;
-  final EventTournamentStatus tournamentStatus;
-  final int qualificationPoints;
-  final int handsPlayed;
-  final int wins;
-  final int selfDrawWins;
-  final int discardWins;
-  final int rank;
-
-  Map<String, dynamic> toJson() {
-    return {
-      'event_guest_id': eventGuestId,
-      'guest_profile_id': guestProfileId,
-      'full_name': fullName,
-      'tournament_status': eventTournamentStatusToJson(tournamentStatus),
-      'qualification_points': qualificationPoints,
-      'hands_played': handsPlayed,
-      'wins': wins,
-      'self_draw_wins': selfDrawWins,
-      'discard_wins': discardWins,
-      'rank': rank,
-    };
-  }
-}
-
 String _requiredString(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is String && value.trim().isNotEmpty) {

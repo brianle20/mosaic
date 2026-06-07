@@ -123,10 +123,6 @@ abstract interface class GuestRepository {
     required EventTournamentStatus status,
   });
 
-  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
-    required String eventId,
-  });
-
   Future<GuestDetailRecord> recordCoverEntry({
     required String guestId,
     required int amountCents,

@@ -36,21 +36,6 @@ class _RecordingLeaderboardRepository implements LeaderboardRepository {
       const [];
 }
 
-class _QualificationGuestRepository extends Fake implements GuestRepository {
-  _QualificationGuestRepository({required this.rows});
-
-  final List<QualificationLeaderboardRow> rows;
-  int fetchCount = 0;
-
-  @override
-  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
-    required String eventId,
-  }) async {
-    fetchCount += 1;
-    return rows;
-  }
-}
-
 class _LedgerSessionRepository implements SessionRepository {
   const _LedgerSessionRepository({required this.rows});
 
@@ -333,59 +318,6 @@ void main() {
     final leaderboardRepository = _RecordingLeaderboardRepository(
       entries: const [],
     );
-    final guestRepository = _QualificationGuestRepository(
-      rows: const [
-        QualificationLeaderboardRow(
-          eventGuestId: 'gst_alice',
-          guestProfileId: 'prof_alice',
-          fullName: 'Alice Wong',
-          tournamentStatus: EventTournamentStatus.qualifying,
-          qualificationPoints: 16,
-          handsPlayed: 1,
-          wins: 1,
-          selfDrawWins: 0,
-          discardWins: 1,
-          rank: 1,
-        ),
-        QualificationLeaderboardRow(
-          eventGuestId: 'gst_brian',
-          guestProfileId: 'prof_brian',
-          fullName: 'Brian Le',
-          tournamentStatus: EventTournamentStatus.qualifying,
-          qualificationPoints: 0,
-          handsPlayed: 1,
-          wins: 0,
-          selfDrawWins: 0,
-          discardWins: 0,
-          rank: 2,
-        ),
-        QualificationLeaderboardRow(
-          eventGuestId: 'gst_carla',
-          guestProfileId: 'prof_carla',
-          fullName: 'Carla Park',
-          tournamentStatus: EventTournamentStatus.qualifying,
-          qualificationPoints: 0,
-          handsPlayed: 1,
-          wins: 0,
-          selfDrawWins: 0,
-          discardWins: 0,
-          rank: 2,
-        ),
-        QualificationLeaderboardRow(
-          eventGuestId: 'gst_dan',
-          guestProfileId: 'prof_dan',
-          fullName: 'Dan Yu',
-          tournamentStatus: EventTournamentStatus.qualifying,
-          qualificationPoints: -16,
-          handsPlayed: 1,
-          wins: 0,
-          selfDrawWins: 0,
-          discardWins: 0,
-          rank: 4,
-        ),
-      ],
-    );
-
     await tester.pumpWidget(
       MaterialApp(
         home: LeaderboardScreen(
@@ -399,8 +331,6 @@ void main() {
     expect(find.text('Tournament'), findsOneWidget);
     expect(find.text('Qualification'), findsNothing);
     expect(find.text('Qualification Standings'), findsNothing);
-    expect(find.text('Alice Wong'), findsNothing);
-    expect(guestRepository.fetchCount, 0);
   });
 
   testWidgets('orders remaining leaderboard tabs by event phase',

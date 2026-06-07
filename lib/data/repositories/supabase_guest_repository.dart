@@ -1,6 +1,5 @@
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/guest_models.dart';
-import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -511,19 +510,6 @@ class SupabaseGuestRepository implements GuestRepository {
     final guest = EventGuestRecord.fromJson(row);
     await _saveMergedGuestList(guest.eventId, guest);
     return guest;
-  }
-
-  @override
-  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
-    required String eventId,
-  }) async {
-    final rows = await _runRpcList(
-      'get_event_qualification_leaderboard',
-      {'target_event_id': eventId},
-    );
-    return rows
-        .map(QualificationLeaderboardRow.fromJson)
-        .toList(growable: false);
   }
 
   Future<void> _saveMergedGuestList(

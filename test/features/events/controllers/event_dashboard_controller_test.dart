@@ -186,26 +186,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
       cachedGuests;
 
   @override
-  Future<List<QualificationLeaderboardRow>> fetchQualificationLeaderboard({
-    required String eventId,
-  }) async {
-    return const [
-      QualificationLeaderboardRow(
-        eventGuestId: 'gst_brian',
-        guestProfileId: 'prf_brian',
-        fullName: 'Brian Le',
-        tournamentStatus: EventTournamentStatus.qualifying,
-        qualificationPoints: 48,
-        handsPlayed: 8,
-        wins: 2,
-        selfDrawWins: 1,
-        discardWins: 1,
-        rank: 1,
-      ),
-    ];
-  }
-
-  @override
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
     String guestId,
   ) {
@@ -662,8 +642,7 @@ void main() {
     expect(controller.leaderLabel, 'Brian Le');
   });
 
-  test('defaults to tournament phase without loading qualification leaderboard',
-      () async {
+  test('defaults to tournament phase when event has no stored phase', () async {
     final event = EventRecord.fromJson(const {
       'id': 'evt_01',
       'owner_user_id': 'usr_01',
