@@ -89,21 +89,6 @@ class _StartSessionScreenState extends State<StartSessionScreen> {
           if (result != null) {
             _controller.recordTableScan(result.normalizedUid);
           }
-        case StartSessionScanStep.scanEast:
-        case StartSessionScanStep.scanSouth:
-        case StartSessionScanStep.scanWest:
-        case StartSessionScanStep.scanNorth:
-          final seatLabel = _controller.state.currentSeatLabel!;
-          final result = await widget.nfcService.scanPlayerTagForSessionSeat(
-            context,
-            seatLabel: seatLabel,
-          );
-          if (!mounted) {
-            return;
-          }
-          if (result != null) {
-            _controller.recordPlayerScan(result.normalizedUid);
-          }
         case StartSessionScanStep.review:
           return;
       }

@@ -113,17 +113,6 @@ class SupabaseSessionRepository implements SessionRepository {
   }
 
   @override
-  Future<StartedTableSessionRecord> startSession(
-    StartTableSessionInput input,
-  ) async {
-    final sessionRow = await _runRpcSingle(
-      'start_table_session',
-      input.toRpcParams(),
-    );
-    return _buildStartedSession(sessionRow);
-  }
-
-  @override
   Future<StartedTableSessionRecord> startAssignedSession(
     StartAssignedTableSessionInput input,
   ) async {

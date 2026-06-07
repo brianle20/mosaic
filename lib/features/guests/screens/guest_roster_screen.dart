@@ -717,13 +717,11 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
 
   bool _canRemoveGuest(EventGuestRecord guest) {
     return widget.canManageGuests &&
-        _controller.hasLoadedActiveTagAssignments &&
         guest.attendanceStatus == AttendanceStatus.expected &&
         guest.checkedInAt == null &&
         guest.coverStatus == CoverStatus.unpaid &&
         !guest.isComped &&
-        !guest.hasScoredPlay &&
-        !_controller.activeTagAssignments.containsKey(guest.id);
+        !guest.hasScoredPlay;
   }
 
   void _handleOverflowAction(

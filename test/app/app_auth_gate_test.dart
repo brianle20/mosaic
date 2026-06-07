@@ -14,7 +14,6 @@ import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -175,14 +174,6 @@ class _FakeGuestRepository implements GuestRepository {
   ) async =>
       const [];
 
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
@@ -206,19 +197,6 @@ class _FakeGuestRepository implements GuestRepository {
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async => const [];
 
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async =>
-      const {};
-
-  @override
-  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
-    required String eventId,
-    required String scannedUid,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
@@ -253,14 +231,6 @@ class _FakeGuestRepository implements GuestRepository {
     throw UnimplementedError();
   }
 
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
@@ -373,11 +343,6 @@ class _FakeSessionRepository implements SessionRepository {
 
   @override
   Future<SessionDetailRecord> resumeSession(String sessionId) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
     throw UnimplementedError();
   }
 
@@ -527,25 +492,7 @@ class _FakeSeatingRepository implements SeatingRepository {
 class _FakeNfcService implements NfcService {
   const _FakeNfcService();
 
-  @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-      BuildContext context) async {
-    return null;
-  }
 
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-      BuildContext context) async {
-    return null;
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) async {
-    return null;
-  }
 
   @override
   Future<TagScanResult?> scanTableTag(BuildContext context) async {

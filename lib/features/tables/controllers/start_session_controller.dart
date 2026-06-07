@@ -1,9 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/event_models.dart';
-import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/models/start_session_scan_state.dart';
@@ -17,8 +15,7 @@ class StartSessionController extends ChangeNotifier {
     required SessionRepository sessionRepository,
     String? preverifiedTableTagUid,
     this.allowAssignedTableEntry = false,
-  })  : _guestRepository = guestRepository,
-        _seatingRepository = seatingRepository,
+  })  : _seatingRepository = seatingRepository,
         _sessionRepository = sessionRepository,
         state = preverifiedTableTagUid == null
             ? StartSessionScanState.initial()
@@ -27,7 +24,6 @@ class StartSessionController extends ChangeNotifier {
   final EventTableRecord table;
   final EventScoringPhase scoringPhase;
   final bool allowAssignedTableEntry;
-  final GuestRepository _guestRepository;
   final SeatingRepository _seatingRepository;
   final SessionRepository _sessionRepository;
 
@@ -36,8 +32,6 @@ class StartSessionController extends ChangeNotifier {
   String? error;
   String? actionError;
   StartSessionScanState state;
-  Map<String, EventGuestRecord> guestsById = const {};
-  Map<String, GuestTagAssignmentSummary> assignmentsByGuestId = const {};
   Map<int, SeatingAssignmentRecord> expectedAssignmentsBySeatIndex = const {};
 
   bool get hasValidAssignedSeats =>
@@ -49,13 +43,11 @@ class StartSessionController extends ChangeNotifier {
       (state.tableTagUid != null || allowAssignedTableEntry);
 
   bool get isAssignedSeatingMissing =>
-      _shouldUseAssignedSeating && !hasValidAssignedSeats;
+      !hasValidAssignedSeats;
 
   bool get canScanNextTag => !isAssignedSeatingMissing && !canConfirmStart;
 
-  bool get canConfirmStart =>
-      hasAssignedTableSeating ||
-      (!_shouldUseAssignedSeating && state.canReview);
+  bool get canConfirmStart => hasAssignedTableSeating;
 
   Future<void> load(String eventId) async {
     isLoading = true;
@@ -63,18 +55,10 @@ class StartSessionController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final guests = await _guestRepository.listGuests(eventId);
-      final assignments =
-          await _guestRepository.listActiveTagAssignments(eventId);
       final seatingAssignments =
           await _seatingRepository.loadAssignments(eventId);
-      guestsById = {
-        for (final guest in guests) guest.id: guest,
-      };
-      assignmentsByGuestId = assignments;
-      expectedAssignmentsBySeatIndex = _shouldUseAssignedSeating
-          ? _expectedAssignmentsForTable(seatingAssignments)
-          : const {};
+      expectedAssignmentsBySeatIndex =
+          _expectedAssignmentsForTable(seatingAssignments);
     } catch (exception) {
       error = exception.toString();
     }
@@ -92,18 +76,8 @@ class StartSessionController extends ChangeNotifier {
       return 'Assigned seating required';
     }
 
-    final expectedAssignment = _expectedAssignmentForCurrentSeat;
-    final currentSeatLabel = state.currentSeatLabel;
-    if (expectedAssignment != null && currentSeatLabel != null) {
-      return 'Scan ${expectedAssignment.displayName} for $currentSeatLabel';
-    }
-
     return switch (state.currentStep) {
       StartSessionScanStep.scanTable => 'Scan Table Tag',
-      StartSessionScanStep.scanEast => 'Scan East Player Tag',
-      StartSessionScanStep.scanSouth => 'Scan South Player Tag',
-      StartSessionScanStep.scanWest => 'Scan West Player Tag',
-      StartSessionScanStep.scanNorth => 'Scan North Player Tag',
       StartSessionScanStep.review => 'Review Session',
     };
   }
@@ -121,64 +95,12 @@ class StartSessionController extends ChangeNotifier {
       ];
     }
 
-    final resolved = <ResolvedSeat>[];
-    for (var index = 0; index < state.scannedPlayerUids.length; index++) {
-      final assignment = _findAssignmentByUid(state.scannedPlayerUids[index]);
-      if (assignment == null) {
-        continue;
-      }
-      final guest = guestsById[assignment.eventGuestId];
-      if (guest == null) {
-        continue;
-      }
-      resolved.add(
-        ResolvedSeat(
-          seatLabel: seatWindForIndex(index).name,
-          guestName: guest.displayName,
-        ),
-      );
-    }
-    return resolved;
+    return const [];
   }
 
   void recordTableScan(String normalizedUid) {
     actionError = null;
     state = state.withTableTag(normalizedUid);
-    notifyListeners();
-  }
-
-  void recordPlayerScan(String normalizedUid) {
-    actionError = null;
-
-    if (isAssignedSeatingMissing) {
-      actionError = 'Generate seating assignments before entering this table.';
-      notifyListeners();
-      return;
-    }
-
-    final assignment = _findAssignmentByUid(normalizedUid);
-    if (assignment == null) {
-      actionError =
-          'Unknown player tag. Register player tags during check-in first.';
-      notifyListeners();
-      return;
-    }
-
-    final expectedAssignment = _expectedAssignmentForCurrentSeat;
-    if (expectedAssignment != null &&
-        assignment.eventGuestId != expectedAssignment.eventGuestId) {
-      actionError =
-          'Expected ${expectedAssignment.displayName} for ${state.currentSeatLabel}. '
-          'Scan the assigned player tag.';
-      notifyListeners();
-      return;
-    }
-
-    try {
-      state = state.withPlayerTag(normalizedUid);
-    } on StateError catch (exception) {
-      actionError = exception.message;
-    }
     notifyListeners();
   }
 
@@ -197,23 +119,12 @@ class StartSessionController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final started = hasAssignedTableSeating
-          ? await _sessionRepository.startAssignedSession(
-              StartAssignedTableSessionInput(
-                eventTableId: table.id,
-                scannedTableUid: state.tableTagUid,
-              ),
-            )
-          : await _sessionRepository.startSession(
-              StartTableSessionInput(
-                eventTableId: table.id,
-                scannedTableUid: state.tableTagUid!,
-                eastPlayerUid: state.scannedPlayerUids[0],
-                southPlayerUid: state.scannedPlayerUids[1],
-                westPlayerUid: state.scannedPlayerUids[2],
-                northPlayerUid: state.scannedPlayerUids[3],
-              ),
-            );
+      final started = await _sessionRepository.startAssignedSession(
+        StartAssignedTableSessionInput(
+          eventTableId: table.id,
+          scannedTableUid: state.tableTagUid,
+        ),
+      );
       isSubmitting = false;
       notifyListeners();
       return started;
@@ -223,20 +134,6 @@ class StartSessionController extends ChangeNotifier {
       notifyListeners();
       return null;
     }
-  }
-
-  GuestTagAssignmentSummary? _findAssignmentByUid(String normalizedUid) {
-    for (final assignment in assignmentsByGuestId.values) {
-      if (assignment.tag.uidHex == normalizedUid) {
-        return assignment;
-      }
-    }
-    return null;
-  }
-
-  SeatingAssignmentRecord? get _expectedAssignmentForCurrentSeat {
-    final seatIndex = state.scannedPlayerUids.length;
-    return expectedAssignmentsBySeatIndex[seatIndex];
   }
 
   Map<int, SeatingAssignmentRecord> _expectedAssignmentsForTable(
@@ -270,9 +167,6 @@ class StartSessionController extends ChangeNotifier {
         assignment.seatIndex: assignment,
     };
   }
-
-  bool get _shouldUseAssignedSeating =>
-      scoringPhase != EventScoringPhase.qualification;
 
   String _formatActionError(Object exception) {
     final message = exception.toString();

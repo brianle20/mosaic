@@ -14,18 +14,5 @@ class TagScanResult {
 }
 
 abstract interface class NfcService {
-  Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context);
-
-  Future<TagScanResult?> scanPlayerTagForIdentification(BuildContext context);
-
   Future<TagScanResult?> scanTableTag(BuildContext context);
-
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  });
-}
-
-abstract interface class PassiveNfcService {
-  Stream<TagScanResult> get playerTagScans;
 }

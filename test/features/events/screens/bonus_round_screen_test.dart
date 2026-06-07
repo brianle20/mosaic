@@ -377,25 +377,6 @@ class _NfcService implements NfcService {
   final List<String> scannedUids;
 
   @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-    BuildContext context,
-  ) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-    BuildContext context,
-  ) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) async =>
-      null;
-
-  @override
   Future<TagScanResult?> scanTableTag(BuildContext context) async {
     final uid = scannedUids.removeAt(0);
     return TagScanResult(
@@ -520,11 +501,6 @@ class _SessionRepository implements SessionRepository {
 
   @override
   Future<SessionDetailRecord> resumeSession(String sessionId) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
     throw UnimplementedError();
   }
 

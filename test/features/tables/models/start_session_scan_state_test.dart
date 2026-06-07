@@ -3,43 +3,20 @@ import 'package:mosaic/features/tables/models/start_session_scan_state.dart';
 
 void main() {
   group('StartSessionScanState', () {
-    test('advances seat prompts east south west north after table scan', () {
-      final state = StartSessionScanState.initial()
-          .withTableTag('TABLE-001')
-          .withPlayerTag('PLAYER-EAST')
-          .withPlayerTag('PLAYER-SOUTH');
+    test('starts by asking for a table tag', () {
+      final state = StartSessionScanState.initial();
 
-      expect(state.currentStep, StartSessionScanStep.scanWest);
-      expect(state.currentSeatLabel, 'West');
+      expect(state.tableTagUid, isNull);
+      expect(state.currentStep, StartSessionScanStep.scanTable);
+      expect(state.canReview, isFalse);
     });
 
-    test('rejects duplicate player-tag scans', () {
-      final state = StartSessionScanState.initial()
-          .withTableTag('TABLE-001')
-          .withPlayerTag('PLAYER-EAST');
+    test('enters review state after table tag scan', () {
+      final state = StartSessionScanState.initial().withTableTag('TABLE-001');
 
-      expect(
-        () => state.withPlayerTag('PLAYER-EAST'),
-        throwsA(isA<StateError>()),
-      );
-    });
-
-    test('enters review state only after all four seats are resolved', () {
-      final completeState = StartSessionScanState.initial()
-          .withTableTag('TABLE-001')
-          .withPlayerTag('PLAYER-EAST')
-          .withPlayerTag('PLAYER-SOUTH')
-          .withPlayerTag('PLAYER-WEST')
-          .withPlayerTag('PLAYER-NORTH');
-
-      expect(completeState.currentStep, StartSessionScanStep.review);
-      expect(completeState.canReview, isTrue);
-      expect(completeState.scannedPlayerUids, [
-        'PLAYER-EAST',
-        'PLAYER-SOUTH',
-        'PLAYER-WEST',
-        'PLAYER-NORTH',
-      ]);
+      expect(state.tableTagUid, 'TABLE-001');
+      expect(state.currentStep, StartSessionScanStep.review);
+      expect(state.canReview, isTrue);
     });
   });
 }

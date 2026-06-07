@@ -7,8 +7,7 @@ import 'package:mosaic/services/nfc/native_nfc_service.dart';
 
 void main() {
   group('NativeNfcService', () {
-    testWidgets('player assignment scan returns native UID result',
-        (tester) async {
+    testWidgets('table scan returns native UID result', (tester) async {
       final reader = _FakeNativeNfcReader(
         uidBytes: Uint8List.fromList([0x04, 0xa1, 0x0b, 0xff]),
       );
@@ -17,12 +16,12 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       final context = tester.element(find.byType(SizedBox));
 
-      final result = await service.scanPlayerTagForAssignment(context);
+      final result = await service.scanTableTag(context);
 
       expect(result?.rawUid, '04A10BFF');
       expect(result?.normalizedUid, '04A10BFF');
       expect(result?.isManualEntry, isFalse);
-      expect(reader.lastAlertMessage, contains('player tag'));
+      expect(reader.lastAlertMessage, contains('table tag'));
     });
 
     testWidgets('table scan returns null when native session is cancelled',
@@ -39,21 +38,6 @@ void main() {
       expect(reader.lastAlertMessage, contains('table tag'));
     });
 
-    testWidgets('session seat scan includes seat label in prompt',
-        (tester) async {
-      final reader = _FakeNativeNfcReader(
-        uidBytes: Uint8List.fromList([0x04, 0xa1, 0x0b, 0xff]),
-      );
-      final service = NativeNfcService(reader: reader);
-
-      await tester.pumpWidget(const SizedBox());
-      final context = tester.element(find.byType(SizedBox));
-
-      await service.scanPlayerTagForSessionSeat(context, seatLabel: 'East');
-
-      expect(reader.lastAlertMessage, contains('East player tag'));
-    });
-
     testWidgets('disabled NFC throws user-facing scan exception',
         (tester) async {
       final reader = _FakeNativeNfcReader(
@@ -65,7 +49,7 @@ void main() {
       final context = tester.element(find.byType(SizedBox));
 
       expect(
-        service.scanPlayerTagForAssignment(context),
+        service.scanTableTag(context),
         throwsA(
           isA<NfcScanException>().having(
             (exception) => exception.message,
@@ -87,7 +71,7 @@ void main() {
       final context = tester.element(find.byType(SizedBox));
 
       expect(
-        service.scanPlayerTagForAssignment(context),
+        service.scanTableTag(context),
         throwsA(
           isA<NfcScanException>().having(
             (exception) => exception.message,
@@ -108,7 +92,7 @@ void main() {
       final context = tester.element(find.byType(SizedBox));
 
       expect(
-        service.scanPlayerTagForAssignment(context),
+        service.scanTableTag(context),
         throwsA(same(thrown)),
       );
     });

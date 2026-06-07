@@ -11,7 +11,6 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/staff_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 
@@ -97,15 +96,6 @@ abstract interface class GuestRepository {
 
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(String guestId);
 
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  );
-
-  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
-    required String eventId,
-    required String scannedUid,
-  });
-
   Future<GuestDetailRecord?> getGuestDetail(String guestId);
 
   Future<List<GuestProfileMatch>> findGuestProfileMatches(
@@ -142,17 +132,6 @@ abstract interface class GuestRepository {
 
   Future<GuestDetailRecord> checkInGuest(String guestId);
 
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  });
-
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  });
 }
 
 abstract interface class RulesetRepository {
@@ -192,8 +171,6 @@ abstract interface class SessionRepository {
   Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(String eventId);
 
   Future<List<EventHandLedgerEntry>> loadEventHandLedger(String eventId);
-
-  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input);
 
   Future<StartedTableSessionRecord> startAssignedSession(
     StartAssignedTableSessionInput input,

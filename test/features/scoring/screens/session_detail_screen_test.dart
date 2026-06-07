@@ -5,7 +5,6 @@ import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 
@@ -16,14 +15,6 @@ class _FakeGuestRepository implements GuestRepository {
   ) async =>
       const [];
 
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
@@ -92,20 +83,6 @@ class _FakeGuestRepository implements GuestRepository {
         },
       ].map(EventGuestRecord.fromJson).toList(growable: false);
 
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
-    required String eventId,
-    required String scannedUid,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
@@ -140,14 +117,6 @@ class _FakeGuestRepository implements GuestRepository {
     throw UnimplementedError();
   }
 
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
@@ -257,11 +226,6 @@ class _FakeSessionRepository implements SessionRepository {
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
       const [];
-
-  @override
-  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<StartedTableSessionRecord> startAssignedSession(

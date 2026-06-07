@@ -14,7 +14,6 @@ import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
@@ -29,7 +28,6 @@ import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 import 'package:mosaic/features/tables/screens/seating_assignment_screen.dart';
 import 'package:mosaic/services/nfc/native_nfc_reader.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
-import 'package:mosaic/services/qr/qr_scanner_service.dart';
 import 'package:mosaic/widgets/app_actions.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
 
@@ -197,14 +195,6 @@ class _GuestRepository extends ThrowingGuestRepository {
   ) async =>
       const [];
 
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
@@ -227,12 +217,6 @@ class _GuestRepository extends ThrowingGuestRepository {
 
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async => guests;
-
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async =>
-      const {};
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
@@ -267,14 +251,6 @@ class _GuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
@@ -596,11 +572,6 @@ class _SessionRepository extends ThrowingSessionRepository {
   }
 
   @override
-  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
     throw UnimplementedError();
   }
@@ -616,25 +587,6 @@ class _NfcService implements NfcService {
   final Object? tableScanError;
 
   @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-    BuildContext context,
-  ) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-    BuildContext context,
-  ) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) async =>
-      null;
-
-  @override
   Future<TagScanResult?> scanTableTag(BuildContext context) async {
     final tableScanError = this.tableScanError;
     if (tableScanError != null) {
@@ -644,37 +596,12 @@ class _NfcService implements NfcService {
   }
 }
 
-class _QrScannerService implements QrScannerService {
-  const _QrScannerService();
-
-  @override
-  Future<QrScanResult?> scanPlayerCode(BuildContext context) async => null;
-}
 
 class _CompletingTableScanNfcService implements NfcService {
   _CompletingTableScanNfcService(this.tableScanCompleter);
 
   final Completer<TagScanResult?> tableScanCompleter;
   int tableScanCallCount = 0;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-    BuildContext context,
-  ) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-    BuildContext context,
-  ) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) async =>
-      null;
 
   @override
   Future<TagScanResult?> scanTableTag(BuildContext context) {
@@ -1212,7 +1139,6 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: const _NfcService(),
-      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1476,7 +1402,6 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: const _NfcService(),
-      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1512,7 +1437,6 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: const _NfcService(),
-      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1701,7 +1625,6 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
-      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1799,7 +1722,6 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
-      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1846,7 +1768,6 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
-      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(
@@ -1896,7 +1817,6 @@ void main() {
       prizeRepository: _PrizeRepository(),
       seatingRepository: seatingRepository,
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
-      qrScannerService: const _QrScannerService(),
     );
 
     await tester.pumpWidget(

@@ -75,14 +75,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   final List<EventGuestRecord> guests;
   final Map<String, GuestTagAssignmentSummary> assignments;
 
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
@@ -111,12 +103,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
 
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async => guests;
-
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async =>
-      assignments;
 
   @override
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
@@ -151,14 +137,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
@@ -235,11 +213,6 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 
   @override
   Future<SessionDetailRecord> resumeSession(String sessionId) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
     throw UnimplementedError();
   }
 

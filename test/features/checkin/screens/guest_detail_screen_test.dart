@@ -28,53 +28,6 @@ class _FakeGuestRepository implements GuestRepository {
   int detailLoadCount = 0;
   int tournamentStatusUpdateCount = 0;
 
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) async {
-    lastAssignedUid = scannedUid;
-    return detail = GuestDetailRecord(
-      guest: EventGuestRecord(
-        id: detail.guest.id,
-        eventId: detail.guest.eventId,
-        guestProfileId: detail.guest.guestProfileId,
-        displayName: detail.guest.displayName,
-        normalizedName: detail.guest.normalizedName,
-        publicDisplayName: detail.guest.publicDisplayName,
-        phoneE164: detail.guest.phoneE164,
-        emailLower: detail.guest.emailLower,
-        instagramHandle: detail.guest.instagramHandle,
-        attendanceStatus: AttendanceStatus.checkedIn,
-        tournamentStatus: detail.guest.tournamentStatus,
-        coverStatus: detail.guest.coverStatus,
-        coverAmountCents: detail.guest.coverAmountCents,
-        isComped: detail.guest.isComped,
-        hasScoredPlay: detail.guest.hasScoredPlay,
-        note: detail.guest.note,
-        checkedInAt: detail.guest.checkedInAt ??
-            DateTime.parse('2026-04-24T19:15:00-07:00'),
-        rowVersion: detail.guest.rowVersion,
-      ),
-      coverEntries: detail.coverEntries,
-      activeTagAssignment: GuestTagAssignmentSummary.fromJson({
-        'assignment_id': 'asg_new',
-        'event_id': detail.guest.eventId,
-        'event_guest_id': detail.guest.id,
-        'status': 'assigned',
-        'assigned_at': '2026-04-24T19:16:00-07:00',
-        'nfc_tag': {
-          'id': 'tag_new',
-          'uid_hex': scannedUid.toUpperCase().replaceAll(' ', ''),
-          'uid_fingerprint': scannedUid.toUpperCase().replaceAll(' ', ''),
-          'default_tag_type': 'player',
-          'status': 'active',
-          'display_label': displayLabel,
-        },
-      }),
-    );
-  }
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) async {
@@ -133,19 +86,6 @@ class _FakeGuestRepository implements GuestRepository {
         detail.guest,
       ];
 
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async =>
-      const {};
-
-  @override
-  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
-    required String eventId,
-    required String scannedUid,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
@@ -229,50 +169,6 @@ class _FakeGuestRepository implements GuestRepository {
     );
   }
 
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) async {
-    lastReplacedUid = scannedUid;
-    return detail = GuestDetailRecord(
-      guest: EventGuestRecord(
-        id: detail.guest.id,
-        eventId: detail.guest.eventId,
-        guestProfileId: detail.guest.guestProfileId,
-        displayName: detail.guest.displayName,
-        normalizedName: detail.guest.normalizedName,
-        phoneE164: detail.guest.phoneE164,
-        emailLower: detail.guest.emailLower,
-        attendanceStatus: AttendanceStatus.checkedIn,
-        coverStatus: detail.guest.coverStatus,
-        coverAmountCents: detail.guest.coverAmountCents,
-        isComped: detail.guest.isComped,
-        hasScoredPlay: detail.guest.hasScoredPlay,
-        note: detail.guest.note,
-        checkedInAt: detail.guest.checkedInAt ??
-            DateTime.parse('2026-04-24T19:15:00-07:00'),
-        rowVersion: detail.guest.rowVersion,
-      ),
-      coverEntries: detail.coverEntries,
-      activeTagAssignment: GuestTagAssignmentSummary.fromJson({
-        'assignment_id': 'asg_replaced',
-        'event_id': detail.guest.eventId,
-        'event_guest_id': detail.guest.id,
-        'status': 'assigned',
-        'assigned_at': '2026-04-24T19:17:00-07:00',
-        'nfc_tag': {
-          'id': 'tag_replaced',
-          'uid_hex': scannedUid.toUpperCase().replaceAll(' ', ''),
-          'uid_fingerprint': scannedUid.toUpperCase().replaceAll(' ', ''),
-          'default_tag_type': 'player',
-          'status': 'active',
-          'display_label': displayLabel ?? 'Replacement Tag',
-        },
-      }),
-    );
-  }
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {

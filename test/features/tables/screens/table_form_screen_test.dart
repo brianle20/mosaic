@@ -91,22 +91,7 @@ class _RecordingTableRepository implements TableRepository {
 class _FakeNfcService implements NfcService {
   const _FakeNfcService();
 
-  @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-          BuildContext context) async =>
-      null;
 
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-          BuildContext context) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) async =>
-      null;
 
   @override
   Future<TagScanResult?> scanTableTag(BuildContext context) async {

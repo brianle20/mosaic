@@ -1,16 +1,11 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/hand_entry_controller.dart';
 import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
-import 'package:mosaic/services/nfc/nfc_service.dart';
-import 'package:mosaic/services/qr/qr_scanner_service.dart';
 
 enum _PlayerScanTarget { winner, discarder }
 
@@ -20,18 +15,12 @@ class HandEntryScreen extends StatefulWidget {
     required this.sessionDetail,
     required this.guestNamesById,
     required this.sessionRepository,
-    this.guestTagAssignmentsByGuestId = const {},
-    this.nfcService,
-    this.qrScannerService,
     this.initialHand,
   });
 
   final SessionDetailRecord sessionDetail;
   final Map<String, String> guestNamesById;
-  final Map<String, GuestTagAssignmentSummary> guestTagAssignmentsByGuestId;
   final SessionRepository sessionRepository;
-  final NfcService? nfcService;
-  final QrScannerService? qrScannerService;
   final HandResultRecord? initialHand;
 
   @override
@@ -45,9 +34,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   int? _winnerSeatIndex;
   int? _discarderSeatIndex;
   int? _penaltySeatIndex;
-  String? _scanError;
   late final TextEditingController _fanCountController;
-  StreamSubscription<TagScanResult>? _playerTagSubscription;
 
   @override
   void initState() {
@@ -64,16 +51,10 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     _fanCountController = TextEditingController(
       text: initialHand?.fanCount?.toString() ?? '',
     );
-    if (widget.nfcService case final PassiveNfcService passiveNfcService) {
-      _playerTagSubscription = passiveNfcService.playerTagScans.listen(
-        _handlePlayerTagScan,
-      );
-    }
   }
 
   @override
   void dispose() {
-    _playerTagSubscription?.cancel();
     _controller
       ..removeListener(_handleUpdate)
       ..dispose();
@@ -85,110 +66,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     if (mounted) {
       setState(() {});
     }
-  }
-
-  void _handlePlayerTagScan(
-    TagScanResult scanResult, {
-    _PlayerScanTarget? targetOverride,
-  }) {
-    _handleScannedPlayerUid(
-      scanResult.normalizedUid,
-      targetOverride: targetOverride,
-      unknownError: 'Scanned tag is not assigned to this table.',
-    );
-  }
-
-  int? _seatIndexForPlayerTag(String normalizedUid) {
-    final scannedUid = normalizedUid.toUpperCase();
-    for (final seat in widget.sessionDetail.seats) {
-      final assignment = widget.guestTagAssignmentsByGuestId[seat.eventGuestId];
-      if (assignment == null) {
-        continue;
-      }
-
-      if (assignment.tag.uidHex.toUpperCase() == scannedUid) {
-        return seat.seatIndex;
-      }
-    }
-    return null;
-  }
-
-  Future<void> _scanPlayerTag(_PlayerScanTarget target) async {
-    final nfcService = widget.nfcService;
-    if (nfcService == null) {
-      return;
-    }
-
-    try {
-      final result = await nfcService.scanPlayerTagForAssignment(context);
-      if (!mounted || result == null) {
-        return;
-      }
-
-      _handlePlayerTagScan(result, targetOverride: target);
-    } catch (exception) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _scanError = exception.toString();
-      });
-    }
-  }
-
-  Future<void> _scanPlayerQr() async {
-    final qrScannerService = widget.qrScannerService;
-    if (qrScannerService == null) {
-      return;
-    }
-
-    final scanTarget = _activePlayerTarget;
-    try {
-      final result = await qrScannerService.scanPlayerCode(context);
-      if (!mounted || result == null) {
-        return;
-      }
-
-      _handleScannedPlayerUid(
-        result.normalizedUid,
-        targetOverride: scanTarget,
-        unknownError: 'Scanned code is not assigned to this table.',
-      );
-    } catch (exception) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _scanError = exception.toString();
-      });
-    }
-  }
-
-  void _handleScannedPlayerUid(
-    String normalizedUid, {
-    _PlayerScanTarget? targetOverride,
-    required String unknownError,
-  }) {
-    if (_resultType != HandResultType.win) {
-      return;
-    }
-
-    final scannedSeatIndex = _seatIndexForPlayerTag(normalizedUid);
-    if (scannedSeatIndex == null || !mounted) {
-      if (mounted) {
-        setState(() {
-          _scanError = unknownError;
-        });
-      }
-      return;
-    }
-
-    _selectSeat(
-      scannedSeatIndex,
-      targetOverride: targetOverride ?? _activePlayerTarget,
-    );
   }
 
   int get _drawDealerSeatIndex =>
@@ -313,13 +190,11 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     }
 
     setState(() {
-      _scanError = null;
       _winType ??= HandWinType.selfDraw;
       final target = targetOverride ?? _activePlayerTarget;
       if (_winType == HandWinType.discard &&
           target == _PlayerScanTarget.discarder) {
         if (_winnerSeatIndex == seatIndex) {
-          _scanError = 'Discarder cannot be the winner.';
           return;
         }
         _discarderSeatIndex = seatIndex;
@@ -407,49 +282,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       _ => 'Seat',
     };
     return '$wind\n${_seatName(seatIndex)}';
-  }
-
-  Widget _buildScannerActions() {
-    final canScanQr = widget.qrScannerService != null &&
-        widget.guestTagAssignmentsByGuestId.isNotEmpty;
-    final canScanNfc = widget.nfcService != null &&
-        widget.guestTagAssignmentsByGuestId.isNotEmpty;
-
-    if (!canScanQr && !canScanNfc) {
-      return const SizedBox.shrink();
-    }
-
-    final targetLabel = _activePlayerTarget == _PlayerScanTarget.discarder
-        ? 'discarder'
-        : 'winner';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (canScanQr)
-              FilledButton.icon(
-                onPressed: _scanPlayerQr,
-                icon: const Icon(Icons.qr_code_scanner),
-                label: Text('Scan QR for $targetLabel'),
-              ),
-            if (canScanNfc)
-              OutlinedButton.icon(
-                onPressed: () => _scanPlayerTag(_activePlayerTarget),
-                icon: const Icon(Icons.nfc),
-                label: Text('Scan NFC for $targetLabel'),
-              ),
-          ],
-        ),
-        if (_scanError != null) ...[
-          const SizedBox(height: 6),
-          Text(_scanError!),
-        ],
-      ],
-    );
   }
 
   @override
@@ -551,8 +383,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                 ],
                 const SizedBox(height: 16),
                 _buildSeatButtonGrid(),
-                const SizedBox(height: 12),
-                _buildScannerActions(),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   initialValue: _winnerSeatIndex,

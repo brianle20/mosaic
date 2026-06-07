@@ -10,7 +10,6 @@ import 'package:mosaic/data/models/ruleset_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -98,19 +97,6 @@ class ThrowingGuestRepository implements GuestRepository {
       throw UnimplementedError();
 
   @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) =>
-      throw UnimplementedError();
-
-  @override
-  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
-    required String eventId,
-    required String scannedUid,
-  }) =>
-      throw UnimplementedError();
-
-  @override
   Future<GuestDetailRecord?> getGuestDetail(String guestId) =>
       throw UnimplementedError();
 
@@ -163,21 +149,6 @@ class ThrowingGuestRepository implements GuestRepository {
   Future<GuestDetailRecord> checkInGuest(String guestId) =>
       throw UnimplementedError();
 
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) =>
-      throw UnimplementedError();
-
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) =>
-      throw UnimplementedError();
 }
 
 class ThrowingTableRepository implements TableRepository {
@@ -242,11 +213,6 @@ class ThrowingSessionRepository implements SessionRepository {
 
   @override
   Future<List<EventHandLedgerEntry>> loadEventHandLedger(String eventId) =>
-      throw UnimplementedError();
-
-  @override
-  Future<StartedTableSessionRecord> startSession(
-          StartTableSessionInput input) =>
       throw UnimplementedError();
 
   @override

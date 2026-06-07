@@ -181,15 +181,12 @@ class _FakeNfcManager implements NfcManager {
     required void Function(NfcTag tag) onDiscovered,
     String? alertMessageIos,
     bool invalidateAfterFirstReadIos = true,
-    void Function(NfcReaderSessionErrorIos error)? onSessionErrorIos,
+    void Function(NfcReaderSessionErrorIos)? onSessionErrorIos,
     bool noPlatformSoundsAndroid = false,
   }) async {
     startSessionCount += 1;
     if (_hasActiveSession) {
-      throw PlatformException(
-        code: 'session_already_exists',
-        message: 'Multiple sessions cannot be active at the same time.',
-      );
+      throw PlatformException(code: 'session_already_exists');
     }
 
     _hasActiveSession = true;

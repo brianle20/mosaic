@@ -26,10 +26,6 @@ typedef RpcSingleRunner = Future<Map<String, dynamic>> Function(
   String functionName,
   Map<String, dynamic> params,
 );
-typedef RpcListRunner = Future<List<Map<String, dynamic>>> Function(
-  String functionName,
-  Map<String, dynamic> params,
-);
 
 const _eventGuestSelect = '*, guest_profile:guest_profiles(*)';
 
@@ -45,7 +41,6 @@ class SupabaseGuestRepository implements GuestRepository {
     GuestProfileInsertRunner? guestProfileInsertRunner,
     EventGuestInsertRunner? eventGuestInsertRunner,
     RpcSingleRunner? rpcSingleRunner,
-    RpcListRunner? rpcListRunner,
   })  : _guestByIdLoader = guestByIdLoader,
         _activeAssignmentLoader = activeAssignmentLoader,
         _coverEntriesLoader = coverEntriesLoader,
@@ -53,8 +48,7 @@ class SupabaseGuestRepository implements GuestRepository {
         _profileOnEventChecker = profileOnEventChecker,
         _guestProfileInsertRunner = guestProfileInsertRunner,
         _eventGuestInsertRunner = eventGuestInsertRunner,
-        _rpcSingleRunner = rpcSingleRunner,
-        _rpcListRunner = rpcListRunner;
+        _rpcSingleRunner = rpcSingleRunner;
 
   final SupabaseClient client;
   final LocalCache cache;
@@ -66,7 +60,6 @@ class SupabaseGuestRepository implements GuestRepository {
   final GuestProfileInsertRunner? _guestProfileInsertRunner;
   final EventGuestInsertRunner? _eventGuestInsertRunner;
   final RpcSingleRunner? _rpcSingleRunner;
-  final RpcListRunner? _rpcListRunner;
 
   String? _currentUserId() {
     final userIdReader = _currentUserIdReader;
@@ -164,82 +157,6 @@ class SupabaseGuestRepository implements GuestRepository {
           });
     await cache.saveGuestCoverEntries(guestId, entries);
     return entries;
-  }
-
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async {
-    final rows = await client.from('event_guest_tag_assignments').select('''
-          id,
-          event_id,
-          event_guest_id,
-          status,
-          assigned_at,
-          nfc_tag:nfc_tags (
-            id,
-            uid_hex,
-            uid_fingerprint,
-            default_tag_type,
-            status,
-            display_label,
-            note
-          )
-        ''').eq('event_id', eventId).eq('status', 'assigned');
-
-    final summaries = rows
-        .map((row) => GuestTagAssignmentSummary.fromJson({
-              'assignment_id': row['id'],
-              'event_id': row['event_id'],
-              'event_guest_id': row['event_guest_id'],
-              'status': row['status'],
-              'assigned_at': row['assigned_at'],
-              'nfc_tag': row['nfc_tag'],
-            }))
-        .toList(growable: false);
-
-    return {
-      for (final summary in summaries) summary.eventGuestId: summary,
-    };
-  }
-
-  @override
-  Future<GuestTagLookupResult?> resolveGuestByActiveTag({
-    required String eventId,
-    required String scannedUid,
-  }) async {
-    final rows = await _runRpcList(
-      'resolve_guest_by_active_tag',
-      {
-        'target_event_id': eventId,
-        'scanned_uid': scannedUid,
-      },
-    );
-
-    if (rows.isEmpty) {
-      return null;
-    }
-
-    if (rows.length > 1) {
-      throw StateError(
-        'This tag is assigned to multiple guests in this event.',
-      );
-    }
-
-    final row = rows.single;
-    final guest = EventGuestRecord.fromJson(
-      _requiredJsonMap(row['guest'], 'guest'),
-    );
-    final assignment = GuestTagAssignmentSummary.fromJson(
-      _requiredJsonMap(row['assignment'], 'assignment'),
-    );
-
-    await _saveMergedGuestList(eventId, guest);
-
-    return GuestTagLookupResult(
-      guest: guest,
-      assignment: assignment,
-    );
   }
 
   @override
@@ -406,50 +323,6 @@ class SupabaseGuestRepository implements GuestRepository {
           ? null
           : GuestTagAssignmentSummary.fromJson(assignmentRow),
     );
-  }
-
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) async {
-    await _runRpcSingle(
-      'assign_guest_tag',
-      {
-        'target_event_guest_id': guestId,
-        'scanned_uid': scannedUid,
-        'scanned_display_label': displayLabel,
-      },
-    );
-    final detail = await getGuestDetail(guestId);
-    if (detail == null) {
-      throw StateError('Assigned guest could not be reloaded.');
-    }
-
-    return detail;
-  }
-
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) async {
-    await _runRpcSingle(
-      'replace_guest_tag',
-      {
-        'target_event_guest_id': guestId,
-        'scanned_uid': scannedUid,
-        'scanned_display_label': displayLabel,
-      },
-    );
-    final detail = await getGuestDetail(guestId);
-    if (detail == null) {
-      throw StateError('Replaced guest could not be reloaded.');
-    }
-
-    return detail;
   }
 
   @override
@@ -918,27 +791,6 @@ class SupabaseGuestRepository implements GuestRepository {
     return row;
   }
 
-  Future<List<Map<String, dynamic>>> _runRpcList(
-    String functionName,
-    Map<String, dynamic> params,
-  ) async {
-    final rpcListRunner = _rpcListRunner;
-    if (rpcListRunner != null) {
-      return rpcListRunner(functionName, params);
-    }
-
-    final result = await client.rpc(functionName, params: params);
-    if (result is! List) {
-      throw StateError(
-        'Expected RPC $functionName to return a list.',
-      );
-    }
-
-    return result
-        .map((row) => (row as Map).cast<String, dynamic>())
-        .toList(growable: false);
-  }
-
   Map<String, dynamic>? _castMaybeSingleRpcRow(dynamic value) {
     if (value == null) {
       return null;
@@ -970,15 +822,6 @@ class SupabaseGuestRepository implements GuestRepository {
 
     throw StateError(
         'Expected a map row result but received ${value.runtimeType}.');
-  }
-
-  Map<String, dynamic> _requiredJsonMap(Object? value, String key) {
-    final row = _castRow(value);
-    if (row == null) {
-      throw StateError('RPC response is missing $key.');
-    }
-
-    return row;
   }
 
   bool _shouldUseFallback(Object exception, String functionName) {

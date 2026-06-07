@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/guest_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
 
@@ -18,14 +17,6 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
   ) async =>
       const [];
 
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
@@ -72,12 +63,6 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
   Future<List<EventGuestRecord>> listGuests(String eventId) async => const [];
 
   @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async =>
-      const {};
-
-  @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       const [];
 
@@ -110,14 +95,6 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) async {

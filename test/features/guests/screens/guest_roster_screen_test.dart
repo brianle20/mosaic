@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
@@ -30,7 +28,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   final Map<String, List<GuestCoverEntryRecord>> _coverEntries;
   final statusUpdates = <String, EventTournamentStatus>{};
   final removedGuestIds = <String>[];
-  Completer<void>? activeAssignmentsGate;
 
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
@@ -38,34 +35,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   ) async =>
       _coverEntries[guestId] ?? const [];
 
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) async {
-    final guest = _guestById(guestId);
-    final assignment = GuestTagAssignmentSummary.fromJson({
-      'assignment_id': 'asg_$guestId',
-      'event_id': guest.eventId,
-      'event_guest_id': guest.id,
-      'status': 'assigned',
-      'assigned_at': '2026-04-24T19:15:00-07:00',
-      'nfc_tag': {
-        'id': 'tag_$guestId',
-        'uid_hex': scannedUid.toUpperCase(),
-        'uid_fingerprint': scannedUid.toUpperCase(),
-        'default_tag_type': 'player',
-        'status': 'active',
-        'display_label': displayLabel,
-      },
-    });
-    _activeAssignments[guestId] = assignment;
-    return GuestDetailRecord(
-      guest: guest,
-      activeTagAssignment: assignment,
-    );
-  }
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) async {
@@ -120,14 +89,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
 
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async => _guests;
-
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async {
-    await activeAssignmentsGate?.future;
-    return _activeAssignments;
-  }
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
@@ -201,14 +162,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<void> removeGuest(String guestId) async {
@@ -1081,55 +1034,6 @@ void main() {
     expect(repository.removedGuestIds, ['gst_01']);
     expect(find.text('Ethan Kwan'), findsNothing);
     expect(find.text('No guests yet'), findsOneWidget);
-  });
-
-  testWidgets('cached tagged guests hide remove until assignments are loaded', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(800, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    final repository = _FakeGuestRepository(
-      [
-        _guest(
-          id: 'gst_01',
-          name: 'Alice Wong',
-          attendanceStatus: AttendanceStatus.expected,
-          coverStatus: CoverStatus.unpaid,
-        ),
-      ],
-      activeAssignments: {
-        'gst_01': _tagAssignment(guestId: 'gst_01', uid: 'ALICE01'),
-      },
-    )..activeAssignmentsGate = Completer<void>();
-
-    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
-    for (var i = 0;
-        i < 5 &&
-            find.byTooltip('More actions for Alice Wong').evaluate().isEmpty;
-        i += 1) {
-      await tester.pump();
-    }
-
-    expect(find.byTooltip('More actions for Alice Wong'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('More actions for Alice Wong'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Mark Paid Manually'), findsOneWidget);
-    expect(find.text('Remove Guest'), findsNothing);
-
-    await tester.tapAt(const Offset(10, 10));
-    await tester.pumpAndSettle();
-    repository.activeAssignmentsGate!.complete();
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('More actions for Alice Wong'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Remove Guest'), findsNothing);
   });
 
   testWidgets('remove guest is hidden once guest has event activity', (

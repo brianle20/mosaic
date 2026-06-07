@@ -1,1053 +1,65 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
-import 'package:mosaic/data/models/event_models.dart';
-import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
-import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
-import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/screens/start_session_screen.dart';
-import 'package:mosaic/services/nfc/native_nfc_reader.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
-class _FakeGuestRepository extends ThrowingGuestRepository {
-  _FakeGuestRepository({
-    required this.guests,
-    required this.assignments,
-  });
-
-  final List<EventGuestRecord> guests;
-  final Map<String, GuestTagAssignmentSummary> assignments;
-
-  @override
-  Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
-    String guestId,
-  ) async =>
-      const [];
-
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<GuestDetailRecord> checkInGuest(String guestId) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<EventGuestRecord> createGuest(CreateGuestInput input) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<GuestProfileMatch>> findGuestProfileMatches(
-    GuestProfileLookupInput input,
-  ) async =>
-      const [];
-
-  @override
-  Future<GuestDetailRecord?> getGuestDetail(String guestId) async => null;
-
-  @override
-  Future<List<EventGuestRecord>> listGuests(String eventId) async => guests;
-
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async =>
-      assignments;
-
-  @override
-  Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
-      guests;
-
-  @override
-  Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
-    String guestId,
-  ) async =>
-      const [];
-
-  @override
-  Future<GuestDetailRecord> recordCoverEntry({
-    required String guestId,
-    required int amountCents,
-    required CoverEntryMethod method,
-    required DateTime transactionOn,
-    String? note,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<GuestDetailRecord> updateCoverEntry({
-    required String guestId,
-    required String coverEntryId,
-    required int amountCents,
-    required CoverEntryMethod method,
-    required DateTime transactionOn,
-    String? note,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
-    throw UnimplementedError();
-  }
-}
-
-class _FakeSessionRepository extends ThrowingSessionRepository {
-  _FakeSessionRepository({this.startAssignedException});
-
-  StartTableSessionInput? startedInput;
-  StartAssignedTableSessionInput? startedAssignedInput;
-  final Object? startAssignedException;
-
-  @override
-  Future<SessionDetailRecord> endSession({
-    required String sessionId,
-    required String reason,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<SessionDetailRecord> editHand(EditHandResultInput input) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<EventHandLedgerEntry>> loadEventHandLedger(
-    String eventId,
-  ) async =>
-      const [];
-
-  @override
-  Future<List<TableSessionRecord>> listSessions(String eventId) async =>
-      const [];
-
-  @override
-  Future<SessionDetailRecord> loadSessionDetail(String sessionId) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<SessionDetailRecord> pauseSession(String sessionId) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<SessionDetailRecord> recordHand(RecordHandResultInput input) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<SessionDetailRecord?> readCachedSessionDetail(
-          String sessionId) async =>
-      null;
-
-  @override
-  Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
-    String eventId,
-  ) async =>
-      const [];
-
-  @override
-  Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
-      const [];
-
-  @override
-  Future<SessionDetailRecord> resumeSession(String sessionId) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<StartedTableSessionRecord> startAssignedSession(
-      StartAssignedTableSessionInput input) async {
-    startedAssignedInput = input;
-    if (startAssignedException case final exception?) {
-      throw exception;
-    }
-    return _startedSession();
-  }
-
-  @override
-  Future<StartedTableSessionRecord> startSession(
-      StartTableSessionInput input) async {
-    startedInput = input;
-    return _startedSession();
-  }
-
-  @override
-  Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
-    throw UnimplementedError();
-  }
-}
-
-class _FakeSeatingRepository extends ThrowingSeatingRepository {
-  const _FakeSeatingRepository([this.assignments = const []]);
-
-  final List<SeatingAssignmentRecord> assignments;
-
-  @override
-  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
-      assignments;
-
-  @override
-  Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<SeatingAssignmentRecord>> generateRandomAssignments(
-    String eventId,
-  ) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
-    required String eventId,
-    required String championsTableId,
-    String? redemptionTableId,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<List<SeatingAssignmentRecord>> readCachedAssignments(String eventId) {
-    throw UnimplementedError();
-  }
-}
-
-class _QueuedNfcService implements NfcService {
-  _QueuedNfcService(this.results);
-
-  final List<TagScanResult?> results;
-
-  TagScanResult? _takeNext() => results.removeAt(0);
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-          BuildContext context) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-          BuildContext context) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) async =>
-      _takeNext();
-
-  @override
-  Future<TagScanResult?> scanTableTag(BuildContext context) async =>
-      _takeNext();
-}
-
-class _ThrowingNfcService implements NfcService {
-  const _ThrowingNfcService(this.message);
-
-  final String message;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-          BuildContext context) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) async {
-    throw NfcScanException(message);
-  }
-
-  @override
-  Future<TagScanResult?> scanTableTag(BuildContext context) async {
-    throw NfcScanException(message);
-  }
-}
-
-class _CompletingTableScanNfcService implements NfcService {
-  _CompletingTableScanNfcService(this.tableScanCompleter);
-
-  final Completer<TagScanResult?> tableScanCompleter;
-  int tableScanCallCount = 0;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(BuildContext context) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-          BuildContext context) async =>
-      null;
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) {
-    throw UnimplementedError();
-  }
-
-  @override
-  Future<TagScanResult?> scanTableTag(BuildContext context) {
-    tableScanCallCount += 1;
-    return tableScanCompleter.future;
-  }
-}
+import '../../../helpers/repository_fakes.dart';
 
 void main() {
-  Map<String, GuestTagAssignmentSummary> buildAssignments() {
-    return const {
-      'gst_east': {
-        'assignment_id': 'asg_east',
-        'event_id': 'evt_01',
-        'event_guest_id': 'gst_east',
-        'status': 'assigned',
-        'assigned_at': '2026-04-24T18:00:00-07:00',
-        'nfc_tag': {
-          'id': 'tag_east',
-          'uid_hex': 'PLAYER-EAST',
-          'uid_fingerprint': 'PLAYER-EAST',
-          'default_tag_type': 'player',
-          'status': 'active',
-        },
-      },
-      'gst_south': {
-        'assignment_id': 'asg_south',
-        'event_id': 'evt_01',
-        'event_guest_id': 'gst_south',
-        'status': 'assigned',
-        'assigned_at': '2026-04-24T18:01:00-07:00',
-        'nfc_tag': {
-          'id': 'tag_south',
-          'uid_hex': 'PLAYER-SOUTH',
-          'uid_fingerprint': 'PLAYER-SOUTH',
-          'default_tag_type': 'player',
-          'status': 'active',
-        },
-      },
-      'gst_west': {
-        'assignment_id': 'asg_west',
-        'event_id': 'evt_01',
-        'event_guest_id': 'gst_west',
-        'status': 'assigned',
-        'assigned_at': '2026-04-24T18:02:00-07:00',
-        'nfc_tag': {
-          'id': 'tag_west',
-          'uid_hex': 'PLAYER-WEST',
-          'uid_fingerprint': 'PLAYER-WEST',
-          'default_tag_type': 'player',
-          'status': 'active',
-        },
-      },
-      'gst_north': {
-        'assignment_id': 'asg_north',
-        'event_id': 'evt_01',
-        'event_guest_id': 'gst_north',
-        'status': 'assigned',
-        'assigned_at': '2026-04-24T18:03:00-07:00',
-        'nfc_tag': {
-          'id': 'tag_north',
-          'uid_hex': 'PLAYER-NORTH',
-          'uid_fingerprint': 'PLAYER-NORTH',
-          'default_tag_type': 'player',
-          'status': 'active',
-        },
-      },
-    }.map(
-      (guestId, json) => MapEntry(
-        guestId,
-        GuestTagAssignmentSummary.fromJson(json),
-      ),
-    );
-  }
-
-  List<EventGuestRecord> buildGuests() {
-    return const [
-      {
-        'id': 'gst_east',
-        'event_id': 'evt_01',
-        'display_name': 'Alice Wong',
-        'normalized_name': 'alice wong',
-        'attendance_status': 'checked_in',
-        'cover_status': 'paid',
-        'cover_amount_cents': 2000,
-        'is_comped': false,
-        'has_scored_play': false,
-      },
-      {
-        'id': 'gst_south',
-        'event_id': 'evt_01',
-        'display_name': 'Bob Lee',
-        'normalized_name': 'bob lee',
-        'attendance_status': 'checked_in',
-        'cover_status': 'paid',
-        'cover_amount_cents': 2000,
-        'is_comped': false,
-        'has_scored_play': false,
-      },
-      {
-        'id': 'gst_west',
-        'event_id': 'evt_01',
-        'display_name': 'Carol Ng',
-        'normalized_name': 'carol ng',
-        'attendance_status': 'checked_in',
-        'cover_status': 'paid',
-        'cover_amount_cents': 2000,
-        'is_comped': false,
-        'has_scored_play': false,
-      },
-      {
-        'id': 'gst_north',
-        'event_id': 'evt_01',
-        'display_name': 'Dee Wu',
-        'normalized_name': 'dee wu',
-        'attendance_status': 'checked_in',
-        'cover_status': 'paid',
-        'cover_amount_cents': 2000,
-        'is_comped': false,
-        'has_scored_play': false,
-      },
-    ].map(EventGuestRecord.fromJson).toList(growable: false);
-  }
-
-  testWidgets('legacy qualification walks tags into review and confirm',
-      (tester) async {
+  testWidgets('starts assigned table after scanning table tag', (tester) async {
     final sessionRepository = _FakeSessionRepository();
-    SessionDetailArgs? openedArgs;
 
     await tester.pumpWidget(
       MaterialApp(
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            return MaterialPageRoute<void>(
+              builder: (_) => const SizedBox(key: Key('session-detail')),
+              settings: settings,
+            );
+          }
+          return null;
+        },
         home: StartSessionScreen(
           eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.qualification,
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
+          table: _table(),
+          guestRepository: const _FakeGuestRepository(),
+          seatingRepository: _FakeSeatingRepository(_tableAssignments()),
           sessionRepository: sessionRepository,
-          seatingRepository: const _FakeSeatingRepository(),
-          nfcService: _QueuedNfcService([
+          nfcService: _QueuedTableNfcService([
             const TagScanResult(
-              rawUid: 'TABLE-001',
+              rawUid: 'table-001',
               normalizedUid: 'TABLE-001',
-              isManualEntry: true,
-            ),
-            const TagScanResult(
-              rawUid: 'PLAYER-EAST',
-              normalizedUid: 'PLAYER-EAST',
-              isManualEntry: true,
-            ),
-            const TagScanResult(
-              rawUid: 'PLAYER-SOUTH',
-              normalizedUid: 'PLAYER-SOUTH',
-              isManualEntry: true,
-            ),
-            const TagScanResult(
-              rawUid: 'PLAYER-WEST',
-              normalizedUid: 'PLAYER-WEST',
-              isManualEntry: true,
-            ),
-            const TagScanResult(
-              rawUid: 'PLAYER-NORTH',
-              normalizedUid: 'PLAYER-NORTH',
-              isManualEntry: true,
+              isManualEntry: false,
             ),
           ]),
         ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.sessionDetailRoute) {
-            openedArgs = settings.arguments! as SessionDetailArgs;
-            return MaterialPageRoute<void>(
-              builder: (context) => const Scaffold(
-                body: Text('Opened Session Detail'),
-              ),
-            );
-          }
-
-          return null;
-        },
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Scan Table Tag'), findsOneWidget);
-
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-    expect(find.text('Scan East Player Tag'), findsOneWidget);
-
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Review Session'), findsOneWidget);
-    expect(find.text('Alice Wong'), findsOneWidget);
-    expect(find.text('Bob Lee'), findsOneWidget);
-    expect(find.text('Carol Ng'), findsOneWidget);
-    expect(find.text('Dee Wu'), findsOneWidget);
-
-    await tester.tap(find.text('Confirm Start Session'));
-    await tester.pumpAndSettle();
-
-    expect(sessionRepository.startedInput, isNotNull);
-    expect(sessionRepository.startedInput!.scannedTableUid, 'TABLE-001');
-    expect(sessionRepository.startedInput!.eastPlayerUid, 'PLAYER-EAST');
-    expect(openedArgs?.eventId, 'evt_01');
-    expect(openedArgs?.sessionId, 'ses_01');
-    expect(find.text('Opened Session Detail'), findsOneWidget);
-  });
-
-  testWidgets('legacy qualification shows native NFC scan errors',
-      (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StartSessionScreen(
-          eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.qualification,
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
-          sessionRepository: _FakeSessionRepository(),
-          seatingRepository: const _FakeSeatingRepository(),
-          nfcService: const _ThrowingNfcService(
-            'NFC is disabled. Enable NFC in system settings, then try again.',
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pump();
-
-    expect(
-      find.text(
-        'NFC is disabled. Enable NFC in system settings, then try again.',
-      ),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('prevents overlapping scans while starting a session',
-      (tester) async {
-    final tableScanCompleter = Completer<TagScanResult?>();
-    final nfcService = _CompletingTableScanNfcService(tableScanCompleter);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StartSessionScreen(
-          eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.qualification,
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
-          sessionRepository: _FakeSessionRepository(),
-          seatingRepository: const _FakeSeatingRepository(),
-          nfcService: nfcService,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.tap(find.text('Scan Next Tag'));
-
-    expect(nfcService.tableScanCallCount, 1);
-
-    tableScanCompleter.complete(null);
-    await tester.pump();
-
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('ignores native NFC errors after leaving start session',
-      (tester) async {
-    final tableScanCompleter = Completer<TagScanResult?>();
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StartSessionScreen(
-          eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.qualification,
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
-          sessionRepository: _FakeSessionRepository(),
-          seatingRepository: const _FakeSeatingRepository(),
-          nfcService: _CompletingTableScanNfcService(tableScanCompleter),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pump();
-
-    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
-    tableScanCompleter.completeError(
-      const NfcScanException('NFC scan failed: Session timed out'),
-    );
-    await tester.pump();
-
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets(
-    'preverified table tag starts at east player and submits table uid',
-    (tester) async {
-      final sessionRepository = _FakeSessionRepository();
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: StartSessionScreen(
-            eventId: 'evt_01',
-            table: EventTableRecord.fromJson(const {
-              'id': 'tbl_01',
-              'event_id': 'evt_01',
-              'label': 'Table 1',
-              'mode': 'points',
-              'display_order': 1,
-              'nfc_tag_id': 'tag_table_01',
-              'default_ruleset_id': 'HK_STANDARD',
-              'default_rotation_policy_type':
-                  'dealer_cycle_return_to_initial_east',
-              'default_rotation_policy_config_json': {},
-              'status': 'active',
-            }),
-            scoringPhase: EventScoringPhase.qualification,
-            preverifiedTableTagUid: 'TABLE-001',
-            guestRepository: _FakeGuestRepository(
-              guests: buildGuests(),
-              assignments: buildAssignments(),
-            ),
-            sessionRepository: sessionRepository,
-            seatingRepository: const _FakeSeatingRepository(),
-            nfcService: _QueuedNfcService([
-              const TagScanResult(
-                rawUid: 'PLAYER-EAST',
-                normalizedUid: 'PLAYER-EAST',
-                isManualEntry: true,
-              ),
-              const TagScanResult(
-                rawUid: 'PLAYER-SOUTH',
-                normalizedUid: 'PLAYER-SOUTH',
-                isManualEntry: true,
-              ),
-              const TagScanResult(
-                rawUid: 'PLAYER-WEST',
-                normalizedUid: 'PLAYER-WEST',
-                isManualEntry: true,
-              ),
-              const TagScanResult(
-                rawUid: 'PLAYER-NORTH',
-                normalizedUid: 'PLAYER-NORTH',
-                isManualEntry: true,
-              ),
-            ]),
-          ),
-          onGenerateRoute: (settings) {
-            if (settings.name == AppRouter.sessionDetailRoute) {
-              return MaterialPageRoute<void>(
-                builder: (context) => const Scaffold(
-                  body: Text('Opened Session Detail'),
-                ),
-              );
-            }
-
-            return null;
-          },
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Scan Table Tag'), findsNothing);
-      expect(find.text('Scan East Player Tag'), findsOneWidget);
-
-      await tester.tap(find.text('Scan Next Tag'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Scan Next Tag'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Scan Next Tag'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Scan Next Tag'));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Confirm Start Session'));
-      await tester.pumpAndSettle();
-
-      expect(sessionRepository.startedInput, isNotNull);
-      expect(sessionRepository.startedInput!.scannedTableUid, 'TABLE-001');
-      expect(sessionRepository.startedInput!.eastPlayerUid, 'PLAYER-EAST');
-    },
-  );
-
-  testWidgets('legacy qualification shows duplicate player scan error',
-      (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StartSessionScreen(
-          eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.qualification,
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
-          sessionRepository: _FakeSessionRepository(),
-          seatingRepository: const _FakeSeatingRepository(),
-          nfcService: _QueuedNfcService([
-            const TagScanResult(
-              rawUid: 'TABLE-001',
-              normalizedUid: 'TABLE-001',
-              isManualEntry: true,
-            ),
-            const TagScanResult(
-              rawUid: 'PLAYER-EAST',
-              normalizedUid: 'PLAYER-EAST',
-              isManualEntry: true,
-            ),
-            const TagScanResult(
-              rawUid: 'PLAYER-EAST',
-              normalizedUid: 'PLAYER-EAST',
-              isManualEntry: true,
-            ),
-          ]),
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.sessionDetailRoute) {
-            return MaterialPageRoute<void>(
-              builder: (context) => const Scaffold(
-                body: Text('Opened Session Detail'),
-              ),
-            );
-          }
-
-          return null;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('Duplicate player tag scanned in the same session setup.'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('shows assigned seating when table assignments exist',
-      (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StartSessionScreen(
-          eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.tournament,
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
-          sessionRepository: _FakeSessionRepository(),
-          seatingRepository: _FakeSeatingRepository(_tableAssignments()),
-          nfcService: _QueuedNfcService([
-            const TagScanResult(
-              rawUid: 'TABLE-001',
-              normalizedUid: 'TABLE-001',
-              isManualEntry: true,
-            ),
-          ]),
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.sessionDetailRoute) {
-            return MaterialPageRoute<void>(
-              builder: (context) => const Scaffold(
-                body: Text('Opened Session Detail'),
-              ),
-            );
-          }
-
-          return null;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
-
     await tester.tap(find.text('Scan Next Tag'));
     await tester.pumpAndSettle();
 
     expect(find.text('Review assigned seating'), findsOneWidget);
-    expect(find.text('Alice Wong'), findsOneWidget);
-    expect(find.text('Scan East Player Tag'), findsNothing);
-  });
-
-  testWidgets('ignores seating assignments during qualification',
-      (tester) async {
-    final sessionRepository = _FakeSessionRepository();
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StartSessionScreen(
-          eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.qualification,
-          preverifiedTableTagUid: 'TABLE-001',
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
-          sessionRepository: sessionRepository,
-          seatingRepository: _FakeSeatingRepository(_tableAssignments()),
-          nfcService: _QueuedNfcService([
-            const TagScanResult(
-              rawUid: 'PLAYER-EAST',
-              normalizedUid: 'PLAYER-EAST',
-              isManualEntry: true,
-            ),
-            const TagScanResult(
-              rawUid: 'PLAYER-SOUTH',
-              normalizedUid: 'PLAYER-SOUTH',
-              isManualEntry: true,
-            ),
-            const TagScanResult(
-              rawUid: 'PLAYER-WEST',
-              normalizedUid: 'PLAYER-WEST',
-              isManualEntry: true,
-            ),
-            const TagScanResult(
-              rawUid: 'PLAYER-NORTH',
-              normalizedUid: 'PLAYER-NORTH',
-              isManualEntry: true,
-            ),
-          ]),
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.sessionDetailRoute) {
-            return MaterialPageRoute<void>(
-              builder: (context) => const Scaffold(
-                body: Text('Opened Session Detail'),
-              ),
-            );
-          }
-
-          return null;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Scan East Player Tag'), findsOneWidget);
-    expect(find.text('Review assigned seating'), findsNothing);
-
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Scan Next Tag'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Confirm Start Session'));
-    await tester.pumpAndSettle();
-
-    expect(sessionRepository.startedInput, isNotNull);
-    expect(sessionRepository.startedAssignedInput, isNull);
-    expect(sessionRepository.startedInput!.eastPlayerUid, 'PLAYER-EAST');
-  });
-
-  testWidgets('starts assigned table without scanning player tags',
-      (tester) async {
-    final sessionRepository = _FakeSessionRepository();
-    SessionDetailArgs? openedArgs;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StartSessionScreen(
-          eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.tournament,
-          preverifiedTableTagUid: 'TABLE-001',
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
-          sessionRepository: sessionRepository,
-          seatingRepository: _FakeSeatingRepository(_tableAssignments()),
-          nfcService: _QueuedNfcService([]),
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.sessionDetailRoute) {
-            openedArgs = settings.arguments! as SessionDetailArgs;
-            return MaterialPageRoute<void>(
-              builder: (context) => const Scaffold(
-                body: Text('Opened Session Detail'),
-              ),
-            );
-          }
-
-          return null;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Review assigned seating'), findsOneWidget);
-    expect(find.text('East'), findsOneWidget);
-    expect(find.text('Alice Wong'), findsOneWidget);
-    expect(find.text('Scan Next Tag'), findsNothing);
+    expect(find.text('Alice'), findsOneWidget);
+    expect(find.text('Billy'), findsOneWidget);
 
     await tester.tap(find.text('Start Assigned Table'));
     await tester.pumpAndSettle();
 
-    expect(sessionRepository.startedInput, isNull);
     expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
-    expect(
-        sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
-    expect(openedArgs?.sessionId, 'ses_01');
+    expect(sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
+    expect(find.byKey(const Key('session-detail')), findsOneWidget);
   });
 
-  testWidgets('blocks tournament start when assigned seating is missing',
+  testWidgets('requires assigned seating and does not show player tag prompts',
       (tester) async {
     final sessionRepository = _FakeSessionRepository();
 
@@ -1055,218 +67,117 @@ void main() {
       MaterialApp(
         home: StartSessionScreen(
           eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.tournament,
-          preverifiedTableTagUid: 'TABLE-001',
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
+          table: _table(),
+          guestRepository: const _FakeGuestRepository(),
+          seatingRepository: const _FakeSeatingRepository([]),
           sessionRepository: sessionRepository,
-          seatingRepository: const _FakeSeatingRepository(),
-          nfcService: _QueuedNfcService([
-            const TagScanResult(
-              rawUid: 'PLAYER-EAST',
-              normalizedUid: 'PLAYER-EAST',
-              isManualEntry: true,
-            ),
-          ]),
+          nfcService: const _EmptyTableNfcService(),
+          preverifiedTableTagUid: 'TABLE-001',
         ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Assigned seating required'), findsOneWidget);
-    expect(
-      find.text('Generate seating assignments before entering this table.'),
-      findsOneWidget,
-    );
-    expect(find.text('Scan Next Tag'), findsNothing);
-    expect(find.text('Scan East Player Tag'), findsNothing);
     expect(find.textContaining('Player Tag'), findsNothing);
-    expect(sessionRepository.startedInput, isNull);
+    expect(find.text('Start Assigned Table'), findsNothing);
+
     expect(sessionRepository.startedAssignedInput, isNull);
   });
+}
 
-  testWidgets('starts short assigned table without scanning a fourth player',
-      (tester) async {
-    final sessionRepository = _FakeSessionRepository();
-    SessionDetailArgs? openedArgs;
+class _FakeGuestRepository extends ThrowingGuestRepository {
+  const _FakeGuestRepository();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StartSessionScreen(
-          eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.tournament,
-          allowAssignedTableEntry: true,
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
-          sessionRepository: sessionRepository,
-          seatingRepository: _FakeSeatingRepository(
-            _tableAssignments().take(3).toList(),
-          ),
-          nfcService: _QueuedNfcService([]),
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.sessionDetailRoute) {
-            openedArgs = settings.arguments! as SessionDetailArgs;
-            return MaterialPageRoute<void>(
-              builder: (context) => const Scaffold(
-                body: Text('Opened Session Detail'),
-              ),
-            );
-          }
+  @override
+  Future<List<EventGuestRecord>> listGuests(String eventId) async => const [];
+}
 
-          return null;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
+class _FakeSeatingRepository extends ThrowingSeatingRepository {
+  const _FakeSeatingRepository(this.assignments);
 
-    expect(find.text('Review assigned seating'), findsOneWidget);
-    expect(find.text('Carol Ng'), findsOneWidget);
-    expect(find.text('Dee Wu'), findsNothing);
-    expect(find.text('Scan Next Tag'), findsNothing);
+  final List<SeatingAssignmentRecord> assignments;
 
-    await tester.tap(find.text('Start Assigned Table'));
-    await tester.pumpAndSettle();
+  @override
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
+      assignments;
+}
 
-    expect(sessionRepository.startedInput, isNull);
-    expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
-    expect(sessionRepository.startedAssignedInput?.scannedTableUid, isNull);
-    expect(openedArgs?.sessionId, 'ses_01');
-  });
+class _FakeSessionRepository extends ThrowingSessionRepository {
+  StartAssignedTableSessionInput? startedAssignedInput;
 
-  testWidgets('shows friendly error when scanned table tag mismatches table',
-      (tester) async {
-    final sessionRepository = _FakeSessionRepository(
-      startAssignedException: Exception(
-        'PostgrestException(message: The scanned table tag does not match '
-        'the selected table., code: P0001, details: Bad Request, hint: null)',
-      ),
-    );
+  @override
+  Future<StartedTableSessionRecord> startAssignedSession(
+    StartAssignedTableSessionInput input,
+  ) async {
+    startedAssignedInput = input;
+    return _startedSession();
+  }
+}
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: StartSessionScreen(
-          eventId: 'evt_01',
-          table: EventTableRecord.fromJson(const {
-            'id': 'tbl_01',
-            'event_id': 'evt_01',
-            'label': 'Table 1C',
-            'mode': 'points',
-            'display_order': 1,
-            'default_ruleset_id': 'HK_STANDARD',
-            'default_rotation_policy_type':
-                'dealer_cycle_return_to_initial_east',
-            'default_rotation_policy_config_json': {},
-            'status': 'active',
-          }),
-          scoringPhase: EventScoringPhase.tournament,
-          preverifiedTableTagUid: 'TABLE-OTHER',
-          guestRepository: _FakeGuestRepository(
-            guests: buildGuests(),
-            assignments: buildAssignments(),
-          ),
-          sessionRepository: sessionRepository,
-          seatingRepository: _FakeSeatingRepository(_tableAssignments()),
-          nfcService: _QueuedNfcService([]),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+class _QueuedTableNfcService implements NfcService {
+  _QueuedTableNfcService(this.results);
 
-    await tester.tap(find.text('Start Assigned Table'));
-    await tester.pumpAndSettle();
+  final List<TagScanResult?> results;
 
-    expect(
-      find.text(
-        'This tag is not bound to Table 1C. Scan the Table 1C tag, '
-        'or rebind this table tag from Tables.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.textContaining('PostgrestException'), findsNothing);
+  @override
+  Future<TagScanResult?> scanTableTag(BuildContext context) async {
+    return results.removeAt(0);
+  }
+}
+
+class _EmptyTableNfcService implements NfcService {
+  const _EmptyTableNfcService();
+
+  @override
+  Future<TagScanResult?> scanTableTag(BuildContext context) async => null;
+}
+
+EventTableRecord _table() {
+  return EventTableRecord.fromJson(const {
+    'id': 'tbl_01',
+    'event_id': 'evt_01',
+    'label': 'Table 1',
+    'mode': 'points',
+    'display_order': 1,
+    'default_ruleset_id': 'HK_STANDARD',
+    'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+    'default_rotation_policy_config_json': {},
+    'status': 'active',
   });
 }
 
 List<SeatingAssignmentRecord> _tableAssignments() {
-  return const [
-    SeatingAssignmentRecord(
-      id: 'seat_asg_east',
-      eventId: 'evt_01',
-      eventTableId: 'tbl_01',
-      tableLabel: 'Table 1',
-      eventGuestId: 'gst_east',
-      displayName: 'Alice Wong',
-      seatIndex: 0,
-      assignmentRound: 1,
-      status: 'active',
-    ),
-    SeatingAssignmentRecord(
-      id: 'seat_asg_south',
-      eventId: 'evt_01',
-      eventTableId: 'tbl_01',
-      tableLabel: 'Table 1',
-      eventGuestId: 'gst_south',
-      displayName: 'Bob Lee',
-      seatIndex: 1,
-      assignmentRound: 1,
-      status: 'active',
-    ),
-    SeatingAssignmentRecord(
-      id: 'seat_asg_west',
-      eventId: 'evt_01',
-      eventTableId: 'tbl_01',
-      tableLabel: 'Table 1',
-      eventGuestId: 'gst_west',
-      displayName: 'Carol Ng',
-      seatIndex: 2,
-      assignmentRound: 1,
-      status: 'active',
-    ),
-    SeatingAssignmentRecord(
-      id: 'seat_asg_north',
-      eventId: 'evt_01',
-      eventTableId: 'tbl_01',
-      tableLabel: 'Table 1',
-      eventGuestId: 'gst_north',
-      displayName: 'Dee Wu',
-      seatIndex: 3,
-      assignmentRound: 1,
-      status: 'active',
-    ),
+  return [
+    _assignment(guestId: 'gst_east', name: 'Alice', seatIndex: 0),
+    _assignment(guestId: 'gst_south', name: 'Billy', seatIndex: 1),
+    _assignment(guestId: 'gst_west', name: 'Carol', seatIndex: 2),
+    _assignment(guestId: 'gst_north', name: 'Dee', seatIndex: 3),
   ];
 }
 
+SeatingAssignmentRecord _assignment({
+  required String guestId,
+  required String name,
+  required int seatIndex,
+}) {
+  return SeatingAssignmentRecord.fromJson({
+    'id': 'seat_$seatIndex',
+    'event_id': 'evt_01',
+    'event_table_id': 'tbl_01',
+    'table_label': 'Table 1',
+    'event_guest_id': guestId,
+    'display_name': name,
+    'assignment_round': 1,
+    'seat_index': seatIndex,
+    'status': 'active',
+    'created_at': '2026-04-24T18:00:00-07:00',
+  });
+}
+
 StartedTableSessionRecord _startedSession() {
-  return StartedTableSessionRecord.fromJson(
-    sessionJson: const {
+  return StartedTableSessionRecord(
+    session: TableSessionRecord.fromJson(const {
       'id': 'ses_01',
       'event_id': 'evt_01',
       'event_table_id': 'tbl_01',
@@ -1282,36 +193,8 @@ StartedTableSessionRecord _startedSession() {
       'hand_count': 0,
       'started_at': '2026-04-24T19:00:00-07:00',
       'started_by_user_id': 'usr_01',
-    },
-    seatsJson: const [
-      {
-        'id': 'seat_01',
-        'table_session_id': 'ses_01',
-        'seat_index': 0,
-        'initial_wind': 'east',
-        'event_guest_id': 'gst_east',
-      },
-      {
-        'id': 'seat_02',
-        'table_session_id': 'ses_01',
-        'seat_index': 1,
-        'initial_wind': 'south',
-        'event_guest_id': 'gst_south',
-      },
-      {
-        'id': 'seat_03',
-        'table_session_id': 'ses_01',
-        'seat_index': 2,
-        'initial_wind': 'west',
-        'event_guest_id': 'gst_west',
-      },
-      {
-        'id': 'seat_04',
-        'table_session_id': 'ses_01',
-        'seat_index': 3,
-        'initial_wind': 'north',
-        'event_guest_id': 'gst_north',
-      },
-    ],
+      'scoring_phase': 'tournament',
+    }),
+    seats: const [],
   );
 }

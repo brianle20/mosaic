@@ -2,27 +2,20 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/guest_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/guests/controllers/guest_roster_controller.dart';
 
 void main() {
-  test(
-      'load leaves active tag assignment state unknown while cached guests show',
-      () async {
+  test('load shows cached guests while refreshing the roster', () async {
     final alice = _guest(id: 'gst_01', name: 'Alice Wong');
     final repository = _FakeGuestRepository(
       [alice],
       cachedGuests: [alice],
-      activeAssignments: {
-        'gst_01': _tagAssignment(guestId: 'gst_01'),
-      },
-    )..activeAssignmentsGate = Completer<void>();
+    );
     final controller = GuestRosterController(guestRepository: repository);
     final cachedGuestsLoaded = Completer<void>();
     controller.addListener(() {
       if (controller.guests.isNotEmpty &&
-          !controller.hasLoadedActiveTagAssignments &&
           !cachedGuestsLoaded.isCompleted) {
         cachedGuestsLoaded.complete();
       }
@@ -32,13 +25,10 @@ void main() {
     await cachedGuestsLoaded.future;
 
     expect(controller.guests.map((guest) => guest.id), ['gst_01']);
-    expect(controller.hasLoadedActiveTagAssignments, isFalse);
 
-    repository.activeAssignmentsGate!.complete();
     await load;
 
-    expect(controller.hasLoadedActiveTagAssignments, isTrue);
-    expect(controller.activeTagAssignments, contains('gst_01'));
+    expect(controller.guests.map((guest) => guest.id), ['gst_01']);
   });
 
   test('removeGuest deletes the guest from the loaded roster', () async {
@@ -367,20 +357,15 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository(
     this._guests, {
     List<EventGuestRecord> cachedGuests = const [],
-    Map<String, GuestTagAssignmentSummary> activeAssignments = const {},
-  })  : _cachedGuests = List<EventGuestRecord>.from(cachedGuests),
-        _activeAssignments =
-            Map<String, GuestTagAssignmentSummary>.from(activeAssignments);
+  }) : _cachedGuests = List<EventGuestRecord>.from(cachedGuests);
 
   final List<EventGuestRecord> _guests;
   final List<EventGuestRecord> _cachedGuests;
-  final Map<String, GuestTagAssignmentSummary> _activeAssignments;
   final removedGuestIds = <String>[];
   int checkInCalls = 0;
   int tournamentMutationCalls = 0;
   Completer<void>? tournamentUpdateStarted;
   Completer<void>? tournamentUpdateGate;
-  Completer<void>? activeAssignmentsGate;
   final gatedTournamentUpdateIds = <String>{};
   final failingTournamentUpdateIds = <String>{};
   final statusUpdates = <String, EventTournamentStatus>{};
@@ -392,14 +377,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async =>
       List<EventGuestRecord>.from(_guests);
-
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async {
-    await activeAssignmentsGate?.future;
-    return Map<String, GuestTagAssignmentSummary>.from(_activeAssignments);
-  }
 
   @override
   Future<void> removeGuest(String guestId) async {
@@ -489,27 +466,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     _guests[index] = updated;
     return updated;
   }
-}
-
-GuestTagAssignmentSummary _tagAssignment({
-  required String guestId,
-  String uid = 'FASTDONE',
-}) {
-  final json = {
-    'assignment_id': 'asg_$guestId',
-    'event_id': 'event-1',
-    'event_guest_id': guestId,
-    'status': 'assigned',
-    'assigned_at': '2026-04-24T19:15:00-07:00',
-    'nfc_tag': {
-      'id': 'tag_$guestId',
-      'uid_hex': uid,
-      'uid_fingerprint': uid,
-      'default_tag_type': 'player',
-      'status': 'active',
-    },
-  };
-  return GuestTagAssignmentSummary.fromJson(json);
 }
 
 EventGuestRecord _guest({

@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
 
 class GuestRosterController extends ChangeNotifier {
@@ -13,8 +12,6 @@ class GuestRosterController extends ChangeNotifier {
   bool isLoading = true;
   String? error;
   List<EventGuestRecord> guests = const [];
-  Map<String, GuestTagAssignmentSummary> activeTagAssignments = const {};
-  bool hasLoadedActiveTagAssignments = false;
   final Set<String> _submittingGuestIds = <String>{};
   final Set<String> _qualifyingCheckedInConsideredGuestIds = <String>{};
   bool _isQualifyingCheckedInConsidered = false;
@@ -24,7 +21,6 @@ class GuestRosterController extends ChangeNotifier {
   Future<void> load(String eventId) async {
     isLoading = true;
     error = null;
-    hasLoadedActiveTagAssignments = false;
     notifyListeners();
 
     final cachedGuests = await _guestRepository.readCachedGuests(eventId);
@@ -36,9 +32,6 @@ class GuestRosterController extends ChangeNotifier {
 
     try {
       guests = await _guestRepository.listGuests(eventId);
-      activeTagAssignments =
-          await _guestRepository.listActiveTagAssignments(eventId);
-      hasLoadedActiveTagAssignments = true;
     } catch (exception) {
       if (guests.isEmpty) {
         error = exception.toString();
@@ -170,10 +163,6 @@ class GuestRosterController extends ChangeNotifier {
         guests = guests
             .where((guest) => guest.id != guestId)
             .toList(growable: false);
-        final updatedAssignments =
-            Map<String, GuestTagAssignmentSummary>.from(activeTagAssignments)
-              ..remove(guestId);
-        activeTagAssignments = updatedAssignments;
       },
     );
     return true;
@@ -193,7 +182,6 @@ class GuestRosterController extends ChangeNotifier {
     await _runGuestAction(guestId, () async {
       final checkedInDetail = await _guestRepository.checkInGuest(guestId);
       _mergeGuest(checkedInDetail.guest);
-      _mergeAssignment(guestId, checkedInDetail.activeTagAssignment);
 
       final updated = await _guestRepository.updateEventGuestTournamentStatus(
         eventGuestId: guestId,
@@ -219,7 +207,6 @@ class GuestRosterController extends ChangeNotifier {
           note: input.note,
         );
         _mergeGuest(detail.guest);
-        _mergeAssignment(guestId, detail.activeTagAssignment);
       },
     );
     return true;
@@ -248,20 +235,5 @@ class GuestRosterController extends ChangeNotifier {
       ...guests.where((entry) => entry.id != guest.id),
       guest,
     ]..sort((left, right) => left.displayName.compareTo(right.displayName));
-  }
-
-  void _mergeAssignment(
-    String guestId,
-    GuestTagAssignmentSummary? assignment,
-  ) {
-    final updated = Map<String, GuestTagAssignmentSummary>.from(
-      activeTagAssignments,
-    );
-    if (assignment == null) {
-      updated.remove(guestId);
-    } else {
-      updated[guestId] = assignment;
-    }
-    activeTagAssignments = updated;
   }
 }

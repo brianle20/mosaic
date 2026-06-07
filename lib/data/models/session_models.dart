@@ -272,36 +272,6 @@ class SessionDetailRecord {
 }
 
 @immutable
-class StartTableSessionInput {
-  const StartTableSessionInput({
-    required this.eventTableId,
-    required this.scannedTableUid,
-    required this.eastPlayerUid,
-    required this.southPlayerUid,
-    required this.westPlayerUid,
-    required this.northPlayerUid,
-  });
-
-  final String eventTableId;
-  final String scannedTableUid;
-  final String eastPlayerUid;
-  final String southPlayerUid;
-  final String westPlayerUid;
-  final String northPlayerUid;
-
-  Map<String, dynamic> toRpcParams() {
-    return {
-      'target_event_table_id': eventTableId,
-      'scanned_table_uid': scannedTableUid,
-      'east_player_uid': eastPlayerUid,
-      'south_player_uid': southPlayerUid,
-      'west_player_uid': westPlayerUid,
-      'north_player_uid': northPlayerUid,
-    };
-  }
-}
-
-@immutable
 class StartAssignedTableSessionInput {
   const StartAssignedTableSessionInput({
     required this.eventTableId,

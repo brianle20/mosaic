@@ -20,8 +20,6 @@ import 'package:mosaic/features/auth/screens/host_sign_in_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service_factory.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
-import 'package:mosaic/services/qr/qr_scanner_service.dart';
-import 'package:mosaic/services/qr/qr_scanner_service_factory.dart';
 import 'package:mosaic/widgets/keyboard_dismiss_region.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -41,7 +39,6 @@ class MosaicApp extends StatelessWidget {
     this.seatingRepository,
     this.staffRepository,
     this.nfcService,
-    this.qrScannerService,
   });
 
   final AppEnvironment? environment;
@@ -57,7 +54,6 @@ class MosaicApp extends StatelessWidget {
   final SeatingRepository? seatingRepository;
   final StaffRepository? staffRepository;
   final NfcService? nfcService;
-  final QrScannerService? qrScannerService;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +88,6 @@ class MosaicApp extends StatelessWidget {
         seatingRepository: seatingRepository!,
         staffRepository: staffRepository ?? const _UnavailableStaffRepository(),
         nfcService: nfcService!,
-        qrScannerService: qrScannerService ?? createDefaultQrScannerService(),
       );
     }
 
@@ -109,7 +104,6 @@ class MosaicApp extends StatelessWidget {
           SeatingRepository seatingRepository,
           StaffRepository staffRepository,
           NfcService nfcService,
-          QrScannerService qrScannerService,
         })>(
       future: _loadRepositories(),
       builder: (context, snapshot) {
@@ -143,7 +137,6 @@ class MosaicApp extends StatelessWidget {
           seatingRepository: snapshot.data!.seatingRepository,
           staffRepository: snapshot.data!.staffRepository,
           nfcService: snapshot.data!.nfcService,
-          qrScannerService: snapshot.data!.qrScannerService,
         );
       },
     );
@@ -162,7 +155,6 @@ class MosaicApp extends StatelessWidget {
         SeatingRepository seatingRepository,
         StaffRepository staffRepository,
         NfcService nfcService,
-        QrScannerService qrScannerService,
       })> _loadRepositories() async {
     final cache = await LocalCache.create();
     final client = Supabase.instance.client;
@@ -202,7 +194,6 @@ class MosaicApp extends StatelessWidget {
       ),
       staffRepository: SupabaseStaffRepository(client: client),
       nfcService: createDefaultNfcService(),
-      qrScannerService: createDefaultQrScannerService(),
     );
   }
 }
@@ -313,7 +304,6 @@ class _AppWithRepositories extends StatelessWidget {
     required this.seatingRepository,
     required this.staffRepository,
     required this.nfcService,
-    required this.qrScannerService,
   });
 
   final AuthRepository authRepository;
@@ -327,7 +317,6 @@ class _AppWithRepositories extends StatelessWidget {
   final SeatingRepository seatingRepository;
   final StaffRepository staffRepository;
   final NfcService nfcService;
-  final QrScannerService qrScannerService;
 
   @override
   Widget build(BuildContext context) {
@@ -342,7 +331,6 @@ class _AppWithRepositories extends StatelessWidget {
       seatingRepository: seatingRepository,
       staffRepository: staffRepository,
       nfcService: nfcService,
-      qrScannerService: qrScannerService,
     );
 
     return MaterialApp(

@@ -1,46 +1,9 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:mosaic/features/checkin/models/manual_tag_scan_draft.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
-class ManualEntryNfcService implements NfcService, PassiveNfcService {
+class ManualEntryNfcService implements NfcService {
   const ManualEntryNfcService();
-
-  @override
-  Stream<TagScanResult> get playerTagScans => const Stream.empty();
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-      BuildContext context) async {
-    return _scanTag(
-      context,
-      title: 'Enter Tag UID',
-      labelText: 'Tag UID',
-    );
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-      BuildContext context) async {
-    return _scanTag(
-      context,
-      title: 'Identify Player Tag',
-      labelText: 'Player Tag UID',
-    );
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) async {
-    return _scanTag(
-      context,
-      title: 'Scan $seatLabel Player Tag',
-      labelText: '$seatLabel Player Tag UID',
-    );
-  }
 
   @override
   Future<TagScanResult?> scanTableTag(BuildContext context) async {

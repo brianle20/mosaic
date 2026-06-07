@@ -8,31 +8,8 @@ class NativeNfcService implements NfcService {
   final NativeNfcReader _reader;
 
   @override
-  Future<TagScanResult?> scanPlayerTagForAssignment(
-    BuildContext context,
-  ) async {
-    return _scanOnce('Hold a player tag near your phone.');
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForIdentification(
-    BuildContext context,
-  ) async {
-    return _scanOnce(
-        'Hold a player tag near your phone to identify the guest.');
-  }
-
-  @override
   Future<TagScanResult?> scanTableTag(BuildContext context) async {
     return _scanOnce('Hold the table tag near your phone.');
-  }
-
-  @override
-  Future<TagScanResult?> scanPlayerTagForSessionSeat(
-    BuildContext context, {
-    required String seatLabel,
-  }) async {
-    return _scanOnce('Hold the $seatLabel player tag near your phone.');
   }
 
   Future<TagScanResult?> _scanOnce(String alertMessage) async {

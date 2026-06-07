@@ -88,11 +88,6 @@ class _FakeSessionRepository implements SessionRepository {
   }
 
   @override
-  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<StartedTableSessionRecord> startAssignedSession(
     StartAssignedTableSessionInput input,
   ) {

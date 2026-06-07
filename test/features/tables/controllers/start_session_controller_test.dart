@@ -5,39 +5,19 @@ import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/controllers/start_session_controller.dart';
-import 'package:mosaic/features/tables/models/start_session_scan_state.dart';
 
 class _FakeGuestRepository extends ThrowingGuestRepository {
-  const _FakeGuestRepository({
-    required this.guests,
-    required this.tagAssignments,
-  });
+  const _FakeGuestRepository({required this.guests});
 
   final List<EventGuestRecord> guests;
-  final Map<String, GuestTagAssignmentSummary> tagAssignments;
 
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async => guests;
 
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async =>
-      tagAssignments;
-
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
@@ -97,14 +77,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
@@ -159,12 +131,6 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
     return _startedSession();
   }
 
-  @override
-  Future<StartedTableSessionRecord> startSession(
-    StartTableSessionInput input,
-  ) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -332,78 +298,6 @@ void main() {
     expect(sessionRepository.startedAssignedInput, isNull);
   });
 
-  test('tournament table without assigned seats does not scan player tags',
-      () async {
-    final sessionRepository = _FakeSessionRepository();
-    final controller = _buildController(
-      sessionRepository: sessionRepository,
-      preverifiedTableTagUid: 'TABLE-001',
-    );
-
-    await controller.load('evt_01');
-    controller.recordPlayerScan('PLAYER-EAST');
-
-    expect(controller.hasAssignedTableSeating, isFalse);
-    expect(controller.canConfirmStart, isFalse);
-    expect(controller.currentPrompt, 'Assigned seating required');
-    expect(
-      controller.actionError,
-      'Generate seating assignments before entering this table.',
-    );
-    expect(controller.state.scannedPlayerUids, isEmpty);
-
-    final started = await controller.confirmStart();
-
-    expect(started, isNull);
-    expect(sessionRepository.startedAssignedInput, isNull);
-  });
-
-  test('rejects a player scanned for the wrong assigned seat', () async {
-    final controller = _buildController(
-      seatingAssignments: _tableAssignments(),
-    );
-
-    await controller.load('evt_01');
-    controller.recordTableScan('TABLE-001');
-    controller.recordPlayerScan('PLAYER-SOUTH');
-
-    expect(controller.state.currentStep, StartSessionScanStep.scanEast);
-    expect(controller.state.scannedPlayerUids, isEmpty);
-    expect(
-      controller.actionError,
-      'Expected Alice for East. Scan the assigned player tag.',
-    );
-  });
-
-  test('accepts assigned player for expected seat', () async {
-    final controller = _buildController(
-      seatingAssignments: _tableAssignments(),
-    );
-
-    await controller.load('evt_01');
-    controller.recordTableScan('TABLE-001');
-    controller.recordPlayerScan('PLAYER-EAST');
-
-    expect(controller.actionError, isNull);
-    expect(controller.state.currentStep, StartSessionScanStep.scanSouth);
-    expect(controller.state.scannedPlayerUids, ['PLAYER-EAST']);
-  });
-
-  test(
-      'legacy qualification mode without assignment rows preserves scan behavior',
-      () async {
-    final controller = _buildController(
-      scoringPhase: EventScoringPhase.qualification,
-    );
-
-    await controller.load('evt_01');
-    controller.recordTableScan('TABLE-001');
-    controller.recordPlayerScan('PLAYER-SOUTH');
-
-    expect(controller.currentPrompt, 'Scan South Player Tag');
-    expect(controller.actionError, isNull);
-    expect(controller.state.scannedPlayerUids, ['PLAYER-SOUTH']);
-  });
 }
 
 StartSessionController _buildController({
@@ -418,7 +312,6 @@ StartSessionController _buildController({
     scoringPhase: scoringPhase,
     guestRepository: _FakeGuestRepository(
       guests: _guests(),
-      tagAssignments: _tagAssignments(),
     ),
     seatingRepository: _FakeSeatingRepository(seatingAssignments),
     sessionRepository: sessionRepository ?? _FakeSessionRepository(),
@@ -466,44 +359,6 @@ List<EventGuestRecord> _guests() {
       'has_scored_play': false,
     },
   ].map(EventGuestRecord.fromJson).toList(growable: false);
-}
-
-Map<String, GuestTagAssignmentSummary> _tagAssignments() {
-  return const {
-    'gst_east': {
-      'assignment_id': 'tag_asg_east',
-      'event_id': 'evt_01',
-      'event_guest_id': 'gst_east',
-      'status': 'assigned',
-      'assigned_at': '2026-04-24T18:00:00-07:00',
-      'nfc_tag': {
-        'id': 'tag_east',
-        'uid_hex': 'PLAYER-EAST',
-        'uid_fingerprint': 'PLAYER-EAST',
-        'default_tag_type': 'player',
-        'status': 'active',
-      },
-    },
-    'gst_south': {
-      'assignment_id': 'tag_asg_south',
-      'event_id': 'evt_01',
-      'event_guest_id': 'gst_south',
-      'status': 'assigned',
-      'assigned_at': '2026-04-24T18:01:00-07:00',
-      'nfc_tag': {
-        'id': 'tag_south',
-        'uid_hex': 'PLAYER-SOUTH',
-        'uid_fingerprint': 'PLAYER-SOUTH',
-        'default_tag_type': 'player',
-        'status': 'active',
-      },
-    },
-  }.map(
-    (guestId, json) => MapEntry(
-      guestId,
-      GuestTagAssignmentSummary.fromJson(json),
-    ),
-  );
 }
 
 List<SeatingAssignmentRecord> _tableAssignments() {

@@ -8,7 +8,6 @@ import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 import '../../../helpers/repository_fakes.dart';
@@ -149,11 +148,6 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   }
 
   @override
-  Future<StartedTableSessionRecord> startSession(StartTableSessionInput input) {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
     throw UnimplementedError();
   }
@@ -182,12 +176,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(String guestId) {
     throw UnimplementedError();
   }
-
-  @override
-  Future<Map<String, GuestTagAssignmentSummary>> listActiveTagAssignments(
-    String eventId,
-  ) async =>
-      const {};
 
   @override
   Future<GuestDetailRecord?> getGuestDetail(String guestId) {
@@ -227,14 +215,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-  @override
-  Future<GuestDetailRecord> assignGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 
   @override
   Future<GuestDetailRecord> updateCoverEntry({
@@ -248,14 +228,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-  @override
-  Future<GuestDetailRecord> replaceGuestTag({
-    required String guestId,
-    required String scannedUid,
-    String? displayLabel,
-  }) {
-    throw UnimplementedError();
-  }
 }
 
 class _FakeSeatingRepository extends ThrowingSeatingRepository {
