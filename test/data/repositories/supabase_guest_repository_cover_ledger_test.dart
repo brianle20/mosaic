@@ -27,7 +27,6 @@ void main() {
           'is_comped': false,
           'has_scored_play': false,
         },
-        activeAssignmentLoader: (_) async => null,
         coverEntriesLoader: (_) async => [
           {
             'id': 'cov_02',
@@ -99,7 +98,6 @@ void main() {
           'is_comped': false,
           'has_scored_play': false,
         },
-        activeAssignmentLoader: (_) async => null,
         coverEntriesLoader: (_) async => [
           {
             'id': 'cov_03',
@@ -181,7 +179,6 @@ void main() {
           'is_comped': false,
           'has_scored_play': false,
         },
-        activeAssignmentLoader: (_) async => null,
         coverEntriesLoader: (_) async => [
           {
             'id': 'cov_03',
@@ -260,7 +257,6 @@ void main() {
           'is_comped': false,
           'has_scored_play': false,
         },
-        activeAssignmentLoader: (_) async => null,
         coverEntriesLoader: (_) async => [
           {
             'id': 'cov_04',

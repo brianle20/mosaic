@@ -1,14 +1,10 @@
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/guest_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 typedef CurrentUserIdReader = String? Function();
 typedef GuestByIdLoader = Future<Map<String, dynamic>> Function(String guestId);
-typedef ActiveAssignmentLoader = Future<Map<String, dynamic>?> Function(
-  String guestId,
-);
 typedef CoverEntriesLoader = Future<List<Map<String, dynamic>>> Function(
   String guestId,
 );
@@ -34,7 +30,6 @@ class SupabaseGuestRepository implements GuestRepository {
     required this.client,
     required this.cache,
     GuestByIdLoader? guestByIdLoader,
-    ActiveAssignmentLoader? activeAssignmentLoader,
     CoverEntriesLoader? coverEntriesLoader,
     CurrentUserIdReader? currentUserIdReader,
     ProfileOnEventChecker? profileOnEventChecker,
@@ -42,7 +37,6 @@ class SupabaseGuestRepository implements GuestRepository {
     EventGuestInsertRunner? eventGuestInsertRunner,
     RpcSingleRunner? rpcSingleRunner,
   })  : _guestByIdLoader = guestByIdLoader,
-        _activeAssignmentLoader = activeAssignmentLoader,
         _coverEntriesLoader = coverEntriesLoader,
         _currentUserIdReader = currentUserIdReader,
         _profileOnEventChecker = profileOnEventChecker,
@@ -53,7 +47,6 @@ class SupabaseGuestRepository implements GuestRepository {
   final SupabaseClient client;
   final LocalCache cache;
   final GuestByIdLoader? _guestByIdLoader;
-  final ActiveAssignmentLoader? _activeAssignmentLoader;
   final CoverEntriesLoader? _coverEntriesLoader;
   final CurrentUserIdReader? _currentUserIdReader;
   final ProfileOnEventChecker? _profileOnEventChecker;
@@ -84,16 +77,11 @@ class SupabaseGuestRepository implements GuestRepository {
     }
 
     final guest = EventGuestRecord.fromJson(guestRow);
-    final assignmentRow = await _loadActiveAssignment(guestId);
-    final assignment = assignmentRow == null
-        ? null
-        : GuestTagAssignmentSummary.fromJson(assignmentRow);
     final coverEntries = await loadGuestCoverEntries(guestId);
     await _saveMergedGuestList(guest.eventId, guest);
     return GuestDetailRecord(
       guest: guest,
       coverEntries: coverEntries,
-      activeTagAssignment: assignment,
     );
   }
 
@@ -316,12 +304,8 @@ class SupabaseGuestRepository implements GuestRepository {
     );
     final guest = EventGuestRecord.fromJson(row);
     await _saveMergedGuestList(guest.eventId, guest);
-    final assignmentRow = await _loadActiveAssignment(guestId);
     return GuestDetailRecord(
       guest: guest,
-      activeTagAssignment: assignmentRow == null
-          ? null
-          : GuestTagAssignmentSummary.fromJson(assignmentRow),
     );
   }
 
@@ -668,57 +652,6 @@ class SupabaseGuestRepository implements GuestRepository {
         .eq('id', guestId)
         .maybeSingle();
     return _castRow(row);
-  }
-
-  Future<Map<String, dynamic>?> _loadActiveAssignment(String guestId) async {
-    final activeAssignmentLoader = _activeAssignmentLoader;
-    if (activeAssignmentLoader != null) {
-      return activeAssignmentLoader(guestId);
-    }
-
-    try {
-      final result = await client.rpc(
-        'get_guest_tag_assignment_summary',
-        params: {
-          'target_event_guest_id': guestId,
-        },
-      );
-      return _castMaybeSingleRpcRow(result);
-    } catch (exception) {
-      if (!_shouldUseFallback(exception, 'get_guest_tag_assignment_summary')) {
-        rethrow;
-      }
-
-      final rows = await client.from('event_guest_tag_assignments').select('''
-            id,
-            event_id,
-            event_guest_id,
-            status,
-            assigned_at,
-            nfc_tag:nfc_tags (
-              id,
-              uid_hex,
-              uid_fingerprint,
-              default_tag_type,
-              status,
-              display_label,
-              note
-            )
-          ''').eq('event_guest_id', guestId).eq('status', 'assigned').limit(1);
-      if (rows.isEmpty) {
-        return null;
-      }
-
-      final row = rows.first;
-      return {
-        'assignment_id': row['id'],
-        'event_id': row['event_id'],
-        'event_guest_id': row['event_guest_id'],
-        'status': row['status'],
-        'assigned_at': row['assigned_at'],
-        'nfc_tag': row['nfc_tag'],
-      };
-    }
   }
 
   Future<List<Map<String, dynamic>>> _loadCoverEntries(String guestId) async {
