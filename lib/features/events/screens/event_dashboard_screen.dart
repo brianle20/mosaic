@@ -315,9 +315,16 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       return;
     }
 
+    final canCorrectHands =
+        event.lifecycleStatus == EventLifecycleStatus.active ||
+        event.lifecycleStatus == EventLifecycleStatus.completed;
+
     await Navigator.of(context).pushNamed(
       AppRouter.eventHandLedgerRoute,
-      arguments: EventHandLedgerArgs(eventId: event.id),
+      arguments: EventHandLedgerArgs(
+        eventId: event.id,
+        canCorrectHands: canCorrectHands,
+      ),
     );
     await _reloadDashboardAfterReturn(event.id);
   }

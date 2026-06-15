@@ -382,6 +382,7 @@ TableSessionRecord _session({
       BonusTableRole.tableOfRedemption => 'table_of_redemption',
       BonusTableRole.tableOfChampionsSuddenDeath =>
         'table_of_champions_sudden_death',
+      BonusTableRole.tableOfChampionsPlayIn => 'table_of_champions_play_in',
     },
     'initial_east_seat_index': 0,
     'current_dealer_seat_index': 0,

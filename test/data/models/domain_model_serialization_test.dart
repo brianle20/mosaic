@@ -174,6 +174,33 @@ void main() {
         'table_of_champions_sudden_death',
       );
     });
+
+    test('round-trips table of champions play-in role from JSON', () {
+      final record = SeatingAssignmentRecord.fromJson(const {
+        'id': 'asg_01',
+        'event_id': 'evt_01',
+        'event_table_id': 'tbl_play_in',
+        'table_label': 'Play-In',
+        'event_guest_id': 'gst_01',
+        'guest_display_name': 'Alice Wong',
+        'seat_index': 0,
+        'assignment_round': 4,
+        'status': 'active',
+        'assignment_type': 'bonus',
+        'bonus_round_id': 'bonus_01',
+        'bonus_table_role': 'table_of_champions_play_in',
+        'seed_rank': 1,
+      });
+
+      expect(
+        record.bonusTableRole,
+        BonusTableRole.tableOfChampionsPlayIn,
+      );
+      expect(
+        record.toJson()['bonus_table_role'],
+        'table_of_champions_play_in',
+      );
+    });
   });
 
   group('BonusRoundState', () {
@@ -252,6 +279,60 @@ void main() {
       expect(state.tiedTopPlayers, isEmpty);
       expect(state.suddenDeathStatus, isNull);
       expect(state.championAwardPoints, isNull);
+    });
+
+    test('parses play-in RPC state with play-in players', () {
+      final state = BonusRoundState.fromJson(const {
+        'bonus_round_id': 'bonus_01',
+        'event_id': 'evt_01',
+        'status': 'active',
+        'champions_table_id': 'tbl_champions',
+        'play_in_status': 'required',
+        'play_in_table_id': 'tbl_play_in',
+        'play_in_session_id': 'ses_play_in',
+        'play_in_winner_event_guest_id': 'gst_02',
+        'play_in_winner_seed_rank': 2,
+        'play_in_players': [
+          {
+            'event_guest_id': 'gst_01',
+            'display_name': 'Alice Wong',
+            'bonus_score_points': 120,
+            'seed_rank': 1,
+          },
+          {
+            'event_guest_id': 'gst_02',
+            'display_name': 'Bob Lee',
+            'total_points': 118.0,
+            'seed_rank': 2.0,
+          },
+        ],
+      });
+
+      expect(state.playInStatus, 'required');
+      expect(state.playInTableId, 'tbl_play_in');
+      expect(state.playInSessionId, 'ses_play_in');
+      expect(state.playInWinnerEventGuestId, 'gst_02');
+      expect(state.playInWinnerSeedRank, 2);
+      expect(state.playInPlayers, hasLength(2));
+      expect(state.playInPlayers.first.bonusScorePoints, 120);
+      expect(state.playInPlayers.last.totalPoints, 118);
+      expect(state.playInPlayers.last.seedRank, 2);
+      expect(state.toJson()['play_in_players'], [
+        {
+          'event_guest_id': 'gst_01',
+          'display_name': 'Alice Wong',
+          'bonus_score_points': 120,
+          'total_points': null,
+          'seed_rank': 1,
+        },
+        {
+          'event_guest_id': 'gst_02',
+          'display_name': 'Bob Lee',
+          'bonus_score_points': null,
+          'total_points': 118,
+          'seed_rank': 2,
+        },
+      ]);
     });
   });
 
@@ -616,6 +697,34 @@ void main() {
       expect(
         session.toJson()['bonus_table_role'],
         'table_of_champions_sudden_death',
+      );
+    });
+
+    test('round-trips bonus table role for play-in sessions', () {
+      final session = TableSessionRecord.fromJson(const {
+        'id': 'ses_01',
+        'event_id': 'evt_01',
+        'event_table_id': 'tbl_01',
+        'session_number_for_table': 1,
+        'ruleset_id': 'HK_STANDARD',
+        'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+        'rotation_policy_config_json': {},
+        'status': 'active',
+        'scoring_phase': 'bonus',
+        'bonus_table_role': 'table_of_champions_play_in',
+        'initial_east_seat_index': 0,
+        'current_dealer_seat_index': 1,
+        'dealer_pass_count': 0,
+        'completed_games_count': 0,
+        'hand_count': 2,
+        'started_at': '2026-05-24T19:00:00Z',
+        'started_by_user_id': 'usr_01',
+      });
+
+      expect(session.bonusTableRole, BonusTableRole.tableOfChampionsPlayIn);
+      expect(
+        session.toJson()['bonus_table_role'],
+        'table_of_champions_play_in',
       );
     });
   });

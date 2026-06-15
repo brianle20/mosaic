@@ -245,14 +245,17 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
     this.summary,
     this.bonusRoundState,
     this.suddenDeathAssignments = const [],
+    this.playInAssignments = const [],
     this.assignments = const [],
   });
 
   TournamentRoundSummary? summary;
   BonusRoundState? bonusRoundState;
   List<SeatingAssignmentRecord> suddenDeathAssignments;
+  List<SeatingAssignmentRecord> playInAssignments;
   List<SeatingAssignmentRecord> assignments;
   final startedSuddenDeathTables = <String>[];
+  final startedPlayInTables = <String>[];
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
@@ -287,6 +290,15 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   }) async {
     startedSuddenDeathTables.add(tableId);
     return suddenDeathAssignments;
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> startTableOfChampionsPlayIn({
+    required String eventId,
+    required String tableId,
+  }) async {
+    startedPlayInTables.add(tableId);
+    return playInAssignments;
   }
 }
 
@@ -873,6 +885,69 @@ void main() {
     );
   });
 
+  test('loads bonus round state and exposes required play-in table', () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_play_in',
+      'event_id': 'evt_01',
+      'label': 'Table 8',
+      'display_order': 8,
+      'nfc_tag_id': 'tag_08',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final seatingRepository = _FakeSeatingRepository(
+      bonusRoundState: const BonusRoundState(
+        bonusRoundId: 'bonus_01',
+        eventId: 'evt_01',
+        status: 'active',
+        playInStatus: 'required',
+        playInTableId: 'tbl_play_in',
+        playInPlayers: [
+          BonusRoundPlayInPlayer(
+            eventGuestId: 'guest_04',
+            displayName: 'Dana Li',
+            seedRank: 4,
+          ),
+          BonusRoundPlayInPlayer(
+            eventGuestId: 'guest_05',
+            displayName: 'Evan Ng',
+            seedRank: 5,
+          ),
+          BonusRoundPlayInPlayer(
+            eventGuestId: 'guest_06',
+            displayName: 'Fran Ho',
+            seedRank: 6,
+          ),
+        ],
+      ),
+    );
+
+    final controller = TableListController(
+      tableRepository: _FakeTableRepository(cachedTables: [table]),
+      sessionRepository: _FakeSessionRepository(cachedSessions: const []),
+      guestRepository: _FakeGuestRepository(const []),
+      seatingRepository: seatingRepository,
+      scoringPhase: EventScoringPhase.bonus,
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.bonusRoundState?.playInStatus, 'required');
+    expect(controller.isPlayInRequired, isTrue);
+    expect(controller.tournamentRoundSummary.hasCurrentRound, isTrue);
+    expect(controller.currentRoundCards.single.table.id, 'tbl_play_in');
+    expect(
+      controller.currentRoundCards.single.assignmentTitle,
+      'Table of Champions Play-In',
+    );
+    expect(
+      controller.currentRoundCards.single.currentRoundSummary?.assignedPlayers
+          .map((player) => player.displayName),
+      ['Dana Li', 'Evan Ng', 'Fran Ho'],
+    );
+  });
+
   test('starts bonus round sudden death through seating repository', () async {
     final table = EventTableRecord.fromJson(const {
       'id': 'tbl_sudden',
@@ -908,6 +983,46 @@ void main() {
     );
 
     expect(seatingRepository.startedSuddenDeathTables, ['tbl_sudden']);
+    expect(assignments, [assignment]);
+    expect(controller.error, isNull);
+  });
+
+  test('starts table of champions play-in through seating repository',
+      () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_play_in',
+      'event_id': 'evt_01',
+      'label': 'Table 8',
+      'display_order': 8,
+      'nfc_tag_id': 'tag_08',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final assignment = _bonusAssignment(
+      table: table,
+      seatIndex: 0,
+      displayName: 'Dana Li',
+      seedRank: 4,
+      role: BonusTableRole.tableOfChampionsPlayIn,
+    );
+    final seatingRepository = _FakeSeatingRepository(
+      playInAssignments: [assignment],
+    );
+    final controller = TableListController(
+      tableRepository: _FakeTableRepository(cachedTables: [table]),
+      sessionRepository: _FakeSessionRepository(cachedSessions: const []),
+      guestRepository: _FakeGuestRepository(const []),
+      seatingRepository: seatingRepository,
+      scoringPhase: EventScoringPhase.bonus,
+    );
+
+    final assignments = await controller.startTableOfChampionsPlayIn(
+      eventId: 'evt_01',
+      tableId: 'tbl_play_in',
+    );
+
+    expect(seatingRepository.startedPlayInTables, ['tbl_play_in']);
     expect(assignments, [assignment]);
     expect(controller.error, isNull);
   });
@@ -1107,6 +1222,8 @@ TableSessionRecord _session({
             BonusTableRole.tableOfRedemption => 'table_of_redemption',
             BonusTableRole.tableOfChampionsSuddenDeath =>
               'table_of_champions_sudden_death',
+            BonusTableRole.tableOfChampionsPlayIn =>
+              'table_of_champions_play_in',
           },
     'assignment_round': assignmentRound,
     'initial_east_seat_index': 0,

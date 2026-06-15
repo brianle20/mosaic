@@ -171,6 +171,9 @@ String _contextLabel(SessionDetailRecord detail) {
       BonusTableRole.tableOfChampionsSuddenDeath) {
     return 'Table of Champions Sudden Death · Session $sessionNumber';
   }
+  if (detail.session.bonusTableRole == BonusTableRole.tableOfChampionsPlayIn) {
+    return 'Table of Champions Play-In · Session $sessionNumber';
+  }
 
   return 'Current session · Session $sessionNumber';
 }

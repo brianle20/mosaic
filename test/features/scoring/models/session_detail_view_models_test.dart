@@ -70,6 +70,21 @@ void main() {
       );
     });
 
+    test('labels table of champions play-in session distinctly', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(
+          scoringPhase: EventScoringPhase.bonus,
+          bonusTableRole: BonusTableRole.tableOfChampionsPlayIn,
+        ),
+        guestNamesById: _guestNamesById,
+      );
+
+      expect(
+        viewModel.contextLabel,
+        'Table of Champions Play-In · Session 1',
+      );
+    });
+
     test('falls back to default table session title without a table label', () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(tableLabel: null),
@@ -316,8 +331,16 @@ SessionDetailRecord _detail({
       'rotation_policy_config_json': {},
       'status': status,
       'scoring_phase': eventScoringPhaseToJson(scoringPhase),
-      'bonus_table_role':
-          bonusTableRole == null ? null : 'table_of_champions_sudden_death',
+      'bonus_table_role': bonusTableRole == null
+          ? null
+          : switch (bonusTableRole) {
+              BonusTableRole.tableOfChampions => 'table_of_champions',
+              BonusTableRole.tableOfRedemption => 'table_of_redemption',
+              BonusTableRole.tableOfChampionsSuddenDeath =>
+                'table_of_champions_sudden_death',
+              BonusTableRole.tableOfChampionsPlayIn =>
+                'table_of_champions_play_in',
+            },
       'assignment_round': assignmentRound,
       'initial_east_seat_index': 0,
       'current_dealer_seat_index': currentDealerSeatIndex,

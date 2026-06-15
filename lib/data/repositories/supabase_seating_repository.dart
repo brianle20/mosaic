@@ -138,6 +138,25 @@ class SupabaseSeatingRepository implements SeatingRepository {
   }
 
   @override
+  Future<List<SeatingAssignmentRecord>> startTableOfChampionsPlayIn({
+    required String eventId,
+    required String tableId,
+  }) async {
+    final rows = await _runRpcList(
+      'start_table_of_champions_play_in',
+      {
+        'target_event_id': eventId,
+        'play_in_table_id': tableId,
+      },
+    );
+    final assignments = rows
+        .map((row) => SeatingAssignmentRecord.fromJson(row))
+        .toList(growable: false);
+    await loadAssignments(eventId);
+    return assignments;
+  }
+
+  @override
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId) async {
     return _loadAndCache(
       eventId,

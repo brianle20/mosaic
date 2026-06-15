@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/features/scoring/models/event_hand_ledger_view_models.dart';
 
 void main() {
@@ -143,6 +145,32 @@ void main() {
       expect(rows.single.cells.single.pointsLabel, '+37');
     });
   });
+
+  test('hand ledger row carries correction target metadata and full guest names',
+      () {
+    final rows = buildEventHandLedgerViewModels([_handEntry()]);
+
+    expect(rows.single.isHandRow, isTrue);
+    expect(rows.single.sessionId, 'ses_01');
+    expect(rows.single.handId, 'hand_01');
+    expect(rows.single.guestNamesById, {
+      'gst_east': 'Alice Wong',
+      'gst_south': 'Bob Lee',
+      'gst_west': 'Carol Ng',
+      'gst_north': 'Dee Wu',
+    });
+    expect(rows.single.cells.first.eventGuestId, 'gst_east');
+    expect(rows.single.cells.first.fullDisplayName, 'Alice Wong');
+    expect(rows.single.cells.first.displayName, 'Alice');
+  });
+
+  test('adjustment ledger row is not a hand correction target', () {
+    final rows = buildEventHandLedgerViewModels([_adjustmentEntry()]);
+
+    expect(rows.single.isHandRow, isFalse);
+    expect(rows.single.sessionId, isEmpty);
+    expect(rows.single.guestNamesById, isEmpty);
+  });
 }
 
 Map<String, Object?> _rowJson({
@@ -201,4 +229,70 @@ Map<String, Object?> _cellJson(
     'display_name': displayName,
     'points_delta': pointsDelta,
   };
+}
+
+EventHandLedgerEntry _handEntry() {
+  return EventHandLedgerEntry(
+    eventId: 'evt_01',
+    tableId: 'tbl_01',
+    tableLabel: 'Table 1',
+    sessionId: 'ses_01',
+    sessionNumberForTable: 1,
+    handId: 'hand_01',
+    handNumber: 1,
+    enteredAt: DateTime.parse('2026-04-24T19:05:00-07:00'),
+    resultType: HandResultType.win,
+    status: HandResultStatus.recorded,
+    winType: HandWinType.selfDraw,
+    fanCount: 3,
+    hasSettlements: true,
+    cells: const [
+      EventHandLedgerCell(
+        wind: SeatWind.east,
+        seatIndex: 0,
+        eventGuestId: 'gst_east',
+        displayName: 'Alice Wong',
+        pointsDelta: 24,
+      ),
+      EventHandLedgerCell(
+        wind: SeatWind.south,
+        seatIndex: 1,
+        eventGuestId: 'gst_south',
+        displayName: 'Bob Lee',
+        pointsDelta: -8,
+      ),
+      EventHandLedgerCell(
+        wind: SeatWind.west,
+        seatIndex: 2,
+        eventGuestId: 'gst_west',
+        displayName: 'Carol Ng',
+        pointsDelta: -8,
+      ),
+      EventHandLedgerCell(
+        wind: SeatWind.north,
+        seatIndex: 3,
+        eventGuestId: 'gst_north',
+        displayName: 'Dee Wu',
+        pointsDelta: -8,
+      ),
+    ],
+  );
+}
+
+EventHandLedgerEntry _adjustmentEntry() {
+  return EventHandLedgerEntry.fromJson({
+    'event_id': 'evt_01',
+    'entered_at': '2026-04-24T22:15:00-07:00',
+    'ledger_row_type': 'adjustment',
+    'adjustment_id': 'adj_01',
+    'adjustment_type': 'finals_champion_award',
+    'adjustment_amount_points': 37,
+    'adjustment_event_guest_id': 'gst_01',
+    'adjustment_display_name': 'Alice Wong',
+    'adjustment_context_json': {
+      'champion_bonus_score_points': 24,
+      'champion_top_up_points': 13,
+    },
+    'cells': const [],
+  });
 }

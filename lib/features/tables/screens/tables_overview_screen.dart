@@ -203,6 +203,33 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     }
   }
 
+  Future<void> _startPlayIn(EventTableRecord table) async {
+    final assignments = await _controller.startTableOfChampionsPlayIn(
+      eventId: widget.eventId,
+      tableId: table.id,
+    );
+    if (!mounted || assignments == null) {
+      return;
+    }
+
+    if (assignments.isNotEmpty) {
+      await Navigator.of(context).pushNamed(
+        AppRouter.seatingAssignmentsRoute,
+        arguments: SeatingAssignmentsArgs(
+          eventId: widget.eventId,
+          initialAssignments: assignments,
+          bonusTableRoleFilter: BonusTableRole.tableOfChampionsPlayIn,
+          showUnassignedGuests: false,
+          enterTableScoringPhase: EventScoringPhase.bonus,
+          minimumTableSize: 2,
+        ),
+      );
+    }
+    if (mounted) {
+      await _controller.load(widget.eventId);
+    }
+  }
+
   Future<void> _openBonusRound() async {
     await Navigator.of(context).pushNamed(
       AppRouter.bonusRoundRoute,
@@ -603,6 +630,12 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
 
   String _currentBoardTitle(TournamentRoundRecord? round) {
     if (_controller.effectiveScoringPhase == EventScoringPhase.bonus) {
+      if (_controller.isPlayInRequired) {
+        return 'Play-In Required';
+      }
+      if (_controller.isPlayInActive) {
+        return 'Play-In in progress';
+      }
       if (_controller.isSuddenDeathRequired) {
         return 'Sudden Death Required';
       }
@@ -640,6 +673,11 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     final sessionId =
         roundTable.activeSessionId ?? roundTable.latestEndedSessionId;
     final action = _currentRoundAction(roundTable);
+    final canStartPlayIn = _controller.isPlayInRequired &&
+        action == _CurrentRoundAction.enter &&
+        widget.scoringOpen &&
+        widget.canManageTables &&
+        !widget.readOnly;
     final canStartSuddenDeath = _canStartSuddenDeathFromCurrentTable(cardData);
 
     return Padding(
@@ -696,21 +734,26 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               runSpacing: 10,
               children: [
                 FilledButton(
-                  onPressed: canStartSuddenDeath
-                      ? () => _startSuddenDeath(cardData.table)
-                      : action == _CurrentRoundAction.enter
-                          ? _controller.isSuddenDeathRequired
-                              ? widget.canManageTables
-                                  ? () => _startSuddenDeath(cardData.table)
-                                  : null
-                              : () => _enterCurrentRoundTable(cardData.table)
-                          : sessionId == null
-                              ? null
-                              : () => _openSessionDetail(sessionId),
+                  onPressed: canStartPlayIn
+                      ? () => _startPlayIn(cardData.table)
+                      : canStartSuddenDeath
+                          ? () => _startSuddenDeath(cardData.table)
+                          : action == _CurrentRoundAction.enter
+                              ? _controller.isSuddenDeathRequired
+                                  ? widget.canManageTables
+                                      ? () => _startSuddenDeath(cardData.table)
+                                      : null
+                                  : () =>
+                                      _enterCurrentRoundTable(cardData.table)
+                              : sessionId == null
+                                  ? null
+                                  : () => _openSessionDetail(sessionId),
                   child: Text(
-                    canStartSuddenDeath
-                        ? 'Start Sudden Death'
-                        : _currentRoundActionLabel(action),
+                    canStartPlayIn
+                        ? 'Start Play-In'
+                        : canStartSuddenDeath
+                            ? 'Start Sudden Death'
+                            : _currentRoundActionLabel(action),
                   ),
                 ),
                 if (cardData.liveSummary case final liveSummary?)
@@ -1140,6 +1183,11 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   Widget _buildReadyTableCard(EventTableRecord table) {
     final hasTag = table.nfcTagId != null;
     final hasSessionHistory = _controller.sessionsForTable(table.id).isNotEmpty;
+    final canStartPlayIn = hasTag &&
+        _controller.isPlayInRequired &&
+        widget.scoringOpen &&
+        widget.canManageTables &&
+        !widget.readOnly;
     final canStartSuddenDeath = hasTag &&
         _controller.isSuddenDeathRequired &&
         !_hasCompletedChampionsTableForSuddenDeath() &&
@@ -1163,9 +1211,11 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 ? 'Ready for assigned tournament seating. Enter the table to start assigned play.'
                 : 'Open scoring before starting assigned tournament seating at this table.'
             : hasTag
-                ? canStartSuddenDeath
-                    ? 'Start sudden death at this table.'
-                    : 'Scan this table from the event dashboard to start seating.'
+                ? canStartPlayIn
+                    ? 'Start play-in at this table.'
+                    : canStartSuddenDeath
+                        ? 'Start sudden death at this table.'
+                        : 'Scan this table from the event dashboard to start seating.'
                 : 'Bind this table tag before live seating.';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1201,6 +1251,14 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 runSpacing: 12,
                 children: [
                   if (!widget.readOnly) ...[
+                    if (canStartPlayIn)
+                      FilledButton.icon(
+                        onPressed: _controller.isStartingNextRound
+                            ? null
+                            : () => _startPlayIn(table),
+                        icon: const Icon(Icons.sports_esports),
+                        label: const Text('Start Play-In'),
+                      ),
                     if (canStartSuddenDeath)
                       FilledButton.icon(
                         onPressed: _controller.isStartingNextRound
@@ -1286,6 +1344,9 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     if (_controller.isSuddenDeathRequired &&
         action == _CurrentRoundAction.enter) {
       return 'Start Sudden Death';
+    }
+    if (_controller.isPlayInRequired && action == _CurrentRoundAction.enter) {
+      return 'Start Play-In';
     }
 
     return switch (action) {

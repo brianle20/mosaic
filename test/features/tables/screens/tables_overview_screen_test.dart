@@ -275,15 +275,18 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
     this.assignments = const [],
     this.bonusRoundState,
     this.suddenDeathAssignments = const [],
+    this.playInAssignments = const [],
   });
 
   TournamentRoundSummary summary;
   List<SeatingAssignmentRecord> assignments;
   BonusRoundState? bonusRoundState;
   List<SeatingAssignmentRecord> suddenDeathAssignments;
+  List<SeatingAssignmentRecord> playInAssignments;
   int generateCount = 0;
   int loadCount = 0;
   final startedSuddenDeathTables = <String>[];
+  final startedPlayInTables = <String>[];
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
@@ -328,6 +331,15 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   }) async {
     startedSuddenDeathTables.add(tableId);
     return suddenDeathAssignments;
+  }
+
+  @override
+  Future<List<SeatingAssignmentRecord>> startTableOfChampionsPlayIn({
+    required String eventId,
+    required String tableId,
+  }) async {
+    startedPlayInTables.add(tableId);
+    return playInAssignments;
   }
 }
 
@@ -2001,6 +2013,92 @@ void main() {
 
     expect(seatingRepository.startedSuddenDeathTables, ['tbl_sudden']);
     expect(openedAssignmentsArgs?.initialAssignments, returnedAssignments);
+    expect(find.text('Opened Seating Assignments'), findsOneWidget);
+  });
+
+  testWidgets('required play-in can start from a ready table', (tester) async {
+    final table = _table('tbl_play_in', 'Table 8');
+    final returnedAssignments = [
+      _bonusAssignment(
+        table: table,
+        seatIndex: 0,
+        displayName: 'Dana Li',
+        seedRank: 4,
+        role: BonusTableRole.tableOfChampionsPlayIn,
+      ),
+      _bonusAssignment(
+        table: table,
+        seatIndex: 1,
+        displayName: 'Evan Ng',
+        seedRank: 5,
+        role: BonusTableRole.tableOfChampionsPlayIn,
+      ),
+    ];
+    final seatingRepository = _FakeSeatingRepository(
+      summary: TournamentRoundSummary.empty(),
+      bonusRoundState: const BonusRoundState(
+        bonusRoundId: 'bonus_01',
+        eventId: 'evt_01',
+        status: 'active',
+        playInStatus: 'required',
+        playInPlayers: [
+          BonusRoundPlayInPlayer(
+            eventGuestId: 'guest_04',
+            displayName: 'Dana Li',
+            seedRank: 4,
+          ),
+          BonusRoundPlayInPlayer(
+            eventGuestId: 'guest_05',
+            displayName: 'Evan Ng',
+            seedRank: 5,
+          ),
+        ],
+      ),
+      playInAssignments: returnedAssignments,
+    );
+    SeatingAssignmentsArgs? openedAssignmentsArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          scoringPhase: EventScoringPhase.bonus,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+          seatingRepository: seatingRepository,
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.seatingAssignmentsRoute) {
+            openedAssignmentsArgs =
+                settings.arguments! as SeatingAssignmentsArgs;
+            return MaterialPageRoute<void>(
+              builder: (context) => const Scaffold(
+                body: Text('Opened Seating Assignments'),
+              ),
+            );
+          }
+
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start play-in at this table.'), findsOneWidget);
+    expect(find.text('Start Play-In'), findsOneWidget);
+
+    await tester.tap(find.text('Start Play-In'));
+    await tester.pumpAndSettle();
+
+    expect(seatingRepository.startedPlayInTables, ['tbl_play_in']);
+    expect(openedAssignmentsArgs?.initialAssignments, returnedAssignments);
+    expect(
+      openedAssignmentsArgs?.bonusTableRoleFilter,
+      BonusTableRole.tableOfChampionsPlayIn,
+    );
     expect(find.text('Opened Seating Assignments'), findsOneWidget);
   });
 

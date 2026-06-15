@@ -260,6 +260,11 @@ abstract interface class SeatingRepository {
     required String tableId,
   });
 
+  Future<List<SeatingAssignmentRecord>> startTableOfChampionsPlayIn({
+    required String eventId,
+    required String tableId,
+  });
+
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId);
 }
 

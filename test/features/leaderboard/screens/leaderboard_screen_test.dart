@@ -185,6 +185,14 @@ class _SeatingRepository implements SeatingRepository {
   }
 
   @override
+  Future<List<SeatingAssignmentRecord>> startTableOfChampionsPlayIn({
+    required String eventId,
+    required String tableId,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
     String eventId,
   ) {

@@ -317,6 +317,13 @@ class ThrowingSeatingRepository implements SeatingRepository {
       throw UnimplementedError();
 
   @override
+  Future<List<SeatingAssignmentRecord>> startTableOfChampionsPlayIn({
+    required String eventId,
+    required String tableId,
+  }) =>
+      throw UnimplementedError();
+
+  @override
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId) =>
       throw UnimplementedError();
 }

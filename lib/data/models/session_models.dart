@@ -483,6 +483,7 @@ BonusTableRole? _optionalBonusTableRole(
     'table_of_redemption' => BonusTableRole.tableOfRedemption,
     'table_of_champions_sudden_death' =>
       BonusTableRole.tableOfChampionsSuddenDeath,
+    'table_of_champions_play_in' => BonusTableRole.tableOfChampionsPlayIn,
     _ => throw FormatException('Unknown bonus table role: $value'),
   };
 }
@@ -493,6 +494,7 @@ String _bonusTableRoleToJson(BonusTableRole role) {
     BonusTableRole.tableOfRedemption => 'table_of_redemption',
     BonusTableRole.tableOfChampionsSuddenDeath =>
       'table_of_champions_sudden_death',
+    BonusTableRole.tableOfChampionsPlayIn => 'table_of_champions_play_in',
   };
 }
 

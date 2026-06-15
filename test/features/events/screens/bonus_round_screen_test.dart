@@ -577,6 +577,13 @@ class _SeatingRepository implements SeatingRepository {
       const [];
 
   @override
+  Future<List<SeatingAssignmentRecord>> startTableOfChampionsPlayIn({
+    required String eventId,
+    required String tableId,
+  }) async =>
+      const [];
+
+  @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
     String eventId,
   ) async =>

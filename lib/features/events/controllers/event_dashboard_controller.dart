@@ -558,9 +558,10 @@ class EventDashboardController extends ChangeNotifier {
         : assignments.first.bonusTableRole;
     return switch (role) {
       BonusTableRole.tableOfChampions => 0,
-      BonusTableRole.tableOfRedemption => 1,
-      BonusTableRole.tableOfChampionsSuddenDeath => 2,
-      null => 3,
+      BonusTableRole.tableOfChampionsPlayIn => 1,
+      BonusTableRole.tableOfRedemption => 2,
+      BonusTableRole.tableOfChampionsSuddenDeath => 3,
+      null => 4,
     };
   }
 

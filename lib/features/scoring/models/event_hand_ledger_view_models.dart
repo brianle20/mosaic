@@ -4,6 +4,8 @@ import 'package:mosaic/data/models/scoring_models.dart';
 class EventHandLedgerRowViewModel {
   const EventHandLedgerRowViewModel({
     required this.handId,
+    required this.sessionId,
+    required this.isHandRow,
     required this.handLabel,
     required this.loggedTimeLabel,
     required this.resultSummary,
@@ -14,6 +16,8 @@ class EventHandLedgerRowViewModel {
   });
 
   final String handId;
+  final String sessionId;
+  final bool isHandRow;
   final String handLabel;
   final String loggedTimeLabel;
   final String resultSummary;
@@ -21,15 +25,26 @@ class EventHandLedgerRowViewModel {
   final bool isVoided;
   final bool hasDataIssue;
   final bool isBonusRound;
+
+  Map<String, String> get guestNamesById => {
+        if (isHandRow)
+          for (final cell in cells)
+            if (cell.eventGuestId.isNotEmpty)
+              cell.eventGuestId: cell.fullDisplayName,
+      };
 }
 
 class EventHandLedgerCellViewModel {
   const EventHandLedgerCellViewModel({
+    required this.eventGuestId,
+    required this.fullDisplayName,
     required this.displayName,
     required this.pointsDelta,
     required this.pointsLabel,
   });
 
+  final String eventGuestId;
+  final String fullDisplayName;
   final String displayName;
   final int pointsDelta;
   final String pointsLabel;
@@ -54,6 +69,8 @@ EventHandLedgerRowViewModel _buildRow(EventHandLedgerEntry entry) {
 
   return EventHandLedgerRowViewModel(
     handId: entry.handId,
+    sessionId: entry.sessionId,
+    isHandRow: true,
     handLabel:
         '${entry.tableLabel} · Session ${entry.sessionNumberForTable} · Hand ${entry.handNumber}',
     loggedTimeLabel: _loggedTimeLabel(entry.enteredAt),
@@ -61,6 +78,8 @@ EventHandLedgerRowViewModel _buildRow(EventHandLedgerEntry entry) {
     cells: entry.cells
         .map(
           (cell) => EventHandLedgerCellViewModel(
+            eventGuestId: cell.eventGuestId,
+            fullDisplayName: cell.displayName,
             displayName: _firstName(cell.displayName),
             pointsDelta: cell.pointsDelta,
             pointsLabel: _signedPoints(cell.pointsDelta),
@@ -77,11 +96,15 @@ EventHandLedgerRowViewModel _buildAdjustmentRow(EventHandLedgerEntry entry) {
   final amount = entry.adjustmentAmountPoints ?? 0;
   return EventHandLedgerRowViewModel(
     handId: entry.handId,
+    sessionId: '',
+    isHandRow: false,
     handLabel: _adjustmentLabel(entry),
     loggedTimeLabel: _loggedTimeLabel(entry.enteredAt),
     resultSummary: _adjustmentSummary(entry),
     cells: [
       EventHandLedgerCellViewModel(
+        eventGuestId: entry.adjustmentEventGuestId ?? '',
+        fullDisplayName: entry.adjustmentDisplayName ?? 'Champion',
         displayName: _firstName(entry.adjustmentDisplayName ?? 'Champion'),
         pointsDelta: amount,
         pointsLabel: _signedPoints(amount),

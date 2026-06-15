@@ -304,6 +304,85 @@ void main() {
       );
     });
 
+    test(
+        'starts table of champions play-in through RPC and refreshes assignments cache',
+        () async {
+      final calls = <({String functionName, Map<String, dynamic> params})>[];
+      final cache = await LocalCache.create();
+      await cache.saveSeatingAssignments('evt_01', [
+        SeatingAssignmentRecordFixture.active(),
+      ]);
+      final repository = SupabaseSeatingRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcListRunner: (functionName, params) async {
+          calls.add((functionName: functionName, params: params));
+          if (functionName == 'get_event_seating_assignments') {
+            return [
+              SeatingAssignmentRecordFixture.active().toJson(),
+              {
+                'id': 'asg_play_in_01',
+                'event_id': 'evt_01',
+                'event_table_id': 'tbl_play_in',
+                'table_label': 'Play-In',
+                'event_guest_id': 'gst_01',
+                'guest_display_name': 'Alice Wong',
+                'seat_index': 0,
+                'assignment_round': 4,
+                'status': 'active',
+                'assignment_type': 'bonus',
+                'bonus_round_id': 'bonus_01',
+                'bonus_table_role': 'table_of_champions_play_in',
+                'seed_rank': 1,
+              },
+            ];
+          }
+          return [
+            {
+              'id': 'asg_play_in_01',
+              'event_id': 'evt_01',
+              'event_table_id': 'tbl_play_in',
+              'table_label': 'Play-In',
+              'event_guest_id': 'gst_01',
+              'guest_display_name': 'Alice Wong',
+              'seat_index': 0,
+              'assignment_round': 4,
+              'status': 'active',
+              'assignment_type': 'bonus',
+              'bonus_round_id': 'bonus_01',
+              'bonus_table_role': 'table_of_champions_play_in',
+              'seed_rank': 1,
+            },
+          ];
+        },
+      );
+
+      final assignments = await repository.startTableOfChampionsPlayIn(
+        eventId: 'evt_01',
+        tableId: 'tbl_play_in',
+      );
+
+      expect(calls.first.functionName, 'start_table_of_champions_play_in');
+      expect(calls.first.params, {
+        'target_event_id': 'evt_01',
+        'play_in_table_id': 'tbl_play_in',
+      });
+      expect(calls.last.functionName, 'get_event_seating_assignments');
+      expect(calls.last.params, {'target_event_id': 'evt_01'});
+      expect(
+        assignments.single.bonusTableRole,
+        BonusTableRole.tableOfChampionsPlayIn,
+      );
+
+      final cached = await repository.readCachedAssignments('evt_01');
+      expect(cached, hasLength(2));
+      expect(cached.last.eventTableId, 'tbl_play_in');
+      expect(
+        cached.last.bonusTableRole,
+        BonusTableRole.tableOfChampionsPlayIn,
+      );
+    });
+
     test('clears assignments through RPC and clears cache on empty result',
         () async {
       final calls = <({String functionName, Map<String, dynamic> params})>[];

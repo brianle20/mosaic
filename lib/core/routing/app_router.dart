@@ -242,6 +242,7 @@ class AppRouter {
           builder: (_) => EventHandLedgerScreen(
             eventId: args.eventId,
             sessionRepository: sessionRepository,
+            canCorrectHands: args.canCorrectHands,
           ),
           settings: settings,
         );
@@ -374,9 +375,11 @@ class GuestRosterArgs {
 class EventHandLedgerArgs {
   const EventHandLedgerArgs({
     required this.eventId,
+    this.canCorrectHands = false,
   });
 
   final String eventId;
+  final bool canCorrectHands;
 }
 
 class BonusRoundArgs {

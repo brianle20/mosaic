@@ -605,6 +605,49 @@ class _RecordingNavigatorObserver extends NavigatorObserver {
   }
 }
 
+Future<void> _expectHandLedgerCorrectionFlag(
+  WidgetTester tester, {
+  required EventRecord event,
+  required bool expectedCanCorrectHands,
+}) async {
+  final router = AppRouter(
+    eventRepository: _EventRepository(event),
+    guestRepository: _GuestRepository(),
+    tableRepository: _TableRepository(),
+    sessionRepository: _SessionRepository(),
+    leaderboardRepository: _LeaderboardRepository(),
+    activityRepository: _ActivityRepository(),
+    prizeRepository: _PrizeRepository(),
+    seatingRepository: const _SeatingRepository(),
+    nfcService: const _NfcService(),
+  );
+
+  await tester.pumpWidget(
+    MaterialApp(
+      home: EventDashboardScreen(
+        args: EventDashboardArgs(eventId: event.id),
+        eventRepository: _EventRepository(event),
+        guestRepository: _GuestRepository(),
+        leaderboardRepository: _LeaderboardRepository(),
+      ),
+      onGenerateRoute: router.onGenerateRoute,
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  await tester.ensureVisible(find.text('Hand Ledger'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Hand Ledger'));
+  await tester.pumpAndSettle();
+
+  expect(find.byType(EventHandLedgerScreen), findsOneWidget);
+  expect(find.text('No hands recorded yet.'), findsOneWidget);
+  final screen = tester.widget<EventHandLedgerScreen>(
+    find.byType(EventHandLedgerScreen),
+  );
+  expect(screen.canCorrectHands, expectedCanCorrectHands);
+}
+
 PrizePlanDetail _fixedPrizePlan(List<int> fixedAmountCents) {
   return PrizePlanDetail(
     plan: PrizePlanRecord.fromJson(
@@ -1410,40 +1453,39 @@ void main() {
     expect(find.byType(ActivityScreen), findsOneWidget);
   });
 
-  testWidgets('hand ledger action routes into the event hand ledger screen',
+  testWidgets(
+      'hand ledger action routes active and completed events with correctable hands enabled',
       (tester) async {
-    final router = AppRouter(
-      eventRepository: _EventRepository(activeEvent),
-      guestRepository: _GuestRepository(),
-      tableRepository: _TableRepository(),
-      sessionRepository: _SessionRepository(),
-      leaderboardRepository: _LeaderboardRepository(),
-      activityRepository: _ActivityRepository(),
-      prizeRepository: _PrizeRepository(),
-      seatingRepository: const _SeatingRepository(),
-      nfcService: const _NfcService(),
+    await _expectHandLedgerCorrectionFlag(
+      tester,
+      event: activeEvent,
+      expectedCanCorrectHands: true,
     );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EventDashboardScreen(
-          args: const EventDashboardArgs(eventId: 'evt_01'),
-          eventRepository: _EventRepository(activeEvent),
-          guestRepository: _GuestRepository(),
-          leaderboardRepository: _LeaderboardRepository(),
-        ),
-        onGenerateRoute: router.onGenerateRoute,
-      ),
+    await _expectHandLedgerCorrectionFlag(
+      tester,
+      event: completedEvent,
+      expectedCanCorrectHands: true,
     );
-    await tester.pumpAndSettle();
+  });
 
-    await tester.ensureVisible(find.text('Hand Ledger'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Hand Ledger'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(EventHandLedgerScreen), findsOneWidget);
-    expect(find.text('No hands recorded yet.'), findsOneWidget);
+  testWidgets(
+      'hand ledger action routes finalized, cancelled, and draft events read-only',
+      (tester) async {
+    await _expectHandLedgerCorrectionFlag(
+      tester,
+      event: finalizedEvent,
+      expectedCanCorrectHands: false,
+    );
+    await _expectHandLedgerCorrectionFlag(
+      tester,
+      event: cancelledEvent,
+      expectedCanCorrectHands: false,
+    );
+    await _expectHandLedgerCorrectionFlag(
+      tester,
+      event: draftEvent,
+      expectedCanCorrectHands: false,
+    );
   });
 
   testWidgets('active event exposes seating action', (tester) async {

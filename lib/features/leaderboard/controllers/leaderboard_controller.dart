@@ -408,6 +408,7 @@ String _bonusRoleTitle(BonusTableRole? role) {
   return switch (role) {
     BonusTableRole.tableOfChampions => 'Table of Champions',
     BonusTableRole.tableOfRedemption => 'Table of Redemption',
+    BonusTableRole.tableOfChampionsPlayIn => 'Table of Champions Play-In',
     BonusTableRole.tableOfChampionsSuddenDeath =>
       'Table of Champions Sudden Death',
     null => 'Finals Table',
@@ -418,6 +419,7 @@ String? _bonusRoleJson(BonusTableRole? role) {
   return switch (role) {
     BonusTableRole.tableOfChampions => 'table_of_champions',
     BonusTableRole.tableOfRedemption => 'table_of_redemption',
+    BonusTableRole.tableOfChampionsPlayIn => 'table_of_champions_play_in',
     BonusTableRole.tableOfChampionsSuddenDeath =>
       'table_of_champions_sudden_death',
     null => null,
