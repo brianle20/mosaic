@@ -357,6 +357,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         .map((guest) => guest.id)
         .toSet();
     final isBulkQualifying = _controller.isQualifyingCheckedInConsidered;
+    final shouldShowGuestControls = _controller.guests.isNotEmpty ||
+        _searchController.text.isNotEmpty ||
+        _searchFocusNode.hasFocus;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Guests')),
@@ -394,7 +397,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
             Text(widget.eventTitle,
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
-            if (_controller.guests.isNotEmpty) ...[
+            if (shouldShowGuestControls) ...[
               _buildSearchField(),
               const SizedBox(height: 12),
               _buildCheckInFilter(),
@@ -421,7 +424,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                   ),
                 ),
             ],
-            if (_controller.guests.isEmpty)
+            if (_controller.guests.isEmpty && !shouldShowGuestControls)
               const Padding(
                 padding: EdgeInsets.only(top: 24),
                 child: EmptyStateCard(

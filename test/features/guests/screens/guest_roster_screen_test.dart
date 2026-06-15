@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
@@ -12,10 +14,12 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository(
     List<EventGuestRecord> guests, {
     List<EventGuestRecord>? cachedGuests,
+    Completer<void>? listGuestsGate,
     Map<String, GuestTagAssignmentSummary> activeAssignments = const {},
     Map<String, List<GuestCoverEntryRecord>> coverEntries = const {},
   })  : _guests = List<EventGuestRecord>.from(guests),
         _cachedGuests = List<EventGuestRecord>.from(cachedGuests ?? guests),
+        _listGuestsGate = listGuestsGate,
         _activeAssignments =
             Map<String, GuestTagAssignmentSummary>.from(activeAssignments),
         _coverEntries = Map<String, List<GuestCoverEntryRecord>>.from(
@@ -24,6 +28,7 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
 
   final List<EventGuestRecord> _guests;
   final List<EventGuestRecord> _cachedGuests;
+  final Completer<void>? _listGuestsGate;
   final Map<String, GuestTagAssignmentSummary> _activeAssignments;
   final Map<String, List<GuestCoverEntryRecord>> _coverEntries;
   final statusUpdates = <String, EventTournamentStatus>{};
@@ -116,7 +121,10 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   }
 
   @override
-  Future<List<EventGuestRecord>> listGuests(String eventId) async => _guests;
+  Future<List<EventGuestRecord>> listGuests(String eventId) async {
+    await _listGuestsGate?.future;
+    return _guests;
+  }
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
@@ -1279,6 +1287,52 @@ void main() {
 
     expect(editableText().focusNode.hasFocus, isFalse);
   });
+
+  testWidgets(
+    'guest search stays focused when live refresh returns no guests',
+    (tester) async {
+      final liveRefreshGate = Completer<void>();
+      final repository = _FakeGuestRepository(
+        const [],
+        cachedGuests: [
+          _guest(
+            id: 'gst_alice',
+            name: 'Alice Wong',
+            attendanceStatus: AttendanceStatus.expected,
+            coverStatus: CoverStatus.paid,
+          ),
+        ],
+        listGuestsGate: liveRefreshGate,
+      );
+
+      await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+      await tester.pumpAndSettle();
+
+      final searchField = find.widgetWithText(TextField, 'Search guests');
+      expect(searchField, findsOneWidget);
+
+      await tester.tap(searchField);
+      await tester.enterText(searchField, 'ali');
+      await tester.pump();
+
+      EditableText editableText() => tester.widget<EditableText>(
+            find.descendant(
+              of: searchField,
+              matching: find.byType(EditableText),
+            ),
+          );
+
+      expect(editableText().focusNode.hasFocus, isTrue);
+
+      liveRefreshGate.complete();
+      await tester.pumpAndSettle();
+
+      expect(searchField, findsOneWidget);
+      expect(editableText().focusNode.hasFocus, isTrue);
+      expect(find.text('No matching guests'), findsOneWidget);
+      expect(find.text('No guests yet'), findsNothing);
+    },
+  );
 
   testWidgets('combines guest search with check-in filter', (tester) async {
     final repository = _FakeGuestRepository([
