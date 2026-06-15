@@ -82,6 +82,24 @@ void main() {
     );
     expect(bonusSeatingSql, contains('leaderboard.hands_played >='));
   });
+
+  test('finals eligibility does not require player tags', () {
+    final bonusSeatingSql = _extractFunction(
+      migrationsSql,
+      'public.generate_bonus_round_seating_assignments',
+    );
+
+    expect(
+      bonusSeatingSql,
+      contains('guest.attendance_status = \'checked_in\''),
+    );
+    expect(bonusSeatingSql, isNot(contains('event_guest_tag_assignments')));
+    expect(bonusSeatingSql, isNot(contains('tag_assignment')));
+    expect(
+      bonusSeatingSql,
+      isNot(contains('tag.default_tag_type = \'player\'')),
+    );
+  });
 }
 
 String _readAllMigrationSql() {

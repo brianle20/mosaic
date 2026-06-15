@@ -192,6 +192,14 @@ class GuestRosterController extends ChangeNotifier {
     return true;
   }
 
+  Future<bool> undoCheckIn(String guestId) async {
+    await _runGuestAction(guestId, () async {
+      final updated = await _guestRepository.undoGuestCheckIn(guestId);
+      _mergeGuest(updated);
+    });
+    return true;
+  }
+
   Future<bool> recordCoverEntry({
     required String guestId,
     required SubmitCoverEntryInput input,

@@ -57,12 +57,15 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   _FakeSessionRepository({
     required this.sessions,
     this.details = const {},
+    this.sessionsAfterBulkStart = const [],
   });
 
-  final List<TableSessionRecord> sessions;
+  List<TableSessionRecord> sessions;
   final Map<String, SessionDetailRecord> details;
+  final List<TableSessionRecord> sessionsAfterBulkStart;
   final pausedSessionIds = <String>[];
   final resumedSessionIds = <String>[];
+  int bulkStartCallCount = 0;
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -120,6 +123,15 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
       sessions;
+
+  @override
+  Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
+    String eventId,
+  ) async {
+    bulkStartCallCount += 1;
+    sessions = sessionsAfterBulkStart;
+    return sessionsAfterBulkStart;
+  }
 
   @override
   Future<SessionDetailRecord> resumeSession(String sessionId) async {
@@ -1165,6 +1177,59 @@ void main() {
     expect(find.text('Other Tables'), findsOneWidget);
     expect(find.text('Open Play'), findsOneWidget);
     expect(find.text('Start Next Round'), findsNothing);
+  });
+
+  testWidgets('seated tournament round starts all tables from tables view',
+      (tester) async {
+    final table = _table('tbl_ready', 'Table 2', order: 2);
+    final startedSession = _session(
+      id: 'ses_round_02',
+      tableId: table.id,
+      scoringPhase: EventScoringPhase.tournament,
+      assignmentRound: 2,
+    );
+    final sessionRepository = _FakeSessionRepository(
+      sessions: const [],
+      sessionsAfterBulkStart: [startedSession],
+      details: {'ses_round_02': _detail(startedSession)},
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: false,
+          tableRepository: _FakeTableRepository([table]),
+          sessionRepository: sessionRepository,
+          guestRepository: _FakeGuestRepository(const []),
+          seatingRepository: _FakeSeatingRepository(
+            summary: _roundSummary(
+              status: TournamentRoundStatus.seating,
+              assigned: 1,
+              notStarted: 1,
+              currentTables: [
+                _roundTable(
+                  table: table,
+                  status: TournamentRoundTableStatus.notStarted,
+                  names: const ['Chris Lee', 'Dana Park'],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start All Tables'), findsOneWidget);
+    expect(find.text('Start Next Round'), findsNothing);
+
+    await tester.tap(find.text('Start All Tables'));
+    await tester.pumpAndSettle();
+
+    expect(sessionRepository.bulkStartCallCount, 1);
+    expect(find.text('Start All Tables'), findsNothing);
   });
 
   testWidgets('paused current-round card shows open action, timer, and dealer',
@@ -2446,6 +2511,7 @@ TableSessionRecord _session({
   int currentDealerSeatIndex = 0,
   int handCount = 0,
   EventScoringPhase scoringPhase = EventScoringPhase.qualification,
+  int? assignmentRound,
   String startedAt = '2026-04-24T19:00:00-07:00',
 }) {
   return TableSessionRecord.fromJson({
@@ -2458,6 +2524,7 @@ TableSessionRecord _session({
     'rotation_policy_config_json': const {},
     'status': status,
     'scoring_phase': eventScoringPhaseToJson(scoringPhase),
+    'assignment_round': assignmentRound,
     'initial_east_seat_index': 0,
     'current_dealer_seat_index': currentDealerSeatIndex,
     'dealer_pass_count': 0,

@@ -295,6 +295,26 @@ class SupabaseGuestRepository implements GuestRepository {
   }
 
   @override
+  Future<GuestDetailRecord> deleteCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+  }) async {
+    await _runRpcSingle(
+      'delete_cover_entry',
+      {
+        'target_cover_entry_id': coverEntryId,
+      },
+    );
+
+    final detail = await getGuestDetail(guestId);
+    if (detail == null) {
+      throw StateError('Updated guest could not be reloaded.');
+    }
+
+    return detail;
+  }
+
+  @override
   Future<GuestDetailRecord> checkInGuest(String guestId) async {
     final row = await _runRpcSingle(
       'check_in_guest',
@@ -307,6 +327,24 @@ class SupabaseGuestRepository implements GuestRepository {
     return GuestDetailRecord(
       guest: guest,
     );
+  }
+
+  @override
+  Future<EventGuestRecord> undoGuestCheckIn(String guestId) async {
+    final updated = await client
+        .from('event_guests')
+        .update({
+          'attendance_status': 'expected',
+          'checked_in_at': null,
+        })
+        .eq('id', guestId)
+        .eq('has_scored_play', false)
+        .select(_eventGuestSelect)
+        .single();
+
+    final guest = EventGuestRecord.fromJson(updated);
+    await _saveMergedGuestList(guest.eventId, guest);
+    return guest;
   }
 
   @override

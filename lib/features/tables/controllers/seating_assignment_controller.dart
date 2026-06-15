@@ -36,7 +36,7 @@ class SeatingAssignmentController extends ChangeNotifier {
   List<EventGuestRecord> unassignedGuests = const [];
 
   bool get canChangeSeating => !hasLiveSessions;
-  bool get canStartAllTables => assignments.isNotEmpty && !hasLiveSessions;
+  bool get canStartAllTables => !hasLiveSessions;
 
   List<SeatingTableGroup> get tableGroups {
     final groups = <String, SeatingTableGroup>{};
@@ -170,28 +170,29 @@ class SeatingAssignmentController extends ChangeNotifier {
     error = null;
     notifyListeners();
 
-    var didStartSessions = false;
     try {
-      await _sessionRepository.startCurrentTournamentRoundSessions(eventId);
-      didStartSessions = true;
-      final loadedAssignments = _filterAssignments(
-        await _seatingRepository.loadAssignments(eventId),
-        bonusTableRoleFilter,
-      );
-      if (loadedAssignments.isNotEmpty || assignments.isEmpty) {
-        assignments = loadedAssignments;
+      if (assignments.isEmpty) {
+        assignments = _filterAssignments(
+          await _seatingRepository.generateTournamentRound(eventId),
+          bonusTableRoleFilter,
+        );
+        _updateUnassignedGuests();
       }
+
+      await _sessionRepository.startCurrentTournamentRoundSessions(eventId);
       await _refreshLiveSessions(eventId);
       error = null;
     } catch (exception) {
-      if (didStartSessions) {
-        try {
-          await _refreshLiveSessions(eventId);
-        } catch (_) {
-          // Preserve the start/reload error that the caller needs to see.
-        }
+      try {
+        await _refreshLiveSessions(eventId);
+      } catch (_) {
+        // Preserve the start error if we cannot determine whether sessions began.
       }
-      error = exception.toString();
+      if (hasLiveSessions) {
+        error = null;
+      } else {
+        error = exception.toString();
+      }
     } finally {
       isSubmitting = false;
       notifyListeners();

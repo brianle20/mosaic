@@ -16,7 +16,8 @@ void main() {
     expect(migration, contains('event.archived_at is null'));
     expect(migration, contains('public.resolve_public_event_id'));
     expect(migration, contains('public.get_public_event_summary'));
-    expect(migration, contains('delete from public.public_event_standings_snapshots'));
+    expect(migration,
+        contains('delete from public.public_event_standings_snapshots'));
     expect(migration, contains("select pg_notify('pgrst', 'reload schema')"));
   });
 }

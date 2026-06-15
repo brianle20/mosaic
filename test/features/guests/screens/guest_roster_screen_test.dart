@@ -27,6 +27,7 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   final Map<String, GuestTagAssignmentSummary> _activeAssignments;
   final Map<String, List<GuestCoverEntryRecord>> _coverEntries;
   final statusUpdates = <String, EventTournamentStatus>{};
+  final uncheckedGuestIds = <String>[];
   final removedGuestIds = <String>[];
 
   @override
@@ -34,7 +35,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     String guestId,
   ) async =>
       _coverEntries[guestId] ?? const [];
-
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) async {
@@ -64,6 +64,34 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
       guest: updatedGuest,
       activeTagAssignment: _activeAssignments[guestId],
     );
+  }
+
+  @override
+  Future<EventGuestRecord> undoGuestCheckIn(String guestId) async {
+    uncheckedGuestIds.add(guestId);
+    final guest = _guestById(guestId);
+    final updatedGuest = EventGuestRecord(
+      id: guest.id,
+      eventId: guest.eventId,
+      guestProfileId: guest.guestProfileId,
+      displayName: guest.displayName,
+      normalizedName: guest.normalizedName,
+      publicDisplayName: guest.publicDisplayName,
+      phoneE164: guest.phoneE164,
+      emailLower: guest.emailLower,
+      instagramHandle: guest.instagramHandle,
+      attendanceStatus: AttendanceStatus.expected,
+      tournamentStatus: guest.tournamentStatus,
+      coverStatus: guest.coverStatus,
+      coverAmountCents: guest.coverAmountCents,
+      isComped: guest.isComped,
+      hasScoredPlay: guest.hasScoredPlay,
+      note: guest.note,
+      checkedInAt: null,
+      rowVersion: guest.rowVersion,
+    );
+    _replaceGuest(updatedGuest);
+    return updatedGuest;
   }
 
   @override
@@ -161,7 +189,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   }) {
     throw UnimplementedError();
   }
-
 
   @override
   Future<void> removeGuest(String guestId) async {
@@ -537,7 +564,7 @@ void main() {
 
     expect(find.text('Mark Qualified'), findsNothing);
     expect(find.text('Withdraw'), findsOneWidget);
-    expect(find.text('Add Cover Entry'), findsAtLeastNWidgets(2));
+    expect(find.text('Add Cover Entry'), findsOneWidget);
   });
 
   testWidgets('groups guests by check-in status', (tester) async {
@@ -634,6 +661,96 @@ void main() {
     expect(find.text('Checked In (1)'), findsOneWidget);
     expect(find.text('Expected Guest'), findsOneWidget);
     expect(find.text('Checked In Guest'), findsOneWidget);
+  });
+
+  testWidgets('checked-in guest can be moved back to expected', (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_checked_in',
+        name: 'Checked In Guest',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.qualified,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Checked In (1)'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('More actions for Checked In Guest'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Undo Check-In'));
+    await tester.pumpAndSettle();
+
+    expect(repository.uncheckedGuestIds, ['gst_checked_in']);
+    expect(find.text('Pending (1)'), findsOneWidget);
+    expect(find.text('Checked In (1)'), findsNothing);
+    expect(find.text('Check In: Prequalified'), findsOneWidget);
+  });
+
+  testWidgets('open-play-only guest can be qualified from overflow',
+      (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_open_play',
+        name: 'Open Play Guest',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('More actions for Open Play Guest'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Qualify'), findsOneWidget);
+
+    await tester.tap(find.text('Qualify'));
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.statusUpdates['gst_open_play'],
+      EventTournamentStatus.qualified,
+    );
+    expect(find.text('Qualified for tournament play'), findsOneWidget);
+    expect(find.text('Checked in; not playing tournament'), findsNothing);
+  });
+
+  testWidgets('open-play-only guest can be considered from overflow',
+      (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_open_play',
+        name: 'Open Play Guest',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('More actions for Open Play Guest'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Consider'), findsOneWidget);
+    expect(find.text('Qualify'), findsOneWidget);
+
+    await tester.tap(find.text('Consider'));
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.statusUpdates['gst_open_play'],
+      EventTournamentStatus.qualifying,
+    );
+    expect(find.text('Checked in as considered'), findsOneWidget);
+    expect(find.text('Checked in; not playing tournament'), findsNothing);
   });
 
   testWidgets('filters guests by tournament status', (tester) async {
@@ -1320,6 +1437,29 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Guest Detail Placeholder'), findsOneWidget);
+  });
+
+  testWidgets('paid checked-in guest overflow omits add cover entry',
+      (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+        tournamentStatus: EventTournamentStatus.openPlayOnly,
+      ),
+    ]);
+
+    await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('More actions for Alice Wong'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add Cover Entry'), findsNothing);
+    expect(find.text('Undo Check-In'), findsOneWidget);
+    expect(find.text('Qualify'), findsOneWidget);
   });
 
   testWidgets('mark paid updates the row and shows feedback', (tester) async {

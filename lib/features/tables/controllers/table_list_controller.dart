@@ -35,6 +35,7 @@ class TableListController extends ChangeNotifier {
   late EventScoringPhase effectiveScoringPhase = scoringPhase;
   bool isLoading = true;
   bool isStartingNextRound = false;
+  bool isStartingAllTables = false;
   bool isUpdatingTimers = false;
   String? error;
   List<EventTableRecord> tables = const [];
@@ -55,6 +56,12 @@ class TableListController extends ChangeNotifier {
 
   bool get isSuddenDeathActive =>
       bonusRoundState?.suddenDeathStatus == 'active';
+
+  bool get canStartAllTables =>
+      effectiveScoringPhase == EventScoringPhase.tournament &&
+      tournamentRoundSummary.round?.status == TournamentRoundStatus.seating &&
+      tournamentRoundSummary.assignedTableCount > 0 &&
+      activeSessionsByTableId.isEmpty;
 
   void refreshRoundTimers() {
     if (activeSessionsByTableId.isEmpty) {
@@ -159,6 +166,29 @@ class TableListController extends ChangeNotifier {
       return null;
     } finally {
       isStartingNextRound = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> startAllTables(String eventId) async {
+    if (!canStartAllTables || isStartingAllTables) {
+      return;
+    }
+
+    isStartingAllTables = true;
+    error = null;
+    notifyListeners();
+
+    try {
+      await _sessionRepository.startCurrentTournamentRoundSessions(eventId);
+      await load(eventId);
+    } catch (exception) {
+      await load(eventId);
+      if (activeSessionsByTableId.isEmpty) {
+        error = exception.toString();
+      }
+    } finally {
+      isStartingAllTables = false;
       notifyListeners();
     }
   }

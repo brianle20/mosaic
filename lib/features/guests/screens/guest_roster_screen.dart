@@ -12,6 +12,9 @@ import 'package:mosaic/widgets/status_chip.dart';
 enum _GuestRosterOverflowAction {
   markPaidManually,
   addCoverEntry,
+  undoCheckIn,
+  consider,
+  qualify,
   moveToOpenPlayOnly,
   withdraw,
   removeGuest,
@@ -173,6 +176,16 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
       ),
       successMessage:
           '${guest.displayName} is checked in: ${_checkInFeedbackLabel(status)}.',
+    );
+  }
+
+  Future<void> _undoCheckIn(EventGuestRecord guest) async {
+    if (!widget.canCheckIn || !guest.isCheckedIn || guest.hasScoredPlay) {
+      return;
+    }
+    await _runQuickAction(
+      () => _controller.undoCheckIn(guest.id),
+      successMessage: '${guest.displayName} is back to pending check-in.',
     );
   }
 
@@ -670,8 +683,11 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     }
 
     final actions = <_GuestRosterOverflowAction>[];
-    if (widget.canManageCover) {
+    if (_canAddCoverEntry(guest)) {
       actions.add(_GuestRosterOverflowAction.addCoverEntry);
+    }
+    if (widget.canCheckIn && guest.isCheckedIn && !guest.hasScoredPlay) {
+      actions.add(_GuestRosterOverflowAction.undoCheckIn);
     }
     if (_canRemoveGuest(guest)) {
       actions.add(_GuestRosterOverflowAction.removeGuest);
@@ -684,10 +700,13 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     switch (guest.tournamentStatus) {
       case EventTournamentStatus.openPlayOnly:
         actions.addAll(const [
+          _GuestRosterOverflowAction.consider,
+          _GuestRosterOverflowAction.qualify,
           _GuestRosterOverflowAction.withdraw,
         ]);
       case EventTournamentStatus.qualifying:
         actions.addAll(const [
+          _GuestRosterOverflowAction.qualify,
           _GuestRosterOverflowAction.moveToOpenPlayOnly,
           _GuestRosterOverflowAction.withdraw,
         ]);
@@ -709,6 +728,9 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     return switch (action) {
       _GuestRosterOverflowAction.markPaidManually => 'Mark Paid Manually',
       _GuestRosterOverflowAction.addCoverEntry => 'Add Cover Entry',
+      _GuestRosterOverflowAction.undoCheckIn => 'Undo Check-In',
+      _GuestRosterOverflowAction.consider => 'Consider',
+      _GuestRosterOverflowAction.qualify => 'Qualify',
       _GuestRosterOverflowAction.moveToOpenPlayOnly => 'Not Playing Tournament',
       _GuestRosterOverflowAction.withdraw => 'Withdraw',
       _GuestRosterOverflowAction.removeGuest => 'Remove Guest',
@@ -724,6 +746,12 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         !guest.hasScoredPlay;
   }
 
+  bool _canAddCoverEntry(EventGuestRecord guest) {
+    return widget.canManageCover &&
+        (guest.coverStatus == CoverStatus.unpaid ||
+            guest.coverStatus == CoverStatus.partial);
+  }
+
   void _handleOverflowAction(
     EventGuestRecord guest,
     _GuestRosterOverflowAction action,
@@ -733,6 +761,12 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         _markPaid(guest);
       case _GuestRosterOverflowAction.addCoverEntry:
         _addCoverEntry(guest);
+      case _GuestRosterOverflowAction.undoCheckIn:
+        _undoCheckIn(guest);
+      case _GuestRosterOverflowAction.consider:
+        _updateTournamentStatus(guest, EventTournamentStatus.qualifying);
+      case _GuestRosterOverflowAction.qualify:
+        _updateTournamentStatus(guest, EventTournamentStatus.qualified);
       case _GuestRosterOverflowAction.moveToOpenPlayOnly:
         _updateTournamentStatus(guest, EventTournamentStatus.openPlayOnly);
       case _GuestRosterOverflowAction.withdraw:

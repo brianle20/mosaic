@@ -174,7 +174,6 @@ class _RecordingSessionRepository implements SessionRepository {
   }
 }
 
-
 void main() {
   Future<void> tapVisible(WidgetTester tester, Finder finder) async {
     await tester.ensureVisible(finder);
@@ -265,7 +264,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(FilledButton, 'East\nBob Lee'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'East\nBob Lee'));
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Fan Count'), '3');
     await tester.tap(find.text('Save Hand'));
@@ -291,9 +290,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await tapVisible(tester, find.text('Discard'));
-    await tester.tap(find.widgetWithText(FilledButton, 'East\nBob Lee'));
+    await tapVisible(
+        tester, find.widgetWithText(OutlinedButton, 'East\nBob Lee').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'South\nCarol Ng'));
+    await tapVisible(
+        tester, find.widgetWithText(OutlinedButton, 'South\nCarol Ng').last);
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Fan Count'), '5');
     await tester.tap(find.text('Save Hand'));
@@ -321,17 +322,18 @@ void main() {
 
     expect(find.text('Self-draw'), findsOneWidget);
     expect(find.text('Discard'), findsOneWidget);
-    expect(find.text('Discarder'), findsNothing);
+    expect(find.text('Choose discarder'), findsNothing);
 
     await tapVisible(tester, find.text('Discard'));
-    expect(find.text('Discarder'), findsOneWidget);
+    expect(find.text('Choose discarder'), findsOneWidget);
 
-    await tapVisible(tester, find.text('Winner'));
-    await tester.tap(find.text('Alice Wong (East)').last);
+    await tester
+        .tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong').first);
     await tester.pumpAndSettle();
 
-    await tapVisible(tester, find.text('Discarder'));
-    await tester.tap(find.text('Bob Lee (South)').last);
+    await tapVisible(tester, find.text('Choose discarder'));
+    await tester
+        .tap(find.widgetWithText(OutlinedButton, 'South\nBob Lee').last);
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -362,15 +364,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tapVisible(tester, find.text('Winner'));
-    await tester.tap(find.text('Alice Wong (East)').last);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong'));
     await tester.pumpAndSettle();
 
     await tapVisible(tester, find.text('Discard'));
-    await tapVisible(tester, find.text('Discarder'));
+    await tapVisible(tester, find.text('Choose discarder'));
 
-    expect(find.text('Alice Wong (East)'), findsOneWidget);
-    expect(find.text('Bob Lee (South)'), findsOneWidget);
+    expect(
+        find.widgetWithText(OutlinedButton, 'East\nAlice Wong'), findsWidgets);
+    expect(find.widgetWithText(OutlinedButton, 'South\nBob Lee'), findsWidgets);
   });
 
   testWidgets('discarder selector appears before fan count for discard wins',
@@ -389,7 +391,7 @@ void main() {
     await tester.tap(find.text('Discard'));
     await tester.pumpAndSettle();
 
-    final discarderTop = tester.getTopLeft(find.text('Discarder')).dy;
+    final discarderTop = tester.getTopLeft(find.text('Choose discarder')).dy;
     final fanCountTop =
         tester.getTopLeft(find.widgetWithText(TextFormField, 'Fan Count')).dy;
 
@@ -410,13 +412,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tapVisible(tester, find.text('Winner'));
-
-    expect(find.text('Bob Lee (East)'), findsOneWidget);
-    expect(find.text('Carol Ng (South)'), findsOneWidget);
-    expect(find.text('Dee Wu (West)'), findsOneWidget);
-    expect(find.text('Alice Wong (North)'), findsOneWidget);
-    expect(find.text('Bob Lee (South)'), findsNothing);
+    expect(
+        find.widgetWithText(OutlinedButton, 'East\nBob Lee'), findsOneWidget);
+    expect(
+        find.widgetWithText(OutlinedButton, 'South\nCarol Ng'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'West\nDee Wu'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'North\nAlice Wong'),
+        findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'South\nBob Lee'), findsNothing);
   });
 
   testWidgets('blocks wins below three fan', (tester) async {
@@ -433,8 +436,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tapVisible(tester, find.text('Winner'));
-    await tester.tap(find.text('Alice Wong (East)').last);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -491,8 +493,7 @@ void main() {
 
     expect(find.text('Round time has expired.'), findsOneWidget);
 
-    await tapVisible(tester, find.text('Winner'));
-    await tester.tap(find.text('Alice Wong (East)').last);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Fan Count'),
@@ -595,7 +596,7 @@ void main() {
     await tester.tap(find.text('False Win'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Caller'), findsOneWidget);
+    expect(find.text('Choose false win caller'), findsOneWidget);
     expect(find.text('6 fan to each player.'), findsOneWidget);
 
     await tester.tap(find.text('Save Hand'));
@@ -603,9 +604,7 @@ void main() {
     expect(find.text('Select the false win caller.'), findsOneWidget);
     expect(repository.recordedInput, isNull);
 
-    await tester.tap(find.text('Caller'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Carol Ng (South)').last);
+    await tester.tap(find.widgetWithText(OutlinedButton, 'South\nCarol Ng'));
     await tester.pumpAndSettle();
 
     expect(

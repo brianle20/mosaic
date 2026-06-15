@@ -11,14 +11,16 @@ void main() {
     expect(migrationFile.existsSync(), isTrue);
     final sql = migrationFile.readAsStringSync();
 
-    const signature = 'public.start_table_session(uuid, text, text, text, text, text)';
+    const signature =
+        'public.start_table_session(uuid, text, text, text, text, text)';
     expect(sql, contains('revoke all on function $signature from public;'));
     expect(sql, contains('revoke all on function $signature from anon;'));
     expect(
       sql,
       contains('revoke all on function $signature from authenticated;'),
     );
-    expect(sql, contains('grant execute on function $signature to service_role;'));
+    expect(
+        sql, contains('grant execute on function $signature to service_role;'));
     expect(sql, contains("select pg_notify('pgrst', 'reload schema')"));
   });
 }

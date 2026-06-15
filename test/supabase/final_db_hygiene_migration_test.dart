@@ -3,7 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('final db hygiene migration stubs deprecated tag RPC and cleans bulk start',
+  test(
+      'final db hygiene migration stubs deprecated tag RPC and cleans bulk start',
       () {
     final migrationFile = File(
       'supabase/migrations/20260607150000_final_db_hygiene.sql',

@@ -18,7 +18,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async => guests;
 
-
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
     throw UnimplementedError();
@@ -77,7 +76,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
     throw UnimplementedError();
@@ -130,7 +128,6 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
     startedAssignedInput = input;
     return _startedSession();
   }
-
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -297,7 +294,6 @@ void main() {
     expect(started, isNull);
     expect(sessionRepository.startedAssignedInput, isNull);
   });
-
 }
 
 StartSessionController _buildController({

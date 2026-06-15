@@ -42,8 +42,7 @@ class StartSessionController extends ChangeNotifier {
       hasValidAssignedSeats &&
       (state.tableTagUid != null || allowAssignedTableEntry);
 
-  bool get isAssignedSeatingMissing =>
-      !hasValidAssignedSeats;
+  bool get isAssignedSeatingMissing => !hasValidAssignedSeats;
 
   bool get canScanNextTag => !isAssignedSeatingMissing && !canConfirmStart;
 

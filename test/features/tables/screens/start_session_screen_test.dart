@@ -55,7 +55,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(sessionRepository.startedAssignedInput?.eventTableId, 'tbl_01');
-    expect(sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
+    expect(
+        sessionRepository.startedAssignedInput?.scannedTableUid, 'TABLE-001');
     expect(find.byKey(const Key('session-detail')), findsOneWidget);
   });
 

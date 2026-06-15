@@ -17,7 +17,6 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
   ) async =>
       const [];
 
-
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
     throw UnimplementedError();
@@ -94,7 +93,6 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
   }) {
     throw UnimplementedError();
   }
-
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) async {
@@ -328,6 +326,40 @@ void main() {
     },
   );
 
+  testWidgets('tournament qualification selector fills narrow screens', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(393, 852);
+
+    final repository = _RecordingGuestRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          guestRepository: repository,
+          onSaved: (_) {},
+        ),
+      ),
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -1000));
+    await tester.pumpAndSettle();
+
+    final fieldBox = tester.renderObject<RenderBox>(
+      find.byKey(guestTournamentQualificationFieldKey),
+    );
+    final selectorBox = tester.renderObject<RenderBox>(
+      find.byKey(const ValueKey('guest-tournament-qualification-selector')),
+    );
+
+    expect(selectorBox.size.width, greaterThanOrEqualTo(fieldBox.size.width));
+  });
+
   testWidgets('selecting considered saves qualifying tournament status', (
     tester,
   ) async {
@@ -438,7 +470,7 @@ void main() {
     expect(updatedGuest?.tournamentStatus, EventTournamentStatus.withdrawn);
   });
 
-  testWidgets('shows an existing guest profile match and stores phone as E.164',
+  testWidgets('requires an explicit action before using a phone profile match',
       (tester) async {
     final repository = _RecordingGuestRepository()
       ..matches = [
@@ -473,8 +505,16 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
 
-    expect(find.text('Using existing guest: Brian Le'), findsOneWidget);
+    expect(find.text('Brian Le exists from another event.'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Use Existing Guest'),
+        findsOneWidget);
+    expect(find.text('Using existing guest: Brian Le'), findsNothing);
     expect(repository.lastLookupInput?.phoneE164, '+14155552671');
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Use Existing Guest'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Using existing guest: Brian Le'), findsOneWidget);
     expect(
       tester
           .widget<EditableText>(
@@ -495,6 +535,53 @@ void main() {
     expect(repository.created, isNotNull);
     expect(repository.created!.phoneE164, '+14155552671');
     expect(repository.created!.publicDisplayName, 'BL');
+  });
+
+  testWidgets('requires an explicit action before using an email profile match',
+      (tester) async {
+    final repository = _RecordingGuestRepository()
+      ..matches = [
+        GuestProfileMatch(
+          matchType: GuestProfileMatchType.email,
+          profile: GuestProfileRecord.fromJson(const {
+            'id': 'prf_01',
+            'owner_user_id': 'usr_01',
+            'display_name': 'Ada Fu',
+            'normalized_name': 'ada fu',
+            'email_lower': 'ada@example.com',
+          }),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestFormScreen(
+          eventId: 'evt_01',
+          existingGuests: const [],
+          guestRepository: repository,
+          onSaved: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Email'),
+      'Ada@Example.com',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastLookupInput?.emailLower, 'ada@example.com');
+    expect(find.text('Ada Fu exists from another event.'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Use Existing Guest'),
+        findsOneWidget);
+    expect(find.text('Using existing guest: Ada Fu'), findsNothing);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Use Existing Guest'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Using existing guest: Ada Fu'), findsOneWidget);
   });
 
   testWidgets('requires an explicit action before using a name-only profile', (
@@ -606,10 +693,13 @@ void main() {
 
     expect(repository.profileLookupCount, 1);
     expect(find.text('Checking saved guests...'), findsNothing);
-    expect(find.text('Using existing guest: Brian Le'), findsOneWidget);
+    expect(find.text('Brian Le exists from another event.'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Use Existing Guest'),
+        findsOneWidget);
+    expect(find.text('Using existing guest: Brian Le'), findsNothing);
   });
 
-  testWidgets('stores Instagram handles and uses them for profile matching', (
+  testWidgets('requires an explicit action before using an Instagram match', (
     tester,
   ) async {
     final repository = _RecordingGuestRepository()
@@ -646,6 +736,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.lastLookupInput?.instagramHandle, 'brian.le');
+    expect(find.text('Brian Le exists from another event.'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Use Existing Guest'),
+        findsOneWidget);
+    expect(find.text('Using existing guest: Brian Le'), findsNothing);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Use Existing Guest'));
+    await tester.pumpAndSettle();
+
     expect(find.text('Using existing guest: Brian Le'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Save Guest'));

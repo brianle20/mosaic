@@ -68,16 +68,19 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
     required this.cachedSessions,
     this.cachedDetails = const {},
     this.loadedDetails = const {},
+    this.sessionsAfterBulkStart = const [],
     this.detailLoader,
     this.sessionLoader,
   });
 
-  final List<TableSessionRecord> cachedSessions;
+  List<TableSessionRecord> cachedSessions;
   final Map<String, SessionDetailRecord> cachedDetails;
   final Map<String, SessionDetailRecord> loadedDetails;
+  final List<TableSessionRecord> sessionsAfterBulkStart;
   final Future<SessionDetailRecord> Function(String sessionId)? detailLoader;
   final Future<List<TableSessionRecord>> Function(String eventId)?
       sessionLoader;
+  int bulkStartCallCount = 0;
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -141,6 +144,15 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
       cachedSessions;
+
+  @override
+  Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
+    String eventId,
+  ) async {
+    bulkStartCallCount += 1;
+    cachedSessions = sessionsAfterBulkStart;
+    return sessionsAfterBulkStart;
+  }
 
   @override
   Future<SessionDetailRecord> resumeSession(String sessionId) {
@@ -215,7 +227,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-
   @override
   Future<GuestDetailRecord> updateCoverEntry({
     required String guestId,
@@ -227,16 +238,17 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   }) {
     throw UnimplementedError();
   }
-
 }
 
 class _FakeSeatingRepository extends ThrowingSeatingRepository {
   _FakeSeatingRepository({
+    this.summary,
     this.bonusRoundState,
     this.suddenDeathAssignments = const [],
     this.assignments = const [],
   });
 
+  TournamentRoundSummary? summary;
   BonusRoundState? bonusRoundState;
   List<SeatingAssignmentRecord> suddenDeathAssignments;
   List<SeatingAssignmentRecord> assignments;
@@ -256,13 +268,13 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
     String eventId,
   ) async =>
-      TournamentRoundSummary.empty();
+      summary ?? TournamentRoundSummary.empty();
 
   @override
   Future<TournamentRoundSummary> loadTournamentRoundSummary(
     String eventId,
   ) async =>
-      TournamentRoundSummary.empty();
+      summary ?? TournamentRoundSummary.empty();
 
   @override
   Future<BonusRoundState?> loadBonusRoundState(String eventId) async =>
@@ -900,6 +912,63 @@ void main() {
     expect(controller.error, isNull);
   });
 
+  test('starts all seated tournament tables and reloads live sessions',
+      () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_01',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final startedSession = _session(
+      id: 'ses_round_02',
+      tableId: 'tbl_01',
+      scoringPhase: EventScoringPhase.tournament,
+      assignmentRound: 2,
+    );
+    final sessionRepository = _FakeSessionRepository(
+      cachedSessions: const [],
+      sessionsAfterBulkStart: [startedSession],
+      loadedDetails: {'ses_round_02': _detail(startedSession)},
+    );
+    final controller = TableListController(
+      tableRepository: _FakeTableRepository(cachedTables: [table]),
+      sessionRepository: sessionRepository,
+      guestRepository: _FakeGuestRepository(const []),
+      seatingRepository: _FakeSeatingRepository(
+        summary: _roundSummary(
+          status: TournamentRoundStatus.seating,
+          assigned: 1,
+          notStarted: 1,
+          currentTables: [
+            TournamentRoundTableSummary(
+              eventTableId: 'tbl_01',
+              tableLabel: 'Table 1',
+              tableDisplayOrder: 1,
+              status: TournamentRoundTableStatus.notStarted,
+              assignedPlayers: const [],
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.canStartAllTables, isTrue);
+
+    await controller.startAllTables('evt_01');
+
+    expect(sessionRepository.bulkStartCallCount, 1);
+    expect(controller.activeSessionsByTableId.keys, ['tbl_01']);
+    expect(controller.canStartAllTables, isFalse);
+    expect(controller.error, isNull);
+  });
+
   test('active sudden death ignores completed champions session on same table',
       () async {
     final table = EventTableRecord.fromJson(const {
@@ -964,6 +1033,35 @@ void main() {
       TournamentRoundTableStatus.notStarted,
     );
   });
+}
+
+TournamentRoundSummary _roundSummary({
+  TournamentRoundStatus status = TournamentRoundStatus.active,
+  int assigned = 0,
+  int complete = 0,
+  int active = 0,
+  int paused = 0,
+  int notStarted = 0,
+  List<TournamentRoundTableSummary> currentTables = const [],
+}) {
+  final assignedCount = assigned == 0 ? currentTables.length : assigned;
+  return TournamentRoundSummary(
+    round: TournamentRoundRecord(
+      id: 'round_02',
+      eventId: 'evt_01',
+      roundNumber: 2,
+      scoringPhase: EventScoringPhase.tournament,
+      status: status,
+      assignmentRound: 2,
+    ),
+    assignedTableCount: assignedCount,
+    completeTableCount: complete,
+    activeTableCount: active,
+    pausedTableCount: paused,
+    notStartedTableCount: notStarted,
+    currentRoundTables: currentTables,
+    otherTables: const [],
+  );
 }
 
 EventGuestRecord _guest(String id, String name) {

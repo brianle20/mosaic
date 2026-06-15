@@ -524,8 +524,15 @@ void main() {
 
     expect(bonusSeatingSql, contains('minimum_hands_played'));
     expect(bonusSeatingSql, contains('leaderboard.hands_played >='));
+    expect(bonusSeatingSql,
+        contains("leaderboard.tournament_status = 'qualified'"));
     expect(bonusSeatingSql, contains("guest.attendance_status = 'checked_in'"));
-    expect(bonusSeatingSql, contains("tag.default_tag_type = 'player'"));
+    expect(bonusSeatingSql, isNot(contains('event_guest_tag_assignments')));
+    expect(bonusSeatingSql, isNot(contains('tag_assignment')));
+    expect(
+      bonusSeatingSql,
+      isNot(contains("tag.default_tag_type = 'player'")),
+    );
     expect(bonusSeatingSql, contains("session.scoring_phase = 'tournament'"));
   });
 

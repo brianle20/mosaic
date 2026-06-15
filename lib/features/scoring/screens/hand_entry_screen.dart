@@ -7,7 +7,9 @@ import 'package:mosaic/features/scoring/controllers/hand_entry_controller.dart';
 import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 
-enum _PlayerScanTarget { winner, discarder }
+enum _PlayerScanTarget { winner, discarder, penaltyCaller }
+
+const _tableSeatOrder = [0, 3, 1, 2];
 
 class HandEntryScreen extends StatefulWidget {
   const HandEntryScreen({
@@ -157,41 +159,21 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     return '$guestName ($wind)';
   }
 
-  List<DropdownMenuItem<int>> _seatItems({int? excludingSeatIndex}) {
-    return [
-      for (var index = 0; index < widget.sessionDetail.seats.length; index++)
-        if (index != excludingSeatIndex)
-          DropdownMenuItem<int>(
-            value: index,
-            child: Text(_seatLabel(index)),
-          ),
-    ];
-  }
-
-  _PlayerScanTarget get _activePlayerTarget {
-    if (_resultType == HandResultType.win &&
-        _winType == HandWinType.discard &&
-        _winnerSeatIndex != null) {
-      return _PlayerScanTarget.discarder;
+  void _selectSeat(int seatIndex,
+      {_PlayerScanTarget target = _PlayerScanTarget.winner}) {
+    if (target == _PlayerScanTarget.penaltyCaller) {
+      setState(() {
+        _penaltySeatIndex = seatIndex;
+      });
+      return;
     }
-    return _PlayerScanTarget.winner;
-  }
 
-  String get _seatButtonPrompt {
-    if (_activePlayerTarget == _PlayerScanTarget.discarder) {
-      return 'Choose discarder';
-    }
-    return 'Choose winner';
-  }
-
-  void _selectSeat(int seatIndex, {_PlayerScanTarget? targetOverride}) {
     if (_resultType != HandResultType.win) {
       return;
     }
 
     setState(() {
       _winType ??= HandWinType.selfDraw;
-      final target = targetOverride ?? _activePlayerTarget;
       if (_winType == HandWinType.discard &&
           target == _PlayerScanTarget.discarder) {
         if (_winnerSeatIndex == seatIndex) {
@@ -208,13 +190,17 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     });
   }
 
-  Widget _buildSeatButtonGrid() {
+  Widget _buildSeatButtonGrid({
+    required String prompt,
+    required _PlayerScanTarget target,
+  }) {
     final colorScheme = Theme.of(context).colorScheme;
+    final orderedSeats = _orderedSeatsForTableView();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          _seatButtonPrompt,
+          prompt,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
@@ -223,7 +209,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: widget.sessionDetail.seats.length,
+          itemCount: orderedSeats.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 2,
             mainAxisSpacing: 8,
@@ -231,34 +217,44 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
             childAspectRatio: 2.4,
           ),
           itemBuilder: (context, index) {
-            final seat = widget.sessionDetail.seats[index];
+            final seat = orderedSeats[index];
             final isDealer = seat.seatIndex == _labelEastSeatIndex;
             final isWinner = seat.seatIndex == _winnerSeatIndex;
             final isDiscarder = seat.seatIndex == _discarderSeatIndex;
-            final selectingDiscarder =
-                _activePlayerTarget == _PlayerScanTarget.discarder;
-            final disabled =
-                selectingDiscarder && seat.seatIndex == _winnerSeatIndex;
-            final selected = selectingDiscarder ? isDiscarder : isWinner;
+            final isPenaltyCaller = seat.seatIndex == _penaltySeatIndex;
+            final disabled = target == _PlayerScanTarget.discarder &&
+                seat.seatIndex == _winnerSeatIndex;
+            final selected = switch (target) {
+              _PlayerScanTarget.winner => isWinner,
+              _PlayerScanTarget.discarder => isDiscarder,
+              _PlayerScanTarget.penaltyCaller => isPenaltyCaller,
+            };
             final label = _seatLabelLines(seat.seatIndex);
 
-            return FilledButton(
-              style: FilledButton.styleFrom(
+            return OutlinedButton(
+              style: OutlinedButton.styleFrom(
                 backgroundColor: selected
                     ? colorScheme.primary
                     : isDealer
-                        ? colorScheme.secondaryContainer
-                        : null,
+                        ? colorScheme.secondaryContainer.withValues(alpha: 0.55)
+                        : colorScheme.surface,
                 foregroundColor: selected
                     ? colorScheme.onPrimary
                     : isDealer
                         ? colorScheme.onSecondaryContainer
-                        : null,
+                        : colorScheme.onSurface,
+                side: BorderSide(
+                  color: selected
+                      ? colorScheme.primary
+                      : colorScheme.outlineVariant,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              onPressed: disabled ? null : () => _selectSeat(seat.seatIndex),
+              onPressed: disabled
+                  ? null
+                  : () => _selectSeat(seat.seatIndex, target: target),
               child: Text(
                 label,
                 textAlign: TextAlign.center,
@@ -270,6 +266,18 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
         ),
       ],
     );
+  }
+
+  List<TableSessionSeatRecord> _orderedSeatsForTableView() {
+    final seatsByRelativeIndex = {
+      for (final seat in widget.sessionDetail.seats)
+        (seat.seatIndex - _labelEastSeatIndex) % 4: seat,
+    };
+    return [
+      for (final relativeIndex in _tableSeatOrder)
+        if (seatsByRelativeIndex[relativeIndex] != null)
+          seatsByRelativeIndex[relativeIndex]!,
+    ];
   }
 
   String _seatLabelLines(int seatIndex) {
@@ -286,9 +294,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final winnerItems = _seatItems();
-    final discarderItems = _seatItems(excludingSeatIndex: _winnerSeatIndex);
-
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.initialHand == null ? 'Record Hand' : 'Edit Hand'),
@@ -382,18 +387,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                   Text(_draft.winTypeError!),
                 ],
                 const SizedBox(height: 16),
-                _buildSeatButtonGrid(),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int>(
-                  initialValue: _winnerSeatIndex,
-                  decoration: const InputDecoration(labelText: 'Winner'),
-                  items: winnerItems,
-                  onChanged: (value) {
-                    if (value != null) {
-                      _selectSeat(value,
-                          targetOverride: _PlayerScanTarget.winner);
-                    }
-                  },
+                _buildSeatButtonGrid(
+                  prompt: 'Choose winner',
+                  target: _PlayerScanTarget.winner,
                 ),
                 if (_draft.winnerSeatError != null) ...[
                   const SizedBox(height: 6),
@@ -401,18 +397,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                 ],
                 const SizedBox(height: 16),
                 if (_winType == HandWinType.discard) ...[
-                  DropdownButtonFormField<int>(
-                    initialValue: _discarderSeatIndex,
-                    decoration: const InputDecoration(labelText: 'Discarder'),
-                    items: discarderItems,
-                    onChanged: (value) {
-                      if (value != null) {
-                        _selectSeat(
-                          value,
-                          targetOverride: _PlayerScanTarget.discarder,
-                        );
-                      }
-                    },
+                  _buildSeatButtonGrid(
+                    prompt: 'Choose discarder',
+                    target: _PlayerScanTarget.discarder,
                   ),
                   if (_draft.discarderSeatError != null) ...[
                     const SizedBox(height: 6),
@@ -442,15 +429,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                 ),
               ],
               if (_resultType == HandResultType.falseWinPenalty) ...[
-                DropdownButtonFormField<int>(
-                  initialValue: _penaltySeatIndex,
-                  decoration: const InputDecoration(labelText: 'Caller'),
-                  items: winnerItems,
-                  onChanged: (value) {
-                    setState(() {
-                      _penaltySeatIndex = value;
-                    });
-                  },
+                _buildSeatButtonGrid(
+                  prompt: 'Choose false win caller',
+                  target: _PlayerScanTarget.penaltyCaller,
                 ),
                 if (_draft.falseWinPenaltySeatError != null) ...[
                   const SizedBox(height: 6),

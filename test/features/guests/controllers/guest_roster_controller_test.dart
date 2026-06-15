@@ -15,8 +15,7 @@ void main() {
     final controller = GuestRosterController(guestRepository: repository);
     final cachedGuestsLoaded = Completer<void>();
     controller.addListener(() {
-      if (controller.guests.isNotEmpty &&
-          !cachedGuestsLoaded.isCompleted) {
+      if (controller.guests.isNotEmpty && !cachedGuestsLoaded.isCompleted) {
         cachedGuestsLoaded.complete();
       }
     });

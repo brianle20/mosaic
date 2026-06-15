@@ -174,9 +174,13 @@ class _FakeGuestRepository implements GuestRepository {
   ) async =>
       const [];
 
-
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventGuestRecord> undoGuestCheckIn(String guestId) {
     throw UnimplementedError();
   }
 
@@ -196,7 +200,6 @@ class _FakeGuestRepository implements GuestRepository {
 
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async => const [];
-
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
@@ -231,6 +234,13 @@ class _FakeGuestRepository implements GuestRepository {
     throw UnimplementedError();
   }
 
+  @override
+  Future<GuestDetailRecord> deleteCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+  }) {
+    throw UnimplementedError();
+  }
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
@@ -491,8 +501,6 @@ class _FakeSeatingRepository implements SeatingRepository {
 
 class _FakeNfcService implements NfcService {
   const _FakeNfcService();
-
-
 
   @override
   Future<TagScanResult?> scanTableTag(BuildContext context) async {

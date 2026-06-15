@@ -130,8 +130,14 @@ abstract interface class GuestRepository {
     String? note,
   });
 
+  Future<GuestDetailRecord> deleteCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+  });
+
   Future<GuestDetailRecord> checkInGuest(String guestId);
 
+  Future<EventGuestRecord> undoGuestCheckIn(String guestId);
 }
 
 abstract interface class RulesetRepository {

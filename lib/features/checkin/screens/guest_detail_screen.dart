@@ -110,6 +110,41 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
     );
   }
 
+  Future<void> _confirmDeleteCoverEntry(GuestCoverEntryRecord entry) async {
+    if (!widget.canManageCover) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete cover entry?'),
+        content: Text(
+          'Delete ${_coverEntrySummary(entry)} from the ledger?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    await _controller.deleteCoverEntry(
+      guestId: widget.guestId,
+      coverEntryId: entry.id,
+    );
+  }
+
   Future<void> _openEditGuest(EventGuestRecord guest) async {
     if (!widget.canManageGuests) {
       return;
@@ -229,12 +264,24 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                     title: Text(_coverEntrySummary(entry)),
                     subtitle: entry.note == null ? null : Text(entry.note!),
                     trailing: widget.canManageCover
-                        ? IconButton(
-                            tooltip: 'Edit cover entry',
-                            onPressed: _controller.isSubmitting
-                                ? null
-                                : () => _openEditCoverEntry(entry),
-                            icon: const Icon(Icons.edit),
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Edit cover entry',
+                                onPressed: _controller.isSubmitting
+                                    ? null
+                                    : () => _openEditCoverEntry(entry),
+                                icon: const Icon(Icons.edit),
+                              ),
+                              IconButton(
+                                tooltip: 'Delete cover entry',
+                                onPressed: _controller.isSubmitting
+                                    ? null
+                                    : () => _confirmDeleteCoverEntry(entry),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                            ],
                           )
                         : null,
                   ),

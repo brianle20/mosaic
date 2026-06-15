@@ -172,6 +172,10 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     }
   }
 
+  Future<void> _startAllTables() async {
+    await _controller.startAllTables(widget.eventId);
+  }
+
   Future<void> _startSuddenDeath(EventTableRecord table) async {
     final assignments = await _controller.startBonusRoundSuddenDeath(
       eventId: widget.eventId,
@@ -512,6 +516,23 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 ),
           ),
           if (!widget.readOnly &&
+              widget.canManageTables &&
+              _controller.canStartAllTables) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed:
+                    _controller.isStartingAllTables ? null : _startAllTables,
+                icon: const Icon(Icons.play_arrow),
+                label: Text(
+                  _controller.isStartingAllTables
+                      ? 'Starting Tables...'
+                      : 'Start All Tables',
+                ),
+              ),
+            ),
+          ] else if (!widget.readOnly &&
               widget.canManageTables &&
               widget.scoringOpen &&
               _controller.effectiveScoringPhase ==

@@ -344,6 +344,28 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     await _reloadDashboardAfterReturn(event.id);
   }
 
+  Future<void> _startTournament() async {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    final assignments = await _controller.startTournament();
+    if (!mounted || assignments == null) {
+      _scrollToTop();
+      return;
+    }
+
+    await Navigator.of(context).pushNamed(
+      AppRouter.seatingAssignmentsRoute,
+      arguments: SeatingAssignmentsArgs(
+        eventId: event.id,
+        initialAssignments: assignments,
+      ),
+    );
+    await _reloadDashboardAfterReturn(event.id);
+  }
+
   Future<void> _confirmDeleteEvent() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -478,8 +500,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     }
   }
 
-  String _flagStatusLabel(bool isOpen) => isOpen ? 'Open' : 'Not Open';
-
   String _eventPhaseLabel(EventRecord? event) {
     return switch (event?.lifecycleStatus) {
       EventLifecycleStatus.draft => 'Setup',
@@ -512,16 +532,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       EventLifecycleStatus.cancelled => StatusChipTone.danger,
       null => StatusChipTone.neutral,
     };
-  }
-
-  StatusChipTone _flagTone(bool isOpen) {
-    return isOpen ? StatusChipTone.success : StatusChipTone.warning;
-  }
-
-  bool _usesTransitionalLiveDashboard(EventRecord? event) {
-    return event?.lifecycleStatus == EventLifecycleStatus.active &&
-        event?.checkinOpen == true &&
-        event?.scoringOpen == false;
   }
 
   String _formatLifecycleMessage(EventLifecycleStatus? lifecycleStatus) {
@@ -639,18 +649,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 ),
               ),
             const SizedBox(height: 20),
-            if (_usesTransitionalLiveDashboard(event)) ...[
-              FilledButton(
-                onPressed: _controller.isSubmittingLifecycle
-                    ? null
-                    : () => _controller.setOperationalFlags(
-                          checkinOpen: event!.checkinOpen,
-                          scoringOpen: true,
-                        ),
-                child: const Text('Open Scoring'),
-              ),
-              const SizedBox(height: 16),
-            ],
             Text(
               'Actions',
               style: Theme.of(context).textTheme.titleMedium,
@@ -746,68 +744,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   ),
               ],
             ),
-            if (_controller.canManageEvent &&
-                lifecycleStatus == EventLifecycleStatus.active) ...[
-              const SizedBox(height: 24),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Live Operations',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          StatusChip(
-                            label:
-                                'Check-In ${_flagStatusLabel(event!.checkinOpen)}',
-                            tone: _flagTone(event.checkinOpen),
-                          ),
-                          StatusChip(
-                            label:
-                                'Scoring ${_flagStatusLabel(event.scoringOpen)}',
-                            tone: _flagTone(event.scoringOpen),
-                          ),
-                        ],
-                      ),
-                      if (!event.checkinOpen) ...[
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          onPressed: _controller.isSubmittingLifecycle
-                              ? null
-                              : () => _controller.setOperationalFlags(
-                                    checkinOpen: true,
-                                    scoringOpen: event.scoringOpen,
-                                  ),
-                          child: const Text('Open Check-In'),
-                        ),
-                      ],
-                      const SizedBox(height: 8),
-                      if (!_usesTransitionalLiveDashboard(event))
-                        OutlinedButton(
-                          onPressed: _controller.isSubmittingLifecycle
-                              ? null
-                              : () => _controller.setOperationalFlags(
-                                    checkinOpen: event.checkinOpen,
-                                    scoringOpen: !event.scoringOpen,
-                                  ),
-                          child: Text(
-                            event.scoringOpen
-                                ? 'Close Hand Entry'
-                                : 'Reopen Hand Entry',
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
             const SizedBox(height: 24),
             Card(
               child: Padding(
@@ -849,7 +785,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
             lifecycleStatus != EventLifecycleStatus.cancelled;
     final showTournamentCommandCenter = _controller.canManageEvent &&
         lifecycleStatus == EventLifecycleStatus.active &&
-        event.scoringOpen &&
         scoringPhase == EventScoringPhase.tournament &&
         _controller.tournamentRoundSummary.hasCurrentRound;
     final showFinalsCommandCenter = _controller.canManageEvent &&
@@ -905,7 +840,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 showOperationalFlags:
                     lifecycleStatus == EventLifecycleStatus.active,
                 checkinOpen: event.checkinOpen,
-                scoringOpen: event.scoringOpen,
               ),
               const SizedBox(height: 14),
               _LiveMetricsRow(
@@ -970,17 +904,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 ),
               ],
               if (showLiveNavigation) const SizedBox(height: 14),
-              if (_controller.canManageEvent &&
-                  lifecycleStatus == EventLifecycleStatus.active) ...[
-                _LiveOperationsStrip(
-                  scoringOpen: event.scoringOpen,
-                  title: 'Live Operations',
-                  openMessage: 'Hand entry and check-in are open for hosts.',
-                  closedMessage:
-                      'Reopen hand entry when hosts are ready to score hands.',
-                ),
-                const SizedBox(height: 18),
-              ],
               if (lifecycleStatus != EventLifecycleStatus.active) ...[
                 const SizedBox(height: 12),
                 InfoPanel(
@@ -1004,14 +927,6 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 onFinalize: () => _controller.finalizeEvent(),
                 onRevert: _confirmRevertToDraft,
                 onCancel: _confirmCancelEvent,
-                handEntryActionLabel:
-                    event.scoringOpen ? 'Close Hand Entry' : null,
-                onHandEntryAction: event.scoringOpen
-                    ? () => _controller.setOperationalFlags(
-                          checkinOpen: event.checkinOpen,
-                          scoringOpen: false,
-                        )
-                    : null,
               ),
             ],
           ),
@@ -1024,7 +939,18 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.draft => 'Open Check-In',
       EventLifecycleStatus.active when event.scoringOpen => 'Scan Table',
-      EventLifecycleStatus.active => 'Open Scoring',
+      EventLifecycleStatus.active when _controller.tableCount == 0 =>
+        'Add Tables',
+      EventLifecycleStatus.active
+          when (_controller.effectiveScoringPhase ??
+                  event.currentScoringPhase) ==
+              EventScoringPhase.tournament =>
+        _controller.tournamentRoundSummary.isComplete
+            ? 'Start Next Round'
+            : _controller.tournamentRoundSummary.hasCurrentRound
+                ? 'Open Tables'
+                : 'Start Tournament',
+      EventLifecycleStatus.active => 'Open Tables',
       EventLifecycleStatus.completed => 'Finalize Event',
       EventLifecycleStatus.finalized => 'View Leaderboard',
       EventLifecycleStatus.cancelled => 'View Activity',
@@ -1035,6 +961,14 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.draft => Icons.how_to_reg,
       EventLifecycleStatus.active when event.scoringOpen => Icons.nfc,
+      EventLifecycleStatus.active when _controller.tableCount == 0 =>
+        Icons.table_bar,
+      EventLifecycleStatus.active
+          when (_controller.effectiveScoringPhase ??
+                      event.currentScoringPhase) ==
+                  EventScoringPhase.tournament &&
+              _controller.tournamentRoundSummary.isComplete =>
+        Icons.skip_next,
       EventLifecycleStatus.active => Icons.play_arrow,
       EventLifecycleStatus.completed => Icons.verified,
       EventLifecycleStatus.finalized => Icons.leaderboard,
@@ -1072,10 +1006,16 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     return switch (event.lifecycleStatus) {
       EventLifecycleStatus.draft => () => _controller.startEvent(),
       EventLifecycleStatus.active when event.scoringOpen => _scanTable,
-      EventLifecycleStatus.active => () => _controller.setOperationalFlags(
-            checkinOpen: event.checkinOpen,
-            scoringOpen: true,
-          ),
+      EventLifecycleStatus.active when _controller.tableCount == 0 =>
+        _openTables,
+      EventLifecycleStatus.active
+          when (_controller.effectiveScoringPhase ??
+                  event.currentScoringPhase) ==
+              EventScoringPhase.tournament =>
+        _controller.tournamentRoundSummary.hasCurrentRound
+            ? _startNextTournamentRound
+            : _startTournament,
+      EventLifecycleStatus.active => _openTables,
       EventLifecycleStatus.completed => () => _controller.finalizeEvent(),
       EventLifecycleStatus.finalized => () => _openLeaderboard(),
       EventLifecycleStatus.cancelled => _openActivity,
@@ -1180,9 +1120,13 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
         children: [
           StatusChip(
             label: pendingSuddenDeath == null
-                ? isFinals
-                    ? 'Finals Live'
-                    : 'Tournament Live'
+                ? summary.isComplete
+                    ? isFinals
+                        ? 'Finals Complete'
+                        : 'Round Complete'
+                    : isFinals
+                        ? 'Finals Live'
+                        : 'Tournament Live'
                 : _suddenDeathCommandLabel(pendingSuddenDeath),
             tone: StatusChipTone.success,
           ),
@@ -1428,7 +1372,6 @@ class _LiveStatusRow extends StatelessWidget {
     required this.showPhase,
     required this.showOperationalFlags,
     required this.checkinOpen,
-    required this.scoringOpen,
   });
 
   final String phaseLabel;
@@ -1436,7 +1379,6 @@ class _LiveStatusRow extends StatelessWidget {
   final bool showPhase;
   final bool showOperationalFlags;
   final bool checkinOpen;
-  final bool scoringOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -1446,10 +1388,6 @@ class _LiveStatusRow extends StatelessWidget {
       children: [
         if (showPhase) StatusChip(label: phaseLabel, tone: phaseTone),
         if (showOperationalFlags) ...[
-          StatusChip(
-            label: scoringOpen ? 'Scoring Open' : 'Scoring Not Open',
-            tone: scoringOpen ? StatusChipTone.success : StatusChipTone.warning,
-          ),
           StatusChip(
             label: checkinOpen ? 'Check-In Open' : 'Check-In Not Open',
             tone: checkinOpen ? StatusChipTone.success : StatusChipTone.warning,
@@ -1531,57 +1469,6 @@ class _LiveMetricsRow extends StatelessWidget {
   }
 }
 
-class _LiveOperationsStrip extends StatelessWidget {
-  const _LiveOperationsStrip({
-    required this.scoringOpen,
-    required this.title,
-    required this.openMessage,
-    required this.closedMessage,
-  });
-
-  final bool scoringOpen;
-  final String title;
-  final String openMessage;
-  final String closedMessage;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer.withValues(alpha: 0.45),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  scoringOpen ? openMessage : closedMessage,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _EventOptionsSection extends StatelessWidget {
   const _EventOptionsSection({
     required this.lifecycleStatus,
@@ -1599,8 +1486,6 @@ class _EventOptionsSection extends StatelessWidget {
     required this.onFinalize,
     required this.onRevert,
     required this.onCancel,
-    required this.handEntryActionLabel,
-    required this.onHandEntryAction,
   });
 
   final EventLifecycleStatus lifecycleStatus;
@@ -1618,16 +1503,14 @@ class _EventOptionsSection extends StatelessWidget {
   final VoidCallback onFinalize;
   final VoidCallback onRevert;
   final VoidCallback onCancel;
-  final String? handEntryActionLabel;
-  final VoidCallback? onHandEntryAction;
 
   bool get _showsSeatingPrepAction {
     return switch (lifecycleStatus) {
-      EventLifecycleStatus.draft || EventLifecycleStatus.completed => true,
+      EventLifecycleStatus.draft ||
       EventLifecycleStatus.active ||
-      EventLifecycleStatus.finalized ||
-      EventLifecycleStatus.cancelled =>
-        false,
+      EventLifecycleStatus.completed =>
+        true,
+      EventLifecycleStatus.finalized || EventLifecycleStatus.cancelled => false,
     };
   }
 
@@ -1663,13 +1546,6 @@ class _EventOptionsSection extends StatelessWidget {
               UtilityActionButton(
                 label: 'Copy Event',
                 onPressed: isSubmitting ? null : onCopy,
-              ),
-            if (canManageEvent &&
-                lifecycleStatus == EventLifecycleStatus.active &&
-                handEntryActionLabel != null)
-              UtilityActionButton(
-                label: handEntryActionLabel!,
-                onPressed: isSubmitting ? null : onHandEntryAction,
               ),
             if (canManageEvent && lifecycleStatus == EventLifecycleStatus.draft)
               UtilityActionButton(

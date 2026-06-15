@@ -930,8 +930,7 @@ void main() {
         contains(scoringPhaseLiveSessionBlockedMessage));
   });
 
-  test('startTournament delegates the phase transition and generates seating',
-      () async {
+  test('startTournament generates draft seating for preview', () async {
     final event = EventRecord.fromJson(const {
       'id': 'evt_01',
       'owner_user_id': 'usr_01',
@@ -1018,10 +1017,8 @@ void main() {
     expect(assignments, isNull);
     expect(
         controller.event?.currentScoringPhase, EventScoringPhase.qualification);
-    expect(
-      controller.lifecycleError,
-      contains('Add or tag more tables before starting this round.'),
-    );
+    expect(controller.lifecycleError,
+        contains('Add or tag more tables before starting this round.'));
     expect(
       controller.lifecycleError,
       isNot(contains('Tournament mode remains active')),
@@ -1052,7 +1049,6 @@ void main() {
         'current_scoring_phase': eventScoringPhaseToJson(phase),
       });
     };
-    var generatedAssignments = false;
     final controller = EventDashboardController(
       eventRepository: repository,
       guestRepository: _FakeGuestRepository(cachedGuests: const []),
@@ -1062,7 +1058,6 @@ void main() {
     controller.updateRuntimeRepositories(
       seatingRepository: _FakeSeatingRepository(
         onGenerate: (_) async {
-          generatedAssignments = true;
           return const [];
         },
       ),
@@ -1070,11 +1065,11 @@ void main() {
     final assignments = await controller.startTournament();
 
     expect(assignments, isEmpty);
-    expect(generatedAssignments, isTrue);
     expect(controller.lifecycleError, isNull);
   });
 
-  test('startNextTournamentRound reports missing seating repository', () async {
+  test('startNextTournamentRound generates draft seating for preview',
+      () async {
     final event = EventRecord.fromJson(const {
       'id': 'evt_01',
       'owner_user_id': 'usr_01',
@@ -1092,16 +1087,16 @@ void main() {
     final controller = EventDashboardController(
       eventRepository: _FakeEventRepository(cachedEvents: [event]),
       guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      seatingRepository: _FakeSeatingRepository(
+        onGenerate: (_) async => const [],
+      ),
     );
     await controller.load('evt_01');
 
     final assignments = await controller.startNextTournamentRound();
 
-    expect(assignments, isNull);
-    expect(
-      controller.lifecycleError,
-      'Seating setup is required to start the next tournament round.',
-    );
+    expect(assignments, isEmpty);
+    expect(controller.lifecycleError, isNull);
   });
 
   test('in-flight load cannot overwrite round state after next round starts',

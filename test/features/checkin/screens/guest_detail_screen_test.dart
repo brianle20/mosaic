@@ -25,9 +25,9 @@ class _FakeGuestRepository implements GuestRepository {
   CoverEntryMethod? lastUpdatedMethod;
   DateTime? lastUpdatedTransactionOn;
   String? lastUpdatedNote;
+  String? lastDeletedCoverEntryId;
   int detailLoadCount = 0;
   int tournamentStatusUpdateCount = 0;
-
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) async {
@@ -59,6 +59,11 @@ class _FakeGuestRepository implements GuestRepository {
   }
 
   @override
+  Future<EventGuestRecord> undoGuestCheckIn(String guestId) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<EventGuestRecord> createGuest(CreateGuestInput input) {
     throw UnimplementedError();
   }
@@ -85,7 +90,6 @@ class _FakeGuestRepository implements GuestRepository {
   Future<List<EventGuestRecord>> listGuests(String eventId) async => [
         detail.guest,
       ];
-
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
@@ -169,6 +173,20 @@ class _FakeGuestRepository implements GuestRepository {
     );
   }
 
+  @override
+  Future<GuestDetailRecord> deleteCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+  }) async {
+    lastDeletedCoverEntryId = coverEntryId;
+    return detail = GuestDetailRecord(
+      guest: detail.guest,
+      coverEntries: detail.coverEntries
+          .where((entry) => entry.id != coverEntryId)
+          .toList(growable: false),
+      activeTagAssignment: detail.activeTagAssignment,
+    );
+  }
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
@@ -767,6 +785,74 @@ void main() {
     expect(repository.lastUpdatedNote, 'Corrected amount');
     expect(find.text('Corrected amount'), findsOneWidget);
     expect(find.text('Zelle \$15.00 - Apr 24, 2026'), findsOneWidget);
+  });
+
+  testWidgets('deletes a cover ledger entry after confirmation',
+      (tester) async {
+    final repository = _FakeGuestRepository(
+      GuestDetailRecord(
+        guest: EventGuestRecord.fromJson(const {
+          'id': 'gst_09',
+          'event_id': 'evt_01',
+          'display_name': 'Ian Q',
+          'normalized_name': 'ian q',
+          'attendance_status': 'expected',
+          'cover_status': 'paid',
+          'cover_amount_cents': 2000,
+          'is_comped': false,
+          'has_scored_play': false,
+        }),
+        coverEntries: [
+          GuestCoverEntryRecord(
+            id: 'cov_01',
+            eventId: 'evt_01',
+            eventGuestId: 'gst_09',
+            amountCents: 500,
+            method: CoverEntryMethod.venmo,
+            recordedByUserId: 'usr_01',
+            transactionOn: DateTime(2026, 4, 24),
+            note: 'Accidental partial payment',
+          ),
+          GuestCoverEntryRecord(
+            id: 'cov_02',
+            eventId: 'evt_01',
+            eventGuestId: 'gst_09',
+            amountCents: 1500,
+            method: CoverEntryMethod.cash,
+            recordedByUserId: 'usr_01',
+            transactionOn: DateTime(2026, 4, 24),
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GuestDetailScreen(
+          guestId: 'gst_09',
+          eventId: 'evt_01',
+          guestRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Delete cover entry').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete cover entry?'), findsOneWidget);
+    expect(
+      find.text('Delete Venmo \$5.00 - Apr 24, 2026 from the ledger?'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastDeletedCoverEntryId, 'cov_01');
+    expect(find.text('Venmo \$5.00 - Apr 24, 2026'), findsNothing);
+    expect(find.text('Accidental partial payment'), findsNothing);
+    expect(find.text('Cash \$15.00 - Apr 24, 2026'), findsOneWidget);
   });
 
   testWidgets('prefills cover entry amount with remaining balance',

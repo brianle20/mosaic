@@ -146,9 +146,19 @@ class ThrowingGuestRepository implements GuestRepository {
       throw UnimplementedError();
 
   @override
+  Future<GuestDetailRecord> deleteCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+  }) =>
+      throw UnimplementedError();
+
+  @override
   Future<GuestDetailRecord> checkInGuest(String guestId) =>
       throw UnimplementedError();
 
+  @override
+  Future<EventGuestRecord> undoGuestCheckIn(String guestId) =>
+      throw UnimplementedError();
 }
 
 class ThrowingTableRepository implements TableRepository {

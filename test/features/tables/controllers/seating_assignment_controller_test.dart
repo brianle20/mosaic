@@ -14,14 +14,12 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
     this.loadedAssignments = const [],
     this.generatedAssignments = const [],
     this.clearedAssignments = const [],
-    this.loadAssignmentsError,
   });
 
   final List<SeatingAssignmentRecord> cachedAssignments;
   final List<SeatingAssignmentRecord> loadedAssignments;
   final List<SeatingAssignmentRecord> generatedAssignments;
   final List<SeatingAssignmentRecord> clearedAssignments;
-  final Object? loadAssignmentsError;
   final calls = <String>[];
 
   @override
@@ -39,6 +37,14 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   }
 
   @override
+  Future<List<SeatingAssignmentRecord>> generateTournamentRound(
+    String eventId,
+  ) async {
+    calls.add('generate-tournament:$eventId');
+    return generatedAssignments;
+  }
+
+  @override
   Future<List<SeatingAssignmentRecord>> generateBonusRoundAssignments({
     required String eventId,
     required String championsTableId,
@@ -50,10 +56,6 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   @override
   Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async {
     calls.add('load:$eventId');
-    final error = loadAssignmentsError;
-    if (error != null) {
-      throw error;
-    }
     return loadedAssignments;
   }
 
@@ -74,7 +76,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
 
   final List<EventGuestRecord> guests;
   final Map<String, GuestTagAssignmentSummary> assignments;
-
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
@@ -137,7 +138,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     throw UnimplementedError();
   }
 
-
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
     throw UnimplementedError();
@@ -149,11 +149,13 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
     this.sessions = const [],
     this.sessionsAfterBulkStart = const [],
     this.bulkStartError,
+    this.sessionsBecomeLiveBeforeBulkStartError = false,
   });
 
   final List<TableSessionRecord> sessions;
   final List<TableSessionRecord> sessionsAfterBulkStart;
   final Object? bulkStartError;
+  final bool sessionsBecomeLiveBeforeBulkStartError;
   final calls = <String>[];
   var _bulkStartSucceeded = false;
 
@@ -223,6 +225,9 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
     calls.add('bulkStart:$eventId');
     final error = bulkStartError;
     if (error != null) {
+      if (sessionsBecomeLiveBeforeBulkStartError) {
+        _bulkStartSucceeded = true;
+      }
       throw error;
     }
     _bulkStartSucceeded = true;
@@ -523,12 +528,10 @@ void main() {
     );
   });
 
-  test('startAllTables bulk starts sessions and reloads seating state',
+  test('startAllTables generates tournament seating before starting sessions',
       () async {
     final seatingRepository = _FakeSeatingRepository(
-      loadedAssignments: [
-        _assignment(displayName: 'Ava East'),
-      ],
+      generatedAssignments: [_assignment(displayName: 'Ava East')],
     );
     final sessionRepository = _FakeSessionRepository(
       sessionsAfterBulkStart: [_session(SessionStatus.active)],
@@ -551,15 +554,15 @@ void main() {
     expect(seatingRepository.calls, [
       'cache:evt_01',
       'load:evt_01',
-      'load:evt_01',
+      'generate-tournament:evt_01',
     ]);
+    expect(controller.assignments.single.displayName, 'Ava East');
     expect(controller.hasLiveSessions, isTrue);
     expect(controller.isSubmitting, isFalse);
     expect(controller.error, isNull);
   });
 
-  test('startAllTables reports backend errors and keeps assignments',
-      () async {
+  test('startAllTables reports backend errors and keeps assignments', () async {
     final seatingRepository = _FakeSeatingRepository(
       loadedAssignments: [
         _assignment(displayName: 'Ava East'),
@@ -581,16 +584,14 @@ void main() {
     expect(controller.error, contains('No current tournament round seating'));
   });
 
-  test('canStartAllTables requires assignments and no live sessions', () async {
+  test('canStartAllTables requires no live sessions', () async {
     final controller = SeatingAssignmentController(
-      seatingRepository: _FakeSeatingRepository(
-        loadedAssignments: [_assignment()],
-      ),
+      seatingRepository: _FakeSeatingRepository(),
       guestRepository: _FakeGuestRepository(),
       sessionRepository: _FakeSessionRepository(),
     );
 
-    expect(controller.canStartAllTables, isFalse);
+    expect(controller.canStartAllTables, isTrue);
 
     await controller.load('evt_01');
     expect(controller.canStartAllTables, isTrue);
@@ -620,14 +621,13 @@ void main() {
     expect(controller.isSubmitting, isFalse);
   });
 
-  test(
-      'startAllTables refreshes live sessions when assignment reload fails after bulk start',
+  test('startAllTables clears client error when sessions started anyway',
       () async {
-    final seatingRepository = _FakeSeatingRepository(
-      loadAssignmentsError: Exception('Reload failed'),
-    );
+    final seatingRepository = _FakeSeatingRepository();
     final sessionRepository = _FakeSessionRepository(
       sessionsAfterBulkStart: [_session(SessionStatus.active)],
+      bulkStartError: Exception('Client parse failed'),
+      sessionsBecomeLiveBeforeBulkStartError: true,
     );
     final controller = SeatingAssignmentController(
       seatingRepository: seatingRepository,
@@ -643,12 +643,12 @@ void main() {
       'bulkStart:evt_01',
       'list:evt_01',
     ]);
-    expect(seatingRepository.calls, ['load:evt_01']);
+    expect(seatingRepository.calls, isEmpty);
     expect(controller.assignments.single.displayName, 'Ava East');
     expect(controller.hasLiveSessions, isTrue);
     expect(controller.canStartAllTables, isFalse);
     expect(controller.isSubmitting, isFalse);
-    expect(controller.error, contains('Reload failed'));
+    expect(controller.error, isNull);
   });
 
   test('generate and clear are blocked while a session is live', () async {

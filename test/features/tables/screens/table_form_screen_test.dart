@@ -91,8 +91,6 @@ class _RecordingTableRepository implements TableRepository {
 class _FakeNfcService implements NfcService {
   const _FakeNfcService();
 
-
-
   @override
   Future<TagScanResult?> scanTableTag(BuildContext context) async {
     return const TagScanResult(

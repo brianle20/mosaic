@@ -11,7 +11,8 @@ void main() {
     expect(migrationFile.existsSync(), isTrue);
     final sql = migrationFile.readAsStringSync();
 
-    expect(sql, contains('create or replace function public.start_table_session'));
+    expect(
+        sql, contains('create or replace function public.start_table_session'));
     expect(sql, contains('event_row.archived_at is null'));
     expect(
       sql,
@@ -27,7 +28,8 @@ void main() {
         'Player tag session start is no longer available. Use assigned seating.',
       ),
     );
-    expect(sql, contains('grant execute on function public.start_table_session'));
+    expect(
+        sql, contains('grant execute on function public.start_table_session'));
     expect(sql, contains("select pg_notify('pgrst', 'reload schema')"));
   });
 }

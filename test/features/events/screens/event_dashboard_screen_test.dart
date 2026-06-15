@@ -37,7 +37,6 @@ class _EventRepository extends ThrowingEventRepository {
     this.onComplete,
     this.onFinalize,
     this.onStart,
-    this.onSetOperationalFlags,
     this.onUpdateScoringPhase,
     this.onCancel,
     this.onRevertToDraft,
@@ -55,11 +54,6 @@ class _EventRepository extends ThrowingEventRepository {
   final Future<EventRecord> Function(String eventId)? onCopyForTesting;
   final Future<EventRecord> Function(String eventId, EventScoringPhase phase)?
       onUpdateScoringPhase;
-  final Future<EventRecord> Function(
-    String eventId,
-    bool checkinOpen,
-    bool scoringOpen,
-  )? onSetOperationalFlags;
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) {
@@ -126,12 +120,6 @@ class _EventRepository extends ThrowingEventRepository {
     required bool checkinOpen,
     required bool scoringOpen,
   }) async {
-    final handler = onSetOperationalFlags;
-    if (handler != null) {
-      event = await handler(eventId, checkinOpen, scoringOpen);
-      return event;
-    }
-
     throw UnimplementedError();
   }
 
@@ -1458,14 +1446,14 @@ void main() {
     expect(find.text('No hands recorded yet.'), findsOneWidget);
   });
 
-  testWidgets('active event hides seating prep action', (tester) async {
+  testWidgets('active event exposes seating action', (tester) async {
     await _pumpDashboard(tester, event: activeEvent);
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text('Event options'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Seating'), findsNothing);
+    expect(find.text('Seating'), findsOneWidget);
   });
 
   testWidgets(
@@ -1932,7 +1920,7 @@ void main() {
       ),
       findsNothing,
     );
-    expect(find.text('Scoring Open'), findsOneWidget);
+    expect(find.text('Scoring Open'), findsNothing);
     expect(find.text('Check-In Open'), findsOneWidget);
     expect(find.text('Guests'), findsOneWidget);
     expect(find.text('Tables'), findsOneWidget);
@@ -1943,19 +1931,17 @@ void main() {
     expect(find.text('Scan Table'), findsOneWidget);
     expect(find.text('Leaderboard'), findsNothing);
     expect(find.text('Activity'), findsOneWidget);
-    expect(find.text('Live Operations'), findsOneWidget);
+    expect(find.text('Live Operations'), findsNothing);
     expect(find.text('Pause Scoring'), findsNothing);
-    expect(find.text('Close Hand Entry'), findsOneWidget);
+    expect(find.text('Close Hand Entry'), findsNothing);
     expect(find.text('Event options'), findsOneWidget);
 
     final tablesTop = tester.getTopLeft(find.text('Tables')).dy;
     final scanTop = tester.getTopLeft(find.text('Scan Table')).dy;
-    final operationsTop = tester.getTopLeft(find.text('Live Operations')).dy;
     final optionsTop = tester.getTopLeft(find.text('Event options')).dy;
 
     expect(tablesTop, lessThan(scanTop));
-    expect(scanTop, lessThan(operationsTop));
-    expect(operationsTop, lessThan(optionsTop));
+    expect(scanTop, lessThan(optionsTop));
   });
 
   testWidgets('event scorers open guests without check-in permission',
@@ -2074,7 +2060,7 @@ void main() {
     expect(panelTop - actionBottom, greaterThanOrEqualTo(12));
   });
 
-  testWidgets('check-in open scoring closed does not make scan table the hero',
+  testWidgets('check-in open tournament with no tables prompts table setup',
       (tester) async {
     await _pumpDashboard(
       tester,
@@ -2085,27 +2071,31 @@ void main() {
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 
-    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Add Tables'), findsOneWidget);
+    expect(find.text('Open Scoring'), findsNothing);
+    expect(find.text('Close Hand Entry'), findsNothing);
+    expect(find.text('Reopen Hand Entry'), findsNothing);
     expect(find.text('Start Qualification'), findsNothing);
     expect(find.text('Scan Table'), findsOneWidget);
 
-    final openScoringTop = tester.getTopLeft(find.text('Open Scoring')).dy;
+    final addTablesTop = tester.getTopLeft(find.text('Add Tables')).dy;
     final scanTableTop = tester.getTopLeft(find.text('Scan Table')).dy;
 
-    expect(openScoringTop, lessThan(scanTableTop));
+    expect(addTablesTop, lessThan(scanTableTop));
   });
 
-  testWidgets('active check-in dashboard opens tournament scoring',
+  testWidgets('active check-in dashboard opens tournament seating setup',
       (tester) async {
+    _SeatingRepository.generatedTournamentRoundCount = 0;
     final eventRepository = _EventRepository(
       activeCheckinOnlyEvent,
-      onSetOperationalFlags: (_, checkinOpen, scoringOpen) async {
-        return EventRecord.fromJson({
-          ...activeCheckinOnlyEvent.toJson(),
-          'checkin_open': checkinOpen,
-          'scoring_open': scoringOpen,
-        });
-      },
+      onUpdateScoringPhase: (eventId, phase) async => EventRecord.fromJson({
+        ...activeCheckinOnlyEvent.toJson(),
+        'current_scoring_phase': eventScoringPhaseToJson(phase),
+      }),
+    );
+    final seatingRepository = _SeatingRepository(
+      generatedAssignments: [_assignment(eventId: activeCheckinOnlyEvent.id)],
     );
     final guests = [
       _dashboardGuest(
@@ -2135,6 +2125,7 @@ void main() {
     ];
 
     TablesOverviewArgs? openedTablesArgs;
+    RouteSettings? openedSeatingSettings;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -2151,6 +2142,7 @@ void main() {
             resolvedTable: _table(eventId: 'evt_04'),
           ),
           sessionRepository: const _SessionRepository(),
+          seatingRepository: seatingRepository,
           nfcService: _NfcService(tableScanResult: _tableScanResult()),
         ),
         onGenerateRoute: (settings) {
@@ -2162,13 +2154,25 @@ void main() {
               ),
             );
           }
+          if (settings.name == AppRouter.seatingAssignmentsRoute) {
+            openedSeatingSettings = settings;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(
+                body: Text('Opened Seating'),
+              ),
+              settings: settings,
+            );
+          }
           return null;
         },
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Start Tournament'), findsOneWidget);
+    expect(find.text('Open Scoring'), findsNothing);
+    expect(find.text('Close Hand Entry'), findsNothing);
+    expect(find.text('Reopen Hand Entry'), findsNothing);
     expect(find.text('Start Qualification'), findsNothing);
     expect(find.text('Qualification'), findsNothing);
     expect(find.text('Guests'), findsOneWidget);
@@ -2176,7 +2180,7 @@ void main() {
     expect(find.text('Checked In'), findsNothing);
     expect(find.text('Qualifying'), findsNothing);
     expect(find.text('Qualified'), findsNothing);
-    expect(find.text('Live Operations'), findsOneWidget);
+    expect(find.text('Live Operations'), findsNothing);
     expect(find.text('Prize Pool'), findsOneWidget);
     expect(find.text('Leader'), findsOneWidget);
 
@@ -2191,10 +2195,17 @@ void main() {
     Navigator.of(tester.element(find.text('Opened Tables'))).pop();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Open Scoring'));
+    await tester.tap(find.text('Start Tournament'));
     await tester.pumpAndSettle();
 
-    expect(eventRepository.event.scoringOpen, isTrue);
+    expect(eventRepository.event.scoringOpen, isFalse);
+    expect(_SeatingRepository.generatedTournamentRoundCount, 1);
+    expect(openedSeatingSettings?.name, AppRouter.seatingAssignmentsRoute);
+    expect(
+      (openedSeatingSettings?.arguments as SeatingAssignmentsArgs?)
+          ?.initialAssignments,
+      seatingRepository.generatedAssignments,
+    );
   });
 
   testWidgets('active event shows Complete Event action', (tester) async {
@@ -2461,7 +2472,8 @@ void main() {
     expect(find.text('Copied event dashboard'), findsOneWidget);
   });
 
-  testWidgets('starting a draft event enables live controls', (tester) async {
+  testWidgets('starting a draft event prompts tournament setup',
+      (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: EventDashboardScreen(
@@ -2482,27 +2494,20 @@ void main() {
 
     expect(find.text('Event Phase'), findsNothing);
     expect(find.text('Check-In Open'), findsOneWidget);
-    expect(find.text('Scoring Not Open'), findsOneWidget);
+    expect(find.text('Scoring Not Open'), findsNothing);
     expect(find.text('Close Check-In'), findsNothing);
-    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Add Tables'), findsOneWidget);
+    expect(find.text('Open Scoring'), findsNothing);
     expect(find.text('Start Qualification'), findsNothing);
   });
 
-  testWidgets('active event exposes operational flag actions', (tester) async {
+  testWidgets('active event hides hand entry operational flag actions',
+      (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: EventDashboardScreen(
           args: const EventDashboardArgs(eventId: 'evt_04'),
-          eventRepository: _EventRepository(
-            activeCheckinOnlyEvent,
-            onSetOperationalFlags: (_, checkinOpen, scoringOpen) async {
-              return EventRecord.fromJson({
-                ...activeCheckinOnlyEvent.toJson(),
-                'checkin_open': checkinOpen,
-                'scoring_open': scoringOpen,
-              });
-            },
-          ),
+          eventRepository: _EventRepository(activeCheckinOnlyEvent),
           guestRepository: _GuestRepository(),
           leaderboardRepository: _LeaderboardRepository(),
         ),
@@ -2512,22 +2517,13 @@ void main() {
 
     expect(find.text('Qualification'), findsNothing);
     expect(find.text('Check-In Open'), findsOneWidget);
-    expect(find.text('Scoring Not Open'), findsOneWidget);
+    expect(find.text('Scoring Not Open'), findsNothing);
     expect(find.text('Close Check-In'), findsNothing);
-    expect(find.text('Open Scoring'), findsOneWidget);
+    expect(find.text('Open Scoring'), findsNothing);
     expect(find.text('Start Qualification'), findsNothing);
-
-    await tester.ensureVisible(find.text('Open Scoring'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Open Scoring'));
-    await tester.pumpAndSettle();
-
-    await tester.drag(find.byType(ListView), const Offset(0, 400));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Scoring Open'), findsOneWidget);
     expect(find.text('Pause Scoring'), findsNothing);
-    expect(find.text('Close Hand Entry'), findsOneWidget);
+    expect(find.text('Close Hand Entry'), findsNothing);
+    expect(find.text('Reopen Hand Entry'), findsNothing);
   });
 
   testWidgets(
@@ -2543,48 +2539,11 @@ void main() {
 
     expect(find.text('Start Tournament'), findsNothing);
     expect(find.text('Pause Scoring'), findsNothing);
-    expect(find.text('Close Hand Entry'), findsOneWidget);
-    expect(find.text('Hand entry and check-in are open for hosts.'),
-        findsOneWidget);
+    expect(find.text('Close Hand Entry'), findsNothing);
+    expect(
+        find.text('Hand entry and check-in are open for hosts.'), findsNothing);
     expect(find.text('Tournament Live'), findsOneWidget);
     expect(find.text('Scoring Phase'), findsNothing);
-  });
-
-  testWidgets('close hand entry action closes scoring without pause wording',
-      (tester) async {
-    final eventRepository = _EventRepository(
-      activeEvent,
-      onSetOperationalFlags: (_, checkinOpen, scoringOpen) async {
-        return EventRecord.fromJson({
-          ...activeEvent.toJson(),
-          'checkin_open': checkinOpen,
-          'scoring_open': scoringOpen,
-        });
-      },
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: EventDashboardScreen(
-          args: EventDashboardArgs(eventId: activeEvent.id),
-          eventRepository: eventRepository,
-          guestRepository: _GuestRepository(),
-          leaderboardRepository: _LeaderboardRepository(),
-          tableRepository: _TableRepository(resolvedTable: _table()),
-          sessionRepository: const _SessionRepository(),
-          nfcService: _NfcService(tableScanResult: _tableScanResult()),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Pause Scoring'), findsNothing);
-    await tester.ensureVisible(find.text('Close Hand Entry'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Close Hand Entry'));
-    await tester.pumpAndSettle();
-
-    expect(eventRepository.event.scoringOpen, isFalse);
   });
 
   testWidgets(
@@ -3090,21 +3049,18 @@ void main() {
     );
   });
 
-  testWidgets('blocked operational flag error renders when update fails',
+  testWidgets('blocked tournament start error renders when setup is missing',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: EventDashboardScreen(
           args: const EventDashboardArgs(eventId: 'evt_04'),
-          eventRepository: _EventRepository(
-            activeCheckinOnlyEvent,
-            onSetOperationalFlags: (_, __, ___) async {
-              throw StateError(
-                  'Scoring can only open while the event is active.');
-            },
-          ),
+          eventRepository: _EventRepository(activeCheckinOnlyEvent),
           guestRepository: _GuestRepository(),
           leaderboardRepository: _LeaderboardRepository(),
+          tableRepository: _TableRepository(
+            tables: [_table(eventId: 'evt_04')],
+          ),
         ),
       ),
     );
@@ -3112,11 +3068,11 @@ void main() {
 
     await tester.drag(find.byType(ListView), const Offset(0, -240));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Open Scoring'));
+    await tester.tap(find.text('Start Tournament'));
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Scoring can only open while the event is active.'),
+      find.text('Seating setup is required to start tournament play.'),
       findsOneWidget,
     );
   });

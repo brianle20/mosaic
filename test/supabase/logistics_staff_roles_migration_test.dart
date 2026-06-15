@@ -87,7 +87,8 @@ void main() {
     );
     expect(sql, isNot(contains('where id = identity_row.id')));
     expect(sql, isNot(contains('where id = target_membership_id;')));
-    expect(sql, isNot(contains('on conflict (event_id, approved_identity_id)')));
+    expect(
+        sql, isNot(contains('on conflict (event_id, approved_identity_id)')));
   });
 
   test('RLS policies use view and scoring helpers', () {

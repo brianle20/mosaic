@@ -19,10 +19,14 @@ class LocalCache {
 
   static Future<LocalCache> create() async {
     final preferences = await SharedPreferences.getInstance();
-    return LocalCache(preferences);
+    final cache = LocalCache(preferences);
+    await cache._runMigrations();
+    return cache;
   }
 
   static const _eventsKey = 'events';
+  static const _cacheSchemaVersionKey = 'cache-schema-version';
+  static const _currentCacheSchemaVersion = 2;
   static const _eventKeyPrefix = 'event:';
   static const _guestListKeyPrefix = 'guests:';
   static const _guestCoverEntriesKeyPrefix = 'guest-cover-entries:';
@@ -37,6 +41,31 @@ class LocalCache {
   static const _prizePreviewKeyPrefix = 'prize-preview:';
   static const _prizeAwardsKeyPrefix = 'prize-awards:';
   static const _activityKeyPrefix = 'activity:';
+
+  Future<void> _runMigrations() async {
+    final version = _preferences.getInt(_cacheSchemaVersionKey) ?? 1;
+    if (version < 2) {
+      await _removeKeysWithPrefixes([
+        _sessionListKeyPrefix,
+        _sessionDetailKeyPrefix,
+      ]);
+    }
+    if (version != _currentCacheSchemaVersion) {
+      await _preferences.setInt(
+        _cacheSchemaVersionKey,
+        _currentCacheSchemaVersion,
+      );
+    }
+  }
+
+  Future<void> _removeKeysWithPrefixes(List<String> prefixes) async {
+    final keys = _preferences.getKeys().where(
+          (key) => prefixes.any(key.startsWith),
+        );
+    for (final key in keys.toList(growable: false)) {
+      await _preferences.remove(key);
+    }
+  }
 
   Future<void> saveEvents(List<EventRecord> events) async {
     await _preferences.setString(

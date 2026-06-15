@@ -264,28 +264,7 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
 
     setState(() {
       _profileMatches = matches;
-      final primaryMatch = _primaryIdentityMatch();
-      if (_selectedProfile == null &&
-          primaryMatch != null &&
-          !_isPublicDisplayNameManuallyEdited) {
-        final profilePublicName = primaryMatch.profile.publicDisplayName;
-        if (profilePublicName?.trim().isNotEmpty == true) {
-          _setPublicDisplayName(profilePublicName!.trim());
-        }
-      }
     });
-  }
-
-  GuestProfileMatch? _primaryIdentityMatch() {
-    for (final match in _visibleProfileMatches()) {
-      if (match.matchType == GuestProfileMatchType.phone ||
-          match.matchType == GuestProfileMatchType.email ||
-          match.matchType == GuestProfileMatchType.instagram) {
-        return match;
-      }
-    }
-
-    return null;
   }
 
   Iterable<GuestProfileMatch> _visibleProfileMatches() {
@@ -296,15 +275,6 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
 
     return _profileMatches.where(
       (match) => match.profile.id != editedProfileId,
-    );
-  }
-
-  Iterable<GuestProfileMatch> _nameOnlyMatches() {
-    final primaryMatchId = _primaryIdentityMatch()?.profile.id;
-    return _visibleProfileMatches().where(
-      (match) =>
-          match.matchType == GuestProfileMatchType.name &&
-          match.profile.id != primaryMatchId,
     );
   }
 
@@ -336,9 +306,8 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
       );
     }
 
-    final primaryMatch = _primaryIdentityMatch();
-    final nameMatches = _nameOnlyMatches().toList(growable: false);
-    if (primaryMatch == null && nameMatches.isEmpty) {
+    final profileMatches = _visibleProfileMatches().toList(growable: false);
+    if (profileMatches.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -347,30 +316,27 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (primaryMatch != null)
-            Text('Using existing guest: ${primaryMatch.profile.displayName}')
-          else
-            for (final match in nameMatches)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${match.profile.displayName} exists from another event.',
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Use this guest profile to keep their info synced across events.',
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: () => _applyProfile(match.profile),
-                      child: const Text('Use Existing Guest'),
-                    ),
-                  ],
-                ),
+          for (final match in profileMatches)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${match.profile.displayName} exists from another event.',
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Use this guest profile to keep their info synced across events.',
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: () => _applyProfile(match.profile),
+                    child: const Text('Use Existing Guest'),
+                  ),
+                ],
               ),
+            ),
         ],
       ),
     );
@@ -379,24 +345,11 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
   Widget _buildTournamentQualificationField() {
     final showWithdrawnSegment = widget.initialGuest?.tournamentStatus ==
         EventTournamentStatus.withdrawn;
-    final segments = [
-      const ButtonSegment<EventTournamentStatus>(
-        value: EventTournamentStatus.qualified,
-        label: Text('Prequalified'),
-      ),
-      const ButtonSegment<EventTournamentStatus>(
-        value: EventTournamentStatus.qualifying,
-        label: Text('Considered'),
-      ),
-      const ButtonSegment<EventTournamentStatus>(
-        value: EventTournamentStatus.openPlayOnly,
-        label: Text('Not Playing Tournament'),
-      ),
-      if (showWithdrawnSegment)
-        const ButtonSegment<EventTournamentStatus>(
-          value: EventTournamentStatus.withdrawn,
-          label: Text('Withdrawn'),
-        ),
+    final statuses = [
+      EventTournamentStatus.qualified,
+      EventTournamentStatus.qualifying,
+      EventTournamentStatus.openPlayOnly,
+      if (showWithdrawnSegment) EventTournamentStatus.withdrawn,
     ];
 
     return LayoutBuilder(
@@ -410,22 +363,93 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 8),
-            SegmentedButton<EventTournamentStatus>(
-              direction:
-                  constraints.maxWidth < 520 ? Axis.vertical : Axis.horizontal,
-              segments: segments,
-              selected: {_tournamentStatus},
-              showSelectedIcon: false,
-              onSelectionChanged: (selection) {
-                setState(() {
-                  _tournamentStatus = selection.single;
-                });
-              },
-            ),
+            constraints.maxWidth < 520
+                ? _buildCompactTournamentQualificationSelector(statuses)
+                : SegmentedButton<EventTournamentStatus>(
+                    segments: [
+                      for (final status in statuses)
+                        ButtonSegment<EventTournamentStatus>(
+                          value: status,
+                          label: Text(_tournamentStatusLabel(status)),
+                        ),
+                    ],
+                    selected: {_tournamentStatus},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (selection) {
+                      setState(() {
+                        _tournamentStatus = selection.single;
+                      });
+                    },
+                  ),
           ],
         );
       },
     );
+  }
+
+  Widget _buildCompactTournamentQualificationSelector(
+    List<EventTournamentStatus> statuses,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return DecoratedBox(
+      key: const ValueKey('guest-tournament-qualification-selector'),
+      decoration: BoxDecoration(
+        border: Border.all(color: colorScheme.outline),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var index = 0; index < statuses.length; index++)
+            _buildCompactTournamentQualificationOption(
+              status: statuses[index],
+              showDivider: index < statuses.length - 1,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactTournamentQualificationOption({
+    required EventTournamentStatus status,
+    required bool showDivider,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final selected = _tournamentStatus == status;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: selected ? colorScheme.primaryContainer : Colors.transparent,
+        border: showDivider
+            ? Border(bottom: BorderSide(color: colorScheme.outline))
+            : null,
+      ),
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _tournamentStatus = status;
+          });
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Text(
+            _tournamentStatusLabel(status),
+            style: Theme.of(context).textTheme.titleMedium,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _tournamentStatusLabel(EventTournamentStatus status) {
+    return switch (status) {
+      EventTournamentStatus.qualified => 'Prequalified',
+      EventTournamentStatus.qualifying => 'Considered',
+      EventTournamentStatus.openPlayOnly => 'Not Playing Tournament',
+      EventTournamentStatus.withdrawn => 'Withdrawn',
+    };
   }
 
   Future<bool> _confirmDuplicateGuest(EventGuestRecord duplicateGuest) async {
@@ -480,7 +504,7 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
     final savedGuest = await _controller.submit(
       eventId: widget.eventId,
       draft: draft,
-      selectedProfile: _selectedProfile ?? _primaryIdentityMatch()?.profile,
+      selectedProfile: _selectedProfile,
       existingGuest: widget.initialGuest,
       tournamentStatus: _tournamentStatus,
     );

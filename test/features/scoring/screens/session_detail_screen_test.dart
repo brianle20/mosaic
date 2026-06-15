@@ -15,9 +15,13 @@ class _FakeGuestRepository implements GuestRepository {
   ) async =>
       const [];
 
-
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<EventGuestRecord> undoGuestCheckIn(String guestId) {
     throw UnimplementedError();
   }
 
@@ -83,7 +87,6 @@ class _FakeGuestRepository implements GuestRepository {
         },
       ].map(EventGuestRecord.fromJson).toList(growable: false);
 
-
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       listGuests(eventId);
@@ -117,6 +120,13 @@ class _FakeGuestRepository implements GuestRepository {
     throw UnimplementedError();
   }
 
+  @override
+  Future<GuestDetailRecord> deleteCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+  }) {
+    throw UnimplementedError();
+  }
 
   @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
@@ -474,7 +484,7 @@ void main() {
 
     await tester.tap(find.text('Record Hand').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, 'East\nAlice Wong'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong'));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Fan Count'),

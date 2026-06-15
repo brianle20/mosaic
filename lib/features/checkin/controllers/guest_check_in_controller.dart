@@ -126,4 +126,25 @@ class GuestCheckInController extends ChangeNotifier {
     isSubmitting = false;
     notifyListeners();
   }
+
+  Future<void> deleteCoverEntry({
+    required String guestId,
+    required String coverEntryId,
+  }) async {
+    isSubmitting = true;
+    actionError = null;
+    notifyListeners();
+
+    try {
+      detail = await _guestRepository.deleteCoverEntry(
+        guestId: guestId,
+        coverEntryId: coverEntryId,
+      );
+    } catch (exception) {
+      actionError = exception.toString();
+    }
+
+    isSubmitting = false;
+    notifyListeners();
+  }
 }

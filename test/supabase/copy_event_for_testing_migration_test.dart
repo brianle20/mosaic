@@ -53,4 +53,22 @@ void main() {
     expect(tableInsert!.group(1), isNot(contains('nfc_tag_id')));
     expect(tableInsert.group(2), isNot(contains('event_table.nfc_tag_id')));
   });
+
+  test('latest copy event migration preserves guest tournament status', () {
+    final migrationFile = File(
+      'supabase/migrations/20260613120000_preserve_copied_event_tournament_status.sql',
+    );
+
+    expect(migrationFile.existsSync(), isTrue);
+    final migration = migrationFile.readAsStringSync();
+    final guestInsert = RegExp(
+      r'insert into public\.event_guests \((.*?)\)\s*select(.*?)from public\.event_guests',
+      dotAll: true,
+    ).firstMatch(migration);
+
+    expect(guestInsert, isNotNull);
+    expect(guestInsert!.group(1), contains('tournament_status'));
+    expect(guestInsert.group(2), contains('guest.tournament_status'));
+    expect(guestInsert.group(2), isNot(contains("'open_play_only'")));
+  });
 }
