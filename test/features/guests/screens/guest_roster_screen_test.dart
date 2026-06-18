@@ -1214,6 +1214,7 @@ void main() {
       _guest(
         id: 'gst_alice',
         name: 'Alice Wong',
+        publicDisplayName: 'Gus',
         attendanceStatus: AttendanceStatus.expected,
         coverStatus: CoverStatus.paid,
       ),
@@ -1252,6 +1253,17 @@ void main() {
     expect(find.text('Brian Le'), findsOneWidget);
     expect(find.text('Alice Wong'), findsNothing);
     expect(find.text('Checked In (1)'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search guests'),
+      'gus',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice Wong'), findsOneWidget);
+    expect(find.text('Gus'), findsNothing);
+    expect(find.text('Brian Le'), findsNothing);
+    expect(find.text('Pending (1)'), findsOneWidget);
   });
 
   testWidgets('guest search shows a keyboard dismiss action while focused', (

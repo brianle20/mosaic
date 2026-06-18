@@ -580,6 +580,8 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     final searchableValues = [
       guest.displayName,
       guest.normalizedName,
+      guest.publicDisplayName,
+      guest.publicName,
       guest.phoneE164,
       guest.emailLower,
       guest.instagramHandle,

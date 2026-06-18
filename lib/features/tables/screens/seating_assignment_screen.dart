@@ -99,8 +99,7 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
   Future<void> _copySeatingAssignments() async {
     final publicNamesByGuestId = {
       for (final guest in _controller.eligibleGuests)
-        if (guest.publicDisplayName?.trim().isNotEmpty ?? false)
-          guest.id: guest.publicDisplayName!.trim(),
+        guest.id: guest.publicName,
     };
 
     await Clipboard.setData(

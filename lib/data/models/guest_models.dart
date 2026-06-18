@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:mosaic/data/models/guest_display_names.dart';
 import 'package:mosaic/data/models/tag_models.dart';
 
 enum AttendanceStatus {
@@ -252,12 +253,9 @@ class EventGuestRecord {
       guestProfileId: _optionalString(json, 'guest_profile_id') ??
           profile?.id ??
           _requiredString(json, 'id'),
-      displayName:
-          profile?.displayName ?? _requiredString(json, 'display_name'),
-      normalizedName:
-          profile?.normalizedName ?? _requiredString(json, 'normalized_name'),
-      publicDisplayName: _optionalString(json, 'public_display_name') ??
-          profile?.publicDisplayName,
+      displayName: _requiredString(json, 'display_name'),
+      normalizedName: _requiredString(json, 'normalized_name'),
+      publicDisplayName: _optionalString(json, 'public_display_name'),
       phoneE164: profile?.phoneE164 ?? _optionalString(json, 'phone_e164'),
       emailLower: profile?.emailLower ?? _optionalString(json, 'email_lower'),
       instagramHandle:
@@ -302,6 +300,13 @@ class EventGuestRecord {
   }
 
   bool get isCheckedIn => attendanceStatus == AttendanceStatus.checkedIn;
+
+  String get fullName => displayName;
+
+  String get publicName => resolvePublicDisplayName(
+        fullName: displayName,
+        publicDisplayName: publicDisplayName,
+      );
 
   Map<String, dynamic> toJson() {
     return {

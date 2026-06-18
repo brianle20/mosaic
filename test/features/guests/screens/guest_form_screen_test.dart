@@ -192,8 +192,9 @@ void main() {
 
     expect(find.byKey(guestNameFieldKey), findsOneWidget);
     expect(find.byKey(guestPublicDisplayNameFieldKey), findsOneWidget);
-    expect(find.text('Name'), findsOneWidget);
-    expect(find.text('Public Display Name'), findsOneWidget);
+    expect(find.text('Full Name'), findsOneWidget);
+    expect(find.text('Public Name'), findsOneWidget);
+    expect(find.text('Public Display Name'), findsNothing);
 
     final nameTop = tester.getTopLeft(find.byKey(guestNameFieldKey)).dy;
     final publicNameTop =

@@ -1,4 +1,5 @@
 import 'package:mosaic/data/local/local_cache.dart';
+import 'package:mosaic/data/models/guest_display_names.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -87,7 +88,7 @@ class SupabaseGuestRepository implements GuestRepository {
 
   @override
   Future<EventGuestRecord> createGuest(CreateGuestInput input) async {
-    final defaultPublicDisplayName = _defaultPublicDisplayName(
+    final defaultPublicDisplayName = defaultPublicDisplayNameFor(
       input.displayName,
     );
     final profile = await _resolveProfileForCreate(
@@ -359,7 +360,7 @@ class SupabaseGuestRepository implements GuestRepository {
       displayName: input.displayName,
       normalizedName: input.normalizedName,
       publicDisplayName: input.publicDisplayName ??
-          _defaultPublicDisplayName(input.displayName),
+          defaultPublicDisplayNameFor(input.displayName),
       phoneE164: input.phoneE164,
       emailLower: input.emailLower,
       instagramHandle: input.instagramHandle,
@@ -369,7 +370,7 @@ class SupabaseGuestRepository implements GuestRepository {
         .update({
           ...input.toUpdateJson(),
           'public_display_name': input.publicDisplayName ??
-              _defaultPublicDisplayName(input.displayName),
+              defaultPublicDisplayNameFor(input.displayName),
         })
         .eq('id', input.id)
         .select(_eventGuestSelect)
@@ -825,21 +826,5 @@ class SupabaseGuestRepository implements GuestRepository {
     return '${value.year.toString().padLeft(4, '0')}-'
         '${value.month.toString().padLeft(2, '0')}-'
         '${value.day.toString().padLeft(2, '0')}';
-  }
-
-  String _defaultPublicDisplayName(String fullName) {
-    final tokens = fullName
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((token) => token.isNotEmpty)
-        .toList(growable: false);
-    if (tokens.isEmpty) {
-      return fullName.trim();
-    }
-    if (tokens.length == 1) {
-      return tokens.single;
-    }
-
-    return '${tokens.first} ${tokens.last.substring(0, 1).toUpperCase()}.';
   }
 }

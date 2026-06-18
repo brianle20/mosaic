@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:mosaic/data/models/guest_display_names.dart' as guest_names;
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/features/guests/models/guest_contact_formatters.dart';
 
@@ -82,26 +83,14 @@ class GuestFormDraft {
   }
 
   static String defaultPublicDisplayNameFor(String fullName) {
-    final parts = fullName
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .toList(growable: false);
-    if (parts.isEmpty) {
-      return '';
-    }
-    if (parts.length == 1) {
-      return parts.first;
-    }
-    return '${parts.first} ${parts.last.substring(0, 1).toUpperCase()}.';
+    return guest_names.defaultPublicDisplayNameFor(fullName);
   }
 
   String resolvedPublicDisplayName() {
-    final trimmed = publicDisplayName?.trim() ?? '';
-    if (trimmed.isEmpty) {
-      return defaultPublicDisplayNameFor(displayName);
-    }
-    return trimmed;
+    return guest_names.resolvePublicDisplayName(
+      fullName: displayName,
+      publicDisplayName: publicDisplayName,
+    );
   }
 
   GuestFormDraft withDisplayName(String value) {

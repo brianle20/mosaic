@@ -380,7 +380,11 @@ void main() {
                 displayName: 'Cameron Eastman',
                 publicDisplayName: 'Cam E.',
               ),
-              _guest(id: 'gst_04', displayName: 'Dia South'),
+              _guest(
+                id: 'gst_04',
+                displayName: 'Dia South',
+                publicDisplayName: '   ',
+              ),
             ],
           ),
           sessionRepository: const _FakeSessionRepository(),
@@ -400,7 +404,7 @@ void main() {
       '\n'
       'Table 2\n'
       'East: Cam E.\n'
-      'South: Dia South',
+      'South: Dia S.',
     );
     expect(find.text('Seating copied.'), findsOneWidget);
   });

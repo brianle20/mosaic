@@ -544,15 +544,14 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
             TextFormField(
               key: guestNameFieldKey,
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
+              decoration: const InputDecoration(labelText: 'Full Name'),
               validator: (_) => _buildDraft().displayNameError,
             ),
             const SizedBox(height: 12),
             TextFormField(
               key: guestPublicDisplayNameFieldKey,
               controller: _publicDisplayNameController,
-              decoration:
-                  const InputDecoration(labelText: 'Public Display Name'),
+              decoration: const InputDecoration(labelText: 'Public Name'),
             ),
             _buildProfileMatchMessage(),
             if (duplicateWarning != null) ...[

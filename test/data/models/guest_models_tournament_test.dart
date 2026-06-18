@@ -93,6 +93,60 @@ void main() {
       expect(guest.toJson()['public_display_name'], 'Alice C.');
     });
 
+    test('exposes full and public names with generated public fallback', () {
+      final guest = EventGuestRecord.fromJson(
+        _eventGuestJson(publicDisplayName: null),
+      );
+
+      expect(guest.fullName, 'Alice Wong Chen');
+      expect(guest.publicName, 'Alice C.');
+    });
+
+    test('trims explicit public names', () {
+      final guest = EventGuestRecord.fromJson(
+        _eventGuestJson(publicDisplayName: '  Gus  '),
+      );
+
+      expect(guest.fullName, 'Alice Wong Chen');
+      expect(guest.publicName, 'Gus');
+    });
+
+    test('event public name wins over joined profile public name', () {
+      final guest = EventGuestRecord.fromJson({
+        ..._eventGuestJson(publicDisplayName: 'Gus'),
+        'guest_profile': const {
+          'id': 'prf_01',
+          'owner_user_id': 'usr_01',
+          'display_name': 'Agustin Feliciano',
+          'normalized_name': 'agustin feliciano',
+          'public_display_name': 'Agustin F.',
+        },
+      });
+
+      expect(guest.publicDisplayName, 'Gus');
+      expect(guest.publicName, 'Gus');
+    });
+
+    test('event row names win over joined profile defaults', () {
+      final guest = EventGuestRecord.fromJson({
+        ..._eventGuestJson(publicDisplayName: null),
+        'display_name': 'Agustin Feliciano',
+        'normalized_name': 'agustin feliciano',
+        'guest_profile': const {
+          'id': 'prf_01',
+          'owner_user_id': 'usr_01',
+          'display_name': 'Profile Name',
+          'normalized_name': 'profile name',
+          'public_display_name': 'Gus',
+        },
+      });
+
+      expect(guest.displayName, 'Agustin Feliciano');
+      expect(guest.normalizedName, 'agustin feliciano');
+      expect(guest.publicDisplayName, isNull);
+      expect(guest.publicName, 'Agustin F.');
+    });
+
     test('create and update inputs serialize public display names', () {
       final createInput = CreateGuestInput(
         eventId: 'evt_01',

@@ -134,6 +134,62 @@ void main() {
       );
     });
 
+    test('returned guest keeps event public name over profile default',
+        () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseGuestRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        currentUserIdReader: () => 'usr_01',
+        profileOnEventChecker: ({
+          required eventId,
+          required guestProfileId,
+        }) async {},
+        guestProfileInsertRunner: (json) async {
+          return {
+            'id': 'prf_gus',
+            ...json,
+            'public_display_name': 'Agustin F.',
+            'row_version': 1,
+          };
+        },
+        eventGuestInsertRunner: (json) async {
+          return {
+            'id': 'gst_gus',
+            ...json,
+            'public_display_name': 'Gus',
+            'attendance_status': 'expected',
+            'cover_status': 'paid',
+            'cover_amount_cents': 2000,
+            'is_comped': false,
+            'has_scored_play': false,
+            'guest_profile': const {
+              'id': 'prf_gus',
+              'owner_user_id': 'usr_01',
+              'display_name': 'Agustin Feliciano',
+              'normalized_name': 'agustin feliciano',
+              'public_display_name': 'Agustin F.',
+            },
+          };
+        },
+      );
+
+      final guest = await repository.createGuest(
+        const CreateGuestInput(
+          eventId: 'evt_01',
+          displayName: 'Agustin Feliciano',
+          normalizedName: 'agustin feliciano',
+          publicDisplayName: 'Gus',
+          coverStatus: CoverStatus.paid,
+          coverAmountCents: 2000,
+          isComped: false,
+        ),
+      );
+
+      expect(guest.publicDisplayName, 'Gus');
+      expect(guest.publicName, 'Gus');
+    });
+
     test('generated public names collapse extra spaces and use final initial',
         () async {
       final cache = await LocalCache.create();
