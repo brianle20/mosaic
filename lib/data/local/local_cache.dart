@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:mosaic/data/models/activity_models.dart';
+import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -25,6 +26,7 @@ class LocalCache {
   }
 
   static const _eventsKey = 'events';
+  static const _accessStateKey = 'auth:access-state';
   static const _cacheSchemaVersionKey = 'cache-schema-version';
   static const _currentCacheSchemaVersion = 2;
   static const _eventKeyPrefix = 'event:';
@@ -72,6 +74,37 @@ class LocalCache {
       _eventsKey,
       jsonEncode(events.map((event) => event.toJson()).toList()),
     );
+  }
+
+  Future<void> saveAccessState(MosaicAccessState state) async {
+    await _preferences.setString(
+      _accessStateKey,
+      jsonEncode(state.toJson()),
+    );
+  }
+
+  MosaicAccessState? readAccessState(String userId) {
+    final raw = _preferences.getString(_accessStateKey);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+
+    try {
+      final state = MosaicAccessState.fromJson(
+        (jsonDecode(raw) as Map).cast<String, dynamic>(),
+      );
+      return state.userId == userId ? state : null;
+    } on FormatException {
+      return null;
+    } on TypeError {
+      return null;
+    } on ArgumentError {
+      return null;
+    }
+  }
+
+  Future<void> clearAccessState() async {
+    await _preferences.remove(_accessStateKey);
   }
 
   List<EventRecord> readEvents() {

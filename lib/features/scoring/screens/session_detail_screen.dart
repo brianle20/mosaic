@@ -162,11 +162,14 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         : buildSessionDetailViewModel(
             detail: detail,
             guestNamesById: _controller.guestNamesById,
+            syncSnapshot: _controller.syncSnapshot,
             now: widget.now?.call(),
           );
     final sessionStatus = detail?.session.status;
-    final canRecordHand =
-        widget.scoringOpen && sessionStatus == SessionStatus.active;
+    final isSyncBlocked = _controller.syncSnapshot?.isBlocked ?? false;
+    final canRecordHand = widget.scoringOpen &&
+        sessionStatus == SessionStatus.active &&
+        !isSyncBlocked;
     final canControlRoundTimer = viewModel?.showRoundTimer ?? false;
 
     return Scaffold(
@@ -188,8 +191,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       padding: const EdgeInsets.only(bottom: 16),
                       child: InlineErrorBanner(message: actionError),
                     ),
+                  if (viewModel!.blockedSyncMessage case final message?)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: InlineErrorBanner(message: message),
+                    ),
                   _SessionHeader(
-                    viewModel: viewModel!,
+                    viewModel: viewModel,
                     status: detail.session.status,
                   ),
                   const SizedBox(height: 12),
@@ -199,10 +207,12 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                     endReason: detail.session.endReason,
                     handEntryMessage: canRecordHand
                         ? null
-                        : _handEntryStatusMessage(
-                            detail.session.status,
-                            scoringOpen: widget.scoringOpen,
-                          ),
+                        : isSyncBlocked
+                            ? 'Hand entry is unavailable until offline sync is reviewed.'
+                            : _handEntryStatusMessage(
+                                detail.session.status,
+                                scoringOpen: widget.scoringOpen,
+                              ),
                     isSubmitting: _controller.isSubmittingOperation,
                     onRecordHand: canRecordHand ? () => _openHandEntry() : null,
                     onPause: canControlRoundTimer &&
@@ -292,6 +302,16 @@ class _SessionHeader extends StatelessWidget {
                 tone: StatusChipTone.info,
               ),
               StatusChip(label: viewModel.dealerLabel),
+              if (viewModel.pendingSyncLabel case final String pendingSyncLabel)
+                StatusChip(
+                  label: pendingSyncLabel,
+                  tone: StatusChipTone.warning,
+                ),
+              if (viewModel.blockedSyncMessage != null)
+                const StatusChip(
+                  label: 'Sync blocked',
+                  tone: StatusChipTone.danger,
+                ),
             ],
           ),
           if (viewModel.showRoundTimer) ...[
@@ -612,6 +632,14 @@ class _HandHistory extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                         ),
                   ),
+                  if (hand.syncStatusLabel
+                      case final String syncStatusLabel) ...[
+                    const SizedBox(height: 8),
+                    StatusChip(
+                      label: syncStatusLabel,
+                      tone: _handSyncStatusTone(syncStatusLabel),
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Text(hand.summaryLabel),
                 ],
@@ -639,6 +667,14 @@ class _HandHistory extends StatelessWidget {
                           fontWeight: FontWeight.w800,
                         ),
                   ),
+                  if (hand.syncStatusLabel
+                      case final String syncStatusLabel) ...[
+                    const SizedBox(height: 8),
+                    StatusChip(
+                      label: syncStatusLabel,
+                      tone: _handSyncStatusTone(syncStatusLabel),
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Text(hand.summaryLabel),
                 ],
@@ -654,6 +690,10 @@ class _HandHistory extends StatelessWidget {
   HandResultRecord _recordForHand(SessionHandViewModel viewModelHand) {
     return detail.hands.firstWhere((hand) => hand.id == viewModelHand.handId);
   }
+}
+
+StatusChipTone _handSyncStatusTone(String label) {
+  return label == 'Blocked' ? StatusChipTone.danger : StatusChipTone.warning;
 }
 
 StatusChipTone _statusTone(SessionStatus status) {

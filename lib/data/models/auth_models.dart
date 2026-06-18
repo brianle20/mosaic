@@ -97,6 +97,14 @@ class MosaicAccessEvent {
   final String title;
   final MosaicAccessRole role;
 
+  Map<String, dynamic> toJson() {
+    return {
+      'eventId': eventId,
+      'title': title,
+      'role': mosaicAccessRoleToJson(role),
+    };
+  }
+
   bool get isOwner => role == MosaicAccessRole.owner;
 
   bool get isAssignedStaff => !isOwner;
@@ -173,6 +181,14 @@ class MosaicAccessState {
   final String? userId;
   final bool isActive;
   final List<MosaicAccessEvent> events;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'userId': userId,
+      'isActive': isActive,
+      'events': events.map((event) => event.toJson()).toList(growable: false),
+    };
+  }
 
   bool get hasApprovedAccess => isActive && events.isNotEmpty;
 

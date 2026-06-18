@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/offline/offline_models.dart';
+import 'package:mosaic/data/offline/session_sync_status.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 
 class SessionDetailController extends ChangeNotifier {
@@ -16,6 +18,7 @@ class SessionDetailController extends ChangeNotifier {
   String? error;
   String? actionError;
   SessionDetailRecord? detail;
+  SessionSyncSnapshot? syncSnapshot;
   Map<String, String> guestNamesById = const {};
 
   Future<void> load({
@@ -25,15 +28,21 @@ class SessionDetailController extends ChangeNotifier {
     isLoading = true;
     error = null;
     actionError = null;
+    syncSnapshot = null;
     notifyListeners();
 
     try {
       final loadedDetail = await sessionRepository.loadSessionDetail(sessionId);
+      final loadedSyncSnapshot = sessionRepository is SessionSyncStatusProvider
+          ? await (sessionRepository as SessionSyncStatusProvider)
+              .readSessionSyncSnapshot(sessionId)
+          : null;
       final guests = await guestRepository.listGuests(eventId);
       guestNamesById = {
         for (final guest in guests) guest.id: guest.displayName,
       };
       detail = loadedDetail;
+      syncSnapshot = loadedSyncSnapshot;
     } catch (err) {
       error = err.toString();
     } finally {

@@ -168,6 +168,9 @@ class RecordHandResultInput {
     this.fanCount,
     this.dealerWasWaitingAtDraw,
     this.correctionNote,
+    this.clientMutationId,
+    this.expectedRecordedHandCount,
+    this.expectedLastRecordedHandId,
   });
 
   final String tableSessionId;
@@ -179,6 +182,9 @@ class RecordHandResultInput {
   final int? fanCount;
   final bool? dealerWasWaitingAtDraw;
   final String? correctionNote;
+  final String? clientMutationId;
+  final int? expectedRecordedHandCount;
+  final String? expectedLastRecordedHandId;
 
   Map<String, dynamic> toRpcParams() {
     return {
@@ -191,6 +197,9 @@ class RecordHandResultInput {
       'target_fan_count': fanCount,
       'target_dealer_was_waiting_at_draw': dealerWasWaitingAtDraw,
       'target_correction_note': correctionNote,
+      'target_client_mutation_id': clientMutationId,
+      'target_expected_recorded_hand_count': expectedRecordedHandCount,
+      'target_expected_last_recorded_hand_id': expectedLastRecordedHandId,
     };
   }
 }

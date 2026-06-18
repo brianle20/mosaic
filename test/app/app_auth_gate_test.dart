@@ -14,6 +14,7 @@ import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/models/staff_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -506,6 +507,30 @@ class _FakeSeatingRepository implements SeatingRepository {
       null;
 }
 
+class _FakeStaffRepository implements StaffRepository {
+  @override
+  Future<List<EventStaffMembershipRecord>> listEventStaff(
+      String eventId) async {
+    return const [];
+  }
+
+  @override
+  Future<EventStaffMembershipRecord> upsertEventStaff(
+    UpsertEventStaffMembershipInput input,
+  ) {
+    throw StateError('upsertEventStaff is not used by this test fake.');
+  }
+
+  @override
+  Future<EventStaffMembershipRecord> disableEventStaffMembership(
+    String membershipId,
+  ) {
+    throw StateError(
+      'disableEventStaffMembership is not used by this test fake.',
+    );
+  }
+}
+
 class _FakeNfcService implements NfcService {
   const _FakeNfcService();
 
@@ -544,6 +569,7 @@ void main() {
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           seatingRepository: _FakeSeatingRepository(),
+          staffRepository: _FakeStaffRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
@@ -552,6 +578,30 @@ void main() {
 
     expect(find.text('Mosaic Sign In'), findsOneWidget);
     expect(find.text('Events'), findsNothing);
+  });
+
+  testWidgets('injected repositories still render auth gate', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MosaicApp(
+          authRepository: _FakeAuthRepository(),
+          eventRepository: _FakeEventRepository(const []),
+          guestRepository: _FakeGuestRepository(),
+          tableRepository: _FakeTableRepository(),
+          sessionRepository: _FakeSessionRepository(),
+          leaderboardRepository: _FakeLeaderboardRepository(),
+          activityRepository: _FakeActivityRepository(),
+          prizeRepository: _FakePrizeRepository(),
+          seatingRepository: _FakeSeatingRepository(),
+          staffRepository: _FakeStaffRepository(),
+          nfcService: const _FakeNfcService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mosaic Sign In'), findsOneWidget);
+    expect(find.text('Preparing host tools...'), findsNothing);
   });
 
   testWidgets('renders event list when signed in', (tester) async {

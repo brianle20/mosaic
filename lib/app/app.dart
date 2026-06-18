@@ -1,9 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/config/app_environment.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/theme/app_theme.dart';
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/staff_models.dart';
+import 'package:mosaic/data/offline/network_reachability.dart';
+import 'package:mosaic/data/offline/offline_session_repository.dart';
+import 'package:mosaic/data/offline/sqlite_offline_store.dart';
+import 'package:mosaic/data/offline/sync_coordinator.dart';
+import 'package:mosaic/data/repositories/offline_auth_repository.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/data/repositories/supabase_activity_repository.dart';
 import 'package:mosaic/data/repositories/supabase_auth_repository.dart';
@@ -23,7 +30,7 @@ import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/keyboard_dismiss_region.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class MosaicApp extends StatelessWidget {
+class MosaicApp extends StatefulWidget {
   const MosaicApp({
     super.key,
     this.environment,
@@ -56,56 +63,96 @@ class MosaicApp extends StatelessWidget {
   final NfcService? nfcService;
 
   @override
+  State<MosaicApp> createState() => _MosaicAppState();
+}
+
+class _MosaicAppState extends State<MosaicApp> {
+  Future<_LoadedRepositories>? _repositoriesFuture;
+  _LoadedRepositories? _loadedRepositories;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_needsDefaultRepositories(widget)) {
+      _repositoriesFuture = _loadRepositories();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant MosaicApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final needsDefaultRepositories = _needsDefaultRepositories(widget);
+    if (needsDefaultRepositories && _repositoriesFuture == null) {
+      _repositoriesFuture = _loadRepositories();
+    }
+    if (!needsDefaultRepositories && _repositoriesFuture != null) {
+      _repositoriesFuture = null;
+      _disposeLoadedRepositories();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposeLoadedRepositories();
+    super.dispose();
+  }
+
+  bool _needsDefaultRepositories(MosaicApp app) {
+    return app.startupError == null && !_hasInjectedRepositories(app);
+  }
+
+  bool _hasInjectedRepositories(MosaicApp app) {
+    return app.authRepository != null &&
+        app.eventRepository != null &&
+        app.guestRepository != null &&
+        app.tableRepository != null &&
+        app.sessionRepository != null &&
+        app.leaderboardRepository != null &&
+        app.activityRepository != null &&
+        app.prizeRepository != null &&
+        app.seatingRepository != null &&
+        app.nfcService != null;
+  }
+
+  void _disposeLoadedRepositories() {
+    final loadedRepositories = _loadedRepositories;
+    if (loadedRepositories == null) {
+      return;
+    }
+    _loadedRepositories = null;
+    unawaited(loadedRepositories.dispose());
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (startupError != null) {
+    if (widget.startupError != null) {
       return MaterialApp(
         title: 'Mosaic',
         theme: AppTheme.build(),
         builder: _buildKeyboardDismissRegion,
-        home: _StartupErrorScreen(message: startupError!),
+        home: _StartupErrorScreen(message: widget.startupError!),
       );
     }
 
-    if (authRepository != null &&
-        eventRepository != null &&
-        guestRepository != null &&
-        tableRepository != null &&
-        sessionRepository != null &&
-        leaderboardRepository != null &&
-        activityRepository != null &&
-        prizeRepository != null &&
-        seatingRepository != null &&
-        nfcService != null) {
+    if (_hasInjectedRepositories(widget)) {
       return _AppWithRepositories(
-        authRepository: authRepository!,
-        eventRepository: eventRepository!,
-        guestRepository: guestRepository!,
-        tableRepository: tableRepository!,
-        sessionRepository: sessionRepository!,
-        leaderboardRepository: leaderboardRepository!,
-        activityRepository: activityRepository!,
-        prizeRepository: prizeRepository!,
-        seatingRepository: seatingRepository!,
-        staffRepository: staffRepository ?? const _UnavailableStaffRepository(),
-        nfcService: nfcService!,
+        authRepository: widget.authRepository!,
+        eventRepository: widget.eventRepository!,
+        guestRepository: widget.guestRepository!,
+        tableRepository: widget.tableRepository!,
+        sessionRepository: widget.sessionRepository!,
+        leaderboardRepository: widget.leaderboardRepository!,
+        activityRepository: widget.activityRepository!,
+        prizeRepository: widget.prizeRepository!,
+        seatingRepository: widget.seatingRepository!,
+        staffRepository:
+            widget.staffRepository ?? const _UnavailableStaffRepository(),
+        nfcService: widget.nfcService!,
       );
     }
 
-    return FutureBuilder<
-        ({
-          AuthRepository authRepository,
-          EventRepository eventRepository,
-          GuestRepository guestRepository,
-          TableRepository tableRepository,
-          SessionRepository sessionRepository,
-          LeaderboardRepository leaderboardRepository,
-          ActivityRepository activityRepository,
-          PrizeRepository prizeRepository,
-          SeatingRepository seatingRepository,
-          StaffRepository staffRepository,
-          NfcService nfcService,
-        })>(
-      future: _loadRepositories(),
+    return FutureBuilder<_LoadedRepositories>(
+      future: _repositoriesFuture ??= _loadRepositories(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return MaterialApp(
@@ -121,7 +168,7 @@ class MosaicApp extends StatelessWidget {
             title: 'Mosaic',
             theme: AppTheme.build(),
             builder: _buildKeyboardDismissRegion,
-            home: _BootstrapLoadingScreen(environment: environment),
+            home: _BootstrapLoadingScreen(environment: widget.environment),
           );
         }
 
@@ -142,24 +189,33 @@ class MosaicApp extends StatelessWidget {
     );
   }
 
-  Future<
-      ({
-        AuthRepository authRepository,
-        EventRepository eventRepository,
-        GuestRepository guestRepository,
-        TableRepository tableRepository,
-        SessionRepository sessionRepository,
-        LeaderboardRepository leaderboardRepository,
-        ActivityRepository activityRepository,
-        PrizeRepository prizeRepository,
-        SeatingRepository seatingRepository,
-        StaffRepository staffRepository,
-        NfcService nfcService,
-      })> _loadRepositories() async {
+  Future<_LoadedRepositories> _loadRepositories() async {
     final cache = await LocalCache.create();
     final client = Supabase.instance.client;
-    return (
-      authRepository: SupabaseAuthRepository.fromClient(client),
+    final offlineStore = await SqliteOfflineStore.open();
+    final reachability = DefaultNetworkReachability(client: client);
+    final supabaseAuthRepository = SupabaseAuthRepository.fromClient(client);
+    final supabaseSessionRepository = SupabaseSessionRepository(
+      client: client,
+      cache: cache,
+    );
+    final sessionRepository = OfflineSessionRepository(
+      inner: supabaseSessionRepository,
+      store: offlineStore,
+      reachability: reachability,
+    );
+    final syncCoordinator = SyncCoordinator(
+      store: offlineStore,
+      sessionRepository: supabaseSessionRepository,
+      reachability: reachability,
+    );
+
+    final loadedRepositories = _LoadedRepositories(
+      authRepository: OfflineAuthRepository(
+        inner: supabaseAuthRepository,
+        cache: cache,
+        reachability: reachability,
+      ),
       eventRepository: SupabaseEventRepository(
         client: client,
         cache: cache,
@@ -172,10 +228,7 @@ class MosaicApp extends StatelessWidget {
         client: client,
         cache: cache,
       ),
-      sessionRepository: SupabaseSessionRepository(
-        client: client,
-        cache: cache,
-      ),
+      sessionRepository: sessionRepository,
       leaderboardRepository: SupabaseLeaderboardRepository(
         client: client,
         cache: cache,
@@ -194,7 +247,51 @@ class MosaicApp extends StatelessWidget {
       ),
       staffRepository: SupabaseStaffRepository(client: client),
       nfcService: createDefaultNfcService(),
+      offlineStore: offlineStore,
     );
+
+    if (!mounted) {
+      await loadedRepositories.dispose();
+      throw StateError('Mosaic app was disposed before startup completed.');
+    }
+
+    _loadedRepositories = loadedRepositories;
+    unawaited(syncCoordinator.initialize().catchError((Object _) {}));
+    return loadedRepositories;
+  }
+}
+
+class _LoadedRepositories {
+  const _LoadedRepositories({
+    required this.authRepository,
+    required this.eventRepository,
+    required this.guestRepository,
+    required this.tableRepository,
+    required this.sessionRepository,
+    required this.leaderboardRepository,
+    required this.activityRepository,
+    required this.prizeRepository,
+    required this.seatingRepository,
+    required this.staffRepository,
+    required this.nfcService,
+    required this.offlineStore,
+  });
+
+  final AuthRepository authRepository;
+  final EventRepository eventRepository;
+  final GuestRepository guestRepository;
+  final TableRepository tableRepository;
+  final SessionRepository sessionRepository;
+  final LeaderboardRepository leaderboardRepository;
+  final ActivityRepository activityRepository;
+  final PrizeRepository prizeRepository;
+  final SeatingRepository seatingRepository;
+  final StaffRepository staffRepository;
+  final NfcService nfcService;
+  final SqliteOfflineStore? offlineStore;
+
+  Future<void> dispose() async {
+    await offlineStore?.close();
   }
 }
 

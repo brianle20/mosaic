@@ -269,6 +269,68 @@ void main() {
       expect(detail.hands.single.fanCount, 6);
     });
 
+    test('records hand with offline idempotency params when provided',
+        () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseSessionRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcSingleRunner: (functionName, params) async {
+          expect(functionName, 'record_hand_result');
+          expect(
+            params['target_client_mutation_id'],
+            '11111111-1111-1111-1111-111111111111',
+          );
+          expect(params['target_expected_recorded_hand_count'], 4);
+          expect(params['target_expected_last_recorded_hand_id'], 'hand_04');
+          return {
+            'id': 'hand_05',
+            'table_session_id': 'ses_01',
+            'hand_number': 5,
+            'result_type': 'win',
+            'winner_seat_index': 0,
+            'win_type': 'self_draw',
+            'discarder_seat_index': null,
+            'fan_count': 5,
+            'base_points': 16,
+            'east_seat_index_before_hand': 0,
+            'east_seat_index_after_hand': 0,
+            'dealer_rotated': false,
+            'session_completed_after_hand': false,
+            'status': 'recorded',
+            'entered_by_user_id': 'usr_01',
+            'entered_at': '2026-04-24T19:40:00-07:00',
+          };
+        },
+        sessionDetailLoader: (_) async => _sessionDetailJson(
+          hands: [
+            _handJson(
+              id: 'hand_05',
+              handNumber: 5,
+              winnerSeatIndex: 0,
+              winType: 'self_draw',
+              fanCount: 5,
+            ),
+          ],
+        ),
+      );
+
+      final detail = await repository.recordHand(
+        const RecordHandResultInput(
+          tableSessionId: 'ses_01',
+          resultType: HandResultType.win,
+          winnerSeatIndex: 0,
+          winType: HandWinType.selfDraw,
+          fanCount: 5,
+          clientMutationId: '11111111-1111-1111-1111-111111111111',
+          expectedRecordedHandCount: 4,
+          expectedLastRecordedHandId: 'hand_04',
+        ),
+      );
+
+      expect(detail.hands.single.id, 'hand_05');
+    });
+
     test('edits and voids a hand through scoring RPCs', () async {
       final rpcCalls = <String>[];
       final cache = await LocalCache.create();
@@ -367,4 +429,58 @@ void main() {
       expect(voided.hands.single.status, HandResultStatus.voided);
     });
   });
+}
+
+Map<String, dynamic> _sessionDetailJson({
+  required List<Map<String, dynamic>> hands,
+}) {
+  return {
+    'session': {
+      'id': 'ses_01',
+      'event_id': 'evt_01',
+      'event_table_id': 'tbl_01',
+      'session_number_for_table': 1,
+      'ruleset_id': 'HK_STANDARD',
+      'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'rotation_policy_config_json': {},
+      'status': 'active',
+      'initial_east_seat_index': 0,
+      'current_dealer_seat_index': 0,
+      'dealer_pass_count': 0,
+      'completed_games_count': hands.length,
+      'hand_count': hands.length,
+      'started_at': '2026-04-24T19:00:00-07:00',
+      'started_by_user_id': 'usr_01',
+    },
+    'seats': const [],
+    'hands': hands,
+    'settlements': const [],
+  };
+}
+
+Map<String, dynamic> _handJson({
+  required String id,
+  required int handNumber,
+  required int? winnerSeatIndex,
+  required String? winType,
+  required int? fanCount,
+}) {
+  return {
+    'id': id,
+    'table_session_id': 'ses_01',
+    'hand_number': handNumber,
+    'result_type': 'win',
+    'winner_seat_index': winnerSeatIndex,
+    'win_type': winType,
+    'discarder_seat_index': null,
+    'fan_count': fanCount,
+    'base_points': 16,
+    'east_seat_index_before_hand': 0,
+    'east_seat_index_after_hand': 0,
+    'dealer_rotated': false,
+    'session_completed_after_hand': false,
+    'status': 'recorded',
+    'entered_by_user_id': 'usr_01',
+    'entered_at': '2026-04-24T19:40:00-07:00',
+  };
 }

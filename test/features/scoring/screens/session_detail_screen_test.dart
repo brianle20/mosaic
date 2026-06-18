@@ -5,6 +5,8 @@ import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/offline/offline_models.dart';
+import 'package:mosaic/data/offline/session_sync_status.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 
@@ -147,10 +149,16 @@ class _FakeGuestRepository implements GuestRepository {
   }
 }
 
-class _FakeSessionRepository implements SessionRepository {
-  _FakeSessionRepository({required this.detail});
+class _FakeSessionRepository
+    implements SessionRepository, SessionSyncStatusProvider {
+  _FakeSessionRepository({
+    required this.detail,
+    SessionSyncSnapshot? syncSnapshot,
+  }) : syncSnapshot =
+            syncSnapshot ?? SessionSyncSnapshot(sessionId: detail.session.id);
 
   SessionDetailRecord detail;
+  SessionSyncSnapshot syncSnapshot;
   SessionDetailRecord? recordHandDetail;
   String? endedReason;
 
@@ -191,6 +199,10 @@ class _FakeSessionRepository implements SessionRepository {
   @override
   Future<SessionDetailRecord> loadSessionDetail(String sessionId) async =>
       detail;
+
+  @override
+  Future<SessionSyncSnapshot> readSessionSyncSnapshot(String sessionId) async =>
+      syncSnapshot;
 
   @override
   Future<SessionDetailRecord> pauseSession(String sessionId) async {
@@ -672,6 +684,101 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('pending offline hand sync state renders count and hand chip',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: _buildDetail(
+              SessionStatus.active,
+              hands: const [
+                {
+                  'id': 'pending:mut_01',
+                  'table_session_id': 'ses_01',
+                  'hand_number': 1,
+                  'result_type': 'washout',
+                  'east_seat_index_before_hand': 0,
+                  'east_seat_index_after_hand': 1,
+                  'dealer_rotated': true,
+                  'session_completed_after_hand': false,
+                  'status': 'recorded',
+                  'entered_by_user_id': 'usr_01',
+                  'entered_at': '2026-04-24T19:05:00-07:00',
+                },
+              ],
+            ),
+            syncSnapshot: SessionSyncSnapshot(
+              sessionId: 'ses_01',
+              pendingHandIds: const {'pending:mut_01'},
+              pendingCount: 1,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 hand pending sync'), findsOneWidget);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pending'), findsOneWidget);
+  });
+
+  testWidgets(
+      'blocked offline hand sync state requires review and disables hand entry',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: _buildDetail(
+              SessionStatus.active,
+              hands: const [
+                {
+                  'id': 'pending:mut_01',
+                  'table_session_id': 'ses_01',
+                  'hand_number': 1,
+                  'result_type': 'washout',
+                  'east_seat_index_before_hand': 0,
+                  'east_seat_index_after_hand': 1,
+                  'dealer_rotated': true,
+                  'session_completed_after_hand': false,
+                  'status': 'recorded',
+                  'entered_by_user_id': 'usr_01',
+                  'entered_at': '2026-04-24T19:05:00-07:00',
+                },
+              ],
+            ),
+            syncSnapshot: SessionSyncSnapshot(
+              sessionId: 'ses_01',
+              blockedHandIds: const {'pending:mut_01'},
+              isBlocked: true,
+              blockedReason: 'Current session hand count has changed.',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('needs review'), findsOneWidget);
+    expect(find.text('Record Hand'), findsNothing);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Blocked'), findsOneWidget);
   });
 
   testWidgets('voided hands render in a separate archive section',

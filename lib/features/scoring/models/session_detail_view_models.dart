@@ -2,6 +2,7 @@ import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/offline/offline_models.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 
 class SessionDetailViewModel {
@@ -17,6 +18,8 @@ class SessionDetailViewModel {
     required this.roundTimeLabel,
     required this.isRoundExpired,
     required this.isRoundEndingSoon,
+    required this.pendingSyncLabel,
+    required this.blockedSyncMessage,
     required this.seats,
     required this.hands,
     required this.archivedHands,
@@ -34,6 +37,8 @@ class SessionDetailViewModel {
   final String roundTimeLabel;
   final bool isRoundExpired;
   final bool isRoundEndingSoon;
+  final String? pendingSyncLabel;
+  final String? blockedSyncMessage;
   final List<SessionSeatViewModel> seats;
   final List<SessionHandViewModel> hands;
   final List<SessionHandViewModel> archivedHands;
@@ -63,6 +68,7 @@ class SessionHandViewModel {
     required this.title,
     required this.summaryLabel,
     required this.isVoided,
+    required this.syncStatusLabel,
   });
 
   final String handId;
@@ -70,11 +76,13 @@ class SessionHandViewModel {
   final String title;
   final String summaryLabel;
   final bool isVoided;
+  final String? syncStatusLabel;
 }
 
 SessionDetailViewModel buildSessionDetailViewModel({
   required SessionDetailRecord detail,
   required Map<String, String> guestNamesById,
+  SessionSyncSnapshot? syncSnapshot,
   DateTime? now,
 }) {
   final currentEastSeatIndex = detail.session.currentDealerSeatIndex;
@@ -109,6 +117,8 @@ SessionDetailViewModel buildSessionDetailViewModel({
     roundTimeLabel: roundTime?.label ?? '',
     isRoundExpired: roundTime?.isExpired ?? false,
     isRoundEndingSoon: roundTime?.isEndingSoon ?? false,
+    pendingSyncLabel: _pendingSyncLabel(syncSnapshot),
+    blockedSyncMessage: _blockedSyncMessage(syncSnapshot),
     seats: detail.seats
         .map(
           (seat) => SessionSeatViewModel(
@@ -129,6 +139,7 @@ SessionDetailViewModel buildSessionDetailViewModel({
             title: 'Hand ${hand.handNumber}',
             summaryLabel: _handSummary(detail, guestNamesById, hand),
             isVoided: hand.status == HandResultStatus.voided,
+            syncStatusLabel: _handSyncStatusLabel(syncSnapshot, hand.id),
           ),
         )
         .toList(growable: false),
@@ -141,11 +152,54 @@ SessionDetailViewModel buildSessionDetailViewModel({
             title: 'Voided Hand ${hand.handNumber}',
             summaryLabel: _handSummary(detail, guestNamesById, hand),
             isVoided: true,
+            syncStatusLabel: _handSyncStatusLabel(syncSnapshot, hand.id),
           ),
         )
         .toList(growable: false),
     emptyHandHistoryLabel: 'No hands recorded yet.',
   );
+}
+
+String? _pendingSyncLabel(SessionSyncSnapshot? syncSnapshot) {
+  final pendingCount = syncSnapshot?.pendingCount ?? 0;
+  if (pendingCount <= 0) {
+    return null;
+  }
+
+  final noun = pendingCount == 1 ? 'hand' : 'hands';
+  return '$pendingCount $noun pending sync';
+}
+
+String? _blockedSyncMessage(SessionSyncSnapshot? syncSnapshot) {
+  if (syncSnapshot == null || !syncSnapshot.isBlocked) {
+    return null;
+  }
+
+  final reason = syncSnapshot.blockedReason?.trim();
+  const baseMessage =
+      'Offline hand sync needs review before more hands can be recorded.';
+  if (reason == null || reason.isEmpty) {
+    return baseMessage;
+  }
+
+  return '$baseMessage $reason';
+}
+
+String? _handSyncStatusLabel(
+  SessionSyncSnapshot? syncSnapshot,
+  String handId,
+) {
+  if (syncSnapshot == null) {
+    return null;
+  }
+  if (syncSnapshot.blockedHandIds.contains(handId)) {
+    return 'Blocked';
+  }
+  if (syncSnapshot.pendingHandIds.contains(handId)) {
+    return 'Pending';
+  }
+
+  return null;
 }
 
 bool _hasRoundTimer(TableSessionRecord session) {
