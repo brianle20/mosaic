@@ -282,18 +282,42 @@ void main() {
     expect(metadataSql, contains('event_cover_charge_cents'));
   });
 
-  test('public realtime uses a public-safe update table', () {
-    expect(migrationsSql, contains('public.public_event_updates'));
-    expect(migrationsSql, contains('public_event_updates_public_read'));
-    expect(migrationsSql, contains('to anon, authenticated'));
-    expect(migrationsSql, contains('alter publication supabase_realtime'));
-    expect(migrationsSql, contains('insert_public_event_update'));
+  test(
+      'public realtime uses cached standings snapshots instead of legacy update rows',
+      () {
+    final cleanupSql = _extractMigration(
+      migrationsSql,
+      '20260625180000_retire_public_event_updates.sql',
+    );
+
+    expect(migrationsSql, contains('public.public_event_standings_snapshots'));
+    expect(
+      migrationsSql,
+      contains('public_event_standings_snapshots_public_read'),
+    );
+    expect(
+      cleanupSql,
+      contains(
+        'alter publication supabase_realtime '
+        'drop table public.public_event_updates',
+      ),
+    );
+    expect(
+      cleanupSql,
+      contains(
+          'drop function if exists app_private.insert_public_event_update()'),
+    );
+    expect(
+      cleanupSql,
+      contains('drop table if exists public.public_event_updates'),
+    );
+    expect(cleanupSql, isNot(contains('create trigger public_event_updates_')));
   });
 
   test('public realtime streams a cached standings snapshot row', () {
-    final publicUpdateSql = _extractFunction(
+    final guestSnapshotRefreshSql = _extractFunction(
       migrationsSql,
-      'app_private.insert_public_event_update',
+      'app_private.refresh_public_standings_snapshot_for_event_guest_change',
     );
     final refreshTotalsSql = _extractFunction(
       migrationsSql,
@@ -334,12 +358,16 @@ void main() {
       ),
     );
     expect(
-      publicUpdateSql,
-      contains('tg_table_name not in'),
+      guestSnapshotRefreshSql,
+      contains("when tg_op = 'DELETE' then old.event_id"),
     );
-    expect(publicUpdateSql, contains("'event_score_totals'"));
-    expect(publicUpdateSql, contains("'hand_results'"));
-    expect(publicUpdateSql, contains("'table_sessions'"));
+    expect(guestSnapshotRefreshSql, contains('else new.event_id'));
+    expect(
+      guestSnapshotRefreshSql,
+      contains(
+        'perform app_private.refresh_public_event_standings_snapshot(target_event_id);',
+      ),
+    );
     expect(
       refreshTotalsSql,
       contains(
@@ -577,6 +605,18 @@ String _readAllMigrationSql() {
   return migrationFiles
       .map((file) => '-- ${file.path}\n${file.readAsStringSync()}')
       .join('\n\n');
+}
+
+String _extractMigration(String sql, String fileName) {
+  final marker = '-- supabase/migrations/$fileName\n';
+  final start = sql.indexOf(marker);
+  if (start == -1) {
+    return '';
+  }
+
+  final next =
+      sql.indexOf('\n\n-- supabase/migrations/', start + marker.length);
+  return next == -1 ? sql.substring(start) : sql.substring(start, next);
 }
 
 String _extractFunction(String sql, String functionName) {
