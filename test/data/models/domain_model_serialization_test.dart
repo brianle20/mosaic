@@ -357,7 +357,8 @@ void main() {
         },
       });
 
-      expect(guest.displayName, 'Brian Le');
+      expect(guest.displayName, 'Legacy Name');
+      expect(guest.guestProfileId, 'prf_01');
       expect(guest.instagramHandle, 'brian.le');
       expect(guest.toJson()['instagram_handle'], 'brian.le');
     });
