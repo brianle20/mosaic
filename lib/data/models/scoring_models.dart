@@ -45,6 +45,7 @@ class HandResultRecord {
     this.dealerWasWaitingAtDraw,
     this.correctionNote,
     this.rowVersion = 1,
+    this.clientMutationId,
   });
 
   factory HandResultRecord.fromJson(Map<String, dynamic> json) {
@@ -71,6 +72,7 @@ class HandResultRecord {
       enteredAt: _requiredDateTime(json, 'entered_at'),
       correctionNote: _optionalString(json, 'correction_note'),
       rowVersion: _intOrDefault(json, 'row_version', 1),
+      clientMutationId: _optionalString(json, 'client_mutation_id'),
     );
   }
 
@@ -94,6 +96,7 @@ class HandResultRecord {
   final DateTime enteredAt;
   final String? correctionNote;
   final int rowVersion;
+  final String? clientMutationId;
 
   Map<String, dynamic> toJson() {
     return {
@@ -117,6 +120,7 @@ class HandResultRecord {
       'entered_at': enteredAt.toIso8601String(),
       'correction_note': correctionNote,
       'row_version': rowVersion,
+      'client_mutation_id': clientMutationId,
     };
   }
 }
@@ -236,6 +240,9 @@ class RecordHandResultInput {
     this.clientMutationId,
     this.expectedRecordedHandCount,
     this.expectedLastRecordedHandId,
+    this.photoClientId,
+    this.photoLocalPath,
+    this.photoCapturedAt,
   });
 
   final String tableSessionId;
@@ -250,9 +257,12 @@ class RecordHandResultInput {
   final String? clientMutationId;
   final int? expectedRecordedHandCount;
   final String? expectedLastRecordedHandId;
+  final String? photoClientId;
+  final String? photoLocalPath;
+  final DateTime? photoCapturedAt;
 
   Map<String, dynamic> toRpcParams() {
-    return {
+    final params = {
       'target_table_session_id': tableSessionId,
       'target_result_type': _handResultTypeToJson(resultType),
       'target_winner_seat_index': winnerSeatIndex,
@@ -266,6 +276,14 @@ class RecordHandResultInput {
       'target_expected_recorded_hand_count': expectedRecordedHandCount,
       'target_expected_last_recorded_hand_id': expectedLastRecordedHandId,
     };
+    if (photoClientId != null) {
+      params['target_photo_client_id'] = photoClientId;
+    }
+    if (photoCapturedAt != null) {
+      params['target_photo_captured_at'] =
+          photoCapturedAt!.toUtc().toIso8601String();
+    }
+    return params;
   }
 }
 

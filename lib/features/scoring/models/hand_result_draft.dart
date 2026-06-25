@@ -15,6 +15,10 @@ class HandResultDraft {
     this.dealerWasWaitingAtDraw,
     this.correctionNote = '',
     this.blockedWinnerSeatIndexes = const {},
+    this.requiresPhoto = false,
+    this.photoClientId,
+    this.photoLocalPath,
+    this.photoCapturedAt,
   });
 
   final HandResultType resultType;
@@ -26,6 +30,10 @@ class HandResultDraft {
   final bool? dealerWasWaitingAtDraw;
   final String correctionNote;
   final Set<int> blockedWinnerSeatIndexes;
+  final bool requiresPhoto;
+  final String? photoClientId;
+  final String? photoLocalPath;
+  final DateTime? photoCapturedAt;
 
   String? get winnerSeatError {
     if (resultType == HandResultType.win && winnerSeatIndex == null) {
@@ -109,7 +117,32 @@ class HandResultDraft {
     return null;
   }
 
+  String? get photoEvidenceError {
+    if (resultType == HandResultType.win &&
+        requiresPhoto &&
+        (photoClientId == null ||
+            photoClientId!.trim().isEmpty ||
+            photoLocalPath == null ||
+            photoLocalPath!.trim().isEmpty ||
+            photoCapturedAt == null)) {
+      return 'Capture a photo of the winning hand.';
+    }
+
+    return null;
+  }
+
   bool get isValid {
+    return winnerSeatError == null &&
+        fanCountError == null &&
+        winTypeError == null &&
+        discarderSeatError == null &&
+        washoutFieldError == null &&
+        falseWinPenaltySeatError == null &&
+        washoutDealerWaitingError == null &&
+        photoEvidenceError == null;
+  }
+
+  bool get canBuildPreview {
     return winnerSeatError == null &&
         fanCountError == null &&
         winTypeError == null &&
@@ -118,8 +151,6 @@ class HandResultDraft {
         falseWinPenaltySeatError == null &&
         washoutDealerWaitingError == null;
   }
-
-  bool get canBuildPreview => isValid;
 
   RecordHandResultInput toRecordInput({required String tableSessionId}) {
     if (resultType == HandResultType.falseWinPenalty) {
@@ -141,6 +172,10 @@ class HandResultDraft {
       dealerWasWaitingAtDraw: null,
       correctionNote:
           correctionNote.trim().isEmpty ? null : correctionNote.trim(),
+      photoClientId: resultType == HandResultType.win ? photoClientId : null,
+      photoLocalPath: resultType == HandResultType.win ? photoLocalPath : null,
+      photoCapturedAt:
+          resultType == HandResultType.win ? photoCapturedAt : null,
     );
   }
 

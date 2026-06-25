@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/app/app.dart';
+import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/hand_evidence_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -537,6 +539,24 @@ class _FakeStaffRepository implements StaffRepository {
   }
 }
 
+class _FakeMosaicProfileRepository implements MosaicProfileRepository {
+  const _FakeMosaicProfileRepository();
+
+  @override
+  Future<List<HandPhotoRecord>> listHandEvidenceReview(String eventId) async =>
+      const [];
+
+  @override
+  Future<HandTileEntryRecord> upsertHandTileEntry({
+    required String handResultId,
+    required Map<String, dynamic> tilesJson,
+    required int? calculatedFanCount,
+    required String calculationVersion,
+  }) {
+    throw StateError('upsertHandTileEntry is not used by this test fake.');
+  }
+}
+
 class _FakeNfcService implements NfcService {
   const _FakeNfcService();
 
@@ -575,6 +595,7 @@ void main() {
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           seatingRepository: _FakeSeatingRepository(),
+          mosaicProfileRepository: const _FakeMosaicProfileRepository(),
           staffRepository: _FakeStaffRepository(),
           nfcService: const _FakeNfcService(),
         ),
@@ -599,6 +620,7 @@ void main() {
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           seatingRepository: _FakeSeatingRepository(),
+          mosaicProfileRepository: const _FakeMosaicProfileRepository(),
           staffRepository: _FakeStaffRepository(),
           nfcService: const _FakeNfcService(),
         ),
@@ -643,6 +665,7 @@ void main() {
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           seatingRepository: _FakeSeatingRepository(),
+          mosaicProfileRepository: const _FakeMosaicProfileRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
@@ -688,6 +711,7 @@ void main() {
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           seatingRepository: _FakeSeatingRepository(),
+          mosaicProfileRepository: const _FakeMosaicProfileRepository(),
           nfcService: const _FakeNfcService(),
         ),
       ),
@@ -699,6 +723,43 @@ void main() {
 
     expect(find.text('Mosaic Sign In'), findsOneWidget);
     expect(find.text('Events'), findsNothing);
+  });
+
+  testWidgets('builds hand evidence review route with injected repository',
+      (tester) async {
+    final router = AppRouter(
+      eventRepository: _FakeEventRepository(const []),
+      guestRepository: _FakeGuestRepository(),
+      tableRepository: _FakeTableRepository(),
+      sessionRepository: _FakeSessionRepository(),
+      leaderboardRepository: _FakeLeaderboardRepository(),
+      activityRepository: _FakeActivityRepository(),
+      prizeRepository: _FakePrizeRepository(),
+      seatingRepository: _FakeSeatingRepository(),
+      mosaicProfileRepository: const _FakeMosaicProfileRepository(),
+      staffRepository: _FakeStaffRepository(),
+      nfcService: const _FakeNfcService(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        onGenerateRoute: router.onGenerateRoute,
+        initialRoute: AppRouter.handEvidenceReviewRoute,
+        onGenerateInitialRoutes: (initialRoute) {
+          return [
+            router.onGenerateRoute(
+              const RouteSettings(
+                name: AppRouter.handEvidenceReviewRoute,
+                arguments: HandEvidenceReviewArgs(eventId: 'evt_01'),
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hand Evidence Review'), findsOneWidget);
   });
 
   testWidgets('renders a clearer startup error state', (tester) async {

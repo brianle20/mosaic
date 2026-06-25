@@ -46,6 +46,37 @@ void main() {
       expect(draft.isValid, isFalse);
     });
 
+    test('new rated win requires local photo path', () {
+      const draft = HandResultDraft(
+        resultType: HandResultType.win,
+        winnerSeatIndex: 0,
+        winType: HandWinType.selfDraw,
+        fanCount: 3,
+        requiresPhoto: true,
+      );
+
+      expect(draft.photoEvidenceError, 'Capture a photo of the winning hand.');
+      expect(draft.isValid, isFalse);
+      expect(draft.canBuildPreview, isTrue);
+    });
+
+    test('photo is not required for washout or correction', () {
+      const washout = HandResultDraft(
+        resultType: HandResultType.washout,
+        requiresPhoto: true,
+      );
+      const correction = HandResultDraft(
+        resultType: HandResultType.win,
+        winnerSeatIndex: 0,
+        winType: HandWinType.selfDraw,
+        fanCount: 3,
+        requiresPhoto: false,
+      );
+
+      expect(washout.photoEvidenceError, isNull);
+      expect(correction.photoEvidenceError, isNull);
+    });
+
     test('discard requires a different discarder seat', () {
       const draft = HandResultDraft(
         resultType: HandResultType.win,

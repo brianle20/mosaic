@@ -19,6 +19,7 @@ import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
 import 'package:mosaic/features/scoring/screens/event_hand_ledger_screen.dart';
+import 'package:mosaic/features/scoring/screens/hand_evidence_review_screen.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 import 'package:mosaic/features/tables/screens/seating_assignment_screen.dart';
 import 'package:mosaic/features/tables/screens/table_form_screen.dart';
@@ -36,6 +37,7 @@ class AppRouter {
     required this.activityRepository,
     required this.prizeRepository,
     required this.seatingRepository,
+    required this.mosaicProfileRepository,
     this.staffRepository,
     required this.nfcService,
     this.accessState,
@@ -49,6 +51,7 @@ class AppRouter {
   final ActivityRepository activityRepository;
   final PrizeRepository prizeRepository;
   final SeatingRepository seatingRepository;
+  final MosaicProfileRepository mosaicProfileRepository;
   final StaffRepository? staffRepository;
   final NfcService nfcService;
   final MosaicAccessState? accessState;
@@ -66,6 +69,7 @@ class AppRouter {
   static const leaderboardRoute = '/leaderboard';
   static const activityRoute = '/activity';
   static const eventHandLedgerRoute = '/events/hand-ledger';
+  static const handEvidenceReviewRoute = '/events/hand-evidence-review';
   static const bonusRoundRoute = '/events/bonus-round';
   static const prizePlanRoute = '/prizes/plan';
   static const prizeAwardsRoute = '/prizes/awards';
@@ -246,6 +250,15 @@ class AppRouter {
           ),
           settings: settings,
         );
+      case handEvidenceReviewRoute:
+        final args = settings.arguments as HandEvidenceReviewArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => HandEvidenceReviewScreen(
+            eventId: args.eventId,
+            mosaicProfileRepository: mosaicProfileRepository,
+          ),
+          settings: settings,
+        );
       case bonusRoundRoute:
         final args = settings.arguments as BonusRoundArgs;
         return MaterialPageRoute<void>(
@@ -380,6 +393,14 @@ class EventHandLedgerArgs {
 
   final String eventId;
   final bool canCorrectHands;
+}
+
+class HandEvidenceReviewArgs {
+  const HandEvidenceReviewArgs({
+    required this.eventId,
+  });
+
+  final String eventId;
 }
 
 class BonusRoundArgs {

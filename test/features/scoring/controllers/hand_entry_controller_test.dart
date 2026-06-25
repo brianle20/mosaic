@@ -2,17 +2,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/features/scoring/controllers/hand_entry_controller.dart';
+import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
 
 import '../../../helpers/repository_fakes.dart';
 
 class _RecordingSessionRepository extends ThrowingSessionRepository {
+  RecordHandResultInput? recordInput;
   RecordFalseWinPenaltyInput? falseWinPenaltyInput;
+
+  @override
+  Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
+    recordInput = input;
+    return _emptySessionDetail();
+  }
 
   @override
   Future<SessionDetailRecord> recordFalseWinPenalty(
     RecordFalseWinPenaltyInput input,
   ) async {
     falseWinPenaltyInput = input;
+    return _emptySessionDetail();
+  }
+
+  SessionDetailRecord _emptySessionDetail() {
     return SessionDetailRecord.fromJson(const {
       'session': {
         'id': 'session-1',
@@ -54,6 +66,31 @@ void main() {
       expect(repository.falseWinPenaltyInput?.tableSessionId, 'session-1');
       expect(repository.falseWinPenaltyInput?.penaltySeatIndex, 3);
       expect(controller.submitError, isNull);
+    });
+
+    test('passes photo metadata on new win submit', () async {
+      final repository = _RecordingSessionRepository();
+      final controller = HandEntryController(sessionRepository: repository);
+      final capturedAt = DateTime.utc(2026, 6, 25, 18);
+
+      final detail = await controller.submit(
+        tableSessionId: 'session-1',
+        draft: HandResultDraft(
+          resultType: HandResultType.win,
+          winnerSeatIndex: 0,
+          winType: HandWinType.selfDraw,
+          fanCount: 3,
+          requiresPhoto: true,
+          photoClientId: 'photo_client_01',
+          photoLocalPath: '/local/photo.jpg',
+          photoCapturedAt: capturedAt,
+        ),
+      );
+
+      expect(detail, isNotNull);
+      expect(repository.recordInput?.photoClientId, 'photo_client_01');
+      expect(repository.recordInput?.photoLocalPath, '/local/photo.jpg');
+      expect(repository.recordInput?.photoCapturedAt, capturedAt);
     });
   });
 }

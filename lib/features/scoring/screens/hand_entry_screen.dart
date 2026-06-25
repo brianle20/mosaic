@@ -8,6 +8,7 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/hand_entry_controller.dart';
 import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
+import 'package:mosaic/services/media/hand_photo_service.dart';
 
 enum _PlayerScanTarget { winner, discarder, penaltyCaller }
 
@@ -19,12 +20,14 @@ class HandEntryScreen extends StatefulWidget {
     required this.sessionDetail,
     required this.guestNamesById,
     required this.sessionRepository,
+    this.handPhotoService,
     this.initialHand,
   });
 
   final SessionDetailRecord sessionDetail;
   final Map<String, String> guestNamesById;
   final SessionRepository sessionRepository;
+  final HandPhotoService? handPhotoService;
   final HandResultRecord? initialHand;
 
   @override
@@ -40,12 +43,17 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   int? _discarderSeatIndex;
   int? _penaltySeatIndex;
   bool _choosingFalseWinCaller = false;
+  bool _isCapturingPhoto = false;
+  CapturedHandPhoto? _capturedPhoto;
+  late final HandPhotoService _handPhotoService;
   late final TextEditingController _fanCountController;
 
   @override
   void initState() {
     super.initState();
     _sessionDetail = widget.sessionDetail;
+    _handPhotoService =
+        widget.handPhotoService ?? ImagePickerHandPhotoService();
     _controller =
         HandEntryController(sessionRepository: widget.sessionRepository)
           ..addListener(_handleUpdate);
@@ -114,6 +122,20 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
         dealerWasWaitingAtDraw: null,
         blockedWinnerSeatIndexes:
             widget.initialHand == null ? _blockedWinnerSeatIndexes : const {},
+        requiresPhoto:
+            widget.initialHand == null && _resultType == HandResultType.win,
+        photoClientId:
+            widget.initialHand == null && _resultType == HandResultType.win
+                ? _capturedPhoto?.clientPhotoId
+                : null,
+        photoLocalPath:
+            widget.initialHand == null && _resultType == HandResultType.win
+                ? _capturedPhoto?.localPath
+                : null,
+        photoCapturedAt:
+            widget.initialHand == null && _resultType == HandResultType.win
+                ? _capturedPhoto?.capturedAt
+                : null,
       );
 
   Set<int> get _blockedWinnerSeatIndexes =>
@@ -132,10 +154,56 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       _sessionDetail.session.scoringPhase == EventScoringPhase.tournament ||
       _sessionDetail.session.scoringPhase == EventScoringPhase.bonus;
 
+  bool get _hasNonPhotoDraftError {
+    final draft = _draft;
+    return draft.winnerSeatError != null ||
+        draft.fanCountError != null ||
+        draft.winTypeError != null ||
+        draft.discarderSeatError != null ||
+        draft.washoutFieldError != null ||
+        draft.falseWinPenaltySeatError != null ||
+        draft.washoutDealerWaitingError != null;
+  }
+
+  Future<void> _captureWinningHandPhoto() async {
+    if (_isCapturingPhoto) {
+      return;
+    }
+
+    setState(() {
+      _isCapturingPhoto = true;
+    });
+
+    try {
+      final captured = await _handPhotoService.captureWinningHandPhoto();
+      if (!mounted || captured == null) {
+        return;
+      }
+
+      setState(() {
+        _capturedPhoto = captured;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCapturingPhoto = false;
+        });
+      }
+    }
+  }
+
   Future<void> _submit() async {
     if (_choosingFalseWinCaller) {
       return;
     }
+
+    if (_draft.photoEvidenceError != null && !_hasNonPhotoDraftError) {
+      await _captureWinningHandPhoto();
+      if (!mounted) {
+        return;
+      }
+    }
+
     if (!_draft.isValid) {
       setState(() {});
       return;
@@ -411,6 +479,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                         _discarderSeatIndex = null;
                         _penaltySeatIndex = null;
                         _winType = null;
+                        _capturedPhoto = null;
                       } else {
                         _winType ??= HandWinType.selfDraw;
                         _penaltySeatIndex = null;
@@ -506,6 +575,36 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                 if (_draft.fanCountError != null) ...[
                   const SizedBox(height: 6),
                   Text(_draft.fanCountError!),
+                ],
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: _controller.isSubmitting || _isCapturingPhoto
+                      ? null
+                      : _captureWinningHandPhoto,
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  label: Text(
+                    _capturedPhoto == null
+                        ? 'Capture winning hand photo'
+                        : 'Retake winning hand photo',
+                  ),
+                ),
+                if (_capturedPhoto != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    'Photo captured',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ] else if (_draft.photoEvidenceError != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    _draft.photoEvidenceError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ],
               ],
               if (_draft.washoutFieldError != null) ...[

@@ -8,6 +8,26 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/screens/hand_entry_screen.dart';
+import 'package:mosaic/services/media/hand_photo_service.dart';
+
+class _FakeHandPhotoService implements HandPhotoService {
+  _FakeHandPhotoService({CapturedHandPhoto? photo})
+      : photo = photo ??
+            CapturedHandPhoto(
+              clientPhotoId: 'photo_client_01',
+              localPath: '/local/hand.jpg',
+              capturedAt: DateTime.utc(2026, 6, 25, 18),
+            );
+
+  final CapturedHandPhoto? photo;
+  int captureCount = 0;
+
+  @override
+  Future<CapturedHandPhoto?> captureWinningHandPhoto() async {
+    captureCount += 1;
+    return photo;
+  }
+}
 
 class _RecordingSessionRepository implements SessionRepository {
   RecordHandResultInput? recordedInput;
@@ -300,6 +320,7 @@ void main() {
           sessionDetail: buildDetail(currentDealerSeatIndex: 1),
           guestNamesById: seatNames,
           sessionRepository: repository,
+          handPhotoService: _FakeHandPhotoService(),
         ),
       ),
     );
@@ -325,6 +346,7 @@ void main() {
           sessionDetail: buildDetail(currentDealerSeatIndex: 1),
           guestNamesById: seatNames,
           sessionRepository: repository,
+          handPhotoService: _FakeHandPhotoService(),
         ),
       ),
     );
@@ -356,6 +378,7 @@ void main() {
           sessionDetail: buildDetail(),
           guestNamesById: seatNames,
           sessionRepository: repository,
+          handPhotoService: _FakeHandPhotoService(),
         ),
       ),
     );
@@ -520,6 +543,7 @@ void main() {
                     sessionDetail: sessionDetail,
                     guestNamesById: seatNames,
                     sessionRepository: repository,
+                    handPhotoService: _FakeHandPhotoService(),
                   ),
                 ),
               );

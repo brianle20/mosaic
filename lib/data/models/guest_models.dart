@@ -237,6 +237,7 @@ class EventGuestRecord {
     required this.isComped,
     required this.hasScoredPlay,
     this.publicDisplayName,
+    this.playerId,
     this.phoneE164,
     this.emailLower,
     this.instagramHandle,
@@ -256,6 +257,7 @@ class EventGuestRecord {
       displayName: _requiredString(json, 'display_name'),
       normalizedName: _requiredString(json, 'normalized_name'),
       publicDisplayName: _optionalString(json, 'public_display_name'),
+      playerId: _optionalString(json, 'player_id'),
       phoneE164: profile?.phoneE164 ?? _optionalString(json, 'phone_e164'),
       emailLower: profile?.emailLower ?? _optionalString(json, 'email_lower'),
       instagramHandle:
@@ -282,6 +284,7 @@ class EventGuestRecord {
   final String displayName;
   final String normalizedName;
   final String? publicDisplayName;
+  final String? playerId;
   final String? phoneE164;
   final String? emailLower;
   final String? instagramHandle;
@@ -316,6 +319,7 @@ class EventGuestRecord {
       'display_name': displayName,
       'normalized_name': normalizedName,
       'public_display_name': publicDisplayName,
+      'player_id': playerId,
       'phone_e164': phoneE164,
       'email_lower': emailLower,
       'instagram_handle': instagramHandle,

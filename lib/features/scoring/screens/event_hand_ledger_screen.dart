@@ -5,6 +5,7 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/event_hand_ledger_controller.dart';
 import 'package:mosaic/features/scoring/models/event_hand_ledger_view_models.dart';
 import 'package:mosaic/features/scoring/screens/hand_entry_screen.dart';
+import 'package:mosaic/services/media/hand_photo_service.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
 
 class EventHandLedgerScreen extends StatefulWidget {
@@ -68,6 +69,7 @@ class _EventHandLedgerScreenState extends State<EventHandLedgerScreen> {
           sessionDetail: target.detail,
           guestNamesById: target.guestNamesById,
           sessionRepository: widget.sessionRepository,
+          handPhotoService: ImagePickerHandPhotoService(),
           initialHand: target.hand,
         ),
       ),

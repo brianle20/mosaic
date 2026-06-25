@@ -4,6 +4,7 @@ import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/hand_evidence_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/ruleset_models.dart';
@@ -204,6 +205,27 @@ abstract interface class SessionRepository {
   Future<SessionDetailRecord> editHand(EditHandResultInput input);
 
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input);
+}
+
+abstract interface class HandEvidenceRepository {
+  Future<void> uploadAndAttachHandPhoto({
+    required String eventId,
+    required String handResultId,
+    required String clientPhotoId,
+    required String localPath,
+    required DateTime capturedAt,
+  });
+}
+
+abstract interface class MosaicProfileRepository {
+  Future<List<HandPhotoRecord>> listHandEvidenceReview(String eventId);
+
+  Future<HandTileEntryRecord> upsertHandTileEntry({
+    required String handResultId,
+    required Map<String, dynamic> tilesJson,
+    required int? calculatedFanCount,
+    required String calculationVersion,
+  });
 }
 
 abstract interface class PrizeRepository {

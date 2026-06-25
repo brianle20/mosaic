@@ -114,6 +114,14 @@ void main() {
         expect(repository.recordedInputs.last.winType, HandWinType.discard);
         expect(repository.recordedInputs.last.discarderSeatIndex, 1);
         expect(repository.recordedInputs.last.fanCount, 5);
+        expect(
+          repository.recordedInputs.last.photoClientId,
+          'photo_client_01',
+        );
+        expect(
+          repository.recordedInputs.last.photoCapturedAt,
+          DateTime.parse('2026-06-25T18:00:00Z'),
+        );
         expect(repository.recordedInputs.last.clientMutationId, 'mut_02');
         expect(repository.recordedInputs.last.expectedRecordedHandCount, 1);
         expect(repository.recordedInputs.last.expectedLastRecordedHandId,
@@ -124,6 +132,112 @@ void main() {
             OfflineMutationStatus.synced);
       },
     );
+
+    test('attaches remote hand id and uploads queued photo after hand sync',
+        () async {
+      final evidence = _FakeHandEvidenceRepository();
+      coordinator = SyncCoordinator(
+        store: store,
+        reachability: reachability,
+        sessionRepository: repository,
+        handEvidenceRepository: evidence,
+        now: () => DateTime.utc(2026, 6, 18, 20, 30),
+      );
+      repository.detail = _detailWithHand(
+        id: 'remote_hand_01',
+        clientMutationId: 'mut_01',
+      );
+      await store.insertMutation(_mutation(id: 'mut_01'));
+      await store.insertPhotoUpload(_photoUpload(mutationId: 'mut_01'));
+
+      await coordinator.syncNow();
+
+      final uploads = await store.readPhotoUploadsForSession('ses_01');
+      expect(uploads.single.remoteHandResultId, 'remote_hand_01');
+      expect(uploads.single.status, OfflinePhotoUploadStatus.uploaded);
+      expect(
+        uploads.single.storagePath,
+        'events/evt_01/hands/remote_hand_01/photo_client_01.jpg',
+      );
+      expect(evidence.uploads.single.handResultId, 'remote_hand_01');
+      expect(evidence.uploads.single.clientPhotoId, 'photo_client_01');
+      expect(evidence.uploads.single.localPath, '/local/photo.jpg');
+    });
+
+    test('skips photo uploads without remote hand id', () async {
+      final evidence = _FakeHandEvidenceRepository();
+      coordinator = SyncCoordinator(
+        store: store,
+        reachability: reachability,
+        sessionRepository: repository,
+        handEvidenceRepository: evidence,
+      );
+      await store.insertPhotoUpload(_photoUpload(mutationId: 'mut_01'));
+
+      await coordinator.syncNow();
+
+      final uploads = await store.readPhotoUploadsForSession('ses_01');
+      expect(uploads.single.status, OfflinePhotoUploadStatus.pending);
+      expect(evidence.uploads, isEmpty);
+    });
+
+    test('network upload failures mark photo upload failed and stop', () async {
+      final evidence = _FakeHandEvidenceRepository()
+        ..errors.add(const NetworkUnavailableException('socket closed'));
+      coordinator = SyncCoordinator(
+        store: store,
+        reachability: reachability,
+        sessionRepository: repository,
+        handEvidenceRepository: evidence,
+      );
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'photo_upload_01',
+          mutationId: 'mut_01',
+          remoteHandResultId: 'remote_hand_01',
+        ),
+      );
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'photo_upload_02',
+          mutationId: 'mut_02',
+          remoteHandResultId: 'remote_hand_02',
+          createdAt: DateTime.utc(2026, 6, 18, 20, 1),
+        ),
+      );
+
+      await coordinator.syncNow();
+
+      final uploads = await store.readPhotoUploadsForSession('ses_01');
+      expect(uploads.first.status, OfflinePhotoUploadStatus.failed);
+      expect(uploads.first.lastError, contains('socket closed'));
+      expect(uploads.last.status, OfflinePhotoUploadStatus.pending);
+      expect(evidence.uploads.single.handResultId, 'remote_hand_01');
+    });
+
+    test('business upload failures mark photo upload blocked and stop',
+        () async {
+      final evidence = _FakeHandEvidenceRepository()
+        ..errors.add(StateError('Photo row not found.'));
+      coordinator = SyncCoordinator(
+        store: store,
+        reachability: reachability,
+        sessionRepository: repository,
+        handEvidenceRepository: evidence,
+      );
+      await store.insertPhotoUpload(
+        _photoUpload(
+          mutationId: 'mut_01',
+          remoteHandResultId: 'remote_hand_01',
+        ),
+      );
+
+      await coordinator.syncNow();
+
+      final uploads = await store.readPhotoUploadsForSession('ses_01');
+      expect(uploads.single.status, OfflinePhotoUploadStatus.blocked);
+      expect(uploads.single.lastError, 'Bad state: Photo row not found.');
+    });
 
     test('failed mutations are retried', () async {
       await store.insertMutation(
@@ -274,6 +388,64 @@ void main() {
       expect(mutation.attemptCount, 1);
     });
 
+    test('initialize resets uploading photos to pending then uploads',
+        () async {
+      final evidence = _FakeHandEvidenceRepository();
+      coordinator = SyncCoordinator(
+        store: store,
+        reachability: reachability,
+        sessionRepository: repository,
+        handEvidenceRepository: evidence,
+        now: () => DateTime.utc(2026, 6, 18, 20, 30),
+      );
+      await store.insertPhotoUpload(
+        _photoUpload(
+          mutationId: 'mut_01',
+          remoteHandResultId: 'remote_hand_01',
+          status: OfflinePhotoUploadStatus.uploading,
+        ),
+      );
+
+      await coordinator.initialize();
+
+      final upload = (await store.readPhotoUploadsForSession('ses_01')).single;
+      expect(upload.status, OfflinePhotoUploadStatus.uploaded);
+      expect(upload.attemptCount, 1);
+      expect(evidence.uploads.single.handResultId, 'remote_hand_01');
+    });
+
+    test('sync requested during active sync runs another pass', () async {
+      final completer = Completer<SessionDetailRecord>();
+      repository.nextResultCompleter = completer;
+      await store.insertMutation(_mutation(id: 'mut_01'));
+
+      final firstSync = coordinator.syncNow();
+      await Future<void>.delayed(Duration.zero);
+      await store.insertMutation(
+        _mutation(
+          id: 'mut_02',
+          createdAt: DateTime.utc(2026, 6, 18, 20, 1),
+        ),
+      );
+
+      await coordinator.syncNow();
+      completer.complete(_detail());
+      await firstSync;
+
+      expect(repository.recordedInputs.map((input) => input.clientMutationId), [
+        'mut_01',
+        'mut_02',
+      ]);
+      expect(
+        (await store.readMutation('mut_01'))!.status,
+        OfflineMutationStatus.synced,
+      );
+      expect(
+        (await store.readMutation('mut_02'))!.status,
+        OfflineMutationStatus.synced,
+      );
+    });
+
     test('concurrent syncNow calls do not double submit a mutation', () async {
       final completer = Completer<SessionDetailRecord>();
       repository.nextResultCompleter = completer;
@@ -311,6 +483,7 @@ class _FakeSessionRepository implements SessionRepository {
   RecordFalseWinPenaltyInput? recordedFalseWinPenalty;
   final List<Object> errors = [];
   Completer<SessionDetailRecord>? nextResultCompleter;
+  SessionDetailRecord? detail;
 
   @override
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
@@ -323,7 +496,7 @@ class _FakeSessionRepository implements SessionRepository {
       nextResultCompleter = null;
       return completer.future;
     }
-    return _detail();
+    return detail ?? _detail();
   }
 
   @override
@@ -334,7 +507,7 @@ class _FakeSessionRepository implements SessionRepository {
     if (errors.isNotEmpty) {
       throw errors.removeAt(0);
     }
-    return _detail();
+    return detail ?? _detail();
   }
 
   @override
@@ -401,6 +574,49 @@ class _FakeSessionRepository implements SessionRepository {
       _detail();
 }
 
+class _FakeHandEvidenceRepository implements HandEvidenceRepository {
+  final List<_UploadedHandPhoto> uploads = [];
+  final List<Object> errors = [];
+
+  @override
+  Future<void> uploadAndAttachHandPhoto({
+    required String eventId,
+    required String handResultId,
+    required String clientPhotoId,
+    required String localPath,
+    required DateTime capturedAt,
+  }) async {
+    uploads.add(
+      _UploadedHandPhoto(
+        eventId: eventId,
+        handResultId: handResultId,
+        clientPhotoId: clientPhotoId,
+        localPath: localPath,
+        capturedAt: capturedAt,
+      ),
+    );
+    if (errors.isNotEmpty) {
+      throw errors.removeAt(0);
+    }
+  }
+}
+
+class _UploadedHandPhoto {
+  const _UploadedHandPhoto({
+    required this.eventId,
+    required this.handResultId,
+    required this.clientPhotoId,
+    required this.localPath,
+    required this.capturedAt,
+  });
+
+  final String eventId;
+  final String handResultId;
+  final String clientPhotoId;
+  final String localPath;
+  final DateTime capturedAt;
+}
+
 OfflineMutationRecord _mutation({
   required String id,
   OfflineMutationKind kind = OfflineMutationKind.recordHand,
@@ -414,6 +630,8 @@ OfflineMutationRecord _mutation({
     'target_fan_count': 5,
     'target_dealer_was_waiting_at_draw': false,
     'target_correction_note': 'offline note',
+    'target_photo_client_id': 'photo_client_01',
+    'target_photo_captured_at': '2026-06-25T18:00:00Z',
   },
   int baseRecordedHandCount = 0,
   String? baseLastRecordedHandId,
@@ -435,6 +653,29 @@ OfflineMutationRecord _mutation({
     updatedAt: timestamp,
     status: status,
     lastError: lastError,
+  );
+}
+
+OfflinePhotoUploadRecord _photoUpload({
+  String id = 'photo_upload_01',
+  required String mutationId,
+  String? remoteHandResultId,
+  DateTime? createdAt,
+  OfflinePhotoUploadStatus status = OfflinePhotoUploadStatus.pending,
+}) {
+  final timestamp = createdAt ?? DateTime.utc(2026, 6, 18, 20);
+  return OfflinePhotoUploadRecord(
+    id: id,
+    mutationId: mutationId,
+    eventId: 'evt_01',
+    sessionId: 'ses_01',
+    clientPhotoId: 'photo_client_01',
+    localPath: '/local/photo.jpg',
+    capturedAt: DateTime.utc(2026, 6, 25, 18),
+    status: status,
+    remoteHandResultId: remoteHandResultId,
+    createdAt: timestamp,
+    updatedAt: timestamp,
   );
 }
 
@@ -461,5 +702,39 @@ SessionDetailRecord _detail() {
     'seats': [],
     'hands': [],
     'settlements': [],
+  });
+}
+
+SessionDetailRecord _detailWithHand({
+  required String id,
+  required String clientMutationId,
+}) {
+  return SessionDetailRecord.fromJson({
+    ..._detail().toJson(),
+    'hands': [
+      {
+        'id': id,
+        'table_session_id': 'ses_01',
+        'hand_number': 1,
+        'result_type': 'win',
+        'winner_seat_index': 2,
+        'win_type': 'discard',
+        'discarder_seat_index': 1,
+        'penalty_seat_index': null,
+        'fan_count': 5,
+        'base_points': 8,
+        'dealer_was_waiting_at_draw': null,
+        'east_seat_index_before_hand': 0,
+        'east_seat_index_after_hand': 0,
+        'dealer_rotated': false,
+        'session_completed_after_hand': false,
+        'status': 'recorded',
+        'entered_by_user_id': 'usr_01',
+        'entered_at': '2026-06-25T18:00:00Z',
+        'correction_note': null,
+        'row_version': 1,
+        'client_mutation_id': clientMutationId,
+      },
+    ],
   });
 }

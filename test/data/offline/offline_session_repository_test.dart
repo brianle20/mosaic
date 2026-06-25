@@ -69,6 +69,117 @@ void main() {
       },
     );
 
+    test('known offline win with photo enqueues mutation and photo upload',
+        () async {
+      final capturedAt = DateTime.utc(2026, 6, 18, 19, 59);
+      final inner = _FakeSessionRepository(cachedDetail: _detail());
+      final repository = OfflineSessionRepository(
+        inner: inner,
+        store: store,
+        reachability: const _FakeReachability(false),
+        projector: const OfflineSessionProjector(),
+        newMutationId: () => '11111111-1111-1111-1111-111111111111',
+        now: () => DateTime.utc(2026, 6, 18, 20),
+      );
+
+      await repository.recordHand(
+        RecordHandResultInput(
+          tableSessionId: 'ses_01',
+          resultType: HandResultType.win,
+          winnerSeatIndex: 0,
+          winType: HandWinType.selfDraw,
+          fanCount: 5,
+          photoClientId: 'photo_client_01',
+          photoLocalPath: '/local/photo_client_01.jpg',
+          photoCapturedAt: capturedAt,
+        ),
+      );
+
+      final mutation = (await store.readPendingMutations()).single;
+      final upload = (await store.readPendingPhotoUploads()).single;
+      expect(mutation.id, '11111111-1111-1111-1111-111111111111');
+      expect(upload.id, 'photo_client_01');
+      expect(upload.mutationId, mutation.id);
+      expect(upload.eventId, 'evt_01');
+      expect(upload.sessionId, 'ses_01');
+      expect(upload.clientPhotoId, 'photo_client_01');
+      expect(upload.localPath, '/local/photo_client_01.jpg');
+      expect(upload.capturedAt, capturedAt);
+      expect(upload.status, OfflinePhotoUploadStatus.pending);
+      expect(upload.createdAt, DateTime.utc(2026, 6, 18, 20));
+      expect(upload.updatedAt, DateTime.utc(2026, 6, 18, 20));
+    });
+
+    test('failed photo enqueue does not leave hand mutation queued', () async {
+      await store.insertPhotoUpload(
+        OfflinePhotoUploadRecord(
+          id: 'photo_client_01',
+          mutationId: 'existing_mutation',
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          clientPhotoId: 'photo_client_01',
+          localPath: '/local/existing.jpg',
+          capturedAt: DateTime.utc(2026, 6, 18, 19),
+          createdAt: DateTime.utc(2026, 6, 18, 19),
+          updatedAt: DateTime.utc(2026, 6, 18, 19),
+        ),
+      );
+      final inner = _FakeSessionRepository(cachedDetail: _detail());
+      final repository = OfflineSessionRepository(
+        inner: inner,
+        store: store,
+        reachability: const _FakeReachability(false),
+        projector: const OfflineSessionProjector(),
+        newMutationId: () => '11111111-1111-1111-1111-111111111111',
+        now: () => DateTime.utc(2026, 6, 18, 20),
+      );
+
+      await expectLater(
+        repository.recordHand(
+          RecordHandResultInput(
+            tableSessionId: 'ses_01',
+            resultType: HandResultType.win,
+            winnerSeatIndex: 0,
+            winType: HandWinType.selfDraw,
+            fanCount: 5,
+            photoClientId: 'photo_client_01',
+            photoLocalPath: '/local/photo_client_01.jpg',
+            photoCapturedAt: DateTime.utc(2026, 6, 18, 19, 59),
+          ),
+        ),
+        throwsA(anything),
+      );
+
+      expect(await store.readPendingMutations(), isEmpty);
+      expect(await store.readPendingPhotoUploads(), hasLength(1));
+    });
+
+    test('known offline washout with photo metadata does not enqueue photo',
+        () async {
+      final inner = _FakeSessionRepository(cachedDetail: _detail());
+      final repository = OfflineSessionRepository(
+        inner: inner,
+        store: store,
+        reachability: const _FakeReachability(false),
+        projector: const OfflineSessionProjector(),
+        newMutationId: () => '11111111-1111-1111-1111-111111111111',
+        now: () => DateTime.utc(2026, 6, 18, 20),
+      );
+
+      await repository.recordHand(
+        RecordHandResultInput(
+          tableSessionId: 'ses_01',
+          resultType: HandResultType.washout,
+          photoClientId: 'photo_client_01',
+          photoLocalPath: '/local/photo_client_01.jpg',
+          photoCapturedAt: DateTime.utc(2026, 6, 18, 19, 59),
+        ),
+      );
+
+      expect(await store.readPendingMutations(), hasLength(1));
+      expect(await store.readPendingPhotoUploads(), isEmpty);
+    });
+
     test('known offline expected state includes projected pending hands',
         () async {
       await store.insertMutation(
@@ -187,6 +298,51 @@ void main() {
       expect(result, same(remoteDetail));
       expect(inner.recordCallCount, 1);
       expect(await store.readPendingMutations(), isEmpty);
+    });
+
+    test('reachable win with photo queues mutation and schedules sync',
+        () async {
+      var syncCallCount = 0;
+      final inner = _FakeSessionRepository(
+        cachedDetail: _detail(),
+      );
+      final repository = OfflineSessionRepository(
+        inner: inner,
+        store: store,
+        reachability: const _FakeReachability(true),
+        projector: const OfflineSessionProjector(),
+        newMutationId: () => '22222222-2222-2222-2222-222222222222',
+        now: () => DateTime.utc(2026, 6, 18, 20),
+        onMutationQueued: () async {
+          syncCallCount += 1;
+        },
+      );
+
+      final result = await repository.recordHand(
+        RecordHandResultInput(
+          tableSessionId: 'ses_01',
+          resultType: HandResultType.win,
+          winnerSeatIndex: 0,
+          winType: HandWinType.selfDraw,
+          fanCount: 5,
+          photoClientId: 'photo_client_01',
+          photoLocalPath: '/local/photo_client_01.jpg',
+          photoCapturedAt: DateTime.utc(2026, 6, 18, 19, 59),
+        ),
+      );
+
+      expect(inner.recordCallCount, 0);
+      expect(
+        result.hands.single.id,
+        'pending:22222222-2222-2222-2222-222222222222',
+      );
+      final mutation = (await store.readPendingMutations()).single;
+      expect(mutation.id, '22222222-2222-2222-2222-222222222222');
+      final upload = (await store.readPendingPhotoUploads()).single;
+      expect(upload.mutationId, '22222222-2222-2222-2222-222222222222');
+      expect(upload.remoteHandResultId, isNull);
+      expect(upload.localPath, '/local/photo_client_01.jpg');
+      expect(syncCallCount, 1);
     });
 
     test('reachable recordHand queues behind existing unsynced mutations',
@@ -601,6 +757,7 @@ class _FakeSessionRepository implements SessionRepository {
   final SessionDetailRecord? cachedDetail;
   final SessionDetailRecord? recordResult;
   final Object? recordError;
+  final List<RecordHandResultInput> recordedInputs = [];
   int recordCallCount = 0;
   int recordFalseWinPenaltyCallCount = 0;
 
@@ -623,6 +780,7 @@ class _FakeSessionRepository implements SessionRepository {
 
   @override
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
+    recordedInputs.add(input);
     recordCallCount += 1;
     final error = recordError;
     if (error != null) {
@@ -766,6 +924,7 @@ SessionDetailRecord _detail({
 HandResultRecord _hand({
   String id = 'hand_01',
   int handNumber = 1,
+  String? clientMutationId,
 }) {
   return HandResultRecord(
     id: id,
@@ -783,5 +942,6 @@ HandResultRecord _hand({
     status: HandResultStatus.recorded,
     enteredByUserId: 'usr_01',
     enteredAt: DateTime.utc(2026, 6, 18, 19),
+    clientMutationId: clientMutationId,
   );
 }

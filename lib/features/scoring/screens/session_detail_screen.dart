@@ -8,6 +8,7 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/session_detail_controller.dart';
 import 'package:mosaic/features/scoring/models/session_detail_view_models.dart';
 import 'package:mosaic/features/scoring/screens/hand_entry_screen.dart';
+import 'package:mosaic/services/media/hand_photo_service.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
@@ -80,6 +81,7 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
           sessionDetail: detail,
           guestNamesById: _controller.guestNamesById,
           sessionRepository: widget.sessionRepository,
+          handPhotoService: ImagePickerHandPhotoService(),
           initialHand: hand,
         ),
       ),

@@ -9,6 +9,7 @@ import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/models/hand_evidence_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -605,6 +606,24 @@ class _RecordingNavigatorObserver extends NavigatorObserver {
   }
 }
 
+class _MosaicProfileRepository implements MosaicProfileRepository {
+  const _MosaicProfileRepository();
+
+  @override
+  Future<List<HandPhotoRecord>> listHandEvidenceReview(String eventId) async =>
+      const [];
+
+  @override
+  Future<HandTileEntryRecord> upsertHandTileEntry({
+    required String handResultId,
+    required Map<String, dynamic> tilesJson,
+    required int? calculatedFanCount,
+    required String calculationVersion,
+  }) {
+    throw UnimplementedError();
+  }
+}
+
 Future<void> _expectHandLedgerCorrectionFlag(
   WidgetTester tester, {
   required EventRecord event,
@@ -619,6 +638,7 @@ Future<void> _expectHandLedgerCorrectionFlag(
     activityRepository: _ActivityRepository(),
     prizeRepository: _PrizeRepository(),
     seatingRepository: const _SeatingRepository(),
+    mosaicProfileRepository: const _MosaicProfileRepository(),
     nfcService: const _NfcService(),
   );
 
@@ -1166,6 +1186,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: const _NfcService(),
     );
 
@@ -1429,6 +1450,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: const _NfcService(),
     );
 
@@ -1651,6 +1673,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 
@@ -1748,6 +1771,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 
@@ -1794,6 +1818,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 
@@ -1843,6 +1868,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: seatingRepository,
+      mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
 

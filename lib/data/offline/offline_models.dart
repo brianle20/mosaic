@@ -4,6 +4,8 @@ enum OfflineMutationKind { recordHand, recordFalseWinPenalty }
 
 enum OfflineMutationStatus { pending, syncing, synced, failed, blocked }
 
+enum OfflinePhotoUploadStatus { pending, uploading, uploaded, failed, blocked }
+
 String offlineMutationKindToJson(OfflineMutationKind kind) {
   return switch (kind) {
     OfflineMutationKind.recordHand => 'record_hand',
@@ -37,6 +39,27 @@ OfflineMutationStatus offlineMutationStatusFromJson(String value) {
     'failed' => OfflineMutationStatus.failed,
     'blocked' => OfflineMutationStatus.blocked,
     _ => throw FormatException('Unknown offline mutation status: $value'),
+  };
+}
+
+String offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus status) {
+  return switch (status) {
+    OfflinePhotoUploadStatus.pending => 'pending',
+    OfflinePhotoUploadStatus.uploading => 'uploading',
+    OfflinePhotoUploadStatus.uploaded => 'uploaded',
+    OfflinePhotoUploadStatus.failed => 'failed',
+    OfflinePhotoUploadStatus.blocked => 'blocked',
+  };
+}
+
+OfflinePhotoUploadStatus offlinePhotoUploadStatusFromJson(String value) {
+  return switch (value) {
+    'pending' => OfflinePhotoUploadStatus.pending,
+    'uploading' => OfflinePhotoUploadStatus.uploading,
+    'uploaded' => OfflinePhotoUploadStatus.uploaded,
+    'failed' => OfflinePhotoUploadStatus.failed,
+    'blocked' => OfflinePhotoUploadStatus.blocked,
+    _ => throw FormatException('Unknown offline photo upload status: $value'),
   };
 }
 
@@ -98,6 +121,43 @@ class OfflineMutationRecord {
       lastAttemptedAt: lastAttemptedAt ?? this.lastAttemptedAt,
     );
   }
+}
+
+@immutable
+class OfflinePhotoUploadRecord {
+  const OfflinePhotoUploadRecord({
+    required this.id,
+    required this.mutationId,
+    required this.eventId,
+    required this.sessionId,
+    required this.clientPhotoId,
+    required this.localPath,
+    required this.capturedAt,
+    required this.createdAt,
+    required this.updatedAt,
+    this.status = OfflinePhotoUploadStatus.pending,
+    this.remoteHandResultId,
+    this.storagePath,
+    this.attemptCount = 0,
+    this.lastError,
+    this.lastAttemptedAt,
+  });
+
+  final String id;
+  final String mutationId;
+  final String eventId;
+  final String sessionId;
+  final String clientPhotoId;
+  final String localPath;
+  final DateTime capturedAt;
+  final OfflinePhotoUploadStatus status;
+  final String? remoteHandResultId;
+  final String? storagePath;
+  final int attemptCount;
+  final String? lastError;
+  final DateTime? lastAttemptedAt;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 }
 
 @immutable

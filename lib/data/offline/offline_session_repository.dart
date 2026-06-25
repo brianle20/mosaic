@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -18,8 +20,10 @@ class OfflineSessionRepository
     this.projector = const OfflineSessionProjector(),
     String Function()? newMutationId,
     DateTime Function()? now,
+    Future<void> Function()? onMutationQueued,
   })  : _newMutationId = newMutationId ?? const Uuid().v4,
-        _now = now ?? DateTime.now;
+        _now = now ?? DateTime.now,
+        _onMutationQueued = onMutationQueued;
 
   final SessionRepository inner;
   final OfflineStore store;
@@ -27,6 +31,7 @@ class OfflineSessionRepository
   final OfflineSessionProjector projector;
   final String Function() _newMutationId;
   final DateTime Function() _now;
+  final Future<void> Function()? _onMutationQueued;
 
   @override
   Future<SessionSyncSnapshot> readSessionSyncSnapshot(String sessionId) async {
@@ -65,6 +70,10 @@ class OfflineSessionRepository
 
   @override
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
+    if (_shouldEnqueuePhotoUpload(input)) {
+      return _enqueueRecordHand(input);
+    }
+
     if (await _hasQueuedMutations(input.tableSessionId)) {
       return _enqueueRecordHand(input);
     }
@@ -140,22 +149,48 @@ class OfflineSessionRepository
       'target_expected_last_recorded_hand_id': expectedLastRecordedHandId,
     };
 
-    await store.insertMutation(
-      OfflineMutationRecord(
-        id: mutationId,
-        kind: OfflineMutationKind.recordHand,
-        eventId: cached.session.eventId,
-        sessionId: input.tableSessionId,
-        payload: payload,
-        baseRecordedHandCount: projectedRecordedHands.length,
-        baseLastRecordedHandId: expectedLastRecordedHandId,
-        localHandNumber: projectedRecordedHands.length + 1,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      ),
+    final mutation = OfflineMutationRecord(
+      id: mutationId,
+      kind: OfflineMutationKind.recordHand,
+      eventId: cached.session.eventId,
+      sessionId: input.tableSessionId,
+      payload: payload,
+      baseRecordedHandCount: projectedRecordedHands.length,
+      baseLastRecordedHandId: expectedLastRecordedHandId,
+      localHandNumber: projectedRecordedHands.length + 1,
+      createdAt: timestamp,
+      updatedAt: timestamp,
     );
 
-    return (await _project(cached)).detail;
+    if (_shouldEnqueuePhotoUpload(input)) {
+      await store.insertMutationWithPhotoUpload(
+        mutation,
+        OfflinePhotoUploadRecord(
+          id: input.photoClientId!,
+          mutationId: mutationId,
+          eventId: cached.session.eventId,
+          sessionId: input.tableSessionId,
+          clientPhotoId: input.photoClientId!,
+          localPath: input.photoLocalPath!,
+          capturedAt: input.photoCapturedAt!.toUtc(),
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        ),
+      );
+    } else {
+      await store.insertMutation(mutation);
+    }
+
+    final projected = (await _project(cached)).detail;
+    _scheduleSync();
+    return projected;
+  }
+
+  bool _shouldEnqueuePhotoUpload(RecordHandResultInput input) {
+    return input.resultType == HandResultType.win &&
+        input.photoClientId != null &&
+        input.photoLocalPath != null &&
+        input.photoCapturedAt != null;
   }
 
   Future<SessionDetailRecord> _enqueueRecordFalseWinPenalty(
@@ -215,7 +250,16 @@ class OfflineSessionRepository
       ),
     );
 
-    return (await _project(cached)).detail;
+    final projected = (await _project(cached)).detail;
+    _scheduleSync();
+    return projected;
+  }
+
+  void _scheduleSync() {
+    final onMutationQueued = _onMutationQueued;
+    if (onMutationQueued != null) {
+      unawaited(onMutationQueued());
+    }
   }
 
   List<HandResultRecord> _projectedRecordedHands(

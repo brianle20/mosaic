@@ -16,7 +16,9 @@ import 'package:mosaic/data/repositories/supabase_activity_repository.dart';
 import 'package:mosaic/data/repositories/supabase_auth_repository.dart';
 import 'package:mosaic/data/repositories/supabase_event_repository.dart';
 import 'package:mosaic/data/repositories/supabase_guest_repository.dart';
+import 'package:mosaic/data/repositories/supabase_hand_evidence_repository.dart';
 import 'package:mosaic/data/repositories/supabase_leaderboard_repository.dart';
+import 'package:mosaic/data/repositories/supabase_mosaic_profile_repository.dart';
 import 'package:mosaic/data/repositories/supabase_prize_repository.dart';
 import 'package:mosaic/data/repositories/supabase_seating_repository.dart';
 import 'package:mosaic/data/repositories/supabase_session_repository.dart';
@@ -44,6 +46,7 @@ class MosaicApp extends StatefulWidget {
     this.activityRepository,
     this.prizeRepository,
     this.seatingRepository,
+    this.mosaicProfileRepository,
     this.staffRepository,
     this.nfcService,
   });
@@ -59,6 +62,7 @@ class MosaicApp extends StatefulWidget {
   final ActivityRepository? activityRepository;
   final PrizeRepository? prizeRepository;
   final SeatingRepository? seatingRepository;
+  final MosaicProfileRepository? mosaicProfileRepository;
   final StaffRepository? staffRepository;
   final NfcService? nfcService;
 
@@ -111,6 +115,7 @@ class _MosaicAppState extends State<MosaicApp> {
         app.activityRepository != null &&
         app.prizeRepository != null &&
         app.seatingRepository != null &&
+        app.mosaicProfileRepository != null &&
         app.nfcService != null;
   }
 
@@ -145,6 +150,7 @@ class _MosaicAppState extends State<MosaicApp> {
         activityRepository: widget.activityRepository!,
         prizeRepository: widget.prizeRepository!,
         seatingRepository: widget.seatingRepository!,
+        mosaicProfileRepository: widget.mosaicProfileRepository!,
         staffRepository:
             widget.staffRepository ?? const _UnavailableStaffRepository(),
         nfcService: widget.nfcService!,
@@ -182,6 +188,7 @@ class _MosaicAppState extends State<MosaicApp> {
           activityRepository: snapshot.data!.activityRepository,
           prizeRepository: snapshot.data!.prizeRepository,
           seatingRepository: snapshot.data!.seatingRepository,
+          mosaicProfileRepository: snapshot.data!.mosaicProfileRepository,
           staffRepository: snapshot.data!.staffRepository,
           nfcService: snapshot.data!.nfcService,
         );
@@ -199,15 +206,21 @@ class _MosaicAppState extends State<MosaicApp> {
       client: client,
       cache: cache,
     );
+    final handEvidenceRepository = SupabaseHandEvidenceRepository(
+      client: client,
+    );
+    late final SyncCoordinator syncCoordinator;
     final sessionRepository = OfflineSessionRepository(
       inner: supabaseSessionRepository,
       store: offlineStore,
       reachability: reachability,
+      onMutationQueued: () => syncCoordinator.syncNow(),
     );
-    final syncCoordinator = SyncCoordinator(
+    syncCoordinator = SyncCoordinator(
       store: offlineStore,
       sessionRepository: supabaseSessionRepository,
       reachability: reachability,
+      handEvidenceRepository: handEvidenceRepository,
     );
 
     final loadedRepositories = _LoadedRepositories(
@@ -245,6 +258,7 @@ class _MosaicAppState extends State<MosaicApp> {
         client: client,
         cache: cache,
       ),
+      mosaicProfileRepository: SupabaseMosaicProfileRepository(client: client),
       staffRepository: SupabaseStaffRepository(client: client),
       nfcService: createDefaultNfcService(),
       offlineStore: offlineStore,
@@ -272,6 +286,7 @@ class _LoadedRepositories {
     required this.activityRepository,
     required this.prizeRepository,
     required this.seatingRepository,
+    required this.mosaicProfileRepository,
     required this.staffRepository,
     required this.nfcService,
     required this.offlineStore,
@@ -286,6 +301,7 @@ class _LoadedRepositories {
   final ActivityRepository activityRepository;
   final PrizeRepository prizeRepository;
   final SeatingRepository seatingRepository;
+  final MosaicProfileRepository mosaicProfileRepository;
   final StaffRepository staffRepository;
   final NfcService nfcService;
   final SqliteOfflineStore? offlineStore;
@@ -399,6 +415,7 @@ class _AppWithRepositories extends StatelessWidget {
     required this.activityRepository,
     required this.prizeRepository,
     required this.seatingRepository,
+    required this.mosaicProfileRepository,
     required this.staffRepository,
     required this.nfcService,
   });
@@ -412,6 +429,7 @@ class _AppWithRepositories extends StatelessWidget {
   final ActivityRepository activityRepository;
   final PrizeRepository prizeRepository;
   final SeatingRepository seatingRepository;
+  final MosaicProfileRepository mosaicProfileRepository;
   final StaffRepository staffRepository;
   final NfcService nfcService;
 
@@ -426,6 +444,7 @@ class _AppWithRepositories extends StatelessWidget {
       activityRepository: activityRepository,
       prizeRepository: prizeRepository,
       seatingRepository: seatingRepository,
+      mosaicProfileRepository: mosaicProfileRepository,
       staffRepository: staffRepository,
       nfcService: nfcService,
     );

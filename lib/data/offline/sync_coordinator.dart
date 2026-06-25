@@ -1,19 +1,23 @@
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/offline/network_reachability.dart';
 import 'package:mosaic/data/offline/offline_models.dart';
 import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/offline_store.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/data/repositories/supabase_hand_evidence_repository.dart';
 
 class SyncCoordinator {
   SyncCoordinator({
     required OfflineStore store,
     required NetworkReachability reachability,
     required SessionRepository sessionRepository,
+    HandEvidenceRepository? handEvidenceRepository,
     DateTime Function()? now,
   })  : _store = store,
         _reachability = reachability,
         _sessionRepository = sessionRepository,
+        _handEvidenceRepository = handEvidenceRepository,
         _now = now ?? DateTime.now {
     if (sessionRepository is OfflineSessionRepository) {
       throw ArgumentError.value(
@@ -27,54 +31,144 @@ class SyncCoordinator {
   final OfflineStore _store;
   final NetworkReachability _reachability;
   final SessionRepository _sessionRepository;
+  final HandEvidenceRepository? _handEvidenceRepository;
   final DateTime Function() _now;
   var _isSyncing = false;
+  var _syncRequested = false;
 
   Future<void> initialize() async {
     await _store.resetSyncingToPending();
+    await _store.resetPhotoUploadsUploadingToPending();
     await syncNow();
   }
 
   Future<void> syncNow() async {
     if (_isSyncing) {
+      _syncRequested = true;
       return;
     }
 
     _isSyncing = true;
     try {
-      if (!await _reachability.isReachable()) {
-        return;
-      }
-
-      final mutations = await _store.readPendingMutations();
-      for (final mutation in mutations) {
-        await _store.markSyncing(mutation.id, attemptedAt: _now().toUtc());
-
-        try {
-          switch (mutation.kind) {
-            case OfflineMutationKind.recordHand:
-              await _sessionRepository.recordHand(_inputFor(mutation));
-            case OfflineMutationKind.recordFalseWinPenalty:
-              await _sessionRepository.recordFalseWinPenalty(
-                _falseWinPenaltyInputFor(mutation),
-              );
-          }
-          await _store.markSynced(mutation.id);
-        } on OfflineSyncConflictException catch (error) {
-          await _store.markSessionBlocked(mutation.sessionId, error.toString());
-          return;
-        } catch (error) {
-          if (_reachability.isNetworkException(error)) {
-            await _store.markFailed(mutation.id, error.toString());
-            return;
-          }
-
-          await _store.markSessionBlocked(mutation.sessionId, error.toString());
-          return;
-        }
-      }
+      var completedPass = true;
+      do {
+        _syncRequested = false;
+        completedPass = await _syncPass();
+      } while (completedPass && _syncRequested);
     } finally {
       _isSyncing = false;
+    }
+  }
+
+  Future<bool> _syncPass() async {
+    if (!await _reachability.isReachable()) {
+      return false;
+    }
+
+    final mutations = await _store.readPendingMutations();
+    for (final mutation in mutations) {
+      await _store.markSyncing(mutation.id, attemptedAt: _now().toUtc());
+
+      try {
+        switch (mutation.kind) {
+          case OfflineMutationKind.recordHand:
+            final detail = await _sessionRepository.recordHand(
+              _inputFor(mutation),
+            );
+            await _attachRemoteHandResultId(mutation, detail);
+          case OfflineMutationKind.recordFalseWinPenalty:
+            await _sessionRepository.recordFalseWinPenalty(
+              _falseWinPenaltyInputFor(mutation),
+            );
+        }
+        await _store.markSynced(mutation.id);
+      } on OfflineSyncConflictException catch (error) {
+        await _store.markSessionBlocked(mutation.sessionId, error.toString());
+        return false;
+      } catch (error) {
+        if (_reachability.isNetworkException(error)) {
+          await _store.markFailed(mutation.id, error.toString());
+          return false;
+        }
+
+        await _store.markSessionBlocked(mutation.sessionId, error.toString());
+        return false;
+      }
+    }
+
+    await _syncPendingPhotoUploads();
+    return true;
+  }
+
+  Future<void> _attachRemoteHandResultId(
+    OfflineMutationRecord mutation,
+    SessionDetailRecord detail,
+  ) async {
+    final remoteHandResultId = _remoteHandResultIdFor(mutation, detail);
+    if (remoteHandResultId == null) {
+      return;
+    }
+
+    await _store.attachRemoteHandResultToPhotoUpload(
+      mutation.id,
+      remoteHandResultId,
+    );
+  }
+
+  String? _remoteHandResultIdFor(
+    OfflineMutationRecord mutation,
+    SessionDetailRecord detail,
+  ) {
+    for (final hand in detail.hands) {
+      if (hand.clientMutationId == mutation.id) {
+        return hand.id;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _syncPendingPhotoUploads() async {
+    final repository = _handEvidenceRepository;
+    if (repository == null) {
+      return;
+    }
+
+    final uploads = await _store.readPendingPhotoUploads();
+    for (final upload in uploads) {
+      final remoteHandResultId = upload.remoteHandResultId;
+      if (remoteHandResultId == null) {
+        continue;
+      }
+
+      await _store.markPhotoUploadUploading(
+        upload.id,
+        attemptedAt: _now().toUtc(),
+      );
+      try {
+        await repository.uploadAndAttachHandPhoto(
+          eventId: upload.eventId,
+          handResultId: remoteHandResultId,
+          clientPhotoId: upload.clientPhotoId,
+          localPath: upload.localPath,
+          capturedAt: upload.capturedAt,
+        );
+        await _store.markPhotoUploadUploaded(
+          upload.id,
+          storagePath: SupabaseHandEvidenceRepository.storagePathFor(
+            eventId: upload.eventId,
+            handResultId: remoteHandResultId,
+            clientPhotoId: upload.clientPhotoId,
+          ),
+        );
+      } catch (error) {
+        if (_reachability.isNetworkException(error)) {
+          await _store.markPhotoUploadFailed(upload.id, error.toString());
+          return;
+        }
+
+        await _store.markPhotoUploadBlocked(upload.id, error.toString());
+        return;
+      }
     }
   }
 
@@ -107,6 +201,8 @@ class SyncCoordinator {
       clientMutationId: mutation.id,
       expectedRecordedHandCount: mutation.baseRecordedHandCount,
       expectedLastRecordedHandId: mutation.baseLastRecordedHandId,
+      photoClientId: _optionalString(payload, 'target_photo_client_id'),
+      photoCapturedAt: _optionalDateTime(payload, 'target_photo_captured_at'),
     );
   }
 
@@ -187,6 +283,18 @@ class SyncCoordinator {
     }
 
     throw FormatException('Expected bool or null for $key.');
+  }
+
+  DateTime? _optionalDateTime(Map<String, dynamic> payload, String key) {
+    final value = payload[key];
+    if (value == null) {
+      return null;
+    }
+    if (value is String) {
+      return DateTime.parse(value);
+    }
+
+    throw FormatException('Expected ISO-8601 string or null for $key.');
   }
 
   HandResultType _resultType(String value) {
