@@ -124,6 +124,26 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     await _controller.load(widget.eventId);
   }
 
+  Future<void> _openBulkSavedGuests() async {
+    if (!widget.canManageGuests) {
+      return;
+    }
+    await Navigator.of(context).pushNamed(
+      AppRouter.bulkSavedGuestRoute,
+      arguments: BulkSavedGuestArgs(
+        eventId: widget.eventId,
+        eventCoverChargeCents: widget.eventCoverChargeCents,
+        existingGuests: _controller.guests,
+        canManageTournamentStatus: widget.canManageTournamentStatus,
+        canManageCover: widget.canManageCover,
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    await _controller.load(widget.eventId);
+  }
+
   Future<void> _openGuestDetail(EventGuestRecord guest) async {
     await Navigator.of(context).pushNamed(
       AppRouter.guestDetailRoute,
@@ -375,7 +395,14 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
                 style: _topActionButtonStyle(),
                 onPressed: _openAddGuest,
                 icon: const Icon(Icons.person_add),
-                label: const Text('Add Guest'),
+                label: const Text('Add New Guest'),
+              ),
+              const SizedBox(height: 6),
+              FilledButton.icon(
+                style: _topActionButtonStyle(),
+                onPressed: _openBulkSavedGuests,
+                icon: const Icon(Icons.group_add),
+                label: const Text('Add From Saved Guests'),
               ),
               const SizedBox(height: 6),
             ],

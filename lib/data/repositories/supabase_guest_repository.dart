@@ -9,6 +9,9 @@ typedef GuestByIdLoader = Future<Map<String, dynamic>> Function(String guestId);
 typedef CoverEntriesLoader = Future<List<Map<String, dynamic>>> Function(
   String guestId,
 );
+typedef GuestProfilesLoader = Future<List<Map<String, dynamic>>> Function(
+  String ownerUserId,
+);
 typedef ProfileOnEventChecker = Future<void> Function({
   required String eventId,
   required String guestProfileId,
@@ -32,6 +35,7 @@ class SupabaseGuestRepository implements GuestRepository {
     required this.cache,
     GuestByIdLoader? guestByIdLoader,
     CoverEntriesLoader? coverEntriesLoader,
+    GuestProfilesLoader? guestProfilesLoader,
     CurrentUserIdReader? currentUserIdReader,
     ProfileOnEventChecker? profileOnEventChecker,
     GuestProfileInsertRunner? guestProfileInsertRunner,
@@ -39,6 +43,7 @@ class SupabaseGuestRepository implements GuestRepository {
     RpcSingleRunner? rpcSingleRunner,
   })  : _guestByIdLoader = guestByIdLoader,
         _coverEntriesLoader = coverEntriesLoader,
+        _guestProfilesLoader = guestProfilesLoader,
         _currentUserIdReader = currentUserIdReader,
         _profileOnEventChecker = profileOnEventChecker,
         _guestProfileInsertRunner = guestProfileInsertRunner,
@@ -49,6 +54,7 @@ class SupabaseGuestRepository implements GuestRepository {
   final LocalCache cache;
   final GuestByIdLoader? _guestByIdLoader;
   final CoverEntriesLoader? _coverEntriesLoader;
+  final GuestProfilesLoader? _guestProfilesLoader;
   final CurrentUserIdReader? _currentUserIdReader;
   final ProfileOnEventChecker? _profileOnEventChecker;
   final GuestProfileInsertRunner? _guestProfileInsertRunner;
@@ -125,6 +131,19 @@ class SupabaseGuestRepository implements GuestRepository {
         .toList(growable: false);
     await cache.saveGuests(eventId, guests);
     return guests;
+  }
+
+  @override
+  Future<List<GuestProfileRecord>> listGuestProfiles() async {
+    final userId = _currentUserId();
+    if (userId == null) {
+      return const [];
+    }
+
+    final rows = await _loadGuestProfiles(userId);
+    return rows
+        .map((row) => GuestProfileRecord.fromJson(row))
+        .toList(growable: false);
   }
 
   @override
@@ -743,6 +762,24 @@ class SupabaseGuestRepository implements GuestRepository {
           .map((row) => (row as Map).cast<String, dynamic>())
           .toList(growable: false);
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _loadGuestProfiles(
+    String ownerUserId,
+  ) async {
+    final guestProfilesLoader = _guestProfilesLoader;
+    if (guestProfilesLoader != null) {
+      return guestProfilesLoader(ownerUserId);
+    }
+
+    final rows = await client
+        .from('guest_profiles')
+        .select()
+        .eq('owner_user_id', ownerUserId)
+        .order('display_name', ascending: true);
+    return rows
+        .map((row) => (row as Map).cast<String, dynamic>())
+        .toList(growable: false);
   }
 
   Future<Map<String, dynamic>> _runRpcSingle(

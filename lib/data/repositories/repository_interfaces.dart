@@ -91,6 +91,8 @@ abstract interface class GuestRepository {
 
   Future<List<EventGuestRecord>> listGuests(String eventId);
 
+  Future<List<GuestProfileRecord>> listGuestProfiles();
+
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
     String guestId,
   );

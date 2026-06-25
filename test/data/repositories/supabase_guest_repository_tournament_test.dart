@@ -317,6 +317,73 @@ void main() {
       final cachedGuests = cache.readGuests('evt_01');
       expect(cachedGuests.map((guest) => guest.id), ['gst_02']);
     });
+
+    group('saved guest profiles', () {
+      test('lists profiles scoped to the current host', () async {
+        final cache = await LocalCache.create();
+        String? capturedOwnerUserId;
+        final repository = SupabaseGuestRepository(
+          client: SupabaseClient('https://example.com', 'publishable-key'),
+          cache: cache,
+          currentUserIdReader: () => 'usr_01',
+          guestProfilesLoader: (ownerUserId) async {
+            capturedOwnerUserId = ownerUserId;
+            return [
+              _guestProfileRow(
+                id: 'prf_alice',
+                ownerUserId: ownerUserId,
+                displayName: 'Alice Wong',
+                normalizedName: 'alice wong',
+                publicDisplayName: 'Alice W.',
+              ),
+              _guestProfileRow(
+                id: 'prf_brian',
+                ownerUserId: ownerUserId,
+                displayName: 'Brian Le',
+                normalizedName: 'brian le',
+              ),
+            ];
+          },
+        );
+
+        final profiles = await repository.listGuestProfiles();
+
+        expect(capturedOwnerUserId, 'usr_01');
+        expect(
+          profiles.map((profile) => profile.id),
+          ['prf_alice', 'prf_brian'],
+        );
+        expect(profiles.first.displayName, 'Alice Wong');
+        expect(profiles.first.publicDisplayName, 'Alice W.');
+        expect(profiles.last.ownerUserId, 'usr_01');
+      });
+
+      test('returns an empty list when there is no current user', () async {
+        final cache = await LocalCache.create();
+        var loaderCalled = false;
+        final repository = SupabaseGuestRepository(
+          client: SupabaseClient('https://example.com', 'publishable-key'),
+          cache: cache,
+          currentUserIdReader: () => null,
+          guestProfilesLoader: (_) async {
+            loaderCalled = true;
+            return [
+              _guestProfileRow(
+                id: 'prf_alice',
+                ownerUserId: 'usr_01',
+                displayName: 'Alice Wong',
+                normalizedName: 'alice wong',
+              ),
+            ];
+          },
+        );
+
+        final profiles = await repository.listGuestProfiles();
+
+        expect(profiles, isEmpty);
+        expect(loaderCalled, isFalse);
+      });
+    });
   });
 }
 
@@ -337,5 +404,22 @@ Map<String, dynamic> _guestRow({
     'cover_amount_cents': 2000,
     'is_comped': false,
     'has_scored_play': false,
+  };
+}
+
+Map<String, dynamic> _guestProfileRow({
+  required String id,
+  required String ownerUserId,
+  required String displayName,
+  required String normalizedName,
+  String? publicDisplayName,
+}) {
+  return {
+    'id': id,
+    'owner_user_id': ownerUserId,
+    'display_name': displayName,
+    'normalized_name': normalizedName,
+    'public_display_name': publicDisplayName,
+    'row_version': 1,
   };
 }

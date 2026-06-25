@@ -16,6 +16,7 @@ import 'package:mosaic/features/events/screens/event_staff_screen.dart';
 import 'package:mosaic/features/leaderboard/screens/leaderboard_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_awards_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
+import 'package:mosaic/features/guests/screens/bulk_saved_guest_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_form_screen.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
 import 'package:mosaic/features/scoring/screens/event_hand_ledger_screen.dart';
@@ -62,6 +63,7 @@ class AppRouter {
   static const guestRosterRoute = '/guests';
   static const guestDetailRoute = '/guests/detail';
   static const guestFormRoute = '/guests/form';
+  static const bulkSavedGuestRoute = '/guests/bulk-saved';
   static const tablesOverviewRoute = '/tables';
   static const tableFormRoute = '/tables/form';
   static const startSessionRoute = '/tables/start-session';
@@ -147,6 +149,19 @@ class AppRouter {
             existingGuests: args.existingGuests,
             defaultCoverAmountCents: args.defaultCoverAmountCents,
             initialGuest: args.initialGuest,
+            guestRepository: guestRepository,
+          ),
+          settings: settings,
+        );
+      case bulkSavedGuestRoute:
+        final args = settings.arguments as BulkSavedGuestArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => BulkSavedGuestScreen(
+            eventId: args.eventId,
+            eventCoverChargeCents: args.eventCoverChargeCents,
+            existingGuests: args.existingGuests,
+            canManageTournamentStatus: args.canManageTournamentStatus,
+            canManageCover: args.canManageCover,
             guestRepository: guestRepository,
           ),
           settings: settings,
@@ -423,6 +438,22 @@ class GuestFormArgs {
   final List<EventGuestRecord> existingGuests;
   final int defaultCoverAmountCents;
   final EventGuestRecord? initialGuest;
+}
+
+class BulkSavedGuestArgs {
+  const BulkSavedGuestArgs({
+    required this.eventId,
+    required this.eventCoverChargeCents,
+    required this.existingGuests,
+    this.canManageTournamentStatus = true,
+    this.canManageCover = true,
+  });
+
+  final String eventId;
+  final int eventCoverChargeCents;
+  final List<EventGuestRecord> existingGuests;
+  final bool canManageTournamentStatus;
+  final bool canManageCover;
 }
 
 class GuestDetailArgs {

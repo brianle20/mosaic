@@ -205,6 +205,9 @@ class _FakeGuestRepository implements GuestRepository {
   Future<List<EventGuestRecord>> listGuests(String eventId) async => const [];
 
   @override
+  Future<List<GuestProfileRecord>> listGuestProfiles() async => const [];
+
+  @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
       const [];
 

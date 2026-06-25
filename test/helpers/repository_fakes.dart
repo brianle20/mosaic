@@ -87,6 +87,10 @@ class ThrowingGuestRepository implements GuestRepository {
       throw UnimplementedError();
 
   @override
+  Future<List<GuestProfileRecord>> listGuestProfiles() =>
+      throw UnimplementedError();
+
+  @override
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
     String guestId,
   ) =>

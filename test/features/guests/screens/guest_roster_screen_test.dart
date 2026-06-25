@@ -334,6 +334,7 @@ Widget _buildRosterApp({
   required GuestRepository guestRepository,
   int eventCoverChargeCents = 1500,
   bool canManageGuests = true,
+  bool canManageCover = true,
   bool canManageTournamentStatus = true,
 }) {
   return MaterialApp(
@@ -343,6 +344,25 @@ Widget _buildRosterApp({
         return MaterialPageRoute<void>(
           builder: (_) => Scaffold(
             body: Text('Default cover: ${args.defaultCoverAmountCents}'),
+          ),
+          settings: settings,
+        );
+      }
+      if (settings.name == AppRouter.bulkSavedGuestRoute) {
+        final args = settings.arguments as BulkSavedGuestArgs;
+        return MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            body: Column(
+              children: [
+                Text('Bulk event: ${args.eventId}'),
+                Text('Bulk cover: ${args.eventCoverChargeCents}'),
+                Text('Bulk existing guests: ${args.existingGuests.length}'),
+                Text(
+                  'Bulk tournament status: ${args.canManageTournamentStatus}',
+                ),
+                Text('Bulk cover permission: ${args.canManageCover}'),
+              ],
+            ),
           ),
           settings: settings,
         );
@@ -361,6 +381,7 @@ Widget _buildRosterApp({
       eventTitle: 'Friday Night Mahjong',
       eventCoverChargeCents: eventCoverChargeCents,
       canManageGuests: canManageGuests,
+      canManageCover: canManageCover,
       canManageTournamentStatus: canManageTournamentStatus,
       guestRepository: guestRepository,
     ),
@@ -382,7 +403,8 @@ void main() {
       find.text('Add guests to start check-in and live seating.'),
       findsOneWidget,
     );
-    expect(find.text('Add Guest'), findsOneWidget);
+    expect(find.text('Add New Guest'), findsOneWidget);
+    expect(find.text('Add From Saved Guests'), findsOneWidget);
   });
 
   testWidgets('passes the event cover charge into add guest', (tester) async {
@@ -394,10 +416,46 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Add Guest'));
+    await tester.tap(find.text('Add New Guest'));
     await tester.pumpAndSettle();
 
     expect(find.text('Default cover: 2500'), findsOneWidget);
+  });
+
+  testWidgets('opens saved guest picker with roster defaults', (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Alice Wong',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.paid,
+      ),
+      _guest(
+        id: 'gst_02',
+        name: 'Brian Le',
+        attendanceStatus: AttendanceStatus.checkedIn,
+        coverStatus: CoverStatus.paid,
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      _buildRosterApp(
+        guestRepository: repository,
+        eventCoverChargeCents: 3000,
+        canManageCover: false,
+        canManageTournamentStatus: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add From Saved Guests'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bulk event: evt_01'), findsOneWidget);
+    expect(find.text('Bulk cover: 3000'), findsOneWidget);
+    expect(find.text('Bulk existing guests: 2'), findsOneWidget);
+    expect(find.text('Bulk tournament status: false'), findsOneWidget);
+    expect(find.text('Bulk cover permission: false'), findsOneWidget);
   });
 
   testWidgets('roster hides player tag identification entry point', (
@@ -420,7 +478,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Add Guest'), findsNothing);
+    expect(find.text('Add New Guest'), findsNothing);
+    expect(find.text('Add From Saved Guests'), findsNothing);
     expect(find.text('Scan Player Tag'), findsNothing);
     expect(find.text('Tag Identified'), findsNothing);
     expect(find.text('No Guest Found'), findsNothing);
