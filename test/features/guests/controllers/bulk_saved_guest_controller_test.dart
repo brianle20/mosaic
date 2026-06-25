@@ -414,6 +414,46 @@ void main() {
       expect(controller.isAlreadyAdded('prf_alice'), isTrue);
     });
 
+    test('saved profile identity is copied while event defaults stay local',
+        () async {
+      final repository = _FakeGuestRepository(
+        profiles: [
+          _profile(
+            id: 'prf_saved',
+            displayName: 'Saved Player',
+            normalizedName: 'saved player',
+            publicDisplayName: 'Saved P.',
+            phoneE164: '+14155550000',
+            emailLower: 'saved@example.com',
+            instagramHandle: 'saved.tiles',
+          ),
+        ],
+      );
+      final controller = _controller(repository);
+      await controller.loadProfiles();
+      controller.tournamentStatus = EventTournamentStatus.openPlayOnly;
+      controller.coverStatus = CoverStatus.paid;
+      controller.coverAmountCents = 2500;
+      controller.toggleSelection('prf_saved');
+
+      final result = await controller.addSelectedGuests();
+
+      expect(result.addedCount, 1);
+      expect(result.failedCount, 0);
+      final input = repository.createInputs.single;
+      expect(input.guestProfileId, 'prf_saved');
+      expect(input.displayName, 'Saved Player');
+      expect(input.normalizedName, 'saved player');
+      expect(input.publicDisplayName, 'Saved P.');
+      expect(input.phoneE164, '+14155550000');
+      expect(input.emailLower, 'saved@example.com');
+      expect(input.instagramHandle, 'saved.tiles');
+      expect(input.tournamentStatus, EventTournamentStatus.openPlayOnly);
+      expect(input.coverStatus, CoverStatus.paid);
+      expect(input.coverAmountCents, 2500);
+      expect(input.isComped, isFalse);
+    });
+
     test(
         'partial success returns added and failed counts and keeps failed ID '
         'selected', () async {

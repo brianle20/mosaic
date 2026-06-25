@@ -147,6 +147,33 @@ void main() {
       expect(guest.publicName, 'Agustin F.');
     });
 
+    test('joined profile contact fields win over stale event contact fields',
+        () {
+      final guest = EventGuestRecord.fromJson({
+        ..._eventGuestJson(publicDisplayName: 'Event Alice'),
+        'phone_e164': '+15550000000',
+        'email_lower': 'old.event@example.com',
+        'guest_profile': const {
+          'id': 'prf_01',
+          'owner_user_id': 'usr_01',
+          'display_name': 'Profile Alice',
+          'normalized_name': 'profile alice',
+          'public_display_name': 'Profile A.',
+          'phone_e164': '+14155552671',
+          'email_lower': 'alice@example.com',
+          'instagram_handle': 'alice.tiles',
+        },
+      });
+
+      expect(guest.displayName, 'Alice Wong Chen');
+      expect(guest.normalizedName, 'alice wong chen');
+      expect(guest.publicDisplayName, 'Event Alice');
+      expect(guest.publicName, 'Event Alice');
+      expect(guest.phoneE164, '+14155552671');
+      expect(guest.emailLower, 'alice@example.com');
+      expect(guest.instagramHandle, 'alice.tiles');
+    });
+
     test('create and update inputs serialize public display names', () {
       final createInput = CreateGuestInput(
         eventId: 'evt_01',
