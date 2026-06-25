@@ -456,6 +456,49 @@ void main() {
   });
 
   group('TableSessionRecord', () {
+    test('parses false win penalty records from JSON', () {
+      final penalty = FalseWinPenaltyRecord.fromJson(const {
+        'id': 'penalty-1',
+        'table_session_id': 'session-1',
+        'hand_result_id': 'hand-1',
+        'penalty_seat_index': 2,
+        'fan_count': 6,
+        'entered_by_user_id': 'host-1',
+        'entered_at': '2026-06-24T12:00:00Z',
+        'status': 'attached',
+        'correction_note': 'called too early',
+      });
+
+      expect(penalty.id, 'penalty-1');
+      expect(penalty.tableSessionId, 'session-1');
+      expect(penalty.handResultId, 'hand-1');
+      expect(penalty.penaltySeatIndex, 2);
+      expect(penalty.fanCount, 6);
+      expect(penalty.status, FalseWinPenaltyStatus.attached);
+      expect(penalty.correctionNote, 'called too early');
+      expect(penalty.toJson()['status'], 'attached');
+    });
+
+    test('serializes false win penalty input for current RPC signature', () {
+      const input = RecordFalseWinPenaltyInput(
+        tableSessionId: 'session-1',
+        penaltySeatIndex: 2,
+        correctionNote: 'called too early',
+        clientMutationId: 'mutation-1',
+        expectedRecordedHandCount: 4,
+        expectedLastRecordedHandId: 'hand-4',
+      );
+
+      expect(input.toRpcParams(), {
+        'target_table_session_id': 'session-1',
+        'target_penalty_seat_index': 2,
+        'target_correction_note': 'called too early',
+        'target_client_mutation_id': 'mutation-1',
+        'target_expected_recorded_hand_count': 4,
+        'target_expected_last_recorded_hand_id': 'hand-4',
+      });
+    });
+
     test('stores ruleset and rotation policy explicitly', () {
       final record = TableSessionRecord.fromJson(const {
         'id': 'ses_01',
@@ -598,6 +641,46 @@ void main() {
       });
 
       expect(detail.tableLabel, isNull);
+    });
+
+    test('session detail parses pending and attached false win penalties', () {
+      final detail = SessionDetailRecord.fromJson({
+        'table_label': 'Table 1',
+        'session': _sessionJson(),
+        'seats': _seatRows(),
+        'hands': [_handJson()],
+        'settlements': const [],
+        'false_win_penalties': const [
+          {
+            'id': 'penalty-1',
+            'table_session_id': 'session-1',
+            'hand_result_id': null,
+            'penalty_seat_index': 1,
+            'fan_count': 6,
+            'entered_by_user_id': 'host-1',
+            'entered_at': '2026-06-24T12:00:00Z',
+            'status': 'pending',
+            'correction_note': null,
+          },
+          {
+            'id': 'penalty-2',
+            'table_session_id': 'session-1',
+            'hand_result_id': 'hand-1',
+            'penalty_seat_index': 2,
+            'fan_count': 6,
+            'entered_by_user_id': 'host-1',
+            'entered_at': '2026-06-24T12:01:00Z',
+            'status': 'attached',
+            'correction_note': null,
+          },
+        ],
+      });
+
+      expect(detail.pendingFalseWinPenaltySeatIndexes, [1]);
+      expect(
+        detail.falseWinPenaltiesForHand('hand-1').single.penaltySeatIndex,
+        2,
+      );
     });
   });
 
@@ -800,6 +883,23 @@ void main() {
       expect(settlement.amountPoints, 16);
       expect(settlement.multiplierFlags, ['discard', 'east_loses']);
     });
+
+    test('parses pending false win settlement without a hand result', () {
+      final settlement = HandSettlementRecord.fromJson(const {
+        'id': 'hst_false_win_01',
+        'hand_result_id': null,
+        'hand_false_win_penalty_id': 'penalty-1',
+        'payer_event_guest_id': 'gst_false_caller',
+        'payee_event_guest_id': 'gst_east',
+        'amount_points': 32,
+        'multiplier_flags_json': ['false_win_penalty'],
+      });
+
+      expect(settlement.handResultId, isNull);
+      expect(settlement.handFalseWinPenaltyId, 'penalty-1');
+      expect(settlement.toJson()['hand_result_id'], isNull);
+      expect(settlement.toJson()['hand_false_win_penalty_id'], 'penalty-1');
+    });
   });
 
   group('LeaderboardEntry', () {
@@ -915,4 +1015,71 @@ void main() {
       expect(preview.awardAmountCents, 7500);
     });
   });
+}
+
+Map<String, dynamic> _sessionJson() {
+  return {
+    'id': 'session-1',
+    'event_id': 'event-1',
+    'event_table_id': 'table-1',
+    'session_number_for_table': 1,
+    'ruleset_id': 'HK_STANDARD',
+    'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+    'rotation_policy_config_json': <String, dynamic>{},
+    'status': 'active',
+    'initial_east_seat_index': 0,
+    'current_dealer_seat_index': 0,
+    'dealer_pass_count': 0,
+    'completed_games_count': 1,
+    'hand_count': 1,
+    'started_at': '2026-06-24T11:00:00Z',
+    'started_by_user_id': 'host-1',
+  };
+}
+
+List<Map<String, dynamic>> _seatRows() {
+  return [
+    {
+      'id': 'seat-1',
+      'table_session_id': 'session-1',
+      'seat_index': 0,
+      'initial_wind': 'east',
+      'event_guest_id': 'guest-1',
+    },
+    {
+      'id': 'seat-2',
+      'table_session_id': 'session-1',
+      'seat_index': 1,
+      'initial_wind': 'south',
+      'event_guest_id': 'guest-2',
+    },
+    {
+      'id': 'seat-3',
+      'table_session_id': 'session-1',
+      'seat_index': 2,
+      'initial_wind': 'west',
+      'event_guest_id': 'guest-3',
+    },
+  ];
+}
+
+Map<String, dynamic> _handJson() {
+  return {
+    'id': 'hand-1',
+    'table_session_id': 'session-1',
+    'hand_number': 1,
+    'result_type': 'win',
+    'winner_seat_index': 0,
+    'win_type': 'self_draw',
+    'discarder_seat_index': null,
+    'fan_count': 3,
+    'base_points': 8,
+    'east_seat_index_before_hand': 0,
+    'east_seat_index_after_hand': 0,
+    'dealer_rotated': false,
+    'session_completed_after_hand': false,
+    'status': 'recorded',
+    'entered_by_user_id': 'host-1',
+    'entered_at': '2026-06-24T11:10:00Z',
+  };
 }

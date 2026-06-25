@@ -65,6 +65,54 @@ void main() {
       expect(rows[2].isVoided, isTrue);
     });
 
+    test('formats attached false win penalties on final hand summaries', () {
+      final entry = EventHandLedgerEntry.fromJson(_rowJson(
+        handNumber: 12,
+        winType: 'self_draw',
+        fanCount: 4,
+        falseWinPenaltiesJson: const [
+          {
+            'penaltySeatIndex': 1,
+            'fanCount': 6,
+          },
+          {
+            'penaltySeatIndex': 2,
+            'fanCount': 6,
+          },
+        ],
+      ));
+
+      final rows = buildEventHandLedgerViewModels([entry]);
+
+      expect(entry.falseWinPenalties, hasLength(2));
+      expect(entry.falseWinPenalties.first.penaltySeatIndex, 1);
+      expect(
+          rows.single.resultSummary, '4 fan self-draw · 2 false win penalties');
+    });
+
+    test('marks draw with false win penalties and no settlements as invalid',
+        () {
+      final rows = buildEventHandLedgerViewModels([
+        EventHandLedgerEntry.fromJson(_rowJson(
+          handNumber: 13,
+          resultType: 'washout',
+          winType: null,
+          fanCount: null,
+          hasSettlements: false,
+          deltas: [0, 0, 0, 0],
+          falseWinPenaltiesJson: const [
+            {
+              'penaltySeatIndex': 1,
+              'fanCount': 6,
+            },
+          ],
+        )),
+      ]);
+
+      expect(rows.single.hasDataIssue, isTrue);
+      expect(rows.single.resultSummary, 'needs review');
+    });
+
     test('formats false win penalty summary and points', () {
       final rows = buildEventHandLedgerViewModels([
         EventHandLedgerEntry.fromJson(_rowJson(
@@ -146,7 +194,8 @@ void main() {
     });
   });
 
-  test('hand ledger row carries correction target metadata and full guest names',
+  test(
+      'hand ledger row carries correction target metadata and full guest names',
       () {
     final rows = buildEventHandLedgerViewModels([_handEntry()]);
 
@@ -187,6 +236,7 @@ Map<String, Object?> _rowJson({
   List<int> deltas = const [-96, 0, 0, 96],
   String? bonusRoundId,
   String? bonusTableRole,
+  List<Map<String, Object?>> falseWinPenaltiesJson = const [],
 }) {
   return {
     'event_id': 'evt_01',
@@ -206,6 +256,7 @@ Map<String, Object?> _rowJson({
     'ledger_row_type': 'hand',
     'bonus_round_id': bonusRoundId,
     'bonus_table_role': bonusTableRole,
+    'false_win_penalties_json': falseWinPenaltiesJson,
     'cells': [
       _cellJson('east', 0, 'gst_east', 'Estevon Jackson', deltas[0]),
       _cellJson('south', 1, 'gst_south', 'Giang Pham', deltas[1]),

@@ -235,6 +235,12 @@ class _FakeSessionRepository
   }
 
   @override
+  Future<SessionDetailRecord> recordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  ) =>
+      throw UnimplementedError();
+
+  @override
   Future<SessionDetailRecord?> readCachedSessionDetail(
           String sessionId) async =>
       null;

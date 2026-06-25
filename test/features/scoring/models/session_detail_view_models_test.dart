@@ -259,6 +259,72 @@ void main() {
       );
     });
 
+    test('summarizes attached false win penalties on final hand', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(
+          hands: [_discardWinHand()],
+          settlements: [
+            ..._discardSettlements(),
+            ..._falseWinPenaltySettlements(handResultId: 'hand_01'),
+          ],
+          falseWinPenalties: [
+            _falseWinPenalty(
+              handResultId: 'hand_01',
+              penaltySeatIndex: 1,
+              status: 'attached',
+            ),
+            _falseWinPenalty(
+              handResultId: 'hand_01',
+              penaltySeatIndex: 3,
+              status: 'attached',
+            ),
+          ],
+        ),
+        guestNamesById: _guestNamesById,
+      );
+
+      expect(
+        viewModel.hands.single.summaryLabel,
+        contains('Giang Tran false win penalty'),
+      );
+      expect(
+        viewModel.hands.single.summaryLabel,
+        contains('Nina Patel false win penalty'),
+      );
+    });
+
+    test(
+        'summarizes attached false win penalties on draw without no points copy',
+        () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(
+          hands: [_washoutHand(id: 'hand_draw')],
+          settlements: _falseWinPenaltySettlements(handResultId: 'hand_draw'),
+          falseWinPenalties: [
+            _falseWinPenalty(
+              handResultId: 'hand_draw',
+              penaltySeatIndex: 1,
+              status: 'attached',
+            ),
+          ],
+        ),
+        guestNamesById: _guestNamesById,
+      );
+
+      expect(
+        viewModel.hands.single.summaryLabel,
+        isNot(contains('No points exchanged')),
+      );
+      expect(
+        viewModel.hands.single.summaryLabel,
+        contains('False win penalties applied'),
+      );
+      expect(
+        viewModel.hands.single.summaryLabel,
+        contains('Giang Tran false win penalty'),
+      );
+    });
+
     test('summarizes false win penalties from persisted settlements', () {
       final viewModel = buildSessionDetailViewModel(
         detail: _detail(
@@ -318,6 +384,7 @@ SessionDetailRecord _detail({
   String? endedAt,
   List<Map<String, Object?>>? hands,
   List<Map<String, Object?>>? settlements,
+  List<Map<String, Object?>> falseWinPenalties = const [],
 }) {
   return SessionDetailRecord.fromJson({
     'table_label': tableLabel,
@@ -383,6 +450,7 @@ SessionDetailRecord _detail({
     ],
     'hands': hands ?? [_discardWinHand()],
     'settlements': settlements ?? _discardSettlements(),
+    'false_win_penalties': falseWinPenalties,
   });
 }
 
@@ -488,31 +556,50 @@ List<Map<String, Object?>> _discardSettlements() {
   ];
 }
 
-List<Map<String, Object?>> _falseWinPenaltySettlements() {
-  return const [
+List<Map<String, Object?>> _falseWinPenaltySettlements({
+  String handResultId = 'hand_04',
+}) {
+  return [
     {
       'id': 'set_03',
-      'hand_result_id': 'hand_04',
+      'hand_result_id': handResultId,
       'payer_event_guest_id': 'gst_south',
       'payee_event_guest_id': 'gst_east',
       'amount_points': 32,
-      'multiplier_flags_json': ['false_win_penalty'],
+      'multiplier_flags_json': const ['false_win_penalty'],
     },
     {
       'id': 'set_04',
-      'hand_result_id': 'hand_04',
+      'hand_result_id': handResultId,
       'payer_event_guest_id': 'gst_south',
       'payee_event_guest_id': 'gst_west',
       'amount_points': 32,
-      'multiplier_flags_json': ['false_win_penalty'],
+      'multiplier_flags_json': const ['false_win_penalty'],
     },
     {
       'id': 'set_05',
-      'hand_result_id': 'hand_04',
+      'hand_result_id': handResultId,
       'payer_event_guest_id': 'gst_south',
       'payee_event_guest_id': 'gst_north',
       'amount_points': 32,
-      'multiplier_flags_json': ['false_win_penalty'],
+      'multiplier_flags_json': const ['false_win_penalty'],
     },
   ];
+}
+
+Map<String, Object?> _falseWinPenalty({
+  required String handResultId,
+  required int penaltySeatIndex,
+  required String status,
+}) {
+  return {
+    'id': 'penalty_${handResultId}_$penaltySeatIndex',
+    'table_session_id': 'ses_01',
+    'hand_result_id': handResultId,
+    'penalty_seat_index': penaltySeatIndex,
+    'fan_count': 6,
+    'status': status,
+    'entered_by_user_id': 'usr_01',
+    'entered_at': '2026-04-24T19:04:00-07:00',
+  };
 }

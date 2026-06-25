@@ -197,6 +197,10 @@ abstract interface class SessionRepository {
 
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input);
 
+  Future<SessionDetailRecord> recordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  );
+
   Future<SessionDetailRecord> editHand(EditHandResultInput input);
 
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input);

@@ -15,6 +15,9 @@ class ProjectedSessionDetail {
 class OfflineSessionProjector {
   const OfflineSessionProjector();
 
+  static const duplicateFalseWinPenaltyMessage =
+      'False win caller already has a pending penalty.';
+
   static final DateTime _dealerCompoundCapEffectiveAt =
       DateTime.utc(2026, 5, 19, 14);
 
@@ -25,7 +28,6 @@ class OfflineSessionProjector {
     final relevant = mutations
         .where(
           (mutation) =>
-              mutation.kind == OfflineMutationKind.recordHand &&
               mutation.sessionId == detail.session.id &&
               mutation.status != OfflineMutationStatus.synced,
         )
@@ -38,17 +40,57 @@ class OfflineSessionProjector {
     var completedGames = detail.session.completedGamesCount;
     var handCount = detail.session.handCount;
     final hands = [...detail.hands];
+    final falseWinPenalties = [...detail.falseWinPenalties];
+    final pendingFalseWinPenaltySeats = <int>{};
+    for (final penalty in falseWinPenalties) {
+      if (penalty.status != FalseWinPenaltyStatus.pending) {
+        continue;
+      }
+      if (!pendingFalseWinPenaltySeats.add(penalty.penaltySeatIndex)) {
+        throw StateError(duplicateFalseWinPenaltyMessage);
+      }
+    }
     final pendingHandIds = <String>{};
     final blockedHandIds = <String>{};
     String? blockedReason;
 
     for (final mutation in relevant) {
       final pendingHandId = 'pending:${mutation.id}';
+      final isBlocked = mutation.status == OfflineMutationStatus.blocked;
+
+      if (mutation.kind == OfflineMutationKind.recordFalseWinPenalty) {
+        if (isBlocked) {
+          blockedHandIds.add(pendingHandId);
+          blockedReason ??= mutation.lastError;
+        } else {
+          final penaltySeatIndex = _requiredInt(
+            mutation.payload['target_penalty_seat_index'],
+          );
+          if (!pendingFalseWinPenaltySeats.add(penaltySeatIndex)) {
+            throw StateError(duplicateFalseWinPenaltyMessage);
+          }
+          falseWinPenalties.add(
+            FalseWinPenaltyRecord(
+              id: pendingHandId,
+              tableSessionId: detail.session.id,
+              penaltySeatIndex: penaltySeatIndex,
+              fanCount: 6,
+              enteredByUserId: 'offline',
+              enteredAt: mutation.createdAt,
+              status: FalseWinPenaltyStatus.pending,
+              correctionNote:
+                  mutation.payload['target_correction_note'] as String?,
+            ),
+          );
+          pendingHandIds.add(pendingHandId);
+        }
+        continue;
+      }
+
       final resultType = _resultType(mutation.payload['target_result_type']);
       final winnerSeatIndex =
           _optionalInt(mutation.payload['target_winner_seat_index']);
       final eastBefore = dealer;
-      final isBlocked = mutation.status == OfflineMutationStatus.blocked;
       final projectedState = isBlocked
           ? _ProjectedHandState(
               eastAfter: dealer,
@@ -100,6 +142,28 @@ class OfflineSessionProjector {
         pendingHandIds.add(pendingHandId);
       }
 
+      if (resultType == HandResultType.win ||
+          resultType == HandResultType.washout) {
+        for (var index = 0; index < falseWinPenalties.length; index += 1) {
+          final penalty = falseWinPenalties[index];
+          if (penalty.status != FalseWinPenaltyStatus.pending) {
+            continue;
+          }
+          falseWinPenalties[index] = FalseWinPenaltyRecord(
+            id: penalty.id,
+            tableSessionId: penalty.tableSessionId,
+            handResultId: pendingHandId,
+            penaltySeatIndex: penalty.penaltySeatIndex,
+            fanCount: penalty.fanCount,
+            enteredByUserId: penalty.enteredByUserId,
+            enteredAt: penalty.enteredAt,
+            status: FalseWinPenaltyStatus.attached,
+            correctionNote: penalty.correctionNote,
+          );
+          pendingFalseWinPenaltySeats.remove(penalty.penaltySeatIndex);
+        }
+      }
+
       dealer = projectedState.eastAfter;
       dealerPassCount = projectedState.dealerPassCount;
       dealerWinStreak = projectedState.dealerWinStreak;
@@ -121,6 +185,7 @@ class OfflineSessionProjector {
         seats: detail.seats,
         hands: hands,
         settlements: detail.settlements,
+        falseWinPenalties: falseWinPenalties,
         tableLabel: detail.tableLabel,
       ),
       syncSnapshot: SessionSyncSnapshot(
@@ -211,6 +276,14 @@ class OfflineSessionProjector {
       num() => value.toInt(),
       _ => throw FormatException('Expected int or null, got $value.'),
     };
+  }
+
+  int _requiredInt(Object? value) {
+    final parsed = _optionalInt(value);
+    if (parsed == null) {
+      throw const FormatException('Expected int, got null.');
+    }
+    return parsed;
   }
 
   bool? _optionalBool(Object? value) {

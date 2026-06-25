@@ -248,6 +248,12 @@ class _FakeSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<SessionDetailRecord> recordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  ) =>
+      throw UnimplementedError();
+
+  @override
   Future<SessionDetailRecord> editHand(EditHandResultInput input) {
     throw UnimplementedError();
   }

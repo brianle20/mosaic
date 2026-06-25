@@ -66,4 +66,33 @@ class HandEntryController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<SessionDetailRecord?> recordFalseWinPenalty({
+    required String tableSessionId,
+    required int penaltySeatIndex,
+    String? correctionNote,
+  }) async {
+    isSubmitting = true;
+    submitError = null;
+    notifyListeners();
+
+    try {
+      return await sessionRepository.recordFalseWinPenalty(
+        RecordFalseWinPenaltyInput(
+          tableSessionId: tableSessionId,
+          penaltySeatIndex: penaltySeatIndex,
+          correctionNote:
+              correctionNote == null || correctionNote.trim().isEmpty
+                  ? null
+                  : correctionNote.trim(),
+        ),
+      );
+    } catch (err) {
+      submitError = err.toString();
+      return null;
+    } finally {
+      isSubmitting = false;
+      notifyListeners();
+    }
+  }
 }

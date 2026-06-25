@@ -179,11 +179,143 @@ void main() {
       expect(projected.syncSnapshot.pendingHandIds, isEmpty);
       expect(projected.syncSnapshot.blockedHandIds, isEmpty);
     });
+
+    test('preserves false win penalties from the cached detail', () {
+      final projected = const OfflineSessionProjector().project(
+        detail: _detail(
+          currentDealerSeatIndex: 1,
+          falseWinPenalties: [
+            _falseWinPenalty(id: 'penalty_pending'),
+            _falseWinPenalty(
+              id: 'penalty_attached',
+              handResultId: 'hand_01',
+              status: FalseWinPenaltyStatus.attached,
+            ),
+          ],
+        ),
+        mutations: const [],
+      );
+
+      expect(projected.detail.falseWinPenalties.map((penalty) => penalty.id), [
+        'penalty_pending',
+        'penalty_attached',
+      ]);
+      expect(projected.detail.pendingFalseWinPenaltySeatIndexes, [2]);
+    });
+
+    test('false win penalty projection does not advance hand or dealer', () {
+      final projected = const OfflineSessionProjector().project(
+        detail: _detail(
+          currentDealerSeatIndex: 1,
+          completedGamesCount: 5,
+          dealerPassCount: 2,
+          handCount: 5,
+        ),
+        mutations: [
+          _mutation(
+            id: 'mut_penalty',
+            kind: OfflineMutationKind.recordFalseWinPenalty,
+            localHandNumber: 6,
+            payload: const {
+              'target_table_session_id': 'ses_01',
+              'target_penalty_seat_index': 3,
+              'target_correction_note': 'called too early',
+            },
+          ),
+        ],
+      );
+
+      expect(projected.detail.hands, isEmpty);
+      expect(projected.detail.session.currentDealerSeatIndex, 1);
+      expect(projected.detail.session.dealerPassCount, 2);
+      expect(projected.detail.session.completedGamesCount, 5);
+      expect(projected.detail.session.handCount, 5);
+      expect(projected.detail.pendingFalseWinPenaltySeatIndexes, [3]);
+      expect(projected.syncSnapshot.pendingHandIds, {'pending:mut_penalty'});
+    });
+
+    test('attaches pending false win penalties to the next projected hand', () {
+      final projected = const OfflineSessionProjector().project(
+        detail: _detail(currentDealerSeatIndex: 1),
+        mutations: [
+          _mutation(
+            id: 'mut_penalty',
+            kind: OfflineMutationKind.recordFalseWinPenalty,
+            createdAt: DateTime.utc(2026, 6, 24, 12),
+            payload: const {
+              'target_table_session_id': 'ses_01',
+              'target_penalty_seat_index': 3,
+              'target_correction_note': 'called too early',
+            },
+          ),
+          _mutation(
+            id: 'mut_hand',
+            localHandNumber: 1,
+            createdAt: DateTime.utc(2026, 6, 24, 12, 1),
+            payload: const {
+              'target_table_session_id': 'ses_01',
+              'target_result_type': 'win',
+              'target_winner_seat_index': 2,
+              'target_win_type': 'discard',
+              'target_discarder_seat_index': 1,
+              'target_fan_count': 3,
+            },
+          ),
+        ],
+      );
+
+      expect(projected.detail.hands.single.id, 'pending:mut_hand');
+      expect(projected.detail.pendingFalseWinPenaltySeatIndexes, isEmpty);
+      expect(projected.detail.falseWinPenalties.single.handResultId,
+          'pending:mut_hand');
+      expect(projected.detail.falseWinPenalties.single.status,
+          FalseWinPenaltyStatus.attached);
+      expect(projected.syncSnapshot.pendingHandIds,
+          {'pending:mut_penalty', 'pending:mut_hand'});
+    });
+
+    test('rejects duplicate false win penalty mutations for same seat', () {
+      expect(
+        () => const OfflineSessionProjector().project(
+          detail: _detail(currentDealerSeatIndex: 1),
+          mutations: [
+            _mutation(
+              id: 'mut_penalty_1',
+              kind: OfflineMutationKind.recordFalseWinPenalty,
+              createdAt: DateTime.utc(2026, 6, 24, 12),
+              payload: const {
+                'target_table_session_id': 'ses_01',
+                'target_penalty_seat_index': 3,
+                'target_correction_note': null,
+              },
+            ),
+            _mutation(
+              id: 'mut_penalty_2',
+              kind: OfflineMutationKind.recordFalseWinPenalty,
+              createdAt: DateTime.utc(2026, 6, 24, 12, 1),
+              payload: const {
+                'target_table_session_id': 'ses_01',
+                'target_penalty_seat_index': 3,
+                'target_correction_note': null,
+              },
+            ),
+          ],
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('False win caller already has a pending penalty.'),
+          ),
+        ),
+      );
+    });
   });
 }
 
 OfflineMutationRecord _mutation({
   required String id,
+  OfflineMutationKind kind = OfflineMutationKind.recordHand,
   int localHandNumber = 1,
   DateTime? createdAt,
   OfflineMutationStatus status = OfflineMutationStatus.pending,
@@ -197,7 +329,7 @@ OfflineMutationRecord _mutation({
   final timestamp = createdAt ?? DateTime.utc(2026, 6, 18, 20);
   return OfflineMutationRecord(
     id: id,
-    kind: OfflineMutationKind.recordHand,
+    kind: kind,
     eventId: 'evt_01',
     sessionId: 'ses_01',
     payload: payload,
@@ -217,6 +349,7 @@ SessionDetailRecord _detail({
   int dealerPassCount = 0,
   int handCount = 0,
   List<HandResultRecord> hands = const [],
+  List<FalseWinPenaltyRecord> falseWinPenalties = const [],
 }) {
   return SessionDetailRecord.fromJson({
     'table_label': 'Table 1',
@@ -269,7 +402,27 @@ SessionDetailRecord _detail({
     ],
     'hands': hands.map((hand) => hand.toJson()).toList(growable: false),
     'settlements': const [],
+    'false_win_penalties': falseWinPenalties
+        .map((penalty) => penalty.toJson())
+        .toList(growable: false),
   });
+}
+
+FalseWinPenaltyRecord _falseWinPenalty({
+  required String id,
+  String? handResultId,
+  FalseWinPenaltyStatus status = FalseWinPenaltyStatus.pending,
+}) {
+  return FalseWinPenaltyRecord(
+    id: id,
+    tableSessionId: 'ses_01',
+    handResultId: handResultId,
+    penaltySeatIndex: 2,
+    fanCount: 6,
+    enteredByUserId: 'usr_01',
+    enteredAt: DateTime.utc(2026, 6, 24, 12),
+    status: status,
+  );
 }
 
 HandResultRecord _hand({

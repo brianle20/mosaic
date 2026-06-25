@@ -45,6 +45,31 @@ class EventHandLedgerCell {
 }
 
 @immutable
+class EventHandLedgerFalseWinPenalty {
+  const EventHandLedgerFalseWinPenalty({
+    required this.penaltySeatIndex,
+    required this.fanCount,
+  });
+
+  factory EventHandLedgerFalseWinPenalty.fromJson(Map<String, dynamic> json) {
+    return EventHandLedgerFalseWinPenalty(
+      penaltySeatIndex: _requiredInt(json, 'penaltySeatIndex'),
+      fanCount: _requiredInt(json, 'fanCount'),
+    );
+  }
+
+  final int penaltySeatIndex;
+  final int fanCount;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'penaltySeatIndex': penaltySeatIndex,
+      'fanCount': fanCount,
+    };
+  }
+}
+
+@immutable
 class EventHandLedgerEntry {
   const EventHandLedgerEntry({
     required this.eventId,
@@ -59,6 +84,7 @@ class EventHandLedgerEntry {
     required this.status,
     required this.hasSettlements,
     required this.cells,
+    this.falseWinPenalties = const [],
     this.rowType = EventHandLedgerRowType.hand,
     this.winType,
     this.fanCount,
@@ -81,6 +107,13 @@ class EventHandLedgerEntry {
     final cells = rawCells
         .map((cell) => EventHandLedgerCell.fromJson(
               (cell as Map).cast<String, dynamic>(),
+            ))
+        .toList(growable: false);
+    final rawFalseWinPenalties =
+        json['false_win_penalties_json'] as List<dynamic>? ?? const [];
+    final falseWinPenalties = rawFalseWinPenalties
+        .map((penalty) => EventHandLedgerFalseWinPenalty.fromJson(
+              (penalty as Map).cast<String, dynamic>(),
             ))
         .toList(growable: false);
 
@@ -116,6 +149,7 @@ class EventHandLedgerEntry {
       penaltySeatIndex: _optionalInt(json, 'penalty_seat_index'),
       hasSettlements: _boolOrDefault(json, 'has_settlements', false),
       cells: cells,
+      falseWinPenalties: falseWinPenalties,
       rowType: rowType,
       bonusRoundId: _optionalString(json, 'bonus_round_id'),
       bonusTableRole: _optionalString(json, 'bonus_table_role'),
@@ -156,6 +190,7 @@ class EventHandLedgerEntry {
   final Map<String, dynamic> adjustmentContextJson;
   final bool hasSettlements;
   final List<EventHandLedgerCell> cells;
+  final List<EventHandLedgerFalseWinPenalty> falseWinPenalties;
 
   Map<String, dynamic> toJson() {
     return {
@@ -184,6 +219,9 @@ class EventHandLedgerEntry {
       'adjustment_context_json': adjustmentContextJson,
       'has_settlements': hasSettlements,
       'cells': cells.map((cell) => cell.toJson()).toList(growable: false),
+      'false_win_penalties_json': falseWinPenalties
+          .map((penalty) => penalty.toJson())
+          .toList(growable: false),
     };
   }
 }

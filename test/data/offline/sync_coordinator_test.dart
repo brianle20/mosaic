@@ -142,6 +142,45 @@ void main() {
       expect(mutation.attemptCount, 1);
     });
 
+    test('sync sends false win penalty mutations to false win RPC path',
+        () async {
+      await store.insertMutation(
+        _mutation(
+          id: 'mut_penalty',
+          kind: OfflineMutationKind.recordFalseWinPenalty,
+          payload: const {
+            'target_table_session_id': 'ses_01',
+            'target_penalty_seat_index': 2,
+            'target_correction_note': null,
+          },
+          baseRecordedHandCount: 4,
+          baseLastRecordedHandId: 'hand_04',
+          createdAt: DateTime.utc(2026, 6, 24, 12),
+        ),
+      );
+
+      await coordinator.syncNow();
+
+      expect(repository.recordedInputs, isEmpty);
+      expect(repository.recordedFalseWinPenalty?.tableSessionId, 'ses_01');
+      expect(repository.recordedFalseWinPenalty?.penaltySeatIndex, 2);
+      expect(repository.recordedFalseWinPenalty?.correctionNote, isNull);
+      expect(
+          repository.recordedFalseWinPenalty?.clientMutationId, 'mut_penalty');
+      expect(
+        repository.recordedFalseWinPenalty?.expectedRecordedHandCount,
+        4,
+      );
+      expect(
+        repository.recordedFalseWinPenalty?.expectedLastRecordedHandId,
+        'hand_04',
+      );
+      expect(
+        (await store.readMutation('mut_penalty'))!.status,
+        OfflineMutationStatus.synced,
+      );
+    });
+
     test(
       'network failures mark current mutation failed and stop later mutations',
       () async {
@@ -269,6 +308,7 @@ class _FakeReachability implements NetworkReachability {
 
 class _FakeSessionRepository implements SessionRepository {
   final List<RecordHandResultInput> recordedInputs = [];
+  RecordFalseWinPenaltyInput? recordedFalseWinPenalty;
   final List<Object> errors = [];
   Completer<SessionDetailRecord>? nextResultCompleter;
 
@@ -282,6 +322,17 @@ class _FakeSessionRepository implements SessionRepository {
     if (completer != null) {
       nextResultCompleter = null;
       return completer.future;
+    }
+    return _detail();
+  }
+
+  @override
+  Future<SessionDetailRecord> recordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  ) async {
+    recordedFalseWinPenalty = input;
+    if (errors.isNotEmpty) {
+      throw errors.removeAt(0);
     }
     return _detail();
   }
@@ -352,6 +403,7 @@ class _FakeSessionRepository implements SessionRepository {
 
 OfflineMutationRecord _mutation({
   required String id,
+  OfflineMutationKind kind = OfflineMutationKind.recordHand,
   String sessionId = 'ses_01',
   Map<String, dynamic> payload = const {
     'target_table_session_id': 'ses_01',
@@ -372,7 +424,7 @@ OfflineMutationRecord _mutation({
   final timestamp = createdAt ?? DateTime.utc(2026, 6, 18, 20);
   return OfflineMutationRecord(
     id: id,
-    kind: OfflineMutationKind.recordHand,
+    kind: kind,
     eventId: 'evt_01',
     sessionId: sessionId,
     payload: payload,

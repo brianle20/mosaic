@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -31,16 +33,19 @@ class HandEntryScreen extends StatefulWidget {
 
 class _HandEntryScreenState extends State<HandEntryScreen> {
   late final HandEntryController _controller;
+  late SessionDetailRecord _sessionDetail;
   late HandResultType _resultType;
   HandWinType? _winType;
   int? _winnerSeatIndex;
   int? _discarderSeatIndex;
   int? _penaltySeatIndex;
+  bool _choosingFalseWinCaller = false;
   late final TextEditingController _fanCountController;
 
   @override
   void initState() {
     super.initState();
+    _sessionDetail = widget.sessionDetail;
     _controller =
         HandEntryController(sessionRepository: widget.sessionRepository)
           ..addListener(_handleUpdate);
@@ -53,6 +58,14 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     _fanCountController = TextEditingController(
       text: initialHand?.fanCount?.toString() ?? '',
     );
+  }
+
+  @override
+  void didUpdateWidget(covariant HandEntryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sessionDetail != widget.sessionDetail) {
+      _sessionDetail = widget.sessionDetail;
+    }
   }
 
   @override
@@ -72,18 +85,21 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   int get _drawDealerSeatIndex =>
       widget.initialHand?.eastSeatIndexBeforeHand ??
-      widget.sessionDetail.session.currentDealerSeatIndex;
+      _sessionDetail.session.currentDealerSeatIndex;
 
   int get _labelEastSeatIndex =>
       widget.initialHand?.eastSeatIndexBeforeHand ??
-      widget.sessionDetail.session.currentDealerSeatIndex;
+      _sessionDetail.session.currentDealerSeatIndex;
 
   String _seatName(int seatIndex) {
-    final seat = widget.sessionDetail.seats.firstWhere(
+    final seat = _sessionDetail.seats.firstWhere(
       (entry) => entry.seatIndex == seatIndex,
     );
     return widget.guestNamesById[seat.eventGuestId] ?? seat.eventGuestId;
   }
+
+  bool get _isEditingLegacyFalseWin =>
+      widget.initialHand?.resultType == HandResultType.falseWinPenalty;
 
   HandResultDraft get _draft => HandResultDraft(
         resultType: _resultType,
@@ -91,37 +107,42 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
         winType: _resultType == HandResultType.win ? _winType : null,
         discarderSeatIndex:
             _resultType == HandResultType.win ? _discarderSeatIndex : null,
-        penaltySeatIndex: _resultType == HandResultType.falseWinPenalty
-            ? _penaltySeatIndex
-            : null,
+        penaltySeatIndex: _isEditingLegacyFalseWin ? _penaltySeatIndex : null,
         fanCount: _resultType == HandResultType.win
             ? int.tryParse(_fanCountController.text)
             : null,
         dealerWasWaitingAtDraw: null,
+        blockedWinnerSeatIndexes:
+            widget.initialHand == null ? _blockedWinnerSeatIndexes : const {},
       );
+
+  Set<int> get _blockedWinnerSeatIndexes =>
+      _sessionDetail.pendingFalseWinPenaltySeatIndexes.toSet();
 
   bool get _roundExpired =>
       widget.initialHand == null &&
       _sessionHasRoundTimer &&
       RoundTimerState.fromStartedAt(
-        startedAt: widget.sessionDetail.session.startedAt,
-        pausedAt: widget.sessionDetail.session.roundTimerPausedAt,
-        pausedSeconds: widget.sessionDetail.session.roundTimerPausedSeconds,
+        startedAt: _sessionDetail.session.startedAt,
+        pausedAt: _sessionDetail.session.roundTimerPausedAt,
+        pausedSeconds: _sessionDetail.session.roundTimerPausedSeconds,
       ).isExpired;
 
   bool get _sessionHasRoundTimer =>
-      widget.sessionDetail.session.scoringPhase ==
-          EventScoringPhase.tournament ||
-      widget.sessionDetail.session.scoringPhase == EventScoringPhase.bonus;
+      _sessionDetail.session.scoringPhase == EventScoringPhase.tournament ||
+      _sessionDetail.session.scoringPhase == EventScoringPhase.bonus;
 
   Future<void> _submit() async {
+    if (_choosingFalseWinCaller) {
+      return;
+    }
     if (!_draft.isValid) {
       setState(() {});
       return;
     }
 
     final detail = await _controller.submit(
-      tableSessionId: widget.sessionDetail.session.id,
+      tableSessionId: _sessionDetail.session.id,
       draft: _draft,
       existingHand: widget.initialHand,
     );
@@ -146,6 +167,35 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     Navigator.of(context).pop(detail);
   }
 
+  Future<void> _showFalseWinCallerPicker() async {
+    setState(() {
+      _choosingFalseWinCaller = true;
+    });
+  }
+
+  Future<void> _recordFalseWinCaller(int seatIndex) async {
+    if (_blockedWinnerSeatIndexes.contains(seatIndex)) {
+      setState(() {
+        _penaltySeatIndex = seatIndex;
+      });
+      return;
+    }
+
+    final detail = await _controller.recordFalseWinPenalty(
+      tableSessionId: _sessionDetail.session.id,
+      penaltySeatIndex: seatIndex,
+    );
+    if (!mounted || detail == null) {
+      return;
+    }
+
+    setState(() {
+      _sessionDetail = detail;
+      _choosingFalseWinCaller = false;
+      _penaltySeatIndex = null;
+    });
+  }
+
   String _seatLabel(int seatIndex) {
     final guestName = _seatName(seatIndex);
     final relativeSeatIndex = (seatIndex - _labelEastSeatIndex) % 4;
@@ -162,9 +212,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   void _selectSeat(int seatIndex,
       {_PlayerScanTarget target = _PlayerScanTarget.winner}) {
     if (target == _PlayerScanTarget.penaltyCaller) {
-      setState(() {
-        _penaltySeatIndex = seatIndex;
-      });
+      unawaited(_recordFalseWinCaller(seatIndex));
       return;
     }
 
@@ -222,8 +270,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
             final isWinner = seat.seatIndex == _winnerSeatIndex;
             final isDiscarder = seat.seatIndex == _discarderSeatIndex;
             final isPenaltyCaller = seat.seatIndex == _penaltySeatIndex;
-            final disabled = target == _PlayerScanTarget.discarder &&
-                seat.seatIndex == _winnerSeatIndex;
+            final disabled = _controller.isSubmitting ||
+                target == _PlayerScanTarget.discarder &&
+                    seat.seatIndex == _winnerSeatIndex;
             final selected = switch (target) {
               _PlayerScanTarget.winner => isWinner,
               _PlayerScanTarget.discarder => isDiscarder,
@@ -270,7 +319,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   List<TableSessionSeatRecord> _orderedSeatsForTableView() {
     final seatsByRelativeIndex = {
-      for (final seat in widget.sessionDetail.seats)
+      for (final seat in _sessionDetail.seats)
         (seat.seatIndex - _labelEastSeatIndex) % 4: seat,
     };
     return [
@@ -301,7 +350,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
         child: FilledButton(
-          onPressed: _controller.isSubmitting ? null : _submit,
+          onPressed: _controller.isSubmitting || _choosingFalseWinCaller
+              ? null
+              : _submit,
           child: Text(_controller.isSubmitting ? 'Saving...' : 'Save Hand'),
         ),
       ),
@@ -321,43 +372,82 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                 ),
                 const SizedBox(height: 16),
               ],
-              SegmentedButton<HandResultType>(
-                segments: const [
-                  ButtonSegment(
-                    value: HandResultType.win,
-                    label: Text('Win'),
-                  ),
-                  ButtonSegment(
-                    value: HandResultType.washout,
-                    label: Text('Draw'),
-                  ),
-                  ButtonSegment(
-                    value: HandResultType.falseWinPenalty,
-                    label: Text('False Win'),
-                  ),
-                ],
-                selected: {_resultType},
-                onSelectionChanged: (selection) {
-                  setState(() {
-                    _resultType = selection.first;
-                    if (_resultType == HandResultType.washout) {
-                      _winnerSeatIndex = null;
-                      _discarderSeatIndex = null;
-                      _penaltySeatIndex = null;
-                      _winType = null;
-                    } else if (_resultType == HandResultType.falseWinPenalty) {
-                      _winnerSeatIndex = null;
-                      _discarderSeatIndex = null;
-                      _winType = null;
-                    } else {
-                      _winType ??= HandWinType.selfDraw;
-                      _penaltySeatIndex = null;
-                    }
-                  });
-                },
-              ),
+              if (_isEditingLegacyFalseWin)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Legacy false win penalty',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _penaltySeatIndex == null
+                          ? 'False win caller: Unknown'
+                          : 'False win caller: ${_seatLabel(_penaltySeatIndex!)}',
+                    ),
+                  ],
+                )
+              else
+                SegmentedButton<HandResultType>(
+                  segments: const [
+                    ButtonSegment(
+                      value: HandResultType.win,
+                      label: Text('Win'),
+                    ),
+                    ButtonSegment(
+                      value: HandResultType.washout,
+                      label: Text('Draw'),
+                    ),
+                  ],
+                  selected: {_resultType},
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _resultType = selection.first;
+                      if (_resultType == HandResultType.washout) {
+                        _winnerSeatIndex = null;
+                        _discarderSeatIndex = null;
+                        _penaltySeatIndex = null;
+                        _winType = null;
+                      } else {
+                        _winType ??= HandWinType.selfDraw;
+                        _penaltySeatIndex = null;
+                      }
+                      _choosingFalseWinCaller = false;
+                    });
+                  },
+                ),
               const SizedBox(height: 16),
-              if (_resultType == HandResultType.win) ...[
+              if (widget.initialHand == null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _controller.isSubmitting
+                        ? null
+                        : _showFalseWinCallerPicker,
+                    icon: const Icon(Icons.warning_amber_outlined),
+                    label: const Text('Record False Win'),
+                  ),
+                ),
+              ],
+              if (_sessionDetail.pendingFalseWinPenalties.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'False win callers: ${_sessionDetail.pendingFalseWinPenalties.map((penalty) => _seatLabel(penalty.penaltySeatIndex)).join(', ')}',
+                ),
+              ],
+              if (_choosingFalseWinCaller) ...[
+                const SizedBox(height: 16),
+                _buildSeatButtonGrid(
+                  prompt: 'Choose false win caller',
+                  target: _PlayerScanTarget.penaltyCaller,
+                ),
+              ],
+              const SizedBox(height: 16),
+              if (!_choosingFalseWinCaller &&
+                  _resultType == HandResultType.win) ...[
                 Wrap(
                   spacing: 8,
                   children: [
@@ -422,23 +512,12 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                 const SizedBox(height: 6),
                 Text(_draft.washoutFieldError!),
               ],
-              if (_resultType == HandResultType.washout) ...[
+              if (!_choosingFalseWinCaller &&
+                  _resultType == HandResultType.washout) ...[
                 Text(
                   'Dealer: ${_seatName(_drawDealerSeatIndex)}',
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
-              ],
-              if (_resultType == HandResultType.falseWinPenalty) ...[
-                _buildSeatButtonGrid(
-                  prompt: 'Choose false win caller',
-                  target: _PlayerScanTarget.penaltyCaller,
-                ),
-                if (_draft.falseWinPenaltySeatError != null) ...[
-                  const SizedBox(height: 6),
-                  Text(_draft.falseWinPenaltySeatError!),
-                ],
-                const SizedBox(height: 8),
-                const Text('6 fan to each player.'),
               ],
               if (_draft.canBuildPreview) ...[
                 const SizedBox(height: 20),

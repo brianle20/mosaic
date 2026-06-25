@@ -62,7 +62,8 @@ EventHandLedgerRowViewModel _buildRow(EventHandLedgerEntry entry) {
   }
 
   final requiresSettlements = entry.resultType == HandResultType.win ||
-      entry.resultType == HandResultType.falseWinPenalty;
+      entry.resultType == HandResultType.falseWinPenalty ||
+      entry.falseWinPenalties.isNotEmpty;
   final hasDataIssue = requiresSettlements &&
       entry.status == HandResultStatus.recorded &&
       !entry.hasSettlements;
@@ -121,7 +122,7 @@ String _resultSummary(EventHandLedgerEntry entry) {
     return 'voided';
   }
   if (entry.resultType == HandResultType.washout) {
-    return 'draw';
+    return _withFalseWinPenaltySummary('draw', entry);
   }
   if (entry.resultType == HandResultType.falseWinPenalty) {
     return '${entry.fanCount ?? 6} fan false win penalty';
@@ -134,10 +135,21 @@ String _resultSummary(EventHandLedgerEntry entry) {
     null => 'win',
   };
 
-  if (fanCount == null) {
-    return winType;
+  final baseSummary = fanCount == null ? winType : '$fanCount fan $winType';
+  return _withFalseWinPenaltySummary(baseSummary, entry);
+}
+
+String _withFalseWinPenaltySummary(
+  String baseSummary,
+  EventHandLedgerEntry entry,
+) {
+  final falseWinCount = entry.falseWinPenalties.length;
+  if (falseWinCount == 0) {
+    return baseSummary;
   }
-  return '$fanCount fan $winType';
+
+  final noun = falseWinCount == 1 ? 'penalty' : 'penalties';
+  return '$baseSummary · $falseWinCount false win $noun';
 }
 
 String _adjustmentLabel(EventHandLedgerEntry entry) {

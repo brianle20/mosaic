@@ -217,6 +217,7 @@ class SessionDetailRecord {
     required this.seats,
     required this.hands,
     required this.settlements,
+    this.falseWinPenalties = const [],
     this.tableLabel,
   });
 
@@ -224,6 +225,8 @@ class SessionDetailRecord {
     final rawSeats = json['seats'] as List<dynamic>? ?? const [];
     final rawHands = json['hands'] as List<dynamic>? ?? const [];
     final rawSettlements = json['settlements'] as List<dynamic>? ?? const [];
+    final rawFalseWinPenalties =
+        json['false_win_penalties'] as List<dynamic>? ?? const [];
 
     final seats = rawSeats
         .map((seat) =>
@@ -240,6 +243,13 @@ class SessionDetailRecord {
               HandSettlementRecord.fromJson(settlement as Map<String, dynamic>),
         )
         .toList(growable: false);
+    final falseWinPenalties = rawFalseWinPenalties
+        .map(
+          (penalty) =>
+              FalseWinPenaltyRecord.fromJson(penalty as Map<String, dynamic>),
+        )
+        .toList(growable: false)
+      ..sort((left, right) => left.enteredAt.compareTo(right.enteredAt));
 
     return SessionDetailRecord(
       session: TableSessionRecord.fromJson(
@@ -248,6 +258,7 @@ class SessionDetailRecord {
       seats: seats,
       hands: hands,
       settlements: settlements,
+      falseWinPenalties: falseWinPenalties,
       tableLabel: _optionalString(json, 'table_label'),
     );
   }
@@ -256,7 +267,30 @@ class SessionDetailRecord {
   final List<TableSessionSeatRecord> seats;
   final List<HandResultRecord> hands;
   final List<HandSettlementRecord> settlements;
+  final List<FalseWinPenaltyRecord> falseWinPenalties;
   final String? tableLabel;
+
+  List<FalseWinPenaltyRecord> get pendingFalseWinPenalties {
+    return falseWinPenalties
+        .where((penalty) => penalty.status == FalseWinPenaltyStatus.pending)
+        .toList(growable: false);
+  }
+
+  List<int> get pendingFalseWinPenaltySeatIndexes {
+    return pendingFalseWinPenalties
+        .map((penalty) => penalty.penaltySeatIndex)
+        .toList(growable: false);
+  }
+
+  List<FalseWinPenaltyRecord> falseWinPenaltiesForHand(String handResultId) {
+    return falseWinPenalties
+        .where(
+          (penalty) =>
+              penalty.handResultId == handResultId &&
+              penalty.status == FalseWinPenaltyStatus.attached,
+        )
+        .toList(growable: false);
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -266,6 +300,9 @@ class SessionDetailRecord {
       'hands': hands.map((hand) => hand.toJson()).toList(growable: false),
       'settlements': settlements
           .map((settlement) => settlement.toJson())
+          .toList(growable: false),
+      'false_win_penalties': falseWinPenalties
+          .map((penalty) => penalty.toJson())
           .toList(growable: false),
     };
   }

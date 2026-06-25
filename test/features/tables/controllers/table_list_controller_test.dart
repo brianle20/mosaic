@@ -634,6 +634,68 @@ void main() {
         liveSummary.lastHand.detail, 'East rotates. Ready for the next hand.');
   });
 
+  test('summarizes attached false win penalties on live table cards', () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_01',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final session = _session(id: 'ses_01', tableId: 'tbl_01', handCount: 1);
+    final detail = _detail(
+      session,
+      hands: [
+        _hand(
+          id: 'hand_01',
+          handNumber: 1,
+          winnerSeatIndex: 0,
+          winType: 'discard',
+        ),
+      ],
+      falseWinPenalties: [
+        _falseWinPenalty(
+          handResultId: 'hand_01',
+          penaltySeatIndex: 1,
+          status: 'attached',
+        ),
+        _falseWinPenalty(
+          handResultId: 'hand_01',
+          penaltySeatIndex: 2,
+          status: 'attached',
+        ),
+      ],
+    );
+
+    final controller = TableListController(
+      tableRepository: _FakeTableRepository(cachedTables: [table]),
+      sessionRepository: _FakeSessionRepository(
+        cachedSessions: [session],
+        cachedDetails: {'ses_01': detail},
+        loadedDetails: {'ses_01': detail},
+      ),
+      guestRepository: _FakeGuestRepository([
+        _guest('guest_east', 'Alice Chen'),
+        _guest('guest_south', 'Ben Wong'),
+        _guest('guest_west', 'Chris Lee'),
+        _guest('guest_north', 'Dana Park'),
+      ]),
+    );
+
+    await controller.load('evt_01');
+
+    final liveSummary = controller.cards.single.liveSummary!;
+    expect(liveSummary.lastHand.title, 'Alice Chen discard');
+    expect(
+      liveSummary.lastHand.detail,
+      '3 fan recorded. Ben Wong false win · Chris Lee false win. '
+      'Ready for the next hand.',
+    );
+  });
+
   test('uses tournament assignment round for live table round wind', () async {
     final table = EventTableRecord.fromJson(const {
       'id': 'tbl_01',
@@ -1249,6 +1311,7 @@ TableSessionSeatRecord _seat(int index, String guestId) {
 SessionDetailRecord _detail(
   TableSessionRecord session, {
   List<HandResultRecord> hands = const [],
+  List<FalseWinPenaltyRecord> falseWinPenalties = const [],
 }) {
   return SessionDetailRecord(
     session: session,
@@ -1260,6 +1323,7 @@ SessionDetailRecord _detail(
     ],
     hands: hands,
     settlements: const [],
+    falseWinPenalties: falseWinPenalties,
   );
 }
 
@@ -1333,6 +1397,23 @@ HandResultRecord _falseWinPenaltyHand() {
     'status': 'recorded',
     'entered_by_user_id': 'usr_01',
     'entered_at': '2026-04-24T19:30:00-07:00',
+  });
+}
+
+FalseWinPenaltyRecord _falseWinPenalty({
+  required String handResultId,
+  required int penaltySeatIndex,
+  required String status,
+}) {
+  return FalseWinPenaltyRecord.fromJson({
+    'id': 'penalty_${handResultId}_$penaltySeatIndex',
+    'table_session_id': 'ses_01',
+    'hand_result_id': handResultId,
+    'penalty_seat_index': penaltySeatIndex,
+    'fan_count': 6,
+    'status': status,
+    'entered_by_user_id': 'usr_01',
+    'entered_at': '2026-04-24T19:04:00-07:00',
   });
 }
 

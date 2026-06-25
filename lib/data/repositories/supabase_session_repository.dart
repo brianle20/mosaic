@@ -214,6 +214,18 @@ class SupabaseSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<SessionDetailRecord> recordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  ) async {
+    final penaltyRow = await _runRpcSingle(
+      'record_false_win_penalty',
+      input.toRpcParams(),
+    );
+    final sessionId = penaltyRow['table_session_id'] as String;
+    return loadSessionDetail(sessionId);
+  }
+
+  @override
   Future<SessionDetailRecord> editHand(EditHandResultInput input) async {
     final handRow =
         await _runRpcSingle('edit_hand_result', input.toRpcParams());
@@ -278,18 +290,44 @@ class SupabaseSessionRepository implements SessionRepository {
         .eq('table_session_id', sessionId)
         .order('hand_number', ascending: true);
 
+    final falseWinPenaltyRows = (await client
+            .from('hand_false_win_penalties')
+            .select()
+            .eq('table_session_id', sessionId)
+            .neq('status', 'voided')
+            .order('entered_at', ascending: true))
+        .map((row) => row.cast<String, dynamic>())
+        .toList(growable: false);
     final handIds = handsRows
         .map((row) => row['id'])
         .whereType<String>()
         .toList(growable: false);
-    final settlementsRows = handIds.isEmpty
-        ? const <Map<String, dynamic>>[]
-        : (await client
-                .from('hand_settlements')
-                .select()
-                .inFilter('hand_result_id', handIds))
-            .map((row) => row.cast<String, dynamic>())
-            .toList(growable: false);
+    final falseWinPenaltyIds = falseWinPenaltyRows
+        .map((row) => row['id'])
+        .whereType<String>()
+        .toList(growable: false);
+    final settlementsById = <String, Map<String, dynamic>>{};
+    if (handIds.isNotEmpty) {
+      final rows = await client
+          .from('hand_settlements')
+          .select()
+          .inFilter('hand_result_id', handIds);
+      for (final row in rows) {
+        final settlement = row.cast<String, dynamic>();
+        settlementsById[settlement['id'] as String] = settlement;
+      }
+    }
+    if (falseWinPenaltyIds.isNotEmpty) {
+      final rows = await client
+          .from('hand_settlements')
+          .select()
+          .inFilter('hand_false_win_penalty_id', falseWinPenaltyIds);
+      for (final row in rows) {
+        final settlement = row.cast<String, dynamic>();
+        settlementsById[settlement['id'] as String] = settlement;
+      }
+    }
+    final settlementsRows = settlementsById.values.toList(growable: false);
 
     return SessionDetailRecord.fromJson({
       'table_label': tableLabel,
@@ -297,6 +335,7 @@ class SupabaseSessionRepository implements SessionRepository {
       'seats': seatsRows,
       'hands': handsRows,
       'settlements': settlementsRows,
+      'false_win_penalties': falseWinPenaltyRows,
     });
   }
 

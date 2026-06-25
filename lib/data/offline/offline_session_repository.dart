@@ -82,6 +82,27 @@ class OfflineSessionRepository
     return _enqueueRecordHand(input);
   }
 
+  @override
+  Future<SessionDetailRecord> recordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  ) async {
+    if (await _hasQueuedMutations(input.tableSessionId)) {
+      return _enqueueRecordFalseWinPenalty(input);
+    }
+
+    if (await reachability.isReachable()) {
+      try {
+        return await inner.recordFalseWinPenalty(input);
+      } catch (error) {
+        if (!reachability.isNetworkException(error)) {
+          rethrow;
+        }
+      }
+    }
+
+    return _enqueueRecordFalseWinPenalty(input);
+  }
+
   Future<bool> _hasQueuedMutations(String sessionId) async {
     final mutations = await store.readMutationsForSession(sessionId);
     return mutations.any(
@@ -99,23 +120,10 @@ class OfflineSessionRepository
 
     final existingMutations =
         await store.readMutationsForSession(input.tableSessionId);
-    final blockedPendingHandIds = existingMutations
-        .where((mutation) => mutation.status == OfflineMutationStatus.blocked)
-        .map((mutation) => 'pending:${mutation.id}')
-        .toSet();
-    final currentProjection = projector
-        .project(
-          detail: cached,
-          mutations: existingMutations,
-        )
-        .detail;
-    final projectedRecordedHands = currentProjection.hands
-        .where(
-          (hand) =>
-              hand.status == HandResultStatus.recorded &&
-              !blockedPendingHandIds.contains(hand.id),
-        )
-        .toList(growable: false);
+    final projectedRecordedHands = _projectedRecordedHands(
+      cached,
+      existingMutations,
+    );
     final projectedLastHand =
         projectedRecordedHands.isEmpty ? null : projectedRecordedHands.last;
     final expectedLastRecordedHandId =
@@ -148,6 +156,96 @@ class OfflineSessionRepository
     );
 
     return (await _project(cached)).detail;
+  }
+
+  Future<SessionDetailRecord> _enqueueRecordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  ) async {
+    final cached = await inner.readCachedSessionDetail(input.tableSessionId);
+    if (cached == null) {
+      throw StateError('This session is not available offline yet.');
+    }
+
+    final existingMutations =
+        await store.readMutationsForSession(input.tableSessionId);
+    final currentProjection = projector
+        .project(
+          detail: cached,
+          mutations: existingMutations,
+        )
+        .detail;
+    if (currentProjection.pendingFalseWinPenaltySeatIndexes.contains(
+      input.penaltySeatIndex,
+    )) {
+      throw StateError(
+        OfflineSessionProjector.duplicateFalseWinPenaltyMessage,
+      );
+    }
+    final projectedRecordedHands = _recordedHandsExcludingBlocked(
+      currentProjection,
+      existingMutations,
+    );
+    final projectedLastHand =
+        projectedRecordedHands.isEmpty ? null : projectedRecordedHands.last;
+    final expectedLastRecordedHandId =
+        projectedLastHand == null || projectedLastHand.id.startsWith('pending:')
+            ? null
+            : projectedLastHand.id;
+    final mutationId = _newMutationId();
+    final timestamp = _now().toUtc();
+    final payload = {
+      ...input.toRpcParams(),
+      'target_client_mutation_id': mutationId,
+      'target_expected_recorded_hand_count': projectedRecordedHands.length,
+      'target_expected_last_recorded_hand_id': expectedLastRecordedHandId,
+    };
+
+    await store.insertMutation(
+      OfflineMutationRecord(
+        id: mutationId,
+        kind: OfflineMutationKind.recordFalseWinPenalty,
+        eventId: cached.session.eventId,
+        sessionId: input.tableSessionId,
+        payload: payload,
+        baseRecordedHandCount: projectedRecordedHands.length,
+        baseLastRecordedHandId: expectedLastRecordedHandId,
+        localHandNumber: projectedRecordedHands.length + 1,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      ),
+    );
+
+    return (await _project(cached)).detail;
+  }
+
+  List<HandResultRecord> _projectedRecordedHands(
+    SessionDetailRecord cached,
+    List<OfflineMutationRecord> existingMutations,
+  ) {
+    final currentProjection = projector
+        .project(
+          detail: cached,
+          mutations: existingMutations,
+        )
+        .detail;
+    return _recordedHandsExcludingBlocked(currentProjection, existingMutations);
+  }
+
+  List<HandResultRecord> _recordedHandsExcludingBlocked(
+    SessionDetailRecord currentProjection,
+    List<OfflineMutationRecord> existingMutations,
+  ) {
+    final blockedPendingHandIds = existingMutations
+        .where((mutation) => mutation.status == OfflineMutationStatus.blocked)
+        .map((mutation) => 'pending:${mutation.id}')
+        .toSet();
+    return currentProjection.hands
+        .where(
+          (hand) =>
+              hand.status == HandResultStatus.recorded &&
+              !blockedPendingHandIds.contains(hand.id),
+        )
+        .toList(growable: false);
   }
 
   Future<ProjectedSessionDetail> _project(SessionDetailRecord detail) async {

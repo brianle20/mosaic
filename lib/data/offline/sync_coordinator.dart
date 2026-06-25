@@ -51,7 +51,14 @@ class SyncCoordinator {
         await _store.markSyncing(mutation.id, attemptedAt: _now().toUtc());
 
         try {
-          await _sessionRepository.recordHand(_inputFor(mutation));
+          switch (mutation.kind) {
+            case OfflineMutationKind.recordHand:
+              await _sessionRepository.recordHand(_inputFor(mutation));
+            case OfflineMutationKind.recordFalseWinPenalty:
+              await _sessionRepository.recordFalseWinPenalty(
+                _falseWinPenaltyInputFor(mutation),
+              );
+          }
           await _store.markSynced(mutation.id);
         } on OfflineSyncConflictException catch (error) {
           await _store.markSessionBlocked(mutation.sessionId, error.toString());
@@ -96,6 +103,29 @@ class SyncCoordinator {
         payload,
         'target_dealer_was_waiting_at_draw',
       ),
+      correctionNote: _optionalString(payload, 'target_correction_note'),
+      clientMutationId: mutation.id,
+      expectedRecordedHandCount: mutation.baseRecordedHandCount,
+      expectedLastRecordedHandId: mutation.baseLastRecordedHandId,
+    );
+  }
+
+  RecordFalseWinPenaltyInput _falseWinPenaltyInputFor(
+    OfflineMutationRecord mutation,
+  ) {
+    if (mutation.kind != OfflineMutationKind.recordFalseWinPenalty) {
+      throw StateError('Unsupported offline mutation kind: ${mutation.kind}.');
+    }
+
+    final payload = mutation.payload;
+    return RecordFalseWinPenaltyInput(
+      tableSessionId: _stringValue(
+        payload,
+        'target_table_session_id',
+        fallback: mutation.sessionId,
+      ),
+      penaltySeatIndex: _optionalInt(payload, 'target_penalty_seat_index') ??
+          (throw const FormatException('Expected false win penalty seat.')),
       correctionNote: _optionalString(payload, 'target_correction_note'),
       clientMutationId: mutation.id,
       expectedRecordedHandCount: mutation.baseRecordedHandCount,

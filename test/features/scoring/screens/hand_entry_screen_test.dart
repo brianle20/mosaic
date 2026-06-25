@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_models.dart';
@@ -11,6 +13,11 @@ class _RecordingSessionRepository implements SessionRepository {
   RecordHandResultInput? recordedInput;
   EditHandResultInput? editedInput;
   VoidHandResultInput? voidedInput;
+  RecordFalseWinPenaltyInput? recordedFalseWinPenalty;
+  int recordFalseWinPenaltyCallCount = 0;
+  Completer<SessionDetailRecord>? recordFalseWinPenaltyCompleter;
+  SessionDetailRecord Function(RecordFalseWinPenaltyInput input)?
+      falseWinPenaltyResponseBuilder;
   SessionStatus recordHandSessionStatus = SessionStatus.active;
 
   @override
@@ -134,6 +141,20 @@ class _RecordingSessionRepository implements SessionRepository {
   }
 
   @override
+  Future<SessionDetailRecord> recordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  ) async {
+    recordedFalseWinPenalty = input;
+    recordFalseWinPenaltyCallCount += 1;
+    final pendingResponse = recordFalseWinPenaltyCompleter;
+    if (pendingResponse != null) {
+      return pendingResponse.future;
+    }
+    return falseWinPenaltyResponseBuilder?.call(input) ??
+        _detailFromStatus(HandResultStatus.recorded);
+  }
+
+  @override
   Future<SessionDetailRecord?> readCachedSessionDetail(
           String sessionId) async =>
       null;
@@ -187,6 +208,7 @@ void main() {
     EventScoringPhase scoringPhase = EventScoringPhase.qualification,
     String? startedAt,
     int roundTimerPausedSeconds = 0,
+    List<Map<String, Object?>> falseWinPenalties = const [],
   }) {
     return SessionDetailRecord.fromJson({
       'session': {
@@ -240,7 +262,26 @@ void main() {
       ],
       'hands': const [],
       'settlements': const [],
+      'false_win_penalties': falseWinPenalties,
     });
+  }
+
+  Map<String, Object?> falseWinPenaltyJson({
+    int penaltySeatIndex = 2,
+    String status = 'pending',
+    String? handResultId,
+  }) {
+    return {
+      'id': 'penalty-$penaltySeatIndex',
+      'table_session_id': 'session-1',
+      'hand_result_id': handResultId,
+      'penalty_seat_index': penaltySeatIndex,
+      'fan_count': 6,
+      'entered_by_user_id': 'host-1',
+      'entered_at': '2026-06-24T12:00:00Z',
+      'status': status,
+      'correction_note': null,
+    };
   }
 
   Map<String, String> seatNames = const {
@@ -578,7 +619,71 @@ void main() {
     expect(repository.recordedInput?.dealerWasWaitingAtDraw, isNull);
   });
 
-  testWidgets('false win penalty records caller without win fields',
+  testWidgets('false win is recorded as pending penalty without saving hand',
+      (tester) async {
+    final repository = _RecordingSessionRepository()
+      ..falseWinPenaltyResponseBuilder = (_) => buildDetail(
+            currentDealerSeatIndex: 1,
+            falseWinPenalties: [
+              falseWinPenaltyJson(
+                penaltySeatIndex: 2,
+                status: 'pending',
+              ),
+            ],
+          );
+    SessionDetailRecord? routeResult;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              routeResult =
+                  await Navigator.of(context).push<SessionDetailRecord>(
+                MaterialPageRoute(
+                  builder: (_) => HandEntryScreen(
+                    sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+                    guestNamesById: seatNames,
+                    sessionRepository: repository,
+                  ),
+                ),
+              );
+            },
+            child: const Text('Open hand entry'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open hand entry'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('False Win'), findsNothing);
+    expect(find.text('Record False Win'), findsOneWidget);
+
+    await tapVisible(tester, find.text('Record False Win'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose false win caller'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'South\nCarol Ng'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedFalseWinPenalty?.penaltySeatIndex, 2);
+    expect(repository.recordedInput, isNull);
+    expect(routeResult, isNull);
+    expect(find.text('Record Hand'), findsOneWidget);
+    expect(find.text('False win callers: Carol Ng (South)'), findsOneWidget);
+
+    await tapVisible(
+      tester,
+      find.widgetWithText(OutlinedButton, 'South\nCarol Ng'),
+    );
+
+    expect(
+        find.text('False win callers cannot win this hand.'), findsOneWidget);
+  });
+
+  testWidgets('save hand is disabled while choosing a false win caller',
       (tester) async {
     final repository = _RecordingSessionRepository();
 
@@ -593,34 +698,228 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('False Win'));
+    await tapVisible(tester, find.text('Record False Win'));
     await tester.pumpAndSettle();
 
     expect(find.text('Choose false win caller'), findsOneWidget);
-    expect(find.text('6 fan to each player.'), findsOneWidget);
+    final saveButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Save Hand'),
+    );
+    expect(saveButton.onPressed, isNull);
 
     await tester.tap(find.text('Save Hand'));
     await tester.pumpAndSettle();
-    expect(find.text('Select the false win caller.'), findsOneWidget);
-    expect(repository.recordedInput, isNull);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'South\nCarol Ng'));
+    expect(repository.recordedInput, isNull);
+  });
+
+  testWidgets('record false win is hidden while editing a hand',
+      (tester) async {
+    final existingHand = HandResultRecord.fromJson(const {
+      'id': 'hand_01',
+      'table_session_id': 'ses_01',
+      'hand_number': 1,
+      'result_type': 'win',
+      'winner_seat_index': 0,
+      'win_type': 'self_draw',
+      'discarder_seat_index': null,
+      'fan_count': 3,
+      'base_points': 8,
+      'east_seat_index_before_hand': 0,
+      'east_seat_index_after_hand': 0,
+      'dealer_rotated': false,
+      'session_completed_after_hand': false,
+      'status': 'recorded',
+      'entered_by_user_id': 'usr_01',
+      'entered_at': '2026-04-24T19:05:00-07:00',
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: _RecordingSessionRepository(),
+          initialHand: existingHand,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Carol Ng (South) false win penalty. East retains.'),
-      findsOneWidget,
+    expect(find.text('Record False Win'), findsNothing);
+  });
+
+  testWidgets('editing a legacy false win penalty preserves caller',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+    final existingHand = HandResultRecord.fromJson(const {
+      'id': 'hand_legacy_false_win',
+      'table_session_id': 'ses_01',
+      'hand_number': 1,
+      'result_type': 'false_win_penalty',
+      'winner_seat_index': null,
+      'win_type': null,
+      'discarder_seat_index': null,
+      'penalty_seat_index': 2,
+      'fan_count': 6,
+      'base_points': 32,
+      'east_seat_index_before_hand': 1,
+      'east_seat_index_after_hand': 1,
+      'dealer_rotated': false,
+      'session_completed_after_hand': false,
+      'status': 'recorded',
+      'entered_by_user_id': 'usr_01',
+      'entered_at': '2026-04-24T19:05:00-07:00',
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+          initialHand: existingHand,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Record False Win'), findsNothing);
+    expect(find.text('Legacy false win penalty'), findsOneWidget);
+    expect(find.text('False win caller: Carol Ng (South)'), findsOneWidget);
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput, isNull);
+    expect(repository.recordedFalseWinPenalty, isNull);
+    expect(repository.editedInput?.handResultId, 'hand_legacy_false_win');
+    expect(repository.editedInput?.resultType, HandResultType.falseWinPenalty);
+    expect(repository.editedInput?.penaltySeatIndex, 2);
+  });
+
+  testWidgets('editing existing winner ignores pending false win blockers',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+    final existingHand = HandResultRecord.fromJson(const {
+      'id': 'hand_01',
+      'table_session_id': 'ses_01',
+      'hand_number': 1,
+      'result_type': 'win',
+      'winner_seat_index': 2,
+      'win_type': 'self_draw',
+      'discarder_seat_index': null,
+      'fan_count': 3,
+      'base_points': 8,
+      'east_seat_index_before_hand': 1,
+      'east_seat_index_after_hand': 1,
+      'dealer_rotated': false,
+      'session_completed_after_hand': false,
+      'status': 'recorded',
+      'entered_by_user_id': 'usr_01',
+      'entered_at': '2026-04-24T19:05:00-07:00',
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(
+            currentDealerSeatIndex: 1,
+            falseWinPenalties: [
+              falseWinPenaltyJson(
+                penaltySeatIndex: 2,
+                status: 'pending',
+              ),
+            ],
+          ),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+          initialHand: existingHand,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('False win callers cannot win this hand.'), findsNothing);
+    expect(repository.editedInput?.handResultId, 'hand_01');
+    expect(repository.editedInput?.winnerSeatIndex, 2);
+  });
+
+  testWidgets('pending false win caller cannot be selected as winner',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(
+            currentDealerSeatIndex: 1,
+            falseWinPenalties: [
+              falseWinPenaltyJson(
+                penaltySeatIndex: 2,
+                status: 'pending',
+              ),
+            ],
+          ),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tapVisible(
+      tester,
+      find.widgetWithText(OutlinedButton, 'South\nCarol Ng'),
     );
 
-    await tester.tap(find.text('Save Hand'));
+    expect(
+        find.text('False win callers cannot win this hand.'), findsOneWidget);
+    expect(repository.recordedInput, isNull);
+  });
+
+  testWidgets('false win caller buttons are disabled while submitting',
+      (tester) async {
+    final repository = _RecordingSessionRepository()
+      ..recordFalseWinPenaltyCompleter = Completer<SessionDetailRecord>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(
-        repository.recordedInput?.resultType, HandResultType.falseWinPenalty);
-    expect(repository.recordedInput?.penaltySeatIndex, 2);
-    expect(repository.recordedInput?.winnerSeatIndex, isNull);
-    expect(repository.recordedInput?.winType, isNull);
-    expect(repository.recordedInput?.fanCount, isNull);
+    await tester.tap(find.text('Record False Win'));
+    await tester.pumpAndSettle();
+
+    final carolButton = find.widgetWithText(OutlinedButton, 'South\nCarol Ng');
+    await tester.tap(carolButton);
+    await tester.pump();
+    await tester.tap(carolButton);
+    await tester.pump();
+
+    expect(repository.recordFalseWinPenaltyCallCount, 1);
+
+    repository.recordFalseWinPenaltyCompleter!.complete(
+      buildDetail(
+        currentDealerSeatIndex: 1,
+        falseWinPenalties: [
+          falseWinPenaltyJson(
+            penaltySeatIndex: 2,
+            status: 'pending',
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
   });
 
   testWidgets('editing a legacy draw preserves its dealer waiting state',

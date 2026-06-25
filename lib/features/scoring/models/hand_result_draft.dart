@@ -14,6 +14,7 @@ class HandResultDraft {
     this.fanCount,
     this.dealerWasWaitingAtDraw,
     this.correctionNote = '',
+    this.blockedWinnerSeatIndexes = const {},
   });
 
   final HandResultType resultType;
@@ -24,10 +25,17 @@ class HandResultDraft {
   final int? fanCount;
   final bool? dealerWasWaitingAtDraw;
   final String correctionNote;
+  final Set<int> blockedWinnerSeatIndexes;
 
   String? get winnerSeatError {
     if (resultType == HandResultType.win && winnerSeatIndex == null) {
       return 'Select a winner.';
+    }
+
+    if (resultType == HandResultType.win &&
+        winnerSeatIndex != null &&
+        blockedWinnerSeatIndexes.contains(winnerSeatIndex)) {
+      return 'False win callers cannot win this hand.';
     }
 
     return null;
@@ -114,6 +122,12 @@ class HandResultDraft {
   bool get canBuildPreview => isValid;
 
   RecordHandResultInput toRecordInput({required String tableSessionId}) {
+    if (resultType == HandResultType.falseWinPenalty) {
+      throw StateError(
+        'False win penalties must be recorded with recordFalseWinPenalty.',
+      );
+    }
+
     return RecordHandResultInput(
       tableSessionId: tableSessionId,
       resultType: resultType,
@@ -122,9 +136,7 @@ class HandResultDraft {
       winType: resultType == HandResultType.win ? winType : null,
       discarderSeatIndex:
           resultType == HandResultType.win ? discarderSeatIndex : null,
-      penaltySeatIndex: resultType == HandResultType.falseWinPenalty
-          ? penaltySeatIndex
-          : null,
+      penaltySeatIndex: null,
       fanCount: resultType == HandResultType.win ? fanCount : null,
       dealerWasWaitingAtDraw: null,
       correctionNote:

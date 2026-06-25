@@ -33,6 +33,19 @@ void main() {
       expect(threeFanDraft.isValid, isTrue);
     });
 
+    test('win draft rejects pending false win caller as winner', () {
+      const draft = HandResultDraft(
+        resultType: HandResultType.win,
+        winnerSeatIndex: 2,
+        winType: HandWinType.selfDraw,
+        fanCount: 3,
+        blockedWinnerSeatIndexes: {2},
+      );
+
+      expect(draft.winnerSeatError, 'False win callers cannot win this hand.');
+      expect(draft.isValid, isFalse);
+    });
+
     test('discard requires a different discarder seat', () {
       const draft = HandResultDraft(
         resultType: HandResultType.win,
@@ -98,7 +111,8 @@ void main() {
           isNull);
     });
 
-    test('false win penalty requires caller and clears win-only fields', () {
+    test('false win penalty requires caller and clears win-only edit fields',
+        () {
       const missingCallerDraft = HandResultDraft(
         resultType: HandResultType.falseWinPenalty,
       );
@@ -119,7 +133,7 @@ void main() {
       expect(missingCallerDraft.isValid, isFalse);
       expect(validDraft.isValid, isTrue);
 
-      final input = validDraft.toRecordInput(tableSessionId: 'ses_01');
+      final input = validDraft.toEditInput(handResultId: 'hand_01');
       expect(input.resultType, HandResultType.falseWinPenalty);
       expect(input.penaltySeatIndex, 1);
       expect(input.winnerSeatIndex, isNull);
@@ -127,6 +141,18 @@ void main() {
       expect(input.discarderSeatIndex, isNull);
       expect(input.fanCount, isNull);
       expect(input.dealerWasWaitingAtDraw, isNull);
+    });
+
+    test('false win penalty cannot build a new hand record input', () {
+      const draft = HandResultDraft(
+        resultType: HandResultType.falseWinPenalty,
+        penaltySeatIndex: 1,
+      );
+
+      expect(
+        () => draft.toRecordInput(tableSessionId: 'ses_01'),
+        throwsStateError,
+      );
     });
 
     test('preview payload is only available when the draft is valid', () {

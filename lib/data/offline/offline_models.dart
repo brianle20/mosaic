@@ -1,18 +1,20 @@
 import 'package:meta/meta.dart';
 
-enum OfflineMutationKind { recordHand }
+enum OfflineMutationKind { recordHand, recordFalseWinPenalty }
 
 enum OfflineMutationStatus { pending, syncing, synced, failed, blocked }
 
 String offlineMutationKindToJson(OfflineMutationKind kind) {
   return switch (kind) {
     OfflineMutationKind.recordHand => 'record_hand',
+    OfflineMutationKind.recordFalseWinPenalty => 'record_false_win_penalty',
   };
 }
 
 OfflineMutationKind offlineMutationKindFromJson(String value) {
   return switch (value) {
     'record_hand' => OfflineMutationKind.recordHand,
+    'record_false_win_penalty' => OfflineMutationKind.recordFalseWinPenalty,
     _ => throw FormatException('Unknown offline mutation kind: $value'),
   };
 }

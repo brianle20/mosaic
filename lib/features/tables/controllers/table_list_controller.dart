@@ -1149,11 +1149,14 @@ class TableListController extends ChangeNotifier {
     }
 
     if (hand.resultType == HandResultType.washout) {
+      final detailParts = [
+        hand.dealerRotated ? 'East rotates.' : 'East retains.',
+        ..._attachedFalseWinPenaltyParts(detail, hand.id),
+        'Ready for the next hand.',
+      ];
       return LastHandSummary(
         title: 'Draw',
-        detail: hand.dealerRotated
-            ? 'East rotates. Ready for the next hand.'
-            : 'East retains. Ready for the next hand.',
+        detail: detailParts.join(' '),
       );
     }
 
@@ -1176,12 +1179,36 @@ class TableListController extends ChangeNotifier {
     final winLabel =
         hand.winType == HandWinType.discard ? 'discard' : 'self-draw';
     final fanCount = hand.fanCount;
+    final scoreDetail =
+        fanCount == null ? 'Score recorded.' : '$fanCount fan recorded.';
+    final detailParts = [
+      scoreDetail,
+      ..._attachedFalseWinPenaltyParts(detail, hand.id),
+      'Ready for the next hand.',
+    ];
     return LastHandSummary(
       title: '$winner $winLabel',
-      detail: fanCount == null
-          ? 'Score recorded. Ready for the next hand.'
-          : '$fanCount fan recorded. Ready for the next hand.',
+      detail: detailParts.join(' '),
     );
+  }
+
+  List<String> _attachedFalseWinPenaltyParts(
+    SessionDetailRecord detail,
+    String handId,
+  ) {
+    final penalties = detail.falseWinPenaltiesForHand(handId);
+    if (penalties.isEmpty) {
+      return const [];
+    }
+
+    final callerSummaries = penalties.map((penalty) {
+      final callerName = _guestNameForSeat(
+        detail,
+        penalty.penaltySeatIndex,
+      );
+      return '$callerName false win';
+    }).join(' · ');
+    return ['$callerSummaries.'];
   }
 
   String _progressLabel(int handCount) {

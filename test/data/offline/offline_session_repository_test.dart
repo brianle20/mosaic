@@ -269,6 +269,139 @@ void main() {
       );
     });
 
+    test(
+        'offline recordFalseWinPenalty enqueues mutation and returns projection',
+        () async {
+      final inner = _FakeSessionRepository(cachedDetail: _detail());
+      final repository = OfflineSessionRepository(
+        inner: inner,
+        store: store,
+        reachability: const _FakeReachability(false),
+        projector: const OfflineSessionProjector(),
+        newMutationId: () => '66666666-6666-6666-6666-666666666666',
+        now: () => DateTime.utc(2026, 6, 24, 12),
+      );
+
+      final projected = await repository.recordFalseWinPenalty(
+        const RecordFalseWinPenaltyInput(
+          tableSessionId: 'ses_01',
+          penaltySeatIndex: 3,
+          correctionNote: 'called too early',
+        ),
+      );
+
+      final mutation = (await store.readPendingMutations()).single;
+      expect(inner.recordFalseWinPenaltyCallCount, 0);
+      expect(mutation.kind, OfflineMutationKind.recordFalseWinPenalty);
+      expect(mutation.id, '66666666-6666-6666-6666-666666666666');
+      expect(mutation.localHandNumber, 1);
+      expect(mutation.baseRecordedHandCount, 0);
+      expect(mutation.baseLastRecordedHandId, isNull);
+      expect(mutation.payload['target_table_session_id'], 'ses_01');
+      expect(mutation.payload['target_penalty_seat_index'], 3);
+      expect(mutation.payload['target_correction_note'], 'called too early');
+      expect(
+        mutation.payload['target_client_mutation_id'],
+        '66666666-6666-6666-6666-666666666666',
+      );
+      expect(mutation.payload['target_expected_recorded_hand_count'], 0);
+      expect(mutation.payload['target_expected_last_recorded_hand_id'], isNull);
+      expect(projected.hands, isEmpty);
+      expect(projected.session.handCount, 0);
+      expect(projected.pendingFalseWinPenaltySeatIndexes, [3]);
+    });
+
+    test('reachable recordFalseWinPenalty queues behind unsynced mutations',
+        () async {
+      await store.insertMutation(
+        _mutation(
+          id: '00000000-0000-0000-0000-000000000001',
+          localHandNumber: 2,
+          baseRecordedHandCount: 1,
+          baseLastRecordedHandId: 'hand_01',
+          createdAt: DateTime.utc(2026, 6, 18, 20),
+        ),
+      );
+      final inner = _FakeSessionRepository(
+        cachedDetail: _detail(
+          handCount: 1,
+          completedGamesCount: 1,
+          hands: [_hand(id: 'hand_01', handNumber: 1)],
+        ),
+      );
+      final repository = OfflineSessionRepository(
+        inner: inner,
+        store: store,
+        reachability: const _FakeReachability(true),
+        projector: const OfflineSessionProjector(),
+        newMutationId: () => '77777777-7777-7777-7777-777777777777',
+        now: () => DateTime.utc(2026, 6, 24, 12),
+      );
+
+      await repository.recordFalseWinPenalty(
+        const RecordFalseWinPenaltyInput(
+          tableSessionId: 'ses_01',
+          penaltySeatIndex: 2,
+        ),
+      );
+
+      final mutations = await store.readMutationsForSession('ses_01');
+      expect(inner.recordFalseWinPenaltyCallCount, 0);
+      expect(mutations.map((mutation) => mutation.id), [
+        '00000000-0000-0000-0000-000000000001',
+        '77777777-7777-7777-7777-777777777777',
+      ]);
+      final mutation = mutations.last;
+      expect(mutation.kind, OfflineMutationKind.recordFalseWinPenalty);
+      expect(mutation.localHandNumber, 3);
+      expect(mutation.baseRecordedHandCount, 2);
+      expect(mutation.baseLastRecordedHandId, isNull);
+      expect(mutation.payload['target_expected_recorded_hand_count'], 2);
+      expect(mutation.payload['target_expected_last_recorded_hand_id'], isNull);
+    });
+
+    test('offline recordFalseWinPenalty rejects duplicate pending seat',
+        () async {
+      final inner = _FakeSessionRepository(cachedDetail: _detail());
+      var nextMutationId = 0;
+      final repository = OfflineSessionRepository(
+        inner: inner,
+        store: store,
+        reachability: const _FakeReachability(false),
+        projector: const OfflineSessionProjector(),
+        newMutationId: () {
+          nextMutationId += 1;
+          return 'mutation_$nextMutationId';
+        },
+        now: () => DateTime.utc(2026, 6, 24, 12),
+      );
+
+      await repository.recordFalseWinPenalty(
+        const RecordFalseWinPenaltyInput(
+          tableSessionId: 'ses_01',
+          penaltySeatIndex: 3,
+        ),
+      );
+
+      await expectLater(
+        repository.recordFalseWinPenalty(
+          const RecordFalseWinPenaltyInput(
+            tableSessionId: 'ses_01',
+            penaltySeatIndex: 3,
+          ),
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('False win caller already has a pending penalty.'),
+          ),
+        ),
+      );
+
+      expect((await store.readPendingMutations()).length, 1);
+    });
+
     test('business errors are rethrown and not enqueued', () async {
       final inner = _FakeSessionRepository(
         cachedDetail: _detail(),
@@ -469,6 +602,7 @@ class _FakeSessionRepository implements SessionRepository {
   final SessionDetailRecord? recordResult;
   final Object? recordError;
   int recordCallCount = 0;
+  int recordFalseWinPenaltyCallCount = 0;
 
   SessionDetailRecord get _requiredDetail {
     final detail = cachedDetail;
@@ -490,6 +624,18 @@ class _FakeSessionRepository implements SessionRepository {
   @override
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
     recordCallCount += 1;
+    final error = recordError;
+    if (error != null) {
+      throw error;
+    }
+    return recordResult ?? _requiredDetail;
+  }
+
+  @override
+  Future<SessionDetailRecord> recordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  ) async {
+    recordFalseWinPenaltyCallCount += 1;
     final error = recordError;
     if (error != null) {
       throw error;

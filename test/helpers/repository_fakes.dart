@@ -256,6 +256,12 @@ class ThrowingSessionRepository implements SessionRepository {
       throw UnimplementedError();
 
   @override
+  Future<SessionDetailRecord> recordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  ) =>
+      throw UnimplementedError();
+
+  @override
   Future<SessionDetailRecord> editHand(EditHandResultInput input) =>
       throw UnimplementedError();
 

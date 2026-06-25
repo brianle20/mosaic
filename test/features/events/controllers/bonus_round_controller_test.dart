@@ -551,6 +551,12 @@ class _SessionRepository implements SessionRepository {
   }
 
   @override
+  Future<SessionDetailRecord> recordFalseWinPenalty(
+    RecordFalseWinPenaltyInput input,
+  ) =>
+      throw UnimplementedError();
+
+  @override
   Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
     String eventId,
   ) async =>

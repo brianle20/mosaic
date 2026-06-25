@@ -292,11 +292,20 @@ String _handSummary(
   }
 
   if (hand.resultType == HandResultType.washout) {
-    return [
+    final falseWinPenaltyParts = _attachedFalseWinPenaltyParts(
+      detail,
+      guestNamesById,
+      hand.id,
+    );
+    final parts = [
       'Draw',
       hand.dealerRotated ? 'East rotated' : 'East retained',
-      'No points exchanged',
-    ].join(' · ');
+      falseWinPenaltyParts.isEmpty
+          ? 'No points exchanged'
+          : 'False win penalties applied',
+    ];
+    parts.addAll(falseWinPenaltyParts);
+    return parts.join(' · ');
   }
 
   if (hand.resultType == HandResultType.falseWinPenalty) {
@@ -380,7 +389,28 @@ String _winSummary(
     parts.add('No points exchanged');
   }
 
+  parts.addAll(_attachedFalseWinPenaltyParts(
+    detail,
+    guestNamesById,
+    hand.id,
+  ));
+
   return parts.join(' · ');
+}
+
+List<String> _attachedFalseWinPenaltyParts(
+  SessionDetailRecord detail,
+  Map<String, String> guestNamesById,
+  String handId,
+) {
+  return detail.falseWinPenaltiesForHand(handId).map((penalty) {
+    final callerName = _guestNameForSeat(
+      detail,
+      guestNamesById,
+      penalty.penaltySeatIndex,
+    );
+    return '$callerName false win penalty';
+  }).toList(growable: false);
 }
 
 int? _pointImpactForGuest(

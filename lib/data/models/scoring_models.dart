@@ -16,6 +16,12 @@ enum HandResultStatus {
   voided,
 }
 
+enum FalseWinPenaltyStatus {
+  pending,
+  attached,
+  voided,
+}
+
 @immutable
 class HandResultRecord {
   const HandResultRecord({
@@ -120,6 +126,7 @@ class HandSettlementRecord {
   const HandSettlementRecord({
     required this.id,
     required this.handResultId,
+    this.handFalseWinPenaltyId,
     required this.payerEventGuestId,
     required this.payeeEventGuestId,
     required this.amountPoints,
@@ -129,7 +136,8 @@ class HandSettlementRecord {
   factory HandSettlementRecord.fromJson(Map<String, dynamic> json) {
     return HandSettlementRecord(
       id: _requiredString(json, 'id'),
-      handResultId: _requiredString(json, 'hand_result_id'),
+      handResultId: _optionalString(json, 'hand_result_id'),
+      handFalseWinPenaltyId: _optionalString(json, 'hand_false_win_penalty_id'),
       payerEventGuestId: _requiredString(json, 'payer_event_guest_id'),
       payeeEventGuestId: _requiredString(json, 'payee_event_guest_id'),
       amountPoints: _requiredInt(json, 'amount_points'),
@@ -138,7 +146,8 @@ class HandSettlementRecord {
   }
 
   final String id;
-  final String handResultId;
+  final String? handResultId;
+  final String? handFalseWinPenaltyId;
   final String payerEventGuestId;
   final String payeeEventGuestId;
   final int amountPoints;
@@ -148,10 +157,66 @@ class HandSettlementRecord {
     return {
       'id': id,
       'hand_result_id': handResultId,
+      'hand_false_win_penalty_id': handFalseWinPenaltyId,
       'payer_event_guest_id': payerEventGuestId,
       'payee_event_guest_id': payeeEventGuestId,
       'amount_points': amountPoints,
       'multiplier_flags_json': multiplierFlags,
+    };
+  }
+}
+
+@immutable
+class FalseWinPenaltyRecord {
+  const FalseWinPenaltyRecord({
+    required this.id,
+    required this.tableSessionId,
+    required this.penaltySeatIndex,
+    required this.fanCount,
+    required this.enteredByUserId,
+    required this.enteredAt,
+    required this.status,
+    this.handResultId,
+    this.correctionNote,
+  });
+
+  factory FalseWinPenaltyRecord.fromJson(Map<String, dynamic> json) {
+    return FalseWinPenaltyRecord(
+      id: _requiredString(json, 'id'),
+      tableSessionId: _requiredString(json, 'table_session_id'),
+      handResultId: _optionalString(json, 'hand_result_id'),
+      penaltySeatIndex: _requiredInt(json, 'penalty_seat_index'),
+      fanCount: _requiredInt(json, 'fan_count'),
+      enteredByUserId: _requiredString(json, 'entered_by_user_id'),
+      enteredAt: _requiredDateTime(json, 'entered_at'),
+      status: _falseWinPenaltyStatusFromJson(
+        _requiredString(json, 'status'),
+      ),
+      correctionNote: _optionalString(json, 'correction_note'),
+    );
+  }
+
+  final String id;
+  final String tableSessionId;
+  final String? handResultId;
+  final int penaltySeatIndex;
+  final int fanCount;
+  final String enteredByUserId;
+  final DateTime enteredAt;
+  final FalseWinPenaltyStatus status;
+  final String? correctionNote;
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'table_session_id': tableSessionId,
+      'hand_result_id': handResultId,
+      'penalty_seat_index': penaltySeatIndex,
+      'fan_count': fanCount,
+      'entered_by_user_id': enteredByUserId,
+      'entered_at': enteredAt.toIso8601String(),
+      'status': _falseWinPenaltyStatusToJson(status),
+      'correction_note': correctionNote,
     };
   }
 }
@@ -257,6 +322,36 @@ class VoidHandResultInput {
     return {
       'target_hand_result_id': handResultId,
       'target_correction_note': correctionNote,
+    };
+  }
+}
+
+@immutable
+class RecordFalseWinPenaltyInput {
+  const RecordFalseWinPenaltyInput({
+    required this.tableSessionId,
+    required this.penaltySeatIndex,
+    this.correctionNote,
+    this.clientMutationId,
+    this.expectedRecordedHandCount,
+    this.expectedLastRecordedHandId,
+  });
+
+  final String tableSessionId;
+  final int penaltySeatIndex;
+  final String? correctionNote;
+  final String? clientMutationId;
+  final int? expectedRecordedHandCount;
+  final String? expectedLastRecordedHandId;
+
+  Map<String, dynamic> toRpcParams() {
+    return {
+      'target_table_session_id': tableSessionId,
+      'target_penalty_seat_index': penaltySeatIndex,
+      'target_correction_note': correctionNote,
+      'target_client_mutation_id': clientMutationId,
+      'target_expected_recorded_hand_count': expectedRecordedHandCount,
+      'target_expected_last_recorded_hand_id': expectedLastRecordedHandId,
     };
   }
 }
@@ -427,5 +522,22 @@ String _handResultStatusToJson(HandResultStatus value) {
   return switch (value) {
     HandResultStatus.recorded => 'recorded',
     HandResultStatus.voided => 'voided',
+  };
+}
+
+FalseWinPenaltyStatus _falseWinPenaltyStatusFromJson(String value) {
+  return switch (value) {
+    'pending' => FalseWinPenaltyStatus.pending,
+    'attached' => FalseWinPenaltyStatus.attached,
+    'voided' => FalseWinPenaltyStatus.voided,
+    _ => throw FormatException('Unknown false win penalty status: $value'),
+  };
+}
+
+String _falseWinPenaltyStatusToJson(FalseWinPenaltyStatus value) {
+  return switch (value) {
+    FalseWinPenaltyStatus.pending => 'pending',
+    FalseWinPenaltyStatus.attached => 'attached',
+    FalseWinPenaltyStatus.voided => 'voided',
   };
 }
