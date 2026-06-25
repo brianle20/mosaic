@@ -220,7 +220,9 @@ abstract interface class HandEvidenceRepository {
 }
 
 abstract interface class MosaicProfileRepository {
-  Future<List<HandPhotoRecord>> listHandEvidenceReview(String eventId);
+  Future<List<HandEvidenceReviewRecord>> listHandEvidenceReview(String eventId);
+
+  Future<Uri?> createHandPhotoSignedUrl(HandPhotoRecord photo);
 
   Future<HandTileEntryRecord> upsertHandTileEntry({
     required String handResultId,

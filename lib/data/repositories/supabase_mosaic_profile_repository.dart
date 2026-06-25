@@ -7,27 +7,47 @@ typedef MosaicProfileRpcRunner = Future<dynamic> Function(
   Map<String, dynamic> params,
 );
 
+typedef HandPhotoSignedUrlCreator = Future<String> Function({
+  required String bucket,
+  required String path,
+  required int expiresInSeconds,
+});
+
 class SupabaseMosaicProfileRepository implements MosaicProfileRepository {
   SupabaseMosaicProfileRepository({required SupabaseClient client})
-      : _rpcRunner = ((functionName, params) {
+      : _signedUrlCreator = (({
+          required bucket,
+          required path,
+          required expiresInSeconds,
+        }) {
+          return client.storage
+              .from(bucket)
+              .createSignedUrl(path, expiresInSeconds);
+        }),
+        _rpcRunner = ((functionName, params) {
           return client.rpc(functionName, params: params);
         });
 
   SupabaseMosaicProfileRepository.withRpcRunner({
     required MosaicProfileRpcRunner rpcRunner,
-  }) : _rpcRunner = rpcRunner;
+    HandPhotoSignedUrlCreator? signedUrlCreator,
+  })  : _signedUrlCreator = signedUrlCreator,
+        _rpcRunner = rpcRunner;
 
+  final HandPhotoSignedUrlCreator? _signedUrlCreator;
   final MosaicProfileRpcRunner _rpcRunner;
 
   @override
-  Future<List<HandPhotoRecord>> listHandEvidenceReview(String eventId) async {
+  Future<List<HandEvidenceReviewRecord>> listHandEvidenceReview(
+    String eventId,
+  ) async {
     final response = await _rpcRunner(
       'list_hand_evidence_review',
       {'target_event_id': eventId},
     );
     if (response is List) {
       return response
-          .map((row) => HandPhotoRecord.fromJson(_rowMap(row)))
+          .map((row) => HandEvidenceReviewRecord.fromJson(_rowMap(row)))
           .toList(growable: false);
     }
 
@@ -35,6 +55,23 @@ class SupabaseMosaicProfileRepository implements MosaicProfileRepository {
       'Expected a row list from list_hand_evidence_review but received '
       '${response.runtimeType}.',
     );
+  }
+
+  @override
+  Future<Uri?> createHandPhotoSignedUrl(HandPhotoRecord photo) async {
+    final signedUrlCreator = _signedUrlCreator;
+    final bucket = photo.storageBucket;
+    final path = photo.storagePath;
+    if (signedUrlCreator == null || bucket == null || path == null) {
+      return null;
+    }
+
+    final signedUrl = await signedUrlCreator(
+      bucket: bucket,
+      path: path,
+      expiresInSeconds: 60 * 10,
+    );
+    return Uri.parse(signedUrl);
   }
 
   @override

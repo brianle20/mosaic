@@ -32,10 +32,10 @@ void main() {
   });
 
   test('hand photos are host admin only and track upload state', () {
-    expect(migration, contains("photo_capture_status text not null"));
-    expect(migration, contains("photo_upload_status text not null"));
+    expect(migration, contains('photo_capture_status text not null'));
+    expect(migration, contains('photo_upload_status text not null'));
     expect(migration,
-        contains("visibility text not null default 'host_admin_only'"));
+        contains('visibility text not null default \'host_admin_only\''));
     expect(migration, contains('hand_photos_visibility_check'));
     expect(migration, contains('hand_photos_upload_status_check'));
     expect(migration, contains('enable row level security'));
@@ -47,6 +47,27 @@ void main() {
     expect(migration, contains('fan_delta integer generated always as'));
     expect(migration, contains('review_status text not null'));
     expect(migration, contains('calculation_version text not null'));
+  });
+
+  test('hand tile review status supports under declared hands', () {
+    expect(
+      migration,
+      contains(
+        "review_status in ('unreviewed', 'matched', 'under_declared', 'flagged', 'resolved')",
+      ),
+    );
+    expect(
+      migration,
+      contains(
+        "when target_calculated_fan_count > hand_row.fan_count then 'under_declared'",
+      ),
+    );
+    expect(
+      migration,
+      contains(
+        "when target_calculated_fan_count < hand_row.fan_count then 'flagged'",
+      ),
+    );
   });
 
   test('rating and profile snapshots preserve provenance', () {
@@ -62,6 +83,25 @@ void main() {
     expect(migration, contains('public.upsert_hand_tile_entry'));
     expect(migration, contains('public.get_player_mosaic_profile'));
     expect(migration, contains('app_private.refresh_mosaic_player_snapshots'));
+  });
+
+  test('hand evidence review RPC returns combined review rows', () {
+    expect(migration, contains('returns table ('));
+    expect(migration, contains('tile_entry.review_status'));
+    expect(migration, contains('seat_wind_tile_id text'));
+    expect(migration, contains('round_wind_tile_id text'));
+    expect(
+      migration,
+      contains('end as seat_wind_tile_id'),
+    );
+    expect(
+      migration,
+      contains('event_record.prevailing_wind as round_wind_tile_id'),
+    );
+    expect(
+      migration,
+      contains('left join public.hand_tile_entries as tile_entry'),
+    );
   });
 
   test('public profile RPC gates and sanitizes snapshot payloads', () {

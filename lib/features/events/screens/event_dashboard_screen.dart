@@ -317,7 +317,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
     final canCorrectHands =
         event.lifecycleStatus == EventLifecycleStatus.active ||
-        event.lifecycleStatus == EventLifecycleStatus.completed;
+            event.lifecycleStatus == EventLifecycleStatus.completed;
 
     await Navigator.of(context).pushNamed(
       AppRouter.eventHandLedgerRoute,
@@ -325,6 +325,19 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventId: event.id,
         canCorrectHands: canCorrectHands,
       ),
+    );
+    await _reloadDashboardAfterReturn(event.id);
+  }
+
+  Future<void> _openHandEvidenceReview() async {
+    final event = _controller.event;
+    if (event == null) {
+      return;
+    }
+
+    await Navigator.of(context).pushNamed(
+      AppRouter.handEvidenceReviewRoute,
+      arguments: HandEvidenceReviewArgs(eventId: event.id),
     );
     await _reloadDashboardAfterReturn(event.id);
   }
@@ -927,6 +940,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 onStaff: _openStaff,
                 onActivity: _openActivity,
                 onHandLedger: _openHandLedger,
+                onHandEvidenceReview: _openHandEvidenceReview,
                 onEdit: _openEditEvent,
                 onCopy: _confirmCopyEventForTesting,
                 onDelete: _confirmDeleteEvent,
@@ -1486,6 +1500,7 @@ class _EventOptionsSection extends StatelessWidget {
     required this.onStaff,
     required this.onActivity,
     required this.onHandLedger,
+    required this.onHandEvidenceReview,
     required this.onEdit,
     required this.onCopy,
     required this.onDelete,
@@ -1503,6 +1518,7 @@ class _EventOptionsSection extends StatelessWidget {
   final VoidCallback onStaff;
   final VoidCallback onActivity;
   final VoidCallback onHandLedger;
+  final VoidCallback onHandEvidenceReview;
   final VoidCallback onEdit;
   final VoidCallback onCopy;
   final VoidCallback onDelete;
@@ -1518,6 +1534,16 @@ class _EventOptionsSection extends StatelessWidget {
       EventLifecycleStatus.completed =>
         true,
       EventLifecycleStatus.finalized || EventLifecycleStatus.cancelled => false,
+    };
+  }
+
+  bool get _showsHandEvidenceReviewAction {
+    return switch (lifecycleStatus) {
+      EventLifecycleStatus.completed || EventLifecycleStatus.finalized => true,
+      EventLifecycleStatus.draft ||
+      EventLifecycleStatus.active ||
+      EventLifecycleStatus.cancelled =>
+        false,
     };
   }
 
@@ -1549,6 +1575,11 @@ class _EventOptionsSection extends StatelessWidget {
               label: 'Hand Ledger',
               onPressed: onHandLedger,
             ),
+            if (canManageEvent && _showsHandEvidenceReviewAction)
+              UtilityActionButton(
+                label: 'Hand Evidence',
+                onPressed: onHandEvidenceReview,
+              ),
             if (canManageEvent)
               UtilityActionButton(
                 label: 'Copy Event',

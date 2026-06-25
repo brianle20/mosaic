@@ -23,6 +23,7 @@ enum HandTileReviewStatus {
   unreviewed,
   matched,
   flagged,
+  underDeclared,
   resolved,
 }
 
@@ -126,6 +127,60 @@ class HandTileEntryRecord {
   final HandTileReviewStatus reviewStatus;
 }
 
+@immutable
+class HandEvidenceReviewRecord {
+  const HandEvidenceReviewRecord({
+    required this.photo,
+    required this.handResultId,
+    this.handNumber,
+    this.tableLabel,
+    this.winnerName,
+    this.winType,
+    this.declaredFanCount,
+    this.seatWindTileId,
+    this.roundWindTileId,
+    this.tileEntry,
+  });
+
+  factory HandEvidenceReviewRecord.fromJson(Map<String, dynamic> json) {
+    final photoId =
+        _optionalString(json, 'photo_id') ?? _requiredString(json, 'id');
+    final tileEntryId = _optionalString(json, 'tile_entry_id');
+
+    return HandEvidenceReviewRecord(
+      photo: HandPhotoRecord.fromJson({
+        ...json,
+        'id': photoId,
+      }),
+      handResultId: _requiredString(json, 'hand_result_id'),
+      handNumber: _optionalInt(json, 'hand_number'),
+      tableLabel: _optionalString(json, 'table_label'),
+      winnerName: _optionalString(json, 'winner_name'),
+      winType: _optionalString(json, 'win_type'),
+      declaredFanCount: _optionalInt(json, 'declared_fan_count'),
+      seatWindTileId: _optionalString(json, 'seat_wind_tile_id'),
+      roundWindTileId: _optionalString(json, 'round_wind_tile_id'),
+      tileEntry: tileEntryId == null
+          ? null
+          : HandTileEntryRecord.fromJson({
+              ...json,
+              'id': tileEntryId,
+            }),
+    );
+  }
+
+  final HandPhotoRecord photo;
+  final String handResultId;
+  final int? handNumber;
+  final String? tableLabel;
+  final String? winnerName;
+  final String? winType;
+  final int? declaredFanCount;
+  final String? seatWindTileId;
+  final String? roundWindTileId;
+  final HandTileEntryRecord? tileEntry;
+}
+
 String _requiredString(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is String && value.trim().isNotEmpty) {
@@ -224,6 +279,7 @@ HandTileReviewStatus _tileReviewStatusFromJson(String value) {
     'unreviewed' => HandTileReviewStatus.unreviewed,
     'matched' => HandTileReviewStatus.matched,
     'flagged' => HandTileReviewStatus.flagged,
+    'under_declared' => HandTileReviewStatus.underDeclared,
     'resolved' => HandTileReviewStatus.resolved,
     _ => throw FormatException('Unknown hand tile review status: $value'),
   };

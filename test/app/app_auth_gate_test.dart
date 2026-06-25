@@ -546,8 +546,13 @@ class _FakeMosaicProfileRepository implements MosaicProfileRepository {
   const _FakeMosaicProfileRepository();
 
   @override
-  Future<List<HandPhotoRecord>> listHandEvidenceReview(String eventId) async =>
+  Future<List<HandEvidenceReviewRecord>> listHandEvidenceReview(
+    String eventId,
+  ) async =>
       const [];
+
+  @override
+  Future<Uri?> createHandPhotoSignedUrl(HandPhotoRecord photo) async => null;
 
   @override
   Future<HandTileEntryRecord> upsertHandTileEntry({

@@ -25,6 +25,7 @@ import 'package:mosaic/features/events/screens/bonus_round_screen.dart';
 import 'package:mosaic/features/events/screens/event_dashboard_screen.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 import 'package:mosaic/features/scoring/screens/event_hand_ledger_screen.dart';
+import 'package:mosaic/features/scoring/screens/hand_evidence_review_screen.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 import 'package:mosaic/features/tables/screens/seating_assignment_screen.dart';
 import 'package:mosaic/services/nfc/native_nfc_reader.dart';
@@ -610,8 +611,13 @@ class _MosaicProfileRepository implements MosaicProfileRepository {
   const _MosaicProfileRepository();
 
   @override
-  Future<List<HandPhotoRecord>> listHandEvidenceReview(String eventId) async =>
+  Future<List<HandEvidenceReviewRecord>> listHandEvidenceReview(
+    String eventId,
+  ) async =>
       const [];
+
+  @override
+  Future<Uri?> createHandPhotoSignedUrl(HandPhotoRecord photo) async => null;
 
   @override
   Future<HandTileEntryRecord> upsertHandTileEntry({
@@ -1507,6 +1513,73 @@ void main() {
       tester,
       event: draftEvent,
       expectedCanCorrectHands: false,
+    );
+  });
+
+  testWidgets('completed event routes to hand evidence review', (tester) async {
+    final router = AppRouter(
+      eventRepository: _EventRepository(completedEvent),
+      guestRepository: _GuestRepository(),
+      tableRepository: _TableRepository(),
+      sessionRepository: _SessionRepository(),
+      leaderboardRepository: _LeaderboardRepository(),
+      activityRepository: _ActivityRepository(),
+      prizeRepository: _PrizeRepository(),
+      seatingRepository: const _SeatingRepository(),
+      mosaicProfileRepository: const _MosaicProfileRepository(),
+      nfcService: const _NfcService(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: EventDashboardArgs(eventId: completedEvent.id),
+          eventRepository: _EventRepository(completedEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+        onGenerateRoute: router.onGenerateRoute,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Hand Evidence'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hand Evidence'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(HandEvidenceReviewScreen), findsOneWidget);
+    expect(find.text('Hand Evidence Review'), findsOneWidget);
+  });
+
+  testWidgets('hand evidence review action follows event access rules',
+      (tester) async {
+    Future<void> expectHandEvidenceAction(
+      EventRecord event,
+      Matcher matcher, {
+      MosaicAccessRole callerRole = MosaicAccessRole.owner,
+    }) async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await _pumpDashboard(
+        tester,
+        event: event,
+        callerRole: callerRole,
+      );
+      await tester.ensureVisible(find.text('Event options'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hand Evidence'), matcher);
+    }
+
+    await expectHandEvidenceAction(completedEvent, findsOneWidget);
+    await expectHandEvidenceAction(finalizedEvent, findsOneWidget);
+    await expectHandEvidenceAction(draftEvent, findsNothing);
+    await expectHandEvidenceAction(cancelledEvent, findsNothing);
+    await expectHandEvidenceAction(
+      completedEvent,
+      findsNothing,
+      callerRole: MosaicAccessRole.eventScorer,
     );
   });
 

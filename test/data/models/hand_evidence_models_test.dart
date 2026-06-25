@@ -96,5 +96,98 @@ void main() {
 
       expect(entry.tilesJson, ['bamboo_1']);
     });
+
+    test('parses under declared tile review status', () {
+      final entry = HandTileEntryRecord.fromJson(const {
+        'id': 'tile_01',
+        'hand_result_id': 'hand_01',
+        'entered_at': '2026-06-25T18:05:00Z',
+        'tiles_json': {'schemaVersion': 1, 'tiles': []},
+        'calculation_version': 'hk_v1',
+        'validation_status': 'valid',
+        'review_status': 'under_declared',
+      });
+
+      expect(entry.reviewStatus, HandTileReviewStatus.underDeclared);
+    });
+  });
+
+  group('HandEvidenceReviewRecord', () {
+    test('parses combined hand evidence review rows', () {
+      final row = HandEvidenceReviewRecord.fromJson(const {
+        'photo_id': 'photo_01',
+        'hand_result_id': 'hand_01',
+        'client_photo_id': 'client_photo_01',
+        'captured_at': '2026-06-25T18:00:00Z',
+        'photo_capture_status': 'captured',
+        'photo_upload_status': 'uploaded',
+        'visibility': 'host_admin_only',
+        'storage_bucket': 'hand-photos',
+        'storage_path': 'events/evt_01/hands/hand_01/client_photo_01.jpg',
+        'hand_number': 12,
+        'table_label': 'Table 3',
+        'winner_name': 'Alice Wong',
+        'win_type': 'self_draw',
+        'declared_fan_count': 3,
+        'seat_wind_tile_id': 'south',
+        'round_wind_tile_id': 'east',
+        'tile_entry_id': 'tile_01',
+        'entered_at': '2026-06-25T18:05:00Z',
+        'tiles_json': {'schemaVersion': 1, 'tiles': []},
+        'calculated_fan_count': 4,
+        'fan_delta': -1,
+        'calculation_version': 'hk_v1',
+        'validation_status': 'valid',
+        'review_status': 'under_declared',
+      });
+
+      expect(row.photo.id, 'photo_01');
+      expect(row.photo.clientPhotoId, 'client_photo_01');
+      expect(row.handResultId, 'hand_01');
+      expect(row.handNumber, 12);
+      expect(row.tableLabel, 'Table 3');
+      expect(row.winnerName, 'Alice Wong');
+      expect(row.winType, 'self_draw');
+      expect(row.declaredFanCount, 3);
+      expect(row.seatWindTileId, 'south');
+      expect(row.roundWindTileId, 'east');
+      expect(row.tileEntry?.id, 'tile_01');
+      expect(
+        row.tileEntry?.enteredAt,
+        DateTime.parse('2026-06-25T18:05:00Z'),
+      );
+      expect(row.tileEntry?.calculatedFanCount, 4);
+      expect(row.tileEntry?.declaredFanCount, 3);
+      expect(row.tileEntry?.fanDelta, -1);
+      expect(row.tileEntry?.reviewStatus, HandTileReviewStatus.underDeclared);
+    });
+
+    test('falls back to legacy id for combined row photo id', () {
+      final row = HandEvidenceReviewRecord.fromJson(const {
+        'id': 'photo_legacy_01',
+        'hand_result_id': 'hand_01',
+        'client_photo_id': 'client_photo_01',
+        'captured_at': '2026-06-25T18:00:00Z',
+        'photo_capture_status': 'captured',
+        'photo_upload_status': 'uploaded',
+        'visibility': 'host_admin_only',
+      });
+
+      expect(row.photo.id, 'photo_legacy_01');
+    });
+
+    test('allows combined review rows without tile entries', () {
+      final row = HandEvidenceReviewRecord.fromJson(const {
+        'photo_id': 'photo_01',
+        'hand_result_id': 'hand_01',
+        'client_photo_id': 'client_photo_01',
+        'captured_at': '2026-06-25T18:00:00Z',
+        'photo_capture_status': 'captured',
+        'photo_upload_status': 'uploaded',
+        'visibility': 'host_admin_only',
+      });
+
+      expect(row.tileEntry, isNull);
+    });
   });
 }
