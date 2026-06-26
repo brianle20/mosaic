@@ -8,7 +8,20 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
+
+EventGuestRecord _eventGuest({required CoverStatus coverStatus}) {
+  return EventGuestRecord.fromJson({
+    'id': 'gst_${coverStatus.name}',
+    'event_id': 'evt_01',
+    'display_name': 'Guest ${coverStatus.name}',
+    'normalized_name': 'guest_${coverStatus.name}',
+    'attendance_status': 'expected',
+    'cover_status': coverStatus.name,
+    'cover_amount_cents': coverStatus == CoverStatus.paid ? 2000 : 0,
+    'is_comped': coverStatus == CoverStatus.comped,
+    'has_scored_play': false,
+  });
+}
 
 void main() {
   group('CreateEventInput', () {
@@ -363,44 +376,14 @@ void main() {
       expect(guest.toJson()['instagram_handle'], 'brian.le');
     });
 
-    test('allows player tag assignment only for paid or comped guests', () {
-      final paidGuest = EventGuestRecord.fromJson(const {
-        'id': 'gst_paid',
-        'event_id': 'evt_01',
-        'display_name': 'Alice',
-        'normalized_name': 'alice',
-        'attendance_status': 'checked_in',
-        'cover_status': 'paid',
-        'cover_amount_cents': 2000,
-        'is_comped': false,
-        'has_scored_play': false,
-      });
-      final compedGuest = EventGuestRecord.fromJson(const {
-        'id': 'gst_comp',
-        'event_id': 'evt_01',
-        'display_name': 'Bob',
-        'normalized_name': 'bob',
-        'attendance_status': 'checked_in',
-        'cover_status': 'comped',
-        'cover_amount_cents': 0,
-        'is_comped': true,
-        'has_scored_play': false,
-      });
-      final unpaidGuest = EventGuestRecord.fromJson(const {
-        'id': 'gst_unpaid',
-        'event_id': 'evt_01',
-        'display_name': 'Carol',
-        'normalized_name': 'carol',
-        'attendance_status': 'expected',
-        'cover_status': 'unpaid',
-        'cover_amount_cents': 0,
-        'is_comped': false,
-        'has_scored_play': false,
-      });
+    test('cover settled guests are eligible for check-in', () {
+      final paidGuest = _eventGuest(coverStatus: CoverStatus.paid);
+      final compedGuest = _eventGuest(coverStatus: CoverStatus.comped);
+      final unpaidGuest = _eventGuest(coverStatus: CoverStatus.unpaid);
 
-      expect(paidGuest.isEligibleForPlayerTagAssignment, isTrue);
-      expect(compedGuest.isEligibleForPlayerTagAssignment, isTrue);
-      expect(unpaidGuest.isEligibleForPlayerTagAssignment, isFalse);
+      expect(paidGuest.isCoverSettledForCheckIn, isTrue);
+      expect(compedGuest.isCoverSettledForCheckIn, isTrue);
+      expect(unpaidGuest.isCoverSettledForCheckIn, isFalse);
     });
 
     test('exposes checked-in state from attendance status', () {
@@ -429,30 +412,6 @@ void main() {
 
       expect(checkedInGuest.isCheckedIn, isTrue);
       expect(expectedGuest.isCheckedIn, isFalse);
-    });
-  });
-
-  group('GuestTagAssignmentSummary', () {
-    test('parses an active assignment with nested player tag', () {
-      final summary = GuestTagAssignmentSummary.fromJson(const {
-        'assignment_id': 'asg_01',
-        'event_id': 'evt_01',
-        'event_guest_id': 'gst_01',
-        'status': 'assigned',
-        'assigned_at': '2026-04-24T19:15:00-07:00',
-        'nfc_tag': {
-          'id': 'tag_01',
-          'uid_hex': '04AABBCCDD',
-          'uid_fingerprint': '04AABBCCDD',
-          'default_tag_type': 'player',
-          'status': 'active',
-          'display_label': 'Player 7',
-        },
-      });
-
-      expect(summary.isActive, isTrue);
-      expect(summary.tag.uidHex, '04AABBCCDD');
-      expect(summary.tag.defaultTagType, NfcTagType.player);
     });
   });
 

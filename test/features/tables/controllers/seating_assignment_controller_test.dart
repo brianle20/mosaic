@@ -4,7 +4,6 @@ import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/controllers/seating_assignment_controller.dart';
 
@@ -71,11 +70,9 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
 class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository({
     this.guests = const [],
-    this.assignments = const {},
   });
 
   final List<EventGuestRecord> guests;
-  final Map<String, GuestTagAssignmentSummary> assignments;
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
@@ -387,10 +384,6 @@ void main() {
       seatingRepository: repository,
       guestRepository: _FakeGuestRepository(
         guests: guests,
-        assignments: {
-          for (final guest in guests)
-            guest.id: _tagAssignment(guestId: guest.id),
-        },
       ),
       sessionRepository: _FakeSessionRepository(),
     );
@@ -453,10 +446,6 @@ void main() {
       ),
       guestRepository: _FakeGuestRepository(
         guests: guests,
-        assignments: {
-          for (final guest in guests)
-            guest.id: _tagAssignment(guestId: guest.id),
-        },
       ),
       sessionRepository: _FakeSessionRepository(),
       bonusTableRoleFilter: BonusTableRole.tableOfChampionsSuddenDeath,
@@ -511,11 +500,6 @@ void main() {
       seatingRepository: _FakeSeatingRepository(),
       guestRepository: _FakeGuestRepository(
         guests: guests,
-        assignments: {
-          for (final guest in guests)
-            if (guest.id != 'gst_untagged')
-              guest.id: _tagAssignment(guestId: guest.id),
-        },
       ),
       sessionRepository: _FakeSessionRepository(),
     );
@@ -736,21 +720,4 @@ EventGuestRecord _guest({
     'has_scored_play': false,
     'tournament_status': eventTournamentStatusToJson(tournamentStatus),
   });
-}
-
-GuestTagAssignmentSummary _tagAssignment({required String guestId}) {
-  return GuestTagAssignmentSummary(
-    assignmentId: 'asg_$guestId',
-    eventId: 'evt_01',
-    eventGuestId: guestId,
-    status: GuestTagAssignmentStatus.assigned,
-    assignedAt: DateTime.parse('2026-05-22T12:00:00Z'),
-    tag: NfcTagRecord(
-      id: 'tag_$guestId',
-      uidHex: 'UID_$guestId',
-      uidFingerprint: 'fingerprint_$guestId',
-      defaultTagType: NfcTagType.player,
-      status: NfcTagStatus.active,
-    ),
-  );
 }

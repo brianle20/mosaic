@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/guest_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/guests/screens/guest_roster_screen.dart';
@@ -15,13 +14,10 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     List<EventGuestRecord> guests, {
     List<EventGuestRecord>? cachedGuests,
     Completer<void>? listGuestsGate,
-    Map<String, GuestTagAssignmentSummary> activeAssignments = const {},
     Map<String, List<GuestCoverEntryRecord>> coverEntries = const {},
   })  : _guests = List<EventGuestRecord>.from(guests),
         _cachedGuests = List<EventGuestRecord>.from(cachedGuests ?? guests),
         _listGuestsGate = listGuestsGate,
-        _activeAssignments =
-            Map<String, GuestTagAssignmentSummary>.from(activeAssignments),
         _coverEntries = Map<String, List<GuestCoverEntryRecord>>.from(
           coverEntries,
         );
@@ -29,7 +25,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   final List<EventGuestRecord> _guests;
   final List<EventGuestRecord> _cachedGuests;
   final Completer<void>? _listGuestsGate;
-  final Map<String, GuestTagAssignmentSummary> _activeAssignments;
   final Map<String, List<GuestCoverEntryRecord>> _coverEntries;
   final statusUpdates = <String, EventTournamentStatus>{};
   final uncheckedGuestIds = <String>[];
@@ -67,7 +62,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     _replaceGuest(updatedGuest);
     return GuestDetailRecord(
       guest: updatedGuest,
-      activeTagAssignment: _activeAssignments[guestId],
     );
   }
 
@@ -116,7 +110,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     return GuestDetailRecord(
       guest: guest,
       coverEntries: _coverEntries[guestId] ?? const [],
-      activeTagAssignment: _activeAssignments[guestId],
     );
   }
 
@@ -182,7 +175,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
           createdAt: DateTime.parse('2026-04-24T19:20:00-07:00'),
         ),
       ],
-      activeTagAssignment: _activeAssignments[guestId],
     );
   }
 
@@ -202,7 +194,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   Future<void> removeGuest(String guestId) async {
     removedGuestIds.add(guestId);
     _guests.removeWhere((guest) => guest.id == guestId);
-    _activeAssignments.remove(guestId);
     _coverEntries.remove(guestId);
   }
 
@@ -270,29 +261,6 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     final index = _guests.indexWhere((entry) => entry.id == guest.id);
     _guests[index] = guest;
   }
-}
-
-GuestTagAssignmentSummary _tagAssignment({
-  required String guestId,
-  String uid = 'FASTDONE',
-  String? displayLabel,
-}) {
-  final json = {
-    'assignment_id': 'asg_$guestId',
-    'event_id': 'evt_01',
-    'event_guest_id': guestId,
-    'status': 'assigned',
-    'assigned_at': '2026-04-24T19:15:00-07:00',
-    'nfc_tag': {
-      'id': 'tag_$guestId',
-      'uid_hex': uid,
-      'uid_fingerprint': uid,
-      'default_tag_type': 'player',
-      'status': 'active',
-      if (displayLabel != null) 'display_label': displayLabel,
-    },
-  };
-  return GuestTagAssignmentSummary.fromJson(json);
 }
 
 EventGuestRecord _guest({
@@ -544,9 +512,6 @@ void main() {
           coverStatus: CoverStatus.paid,
         ),
       ],
-      activeAssignments: {
-        'gst_done': _tagAssignment(guestId: 'gst_done'),
-      },
     );
 
     await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
@@ -1235,9 +1200,7 @@ void main() {
         attendanceStatus: AttendanceStatus.checkedIn,
         coverStatus: CoverStatus.paid,
       ),
-    ], activeAssignments: {
-      'gst_01': _tagAssignment(guestId: 'gst_01', uid: 'ALICE01'),
-    });
+    ]);
 
     await tester.pumpWidget(_buildRosterApp(guestRepository: repository));
     await tester.pumpAndSettle();

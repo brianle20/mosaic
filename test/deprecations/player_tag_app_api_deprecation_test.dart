@@ -30,6 +30,12 @@ void main() {
       'westPlayerUid',
       'northPlayerUid',
       'player tag assignments',
+      'isEligibleForPlayerTagAssignment',
+      'GuestTagLookupResult',
+      'hasAssignedPlayerTag',
+      'activeTagAssignment',
+      'GuestTagAssignmentSummary',
+      'GuestTagAssignmentStatus',
     ];
 
     final offenders = <String>[];

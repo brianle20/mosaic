@@ -1,6 +1,5 @@
 import 'package:meta/meta.dart';
 import 'package:mosaic/data/models/guest_display_names.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 
 enum AttendanceStatus {
   expected,
@@ -298,7 +297,7 @@ class EventGuestRecord {
   final DateTime? checkedInAt;
   final int rowVersion;
 
-  bool get isEligibleForPlayerTagAssignment {
+  bool get isCoverSettledForCheckIn {
     return coverStatus == CoverStatus.paid || coverStatus == CoverStatus.comped;
   }
 
@@ -337,29 +336,14 @@ class EventGuestRecord {
 }
 
 @immutable
-class GuestTagLookupResult {
-  const GuestTagLookupResult({
-    required this.guest,
-    required this.assignment,
-  });
-
-  final EventGuestRecord guest;
-  final GuestTagAssignmentSummary assignment;
-}
-
-@immutable
 class GuestDetailRecord {
   const GuestDetailRecord({
     required this.guest,
     this.coverEntries = const [],
-    this.activeTagAssignment,
   });
 
   final EventGuestRecord guest;
   final List<GuestCoverEntryRecord> coverEntries;
-  final GuestTagAssignmentSummary? activeTagAssignment;
-
-  bool get hasAssignedPlayerTag => activeTagAssignment?.isActive ?? false;
 }
 
 @immutable

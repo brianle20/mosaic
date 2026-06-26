@@ -288,7 +288,7 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                 ),
               ),
             const SizedBox(height: 24),
-            if (guest != null && !guest.isEligibleForPlayerTagAssignment)
+            if (guest != null && !guest.isCoverSettledForCheckIn)
               const Card(
                 child: Padding(
                   padding: EdgeInsets.all(16),
@@ -308,7 +308,7 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
                 ),
               ),
             if (guest != null &&
-                guest.isEligibleForPlayerTagAssignment &&
+                guest.isCoverSettledForCheckIn &&
                 !guest.isCheckedIn &&
                 widget.canCheckIn &&
                 guest.tournamentStatus != EventTournamentStatus.withdrawn)

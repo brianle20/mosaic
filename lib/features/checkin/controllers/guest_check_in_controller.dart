@@ -39,7 +39,7 @@ class GuestCheckInController extends ChangeNotifier {
     }
 
     final currentDetail = detail!;
-    if (!currentDetail.guest.isEligibleForPlayerTagAssignment) {
+    if (!currentDetail.guest.isCoverSettledForCheckIn) {
       actionError = 'Guests must be paid or comped before check-in.';
       notifyListeners();
       return;
@@ -65,8 +65,6 @@ class GuestCheckInController extends ChangeNotifier {
         detail = GuestDetailRecord(
           guest: updatedGuest,
           coverEntries: coverEntries,
-          activeTagAssignment: checkedInDetail?.activeTagAssignment ??
-              currentDetail.activeTagAssignment,
         );
       }
     } catch (exception) {

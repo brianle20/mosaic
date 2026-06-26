@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/guest_models.dart';
-import 'package:mosaic/data/models/tag_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/screens/guest_detail_screen.dart';
 
@@ -54,7 +53,6 @@ class _FakeGuestRepository implements GuestRepository {
       ),
       coverEntries:
           returnEmptyCoverEntriesOnCheckIn ? const [] : detail.coverEntries,
-      activeTagAssignment: detail.activeTagAssignment,
     );
   }
 
@@ -133,7 +131,6 @@ class _FakeGuestRepository implements GuestRepository {
         ),
         ...detail.coverEntries,
       ],
-      activeTagAssignment: detail.activeTagAssignment,
     );
   }
 
@@ -172,7 +169,6 @@ class _FakeGuestRepository implements GuestRepository {
                 : entry,
           )
           .toList(growable: false),
-      activeTagAssignment: detail.activeTagAssignment,
     );
   }
 
@@ -187,7 +183,6 @@ class _FakeGuestRepository implements GuestRepository {
       coverEntries: detail.coverEntries
           .where((entry) => entry.id != coverEntryId)
           .toList(growable: false),
-      activeTagAssignment: detail.activeTagAssignment,
     );
   }
 
@@ -231,7 +226,6 @@ class _FakeGuestRepository implements GuestRepository {
     detail = GuestDetailRecord(
       guest: updatedGuest,
       coverEntries: detail.coverEntries,
-      activeTagAssignment: detail.activeTagAssignment,
     );
     return updatedGuest;
   }
@@ -575,20 +569,6 @@ void main() {
           'cover_amount_cents': 2000,
           'is_comped': false,
           'has_scored_play': false,
-        }),
-        activeTagAssignment: GuestTagAssignmentSummary.fromJson(const {
-          'assignment_id': 'asg_01',
-          'event_id': 'evt_01',
-          'event_guest_id': 'gst_03',
-          'status': 'assigned',
-          'assigned_at': '2026-04-24T19:15:00-07:00',
-          'nfc_tag': {
-            'id': 'tag_01',
-            'uid_hex': '04CCDDEE',
-            'uid_fingerprint': '04CCDDEE',
-            'default_tag_type': 'player',
-            'status': 'active',
-          },
         }),
       ),
     );

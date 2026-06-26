@@ -703,7 +703,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   List<_GuestRosterOverflowAction> _overflowActionsForGuest(
     EventGuestRecord guest,
   ) {
-    if (!guest.isEligibleForPlayerTagAssignment) {
+    if (!guest.isCoverSettledForCheckIn) {
       final actions = <_GuestRosterOverflowAction>[];
       if (widget.canManageCover) {
         actions.add(_GuestRosterOverflowAction.markPaidManually);
@@ -810,7 +810,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
 
   Widget _buildQuickActionsForGuest(EventGuestRecord guest) {
     final isSubmitting = _controller.isSubmittingGuest(guest.id);
-    if (!guest.isEligibleForPlayerTagAssignment) {
+    if (!guest.isCoverSettledForCheckIn) {
       if (!widget.canManageCover) {
         return const SizedBox.shrink();
       }
@@ -986,7 +986,7 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
     if (guest.tournamentStatus == EventTournamentStatus.withdrawn) {
       return 'Withdrawn from tournament play';
     }
-    if (!guest.isEligibleForPlayerTagAssignment) {
+    if (!guest.isCoverSettledForCheckIn) {
       return 'Needs payment or comp';
     }
     if (!guest.isCheckedIn) {
