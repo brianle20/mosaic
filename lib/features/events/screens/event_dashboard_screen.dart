@@ -112,7 +112,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventId: event.id,
         eventTitle: event.title,
         eventCoverChargeCents: event.coverChargeCents,
-        canCheckIn: _controller.canManageEvent,
+        canCheckIn: _controller.canCheckInGuests,
         canManageGuests: _controller.canManageEvent,
         canManageCover: _controller.canManageEvent,
         canManageTournamentStatus: _controller.canManageEvent,

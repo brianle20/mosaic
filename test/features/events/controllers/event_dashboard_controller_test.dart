@@ -447,7 +447,22 @@ void main() {
 
     expect(controller.canManageEvent, isFalse);
     expect(controller.canManageStaff, isFalse);
+    expect(controller.canCheckInGuests, isFalse);
     expect(controller.canScoreLegacyQualification, isTrue);
+    expect(controller.canScoreTournament, isTrue);
+    expect(controller.canScoreBonus, isTrue);
+  });
+
+  test('owners can manage and check in guests', () {
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(cachedEvents: const []),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      callerRole: MosaicAccessRole.owner,
+    );
+
+    expect(controller.canManageEvent, isTrue);
+    expect(controller.canManageStaff, isTrue);
+    expect(controller.canCheckInGuests, isTrue);
     expect(controller.canScoreTournament, isTrue);
     expect(controller.canScoreBonus, isTrue);
   });

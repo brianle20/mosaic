@@ -2119,6 +2119,46 @@ void main() {
 
     expect(openedArgs?.canCheckIn, isFalse);
     expect(openedArgs?.canManageGuests, isFalse);
+    expect(openedArgs?.canManageCover, isFalse);
+    expect(openedArgs?.canManageTournamentStatus, isFalse);
+  });
+
+  testWidgets('owners open guests with management and check-in permission',
+      (tester) async {
+    GuestRosterArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: EventDashboardArgs(
+            eventId: activeEvent.id,
+            callerRole: MosaicAccessRole.owner,
+          ),
+          eventRepository: _EventRepository(activeEvent),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.guestRosterRoute) {
+            openedArgs = settings.arguments! as GuestRosterArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Guests opened')),
+              settings: settings,
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Guests').first);
+    await tester.pumpAndSettle();
+
+    expect(openedArgs?.canCheckIn, isTrue);
+    expect(openedArgs?.canManageGuests, isTrue);
+    expect(openedArgs?.canManageCover, isTrue);
+    expect(openedArgs?.canManageTournamentStatus, isTrue);
   });
 
   testWidgets('live console renders event title once', (tester) async {

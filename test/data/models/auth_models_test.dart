@@ -50,6 +50,12 @@ void main() {
     expect(access.canManageStaff('evt_01'), isTrue);
     expect(access.canScoreTournament('evt_02'), isTrue);
     expect(access.canScoreBonus('evt_03'), isTrue);
+    expect(access.canCheckInGuests('evt_01'), isTrue);
+    expect(access.canCheckInGuests('evt_02'), isFalse);
+    expect(MosaicAccessRole.owner.canCheckInGuests, isTrue);
+    expect(MosaicAccessRole.eventScorer.canCheckInGuests, isFalse);
+    expect(MosaicAccessRole.eventScorer.canManageEvent, isFalse);
+    expect(MosaicAccessRole.eventScorer.canManageStaff, isFalse);
   });
 
   group('MosaicAccessState serialization', () {

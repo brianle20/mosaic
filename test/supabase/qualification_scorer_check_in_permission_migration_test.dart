@@ -23,8 +23,9 @@ void main() {
       'app_private.can_score_tournament',
     );
 
-    expect(requireGuestSql, contains('app_private.can_manage_event'));
-    expect(requireGuestSql, contains('app_private.can_score_tournament'));
+    expect(requireGuestSql, contains('app_private.can_check_in_guests'));
+    expect(
+        requireGuestSql, isNot(contains('app_private.can_score_tournament')));
     expect(
       requireGuestSql,
       isNot(contains('app_private.can_score_qualification')),

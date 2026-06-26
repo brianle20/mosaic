@@ -26,6 +26,8 @@ extension MosaicAccessRoleCapabilities on MosaicAccessRole {
 
   bool get canManageStaff => this == MosaicAccessRole.owner;
 
+  bool get canCheckInGuests => this == MosaicAccessRole.owner;
+
   bool get canScoreLegacyQualification => canScoreTournament;
 
   bool get canScoreTournament =>
@@ -221,6 +223,10 @@ class MosaicAccessState {
 
   bool canManageStaff(String eventId) {
     return roleForEvent(eventId)?.canManageStaff ?? false;
+  }
+
+  bool canCheckInGuests(String eventId) {
+    return roleForEvent(eventId)?.canCheckInGuests ?? false;
   }
 
   bool canScoreLegacyQualification(String eventId) {

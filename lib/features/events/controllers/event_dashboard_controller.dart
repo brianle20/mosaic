@@ -92,6 +92,8 @@ class EventDashboardController extends ChangeNotifier {
 
   bool get canManageStaff => callerRole.canManageStaff;
 
+  bool get canCheckInGuests => callerRole.canCheckInGuests;
+
   bool get canScoreLegacyQualification =>
       callerRole.canScoreLegacyQualification;
 
