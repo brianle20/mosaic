@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/features/guests/screens/bulk_saved_guest_screen.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 import '../../../helpers/repository_fakes.dart';
 
@@ -39,6 +40,24 @@ void main() {
     expect(find.text('Brian Le'), findsOneWidget);
     expect(find.text('B-Le'), findsOneWidget);
     expect(find.text('brian@example.com'), findsOneWidget);
+
+    final alreadyAddedRow = find.byKey(
+      const ValueKey<String>('bulk-saved-guest-row-prf_ada'),
+    );
+    expect(
+      find.descendant(
+        of: alreadyAddedRow,
+        matching: find.byIcon(Icons.check_circle_outline),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: alreadyAddedRow,
+        matching: find.byType(StatusChip),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Ada Fu'));
     await tester.pump();

@@ -6,6 +6,7 @@ import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/features/guests/controllers/bulk_saved_guest_controller.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
 import 'package:mosaic/widgets/money_text_form_field.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 const bulkSavedGuestSearchFieldKey = Key('bulk-saved-guest-search-field');
 const bulkSavedGuestTournamentStatusFieldKey =
@@ -406,12 +407,17 @@ class _SavedGuestProfileTile extends StatelessWidget {
       enabled: !isAlreadyAdded,
       onTap: isAlreadyAdded ? null : onTap,
       leading: Icon(
-        isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-        color: isSelected
+        isAlreadyAdded
+            ? Icons.check_circle_outline
+            : isSelected
+                ? Icons.check_circle
+                : Icons.radio_button_unchecked,
+        color: isAlreadyAdded
             ? colorScheme.primary
-            : isAlreadyAdded
-                ? colorScheme.outline
+            : isSelected
+                ? colorScheme.primary
                 : colorScheme.onSurfaceVariant,
+        semanticLabel: isAlreadyAdded ? 'Already added' : null,
       ),
       title: Text(
         profile.displayName,
@@ -422,12 +428,9 @@ class _SavedGuestProfileTile extends StatelessWidget {
         foregroundColor: foregroundColor,
       ),
       trailing: isAlreadyAdded
-          ? Text(
-              'Already added',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
+          ? const StatusChip(
+              label: 'Already added',
+              tone: StatusChipTone.success,
             )
           : null,
     );
