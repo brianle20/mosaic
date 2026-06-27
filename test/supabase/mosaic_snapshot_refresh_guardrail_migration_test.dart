@@ -55,6 +55,19 @@ void main() {
     ]);
   });
 
+  test('latest score total refresh serializes per event', () {
+    final refreshBody = _latestFunctionBody(
+      'app_private.refresh_event_score_totals',
+    );
+
+    _expectOrdered(refreshBody, [
+      'perform pg_advisory_xact_lock(',
+      'hashtextextended(target_event_id::text, 0)',
+      'delete from public.event_score_totals',
+      'insert into public.event_score_totals',
+    ]);
+  });
+
   test('bridge mutation helper refreshes affected players and realigns guests',
       () {
     final helperBody = _functionBody(

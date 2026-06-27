@@ -53,5 +53,9 @@ abstract interface class OfflineStore {
 
   Future<void> resetSyncingToPending();
 
+  Future<void> resetBlockedMutationsToPending({
+    required String lastErrorContains,
+  });
+
   Future<void> close();
 }

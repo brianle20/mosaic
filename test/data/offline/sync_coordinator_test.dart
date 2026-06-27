@@ -11,6 +11,7 @@ import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/sqlite_offline_store.dart';
 import 'package:mosaic/data/offline/sync_coordinator.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:supabase/supabase.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -322,6 +323,26 @@ void main() {
     );
 
     test(
+      'score total duplicate refresh errors are retryable instead of blocked',
+      () async {
+        repository.errors.add(_scoreTotalDuplicateException());
+        await store.insertMutation(_mutation(id: 'mut_01'));
+
+        await coordinator.syncNow();
+
+        final mutation = await store.readMutation('mut_01');
+        expect(mutation!.status, OfflineMutationStatus.failed);
+        expect(mutation.lastError, contains('event_score_totals'));
+
+        final mutations = await store.readMutationsForSession('ses_01');
+        expect(
+          mutations.map((mutation) => mutation.status).toSet(),
+          {OfflineMutationStatus.failed},
+        );
+      },
+    );
+
+    test(
       'OfflineSyncConflictException blocks all unsynced mutations for session',
       () async {
         repository.errors.add(
@@ -386,6 +407,23 @@ void main() {
       final mutation = await store.readMutation('mut_01');
       expect(mutation!.status, OfflineMutationStatus.synced);
       expect(mutation.attemptCount, 1);
+    });
+
+    test('initialize retries blocked score total duplicate rows', () async {
+      await store.insertMutation(
+        _mutation(
+          id: 'mut_01',
+          status: OfflineMutationStatus.blocked,
+          lastError: _scoreTotalDuplicateException().toString(),
+        ),
+      );
+
+      await coordinator.initialize();
+
+      expect(repository.recordedInputs.single.clientMutationId, 'mut_01');
+      final mutation = await store.readMutation('mut_01');
+      expect(mutation!.status, OfflineMutationStatus.synced);
+      expect(mutation.lastError, isNull);
     });
 
     test('initialize resets uploading photos to pending then uploads',
@@ -653,6 +691,16 @@ OfflineMutationRecord _mutation({
     updatedAt: timestamp,
     status: status,
     lastError: lastError,
+  );
+}
+
+PostgrestException _scoreTotalDuplicateException() {
+  return const PostgrestException(
+    message:
+        'duplicate key value violates unique constraint "event_score_totals_event_id_event_guest_id_key"',
+    code: '23505',
+    details:
+        'Key (event_id, event_guest_id)=(evt_01, guest_01) already exists.',
   );
 }
 

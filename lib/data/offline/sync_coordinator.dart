@@ -6,6 +6,7 @@ import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/offline_store.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/data/repositories/supabase_hand_evidence_repository.dart';
+import 'package:supabase/supabase.dart';
 
 class SyncCoordinator {
   SyncCoordinator({
@@ -36,8 +37,14 @@ class SyncCoordinator {
   var _isSyncing = false;
   var _syncRequested = false;
 
+  static const _scoreTotalsUniqueConstraint =
+      'event_score_totals_event_id_event_guest_id_key';
+
   Future<void> initialize() async {
     await _store.resetSyncingToPending();
+    await _store.resetBlockedMutationsToPending(
+      lastErrorContains: _scoreTotalsUniqueConstraint,
+    );
     await _store.resetPhotoUploadsUploadingToPending();
     await syncNow();
   }
@@ -86,6 +93,11 @@ class SyncCoordinator {
         await _store.markSessionBlocked(mutation.sessionId, error.toString());
         return false;
       } catch (error) {
+        if (_isRetryableScoreTotalsRefreshConflict(error)) {
+          await _store.markFailed(mutation.id, error.toString());
+          return false;
+        }
+
         if (_reachability.isNetworkException(error)) {
           await _store.markFailed(mutation.id, error.toString());
           return false;
@@ -98,6 +110,21 @@ class SyncCoordinator {
 
     await _syncPendingPhotoUploads();
     return true;
+  }
+
+  bool _isRetryableScoreTotalsRefreshConflict(Object error) {
+    if (error is PostgrestException) {
+      final text = [
+        error.message,
+        error.details,
+      ].whereType<String>().join(' ');
+      return error.code == '23505' &&
+          text.contains(_scoreTotalsUniqueConstraint);
+    }
+
+    final text = error.toString();
+    return text.contains('23505') &&
+        text.contains(_scoreTotalsUniqueConstraint);
   }
 
   Future<void> _attachRemoteHandResultId(

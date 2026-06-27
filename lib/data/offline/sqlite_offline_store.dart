@@ -412,6 +412,25 @@ class SqliteOfflineStore implements OfflineStore {
   }
 
   @override
+  Future<void> resetBlockedMutationsToPending({
+    required String lastErrorContains,
+  }) async {
+    await _backend.update(
+      _mutationsTable,
+      {
+        'status': offlineMutationStatusToJson(OfflineMutationStatus.pending),
+        'last_error': null,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where: 'status = ? and last_error like ?',
+      whereArgs: [
+        offlineMutationStatusToJson(OfflineMutationStatus.blocked),
+        '%$lastErrorContains%',
+      ],
+    );
+  }
+
+  @override
   Future<void> close() => _backend.close();
 
   Map<String, Object?> _toRow(OfflineMutationRecord mutation) {
@@ -692,6 +711,9 @@ class _MemoryOfflineStoreBackend implements _OfflineStoreBackend {
       'status in (?, ?)' =>
         row['status'] == whereArgs[0] || row['status'] == whereArgs[1],
       'status = ?' => row['status'] == whereArgs[0],
+      'status = ? and last_error like ?' =>
+        row['status'] == whereArgs[0] &&
+            _like(row['last_error'] as String?, whereArgs[1]! as String),
       'session_id = ? and status in (?, ?, ?)' =>
         row['session_id'] == whereArgs[0] &&
             (row['status'] == whereArgs[1] ||
@@ -699,6 +721,16 @@ class _MemoryOfflineStoreBackend implements _OfflineStoreBackend {
                 row['status'] == whereArgs[3]),
       _ => throw UnsupportedError('Unsupported memory where clause: $where'),
     };
+  }
+
+  bool _like(String? value, String pattern) {
+    if (value == null) {
+      return false;
+    }
+    if (pattern.startsWith('%') && pattern.endsWith('%')) {
+      return value.contains(pattern.substring(1, pattern.length - 1));
+    }
+    return value == pattern;
   }
 
   Map<String, Map<String, Map<String, Object?>>> _copyTables() {
