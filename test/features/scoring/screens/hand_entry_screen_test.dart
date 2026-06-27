@@ -1107,4 +1107,46 @@ void main() {
     expect(repository.voidedInput, isNotNull);
     expect(repository.voidedInput!.handResultId, 'hand_01');
   });
+
+  testWidgets('editing existing win shows saved photo status', (tester) async {
+    final existingHand = HandResultRecord.fromJson(const {
+      'id': 'hand_01',
+      'table_session_id': 'ses_01',
+      'hand_number': 1,
+      'result_type': 'win',
+      'winner_seat_index': 0,
+      'win_type': 'self_draw',
+      'discarder_seat_index': null,
+      'fan_count': 3,
+      'base_points': 8,
+      'east_seat_index_before_hand': 0,
+      'east_seat_index_after_hand': 0,
+      'dealer_rotated': false,
+      'session_completed_after_hand': false,
+      'status': 'recorded',
+      'entered_by_user_id': 'usr_01',
+      'entered_at': '2026-04-24T19:05:00-07:00',
+      'photo_id': 'photo_01',
+      'photo_client_id': 'photo_client_01',
+      'photo_captured_at': '2026-04-24T19:05:05-07:00',
+      'photo_upload_status': 'uploaded',
+      'photo_storage_bucket': 'hand-photos',
+      'photo_storage_path': 'events/evt_01/hands/hand_01/photo_client_01.jpg',
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: _RecordingSessionRepository(),
+          initialHand: existingHand,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Winning hand photo uploaded'), findsOneWidget);
+    expect(find.text('photo_client_01'), findsOneWidget);
+  });
 }

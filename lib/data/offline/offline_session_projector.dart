@@ -136,6 +136,15 @@ class OfflineSessionProjector {
           enteredByUserId: 'offline',
           enteredAt: mutation.createdAt,
           correctionNote: 'Pending sync',
+          photoClientId:
+              _optionalString(mutation.payload['target_photo_client_id']),
+          photoCapturedAt:
+              _optionalDateTime(mutation.payload['target_photo_captured_at']),
+          photoUploadStatus:
+              _optionalString(mutation.payload['target_photo_client_id']) ==
+                      null
+                  ? null
+                  : 'pending',
         ),
       );
 
@@ -296,6 +305,23 @@ class OfflineSessionProjector {
       null => null,
       bool() => value,
       _ => throw FormatException('Expected bool or null, got $value.'),
+    };
+  }
+
+  String? _optionalString(Object? value) {
+    return switch (value) {
+      null => null,
+      String() => value,
+      _ => throw FormatException('Expected string or null, got $value.'),
+    };
+  }
+
+  DateTime? _optionalDateTime(Object? value) {
+    return switch (value) {
+      null => null,
+      DateTime() => value,
+      String() => DateTime.parse(value),
+      _ => throw FormatException('Expected ISO-8601 string or null, got $value.'),
     };
   }
 

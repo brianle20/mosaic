@@ -183,6 +183,22 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       (_showValidationSummary ? _firstDraftError : null) ??
       _controller.submitError;
 
+  String? get _existingPhotoStatusLabel {
+    final hand = widget.initialHand;
+    if (hand == null ||
+        hand.resultType != HandResultType.win ||
+        hand.photoClientId == null) {
+      return null;
+    }
+
+    return switch (hand.photoUploadStatus) {
+      'uploaded' => 'Winning hand photo uploaded',
+      'pending' => 'Winning hand photo pending upload',
+      'failed' => 'Winning hand photo upload failed',
+      _ => 'Winning hand photo captured',
+    };
+  }
+
   Future<void> _captureWinningHandPhoto() async {
     if (_isCapturingPhoto) {
       return;
@@ -671,18 +687,36 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                         Text(_draft.fanCountError!),
                       ],
                       const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: _controller.isSubmitting || _isCapturingPhoto
-                            ? null
-                            : _captureWinningHandPhoto,
-                        icon: const Icon(Icons.photo_camera_outlined),
-                        label: Text(
-                          _capturedPhoto == null
-                              ? 'Capture winning hand photo'
-                              : 'Retake winning hand photo',
+                      if (widget.initialHand == null)
+                        OutlinedButton.icon(
+                          onPressed:
+                              _controller.isSubmitting || _isCapturingPhoto
+                                  ? null
+                                  : _captureWinningHandPhoto,
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          label: Text(
+                            _capturedPhoto == null
+                                ? 'Capture winning hand photo'
+                                : 'Retake winning hand photo',
+                          ),
                         ),
-                      ),
-                      if (_capturedPhoto != null) ...[
+                      if (_existingPhotoStatusLabel case final photoStatus?) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          photoStatus,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.initialHand!.photoClientId!,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ] else if (_capturedPhoto != null) ...[
                         const SizedBox(height: 6),
                         Text(
                           'Photo captured',

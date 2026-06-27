@@ -46,6 +46,12 @@ class HandResultRecord {
     this.correctionNote,
     this.rowVersion = 1,
     this.clientMutationId,
+    this.photoId,
+    this.photoClientId,
+    this.photoCapturedAt,
+    this.photoUploadStatus,
+    this.photoStorageBucket,
+    this.photoStoragePath,
   });
 
   factory HandResultRecord.fromJson(Map<String, dynamic> json) {
@@ -73,6 +79,12 @@ class HandResultRecord {
       correctionNote: _optionalString(json, 'correction_note'),
       rowVersion: _intOrDefault(json, 'row_version', 1),
       clientMutationId: _optionalString(json, 'client_mutation_id'),
+      photoId: _optionalString(json, 'photo_id'),
+      photoClientId: _optionalString(json, 'photo_client_id'),
+      photoCapturedAt: _optionalDateTime(json, 'photo_captured_at'),
+      photoUploadStatus: _optionalString(json, 'photo_upload_status'),
+      photoStorageBucket: _optionalString(json, 'photo_storage_bucket'),
+      photoStoragePath: _optionalString(json, 'photo_storage_path'),
     );
   }
 
@@ -97,6 +109,12 @@ class HandResultRecord {
   final String? correctionNote;
   final int rowVersion;
   final String? clientMutationId;
+  final String? photoId;
+  final String? photoClientId;
+  final DateTime? photoCapturedAt;
+  final String? photoUploadStatus;
+  final String? photoStorageBucket;
+  final String? photoStoragePath;
 
   Map<String, dynamic> toJson() {
     return {
@@ -121,6 +139,12 @@ class HandResultRecord {
       'correction_note': correctionNote,
       'row_version': rowVersion,
       'client_mutation_id': clientMutationId,
+      'photo_id': photoId,
+      'photo_client_id': photoClientId,
+      'photo_captured_at': photoCapturedAt?.toIso8601String(),
+      'photo_upload_status': photoUploadStatus,
+      'photo_storage_bucket': photoStorageBucket,
+      'photo_storage_path': photoStoragePath,
     };
   }
 }
@@ -472,6 +496,19 @@ DateTime _requiredDateTime(Map<String, dynamic> json, String key) {
   }
 
   throw FormatException('Expected ISO-8601 string for $key.');
+}
+
+DateTime? _optionalDateTime(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value == null) {
+    return null;
+  }
+
+  if (value is String) {
+    return DateTime.parse(value);
+  }
+
+  throw FormatException('Expected ISO-8601 string or null for $key.');
 }
 
 List<String> _stringList(Map<String, dynamic> json, String key) {

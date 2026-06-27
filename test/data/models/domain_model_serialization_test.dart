@@ -800,6 +800,43 @@ void main() {
       expect(hand.sessionCompletedAfterHand, isFalse);
     });
 
+    test('parses attached photo metadata from JSON', () {
+      final hand = HandResultRecord.fromJson(const {
+        'id': 'hand_01',
+        'table_session_id': 'ses_01',
+        'hand_number': 3,
+        'result_type': 'win',
+        'winner_seat_index': 2,
+        'win_type': 'discard',
+        'discarder_seat_index': 0,
+        'fan_count': 7,
+        'base_points': 32,
+        'east_seat_index_before_hand': 0,
+        'east_seat_index_after_hand': 1,
+        'dealer_rotated': true,
+        'session_completed_after_hand': false,
+        'status': 'recorded',
+        'entered_by_user_id': 'usr_01',
+        'entered_at': '2026-04-24T20:00:00-07:00',
+        'photo_id': 'photo_01',
+        'photo_client_id': 'photo_client_01',
+        'photo_captured_at': '2026-04-24T20:00:05-07:00',
+        'photo_upload_status': 'uploaded',
+        'photo_storage_bucket': 'hand-photos',
+        'photo_storage_path': 'events/evt_01/hands/hand_01/photo_client_01.jpg',
+      });
+
+      expect(hand.photoId, 'photo_01');
+      expect(hand.photoClientId, 'photo_client_01');
+      expect(hand.photoCapturedAt, DateTime.parse('2026-04-24T20:00:05-07:00'));
+      expect(hand.photoUploadStatus, 'uploaded');
+      expect(hand.photoStorageBucket, 'hand-photos');
+      expect(
+        hand.toJson()['photo_storage_path'],
+        'events/evt_01/hands/hand_01/photo_client_01.jpg',
+      );
+    });
+
     test('parses false win penalty fields from JSON', () {
       final hand = HandResultRecord.fromJson(const {
         'id': 'hand_02',

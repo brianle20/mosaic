@@ -463,6 +463,42 @@ void main() {
       expect(edited.hands.single.status, HandResultStatus.recorded);
       expect(voided.hands.single.status, HandResultStatus.voided);
     });
+
+    test('loadSessionDetail attaches photo metadata to hands', () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseSessionRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        sessionDetailLoader: (_) async => _sessionDetailJson(
+          hands: [_handResultRow()],
+        ),
+        sessionHandPhotosLoader: (handIds) async {
+          expect(handIds, ['hand_01']);
+          return [
+            {
+              'id': 'photo_01',
+              'hand_result_id': 'hand_01',
+              'client_photo_id': 'photo_client_01',
+              'captured_at': '2026-06-25T18:00:00Z',
+              'storage_bucket': 'hand-photos',
+              'storage_path':
+                  'events/evt_01/hands/hand_01/photo_client_01.jpg',
+              'photo_upload_status': 'uploaded',
+            },
+          ];
+        },
+      );
+
+      final detail = await repository.loadSessionDetail('ses_01');
+
+      expect(detail.hands.single.photoId, 'photo_01');
+      expect(detail.hands.single.photoClientId, 'photo_client_01');
+      expect(detail.hands.single.photoUploadStatus, 'uploaded');
+      expect(
+        detail.hands.single.photoStoragePath,
+        'events/evt_01/hands/hand_01/photo_client_01.jpg',
+      );
+    });
   });
 }
 
@@ -531,6 +567,7 @@ class _FakePostgrestServer {
       'table_sessions' => _sessionRow(),
       'table_session_seats' => [_seatRow(0), _seatRow(1), _seatRow(2)],
       'hand_results' => [_handResultRow()],
+      'hand_photos' => const [],
       'hand_settlements' => _settlementRows(request.uri),
       'hand_false_win_penalties' => _falseWinPenaltyRows(request.uri),
       'event_tables' => {'label': 'Table 1'},

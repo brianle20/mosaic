@@ -22,6 +22,9 @@ typedef SessionRpcListRunner = Future<List<Map<String, dynamic>>> Function(
 typedef SessionDetailLoader = Future<Map<String, dynamic>> Function(
   String sessionId,
 );
+typedef SessionHandPhotosLoader = Future<List<Map<String, dynamic>>> Function(
+  List<String> handIds,
+);
 typedef SessionTableLabelLoader = Future<String?> Function(String tableId);
 typedef SessionEventHandLedgerLoader = Future<List<Map<String, dynamic>>>
     Function(String eventId);
@@ -35,6 +38,7 @@ class SupabaseSessionRepository implements SessionRepository {
     SessionRpcSingleRunner? rpcSingleRunner,
     SessionRpcListRunner? rpcListRunner,
     SessionDetailLoader? sessionDetailLoader,
+    SessionHandPhotosLoader? sessionHandPhotosLoader,
     SessionTableLabelLoader? sessionTableLabelLoader,
     SessionEventHandLedgerLoader? eventHandLedgerLoader,
   })  : _sessionListLoader = sessionListLoader,
@@ -42,6 +46,7 @@ class SupabaseSessionRepository implements SessionRepository {
         _rpcSingleRunner = rpcSingleRunner,
         _rpcListRunner = rpcListRunner,
         _sessionDetailLoader = sessionDetailLoader,
+        _sessionHandPhotosLoader = sessionHandPhotosLoader,
         _sessionTableLabelLoader = sessionTableLabelLoader,
         _eventHandLedgerLoader = eventHandLedgerLoader;
 
@@ -52,6 +57,7 @@ class SupabaseSessionRepository implements SessionRepository {
   final SessionRpcSingleRunner? _rpcSingleRunner;
   final SessionRpcListRunner? _rpcListRunner;
   final SessionDetailLoader? _sessionDetailLoader;
+  final SessionHandPhotosLoader? _sessionHandPhotosLoader;
   final SessionTableLabelLoader? _sessionTableLabelLoader;
   final SessionEventHandLedgerLoader? _eventHandLedgerLoader;
 
@@ -268,10 +274,21 @@ class SupabaseSessionRepository implements SessionRepository {
           (_sessionTableLabelLoader == null
               ? null
               : await _loadTableLabel(session.eventTableId));
+      final handsRows = (detailJson['hands'] as List<dynamic>? ?? const [])
+          .map((row) => (row as Map).cast<String, dynamic>())
+          .toList(growable: false);
+      final handIds = handsRows
+          .map((row) => row['id'])
+          .whereType<String>()
+          .toList(growable: false);
+      final photosByHandId = _sessionHandPhotosLoader == null
+          ? const <String, Map<String, dynamic>>{}
+          : await _loadHandPhotosByHandId(handIds);
 
       return SessionDetailRecord.fromJson({
         ...detailJson,
         'table_label': tableLabel,
+        'hands': _withAttachedPhotos(handsRows, photosByHandId),
       });
     }
 
@@ -302,6 +319,13 @@ class SupabaseSessionRepository implements SessionRepository {
         .map((row) => row['id'])
         .whereType<String>()
         .toList(growable: false);
+    final photosByHandId = await _loadHandPhotosByHandId(handIds);
+    final handsWithPhotos = _withAttachedPhotos(
+      handsRows.map((row) => row.cast<String, dynamic>()).toList(
+            growable: false,
+          ),
+      photosByHandId,
+    );
     final falseWinPenaltyIds = falseWinPenaltyRows
         .map((row) => row['id'])
         .whereType<String>()
@@ -333,10 +357,60 @@ class SupabaseSessionRepository implements SessionRepository {
       'table_label': tableLabel,
       'session': sessionJson,
       'seats': seatsRows,
-      'hands': handsRows,
+      'hands': handsWithPhotos,
       'settlements': settlementsRows,
       'false_win_penalties': falseWinPenaltyRows,
     });
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _loadHandPhotosByHandId(
+    List<String> handIds,
+  ) async {
+    if (handIds.isEmpty) {
+      return const {};
+    }
+
+    final loader = _sessionHandPhotosLoader;
+    final rows = loader != null
+        ? await loader(handIds)
+        : await client
+            .from('hand_photos')
+            .select()
+            .inFilter('hand_result_id', handIds);
+
+    return {
+      for (final row in rows.map((row) => row.cast<String, dynamic>()))
+        if (row['hand_result_id'] case final String handResultId)
+          handResultId: row,
+    };
+  }
+
+  Map<String, dynamic> _withAttachedPhoto(
+    Map<String, dynamic> hand,
+    Map<String, dynamic>? photo,
+  ) {
+    if (photo == null) {
+      return hand;
+    }
+
+    return {
+      ...hand,
+      'photo_id': photo['id'],
+      'photo_client_id': photo['client_photo_id'],
+      'photo_captured_at': photo['captured_at'],
+      'photo_upload_status': photo['photo_upload_status'],
+      'photo_storage_bucket': photo['storage_bucket'],
+      'photo_storage_path': photo['storage_path'],
+    };
+  }
+
+  List<Map<String, dynamic>> _withAttachedPhotos(
+    List<Map<String, dynamic>> hands,
+    Map<String, Map<String, dynamic>> photosByHandId,
+  ) {
+    return hands
+        .map((hand) => _withAttachedPhoto(hand, photosByHandId[hand['id']]))
+        .toList(growable: false);
   }
 
   Future<String?> _loadTableLabel(String tableId) async {
