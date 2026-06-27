@@ -559,6 +559,30 @@ void main() {
     );
     expect(sql, contains("select pg_notify('pgrst', 'reload schema')"));
   });
+
+  test('latest tournament round generation can use untagged event tables', () {
+    final sql = _readAllMigrationSql();
+    final functionSql = _extractLatestFunction(
+      sql,
+      'public.generate_tournament_round',
+    );
+
+    expect(functionSql, contains('ready_tables as ('));
+    expect(functionSql, contains('from public.event_tables as event_table'));
+    expect(functionSql, isNot(contains('join public.nfc_tags as table_nfc')));
+    expect(
+      functionSql,
+      isNot(contains("table_nfc.default_tag_type = 'table'")),
+    );
+    expect(
+      functionSql,
+      isNot(contains("table_nfc.status = 'active'")),
+    );
+    expect(
+      functionSql,
+      contains('Add more tables before starting this round.'),
+    );
+  });
 }
 
 String _readAllMigrationSql() {
