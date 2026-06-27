@@ -97,15 +97,34 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
   }
 
   Future<void> _copySeatingAssignments() async {
+    final tableGroups = _controller.tableGroups;
     final publicNamesByGuestId = {
       for (final guest in _controller.eligibleGuests)
         guest.id: guest.publicName,
     };
+    final missingPublicName = tableGroups.any(
+      (group) => group.seats.any(
+        (seat) => !publicNamesByGuestId.containsKey(seat.eventGuestId),
+      ),
+    );
+
+    if (missingPublicName) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Public names are still loading.')),
+        );
+      return;
+    }
 
     await Clipboard.setData(
       ClipboardData(
         text: _formatSeatingAssignmentsForClipboard(
-          _controller.tableGroups,
+          tableGroups,
           publicNamesByGuestId: publicNamesByGuestId,
         ),
       ),
@@ -307,7 +326,7 @@ String _formatSeatingAssignmentsForClipboard(
       group.tableLabel,
       for (final seat in group.seats)
         '${_windLabel(seat.seatIndex)}: '
-            '${publicNamesByGuestId[seat.eventGuestId] ?? seat.displayName}',
+            '${publicNamesByGuestId[seat.eventGuestId]!}',
     ];
     return lines.join('\n');
   }).join('\n\n');

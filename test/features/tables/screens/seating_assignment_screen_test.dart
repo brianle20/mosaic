@@ -406,6 +406,51 @@ void main() {
     expect(find.text('Seating copied.'), findsOneWidget);
   });
 
+  testWidgets('copy seating fails closed when public names are unavailable',
+      (tester) async {
+    String? copiedText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copiedText = (call.arguments as Map)['text'] as String?;
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          seatingRepository: _FakeSeatingRepository(
+            loadedAssignments: [
+              _assignment(
+                id: 'a1',
+                tableId: 'tbl_01',
+                tableLabel: 'Table 1',
+                guestId: 'gst_missing',
+                displayName: 'Private Full Name',
+                seatIndex: 0,
+              ),
+            ],
+          ),
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: const _FakeSessionRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Copy Seating'));
+    await tester.pump();
+
+    expect(copiedText, isNull);
+    expect(find.text('Public names are still loading.'), findsOneWidget);
+  });
+
   testWidgets('seating review does not start all tables', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
