@@ -13,6 +13,7 @@ import 'package:mosaic/services/media/hand_photo_service.dart';
 enum _PlayerScanTarget { winner, discarder, penaltyCaller }
 
 const _tableSeatOrder = [0, 3, 1, 2];
+const _quickFanCounts = [3, 4, 5, 6];
 
 class HandEntryScreen extends StatefulWidget {
   const HandEntryScreen({
@@ -264,6 +265,12 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     });
   }
 
+  void _setFanCount(int fanCount) {
+    setState(() {
+      _fanCountController.text = fanCount.toString();
+    });
+  }
+
   String _seatLabel(int seatIndex) {
     final guestName = _seatName(seatIndex);
     final relativeSeatIndex = (seatIndex - _labelEastSeatIndex) % 4;
@@ -441,171 +448,224 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                 const SizedBox(height: 16),
               ],
               if (_isEditingLegacyFalseWin)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Legacy false win penalty',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _penaltySeatIndex == null
-                          ? 'False win caller: Unknown'
-                          : 'False win caller: ${_seatLabel(_penaltySeatIndex!)}',
-                    ),
-                  ],
+                _HandEntrySection(
+                  number: '1',
+                  title: 'Legacy False Win',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Legacy false win penalty',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _penaltySeatIndex == null
+                            ? 'False win caller: Unknown'
+                            : 'False win caller: ${_seatLabel(_penaltySeatIndex!)}',
+                      ),
+                    ],
+                  ),
                 )
               else
-                SegmentedButton<HandResultType>(
-                  segments: const [
-                    ButtonSegment(
-                      value: HandResultType.win,
-                      label: Text('Win'),
-                    ),
-                    ButtonSegment(
-                      value: HandResultType.washout,
-                      label: Text('Draw'),
-                    ),
-                  ],
-                  selected: {_resultType},
-                  onSelectionChanged: (selection) {
-                    setState(() {
-                      _resultType = selection.first;
-                      if (_resultType == HandResultType.washout) {
-                        _winnerSeatIndex = null;
-                        _discarderSeatIndex = null;
-                        _penaltySeatIndex = null;
-                        _winType = null;
-                        _capturedPhoto = null;
-                      } else {
-                        _winType ??= HandWinType.selfDraw;
-                        _penaltySeatIndex = null;
-                      }
-                      _choosingFalseWinCaller = false;
-                    });
-                  },
+                _HandEntrySection(
+                  number: '1',
+                  title: 'Result',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SegmentedButton<HandResultType>(
+                        segments: const [
+                          ButtonSegment(
+                            value: HandResultType.win,
+                            label: Text('Win'),
+                          ),
+                          ButtonSegment(
+                            value: HandResultType.washout,
+                            label: Text('Draw'),
+                          ),
+                        ],
+                        selected: {_resultType},
+                        onSelectionChanged: (selection) {
+                          setState(() {
+                            _resultType = selection.first;
+                            if (_resultType == HandResultType.washout) {
+                              _winnerSeatIndex = null;
+                              _discarderSeatIndex = null;
+                              _penaltySeatIndex = null;
+                              _winType = null;
+                              _capturedPhoto = null;
+                            } else {
+                              _winType ??= HandWinType.selfDraw;
+                              _penaltySeatIndex = null;
+                            }
+                            _choosingFalseWinCaller = false;
+                          });
+                        },
+                      ),
+                      if (widget.initialHand == null) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: _controller.isSubmitting
+                              ? null
+                              : _showFalseWinCallerPicker,
+                          icon: const Icon(Icons.warning_amber_outlined),
+                          label: const Text('Record False Win'),
+                        ),
+                      ],
+                      if (_sessionDetail
+                          .pendingFalseWinPenalties.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'False win callers: ${_sessionDetail.pendingFalseWinPenalties.map((penalty) => _seatLabel(penalty.penaltySeatIndex)).join(', ')}',
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
               const SizedBox(height: 16),
-              if (widget.initialHand == null) ...[
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: _controller.isSubmitting
-                        ? null
-                        : _showFalseWinCallerPicker,
-                    icon: const Icon(Icons.warning_amber_outlined),
-                    label: const Text('Record False Win'),
+              if (_choosingFalseWinCaller) ...[
+                _HandEntrySection(
+                  number: '2',
+                  title: 'False Win Caller',
+                  child: _buildSeatButtonGrid(
+                    prompt: 'Choose false win caller',
+                    target: _PlayerScanTarget.penaltyCaller,
                   ),
                 ),
               ],
-              if (_sessionDetail.pendingFalseWinPenalties.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'False win callers: ${_sessionDetail.pendingFalseWinPenalties.map((penalty) => _seatLabel(penalty.penaltySeatIndex)).join(', ')}',
-                ),
-              ],
-              if (_choosingFalseWinCaller) ...[
-                const SizedBox(height: 16),
-                _buildSeatButtonGrid(
-                  prompt: 'Choose false win caller',
-                  target: _PlayerScanTarget.penaltyCaller,
-                ),
-              ],
-              const SizedBox(height: 16),
               if (!_choosingFalseWinCaller &&
                   _resultType == HandResultType.win) ...[
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('Self-draw'),
-                      selected: _winType == HandWinType.selfDraw,
-                      onSelected: (_) {
-                        setState(() {
-                          _winType = HandWinType.selfDraw;
-                          _discarderSeatIndex = null;
-                        });
-                      },
-                    ),
-                    ChoiceChip(
-                      label: const Text('Discard'),
-                      selected: _winType == HandWinType.discard,
-                      onSelected: (_) {
-                        setState(() {
-                          _winType = HandWinType.discard;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-                if (_draft.winTypeError != null) ...[
-                  const SizedBox(height: 6),
-                  Text(_draft.winTypeError!),
-                ],
-                const SizedBox(height: 16),
-                _buildSeatButtonGrid(
-                  prompt: 'Choose winner',
-                  target: _PlayerScanTarget.winner,
+                _HandEntrySection(
+                  number: '2',
+                  title: 'Winner',
+                  child: _buildSeatButtonGrid(
+                    prompt: 'Choose winner',
+                    target: _PlayerScanTarget.winner,
+                  ),
                 ),
                 if (_draft.winnerSeatError != null) ...[
                   const SizedBox(height: 6),
                   Text(_draft.winnerSeatError!),
                 ],
                 const SizedBox(height: 16),
-                if (_winType == HandWinType.discard) ...[
-                  _buildSeatButtonGrid(
-                    prompt: 'Choose discarder',
-                    target: _PlayerScanTarget.discarder,
-                  ),
-                  if (_draft.discarderSeatError != null) ...[
-                    const SizedBox(height: 6),
-                    Text(_draft.discarderSeatError!),
-                  ],
-                  const SizedBox(height: 16),
-                ],
-                TextFormField(
-                  controller: _fanCountController,
-                  decoration: const InputDecoration(labelText: 'Fan Count'),
-                  keyboardType: TextInputType.number,
-                  onChanged: (_) => setState(() {}),
-                ),
-                if (_draft.fanCountError != null) ...[
-                  const SizedBox(height: 6),
-                  Text(_draft.fanCountError!),
-                ],
-                const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: _controller.isSubmitting || _isCapturingPhoto
-                      ? null
-                      : _captureWinningHandPhoto,
-                  icon: const Icon(Icons.photo_camera_outlined),
-                  label: Text(
-                    _capturedPhoto == null
-                        ? 'Capture winning hand photo'
-                        : 'Retake winning hand photo',
-                  ),
-                ),
-                if (_capturedPhoto != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Photo captured',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.w700,
+                _HandEntrySection(
+                  number: '3',
+                  title: 'Score',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('Self-draw'),
+                            selected: _winType == HandWinType.selfDraw,
+                            onSelected: (_) {
+                              setState(() {
+                                _winType = HandWinType.selfDraw;
+                                _discarderSeatIndex = null;
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            label: const Text('Discard'),
+                            selected: _winType == HandWinType.discard,
+                            onSelected: (_) {
+                              setState(() {
+                                _winType = HandWinType.discard;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      if (_draft.winTypeError != null) ...[
+                        const SizedBox(height: 6),
+                        Text(_draft.winTypeError!),
+                      ],
+                      if (_winType == HandWinType.discard) ...[
+                        const SizedBox(height: 16),
+                        _buildSeatButtonGrid(
+                          prompt: 'Choose discarder',
+                          target: _PlayerScanTarget.discarder,
                         ),
+                        if (_draft.discarderSeatError != null) ...[
+                          const SizedBox(height: 6),
+                          Text(_draft.discarderSeatError!),
+                        ],
+                      ],
+                      const SizedBox(height: 16),
+                      Text(
+                        'Quick fan',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final fanCount in _quickFanCounts)
+                            ChoiceChip(
+                              label: Text('${fanCount}F'),
+                              selected:
+                                  int.tryParse(_fanCountController.text) ==
+                                      fanCount,
+                              onSelected: (_) => _setFanCount(fanCount),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _fanCountController,
+                        decoration:
+                            const InputDecoration(labelText: 'Fan Count'),
+                        keyboardType: TextInputType.number,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      if (_draft.fanCountError != null) ...[
+                        const SizedBox(height: 6),
+                        Text(_draft.fanCountError!),
+                      ],
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: _controller.isSubmitting || _isCapturingPhoto
+                            ? null
+                            : _captureWinningHandPhoto,
+                        icon: const Icon(Icons.photo_camera_outlined),
+                        label: Text(
+                          _capturedPhoto == null
+                              ? 'Capture winning hand photo'
+                              : 'Retake winning hand photo',
+                        ),
+                      ),
+                      if (_capturedPhoto != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          'Photo captured',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ] else if (_draft.photoEvidenceError != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          _draft.photoEvidenceError!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ] else if (_draft.photoEvidenceError != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    _draft.photoEvidenceError!,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                  ),
-                ],
+                ),
               ],
               if (_draft.washoutFieldError != null) ...[
                 const SizedBox(height: 6),
@@ -613,9 +673,13 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
               ],
               if (!_choosingFalseWinCaller &&
                   _resultType == HandResultType.washout) ...[
-                Text(
-                  'Dealer: ${_seatName(_drawDealerSeatIndex)}',
-                  style: Theme.of(context).textTheme.labelLarge,
+                _HandEntrySection(
+                  number: '2',
+                  title: 'Draw',
+                  child: Text(
+                    'Dealer: ${_seatName(_drawDealerSeatIndex)}',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
                 ),
               ],
               if (_draft.canBuildPreview) ...[
@@ -662,5 +726,45 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     final fanCount = int.tryParse(_fanCountController.text) ?? 0;
     final winType = _winType == HandWinType.discard ? 'discard' : 'self-draw';
     return '$winner wins by $winType for $fanCount fan.';
+  }
+}
+
+class _HandEntrySection extends StatelessWidget {
+  const _HandEntrySection({
+    required this.number,
+    required this.title,
+    required this.child,
+  });
+
+  final String number;
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$number. $title',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            child,
+          ],
+        ),
+      ),
+    );
   }
 }

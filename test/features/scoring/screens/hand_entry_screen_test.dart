@@ -391,14 +391,16 @@ void main() {
     await tapVisible(tester, find.text('Discard'));
     expect(find.text('Choose discarder'), findsOneWidget);
 
-    await tester
-        .tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong').first);
-    await tester.pumpAndSettle();
+    await tapVisible(
+      tester,
+      find.widgetWithText(OutlinedButton, 'East\nAlice Wong').first,
+    );
 
     await tapVisible(tester, find.text('Choose discarder'));
-    await tester
-        .tap(find.widgetWithText(OutlinedButton, 'South\nBob Lee').last);
-    await tester.pumpAndSettle();
+    await tapVisible(
+      tester,
+      find.widgetWithText(OutlinedButton, 'South\nBob Lee').last,
+    );
 
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Fan Count'), '3');
@@ -411,6 +413,50 @@ void main() {
 
     expect(repository.recordedInput, isNotNull);
     expect(repository.recordedInput!.winType, HandWinType.discard);
+  });
+
+  testWidgets('uses guided sections and quick fan picks on one screen',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+          handPhotoService: _FakeHandPhotoService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1. Result'), findsOneWidget);
+    expect(find.text('2. Winner'), findsOneWidget);
+    expect(find.text('3. Score'), findsOneWidget);
+    expect(find.text('Quick fan'), findsOneWidget);
+
+    final quickFanLabels = tester
+        .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+        .map((chip) => (chip.label as Text).data)
+        .where((label) => label?.endsWith('F') ?? false)
+        .toList();
+    expect(quickFanLabels, ['3F', '4F', '5F', '6F']);
+    expect(find.widgetWithText(ChoiceChip, '8F'), findsNothing);
+    expect(find.widgetWithText(ChoiceChip, '13F'), findsNothing);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong'));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.widgetWithText(ChoiceChip, '4F'));
+
+    expect(find.widgetWithText(TextFormField, 'Fan Count'), findsOneWidget);
+    expect(find.text('Alice Wong (East) wins by self-draw for 4 fan.'),
+        findsOneWidget);
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput?.fanCount, 4);
   });
 
   testWidgets('excludes the selected winner from the discarder menu',
@@ -452,8 +498,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Discard'));
-    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Discard'));
 
     final discarderTop = tester.getTopLeft(find.text('Choose discarder')).dy;
     final fanCountTop =
@@ -925,9 +970,11 @@ void main() {
     await tester.pumpAndSettle();
 
     final carolButton = find.widgetWithText(OutlinedButton, 'South\nCarol Ng');
+    await tester.ensureVisible(carolButton);
+    await tester.pumpAndSettle();
     await tester.tap(carolButton);
     await tester.pump();
-    await tester.tap(carolButton);
+    await tester.tap(carolButton, warnIfMissed: false);
     await tester.pump();
 
     expect(repository.recordFalseWinPenaltyCallCount, 1);
