@@ -277,6 +277,7 @@ void main() {
 
     expect(find.text('Cover Amount'), findsOneWidget);
     expect(find.text('Cover Amount (cents)'), findsNothing);
+    expect(find.text('Cover Status'), findsNothing);
     expect(find.text(r'$'), findsOneWidget);
     expect(coverAmountEditable().controller.text, '15.00');
 
@@ -300,6 +301,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.created, isNotNull);
+    expect(repository.created!.coverStatus, CoverStatus.unpaid);
     expect(repository.created!.coverAmountCents, 500);
   });
 

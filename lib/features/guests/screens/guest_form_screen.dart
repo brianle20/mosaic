@@ -584,26 +584,6 @@ class _GuestFormScreenState extends State<GuestFormScreen> {
               validator: (_) => _buildDraft().instagramHandleError,
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<CoverStatus>(
-              initialValue: _coverStatus,
-              decoration: const InputDecoration(labelText: 'Cover Status'),
-              items: CoverStatus.values
-                  .map(
-                    (status) => DropdownMenuItem(
-                      value: status,
-                      child: Text(status.name),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() {
-                    _coverStatus = value;
-                  });
-                }
-              },
-            ),
-            const SizedBox(height: 12),
             MoneyTextFormField(
               fieldKey: guestCoverAmountFieldKey,
               controller: _coverAmountController,
