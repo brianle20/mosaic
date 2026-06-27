@@ -21,8 +21,11 @@ void main() {
   test('latest events select policy supports insert returning for owners', () {
     final policySql = _extractLatestEventsSelectPolicy(migrationsSql);
 
-    expect(policySql, contains('owner_user_id = auth.uid()'));
-    expect(policySql, contains('app_private.event_staff_role(id)'));
+    expect(policySql, contains('owner_user_id = (select auth.uid())'));
+    expect(
+      policySql,
+      contains('app_private.event_staff_role(id, (select auth.uid()))'),
+    );
     expect(policySql, isNot(contains('app_private.can_view_event(id)')));
   });
 }
