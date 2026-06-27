@@ -457,19 +457,58 @@ void main() {
     expect(find.text('Time expired'), findsOneWidget);
   });
 
+  testWidgets('timed completed session allows missing final hand entry',
+      (tester) async {
+    final startedAt =
+        DateTime.now().subtract(const Duration(minutes: 61)).toIso8601String();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: _buildDetail(
+              SessionStatus.completed,
+              scoringPhase: EventScoringPhase.tournament,
+              startedAt: startedAt,
+              hands: const [
+                {
+                  'id': 'hand_01',
+                  'table_session_id': 'ses_01',
+                  'hand_number': 1,
+                  'result_type': 'washout',
+                  'east_seat_index_before_hand': 0,
+                  'east_seat_index_after_hand': 1,
+                  'dealer_rotated': true,
+                  'session_completed_after_hand': false,
+                  'status': 'recorded',
+                  'entered_by_user_id': 'usr_01',
+                  'entered_at': '2026-04-24T19:05:00-07:00',
+                },
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Completed'), findsOneWidget);
+    expect(find.text('Record Hand'), findsOneWidget);
+    expect(
+      find.text('Hand entry is closed because this session is complete.'),
+      findsNothing,
+    );
+  });
+
   testWidgets('final hand completion blocks further hand entry',
       (tester) async {
     final startedAt =
         DateTime.now().subtract(const Duration(minutes: 61)).toIso8601String();
     final sessionRepository = _FakeSessionRepository(
       detail: _buildDetail(
-        SessionStatus.active,
-        hasHands: false,
-        scoringPhase: EventScoringPhase.tournament,
-        startedAt: startedAt,
-        currentDealerSeatIndex: 0,
-      ),
-    )..recordHandDetail = _buildDetail(
         SessionStatus.completed,
         scoringPhase: EventScoringPhase.tournament,
         startedAt: startedAt,
@@ -494,7 +533,8 @@ void main() {
             'entered_at': '2026-04-24T19:05:00-07:00',
           },
         ],
-      );
+      ),
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -506,19 +546,6 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Record Hand').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Fan Count'),
-      '3',
-    );
-    await tester.ensureVisible(find.text('Save Hand'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save Hand'));
     await tester.pumpAndSettle();
 
     expect(find.text('Completed'), findsOneWidget);

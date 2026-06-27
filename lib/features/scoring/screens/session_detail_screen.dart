@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -167,11 +168,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
             syncSnapshot: _controller.syncSnapshot,
             now: widget.now?.call(),
           );
-    final sessionStatus = detail?.session.status;
     final isSyncBlocked = _controller.syncSnapshot?.isBlocked ?? false;
-    final canRecordHand = widget.scoringOpen &&
-        sessionStatus == SessionStatus.active &&
-        !isSyncBlocked;
+    final canRecordHand = detail != null &&
+        _canRecordHand(
+          detail: detail,
+          scoringOpen: widget.scoringOpen,
+          isSyncBlocked: isSyncBlocked,
+        );
     final canControlRoundTimer = viewModel?.showRoundTimer ?? false;
 
     return Scaffold(
@@ -265,6 +268,36 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         'Hand entry is unavailable because this session was aborted.',
       SessionStatus.active => '',
     };
+  }
+
+  bool _canRecordHand({
+    required SessionDetailRecord detail,
+    required bool scoringOpen,
+    required bool isSyncBlocked,
+  }) {
+    if (!scoringOpen || isSyncBlocked) {
+      return false;
+    }
+
+    if (detail.session.status == SessionStatus.active) {
+      return true;
+    }
+
+    if (detail.session.status != SessionStatus.completed) {
+      return false;
+    }
+
+    return _isTimedScoringPhase(detail.session.scoringPhase) &&
+        !detail.hands.any(
+          (hand) =>
+              hand.status == HandResultStatus.recorded &&
+              hand.sessionCompletedAfterHand,
+        );
+  }
+
+  bool _isTimedScoringPhase(EventScoringPhase phase) {
+    return phase == EventScoringPhase.tournament ||
+        phase == EventScoringPhase.bonus;
   }
 }
 
