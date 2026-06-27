@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:mosaic/data/supabase/supabase_bootstrap.dart';
 
 import 'support/live_fixture_factory.dart';
 import 'support/live_test_harness.dart';
@@ -55,7 +55,7 @@ void main() {
       await pumpUntilVisible(tester, find.text(eventTitle));
       await pumpUntilVisible(tester, find.text('Guests'));
 
-      final eventRow = await Supabase.instance.client
+      final eventRow = await SupabaseBootstrap.client
           .from('events')
           .select('id, title')
           .eq('title', eventTitle)
@@ -83,7 +83,7 @@ void main() {
         await pumpUntilVisible(tester, find.text(guestNames[index]));
       }
 
-      final guestRows = await Supabase.instance.client
+      final guestRows = await SupabaseBootstrap.client
           .from('event_guests')
           .select('id, display_name, attendance_status')
           .eq('event_id', eventId)
@@ -116,7 +116,7 @@ void main() {
       await pumpUntilVisible(tester, find.text('Paid at door via smoke test'));
       await pumpUntilVisible(tester, find.text(firstGuestName));
 
-      final coverEntryRows = await Supabase.instance.client
+      final coverEntryRows = await SupabaseBootstrap.client
           .from('guest_cover_entries')
           .select('event_guest_id, amount_cents, method, note')
           .eq('event_id', eventId)
@@ -198,7 +198,7 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      final updatedGuests = await Supabase.instance.client
+      final updatedGuests = await SupabaseBootstrap.client
           .from('event_guests')
           .select('id, attendance_status')
           .eq('event_id', eventId);
@@ -239,7 +239,7 @@ void main() {
       await pumpUntilVisible(tester, find.text('Session Progress'));
       await pumpUntilVisible(tester, find.text('Pause'));
 
-      final sessionRows = await Supabase.instance.client
+      final sessionRows = await SupabaseBootstrap.client
           .from('table_sessions')
           .select('id, event_table_id, status')
           .eq('event_id', eventId)
@@ -248,7 +248,7 @@ void main() {
       expect(sessionRows.single['status'], 'active');
 
       final sessionId = sessionRows.single['id'] as String;
-      final seatRows = await Supabase.instance.client
+      final seatRows = await SupabaseBootstrap.client
           .from('table_session_seats')
           .select('seat_index, initial_wind, event_guest_id')
           .eq('table_session_id', sessionId)
@@ -283,14 +283,14 @@ void main() {
       );
       await recordWashoutHandViaUi(tester);
 
-      final recordedHands = await Supabase.instance.client
+      final recordedHands = await SupabaseBootstrap.client
           .from('hand_results')
           .select('id, hand_number, result_type, status')
           .eq('table_session_id', sessionId)
           .order('hand_number', ascending: true);
       expect(recordedHands, hasLength(3));
 
-      final leaderboardBeforeVoid = await Supabase.instance.client.rpc(
+      final leaderboardBeforeVoid = await SupabaseBootstrap.client.rpc(
         'get_event_leaderboard',
         params: {'target_event_id': eventId},
       ) as List<dynamic>;
@@ -314,13 +314,13 @@ void main() {
       await tester.pumpAndSettle();
       await pumpUntilVisible(tester, find.text('Session Progress'));
 
-      final leaderboardAfterVoid = await Supabase.instance.client.rpc(
+      final leaderboardAfterVoid = await SupabaseBootstrap.client.rpc(
         'get_event_leaderboard',
         params: {'target_event_id': eventId},
       ) as List<dynamic>;
       expect(leaderboardAfterVoid.first['display_name'], guestNames[2]);
       expect(leaderboardAfterVoid.first['total_points'], 32);
-      final voidedHands = await Supabase.instance.client
+      final voidedHands = await SupabaseBootstrap.client
           .from('hand_results')
           .select('status')
           .eq('table_session_id', sessionId)
@@ -346,7 +346,7 @@ void main() {
       await openDashboardSection(tester, 'Prizes');
       await pumpUntilVisible(tester, find.text('Prize Plan'));
 
-      await Supabase.instance.client.rpc(
+      await SupabaseBootstrap.client.rpc(
         'upsert_prize_plan',
         params: {
           'target_event_id': eventId,
@@ -363,11 +363,11 @@ void main() {
           ],
         },
       );
-      await Supabase.instance.client.rpc(
+      await SupabaseBootstrap.client.rpc(
         'lock_prize_awards',
         params: {'target_event_id': eventId},
       );
-      final prizeAwards = await Supabase.instance.client
+      final prizeAwards = await SupabaseBootstrap.client
           .from('prize_awards')
           .select('id, display_rank, award_amount_cents')
           .eq('event_id', eventId)
@@ -392,7 +392,7 @@ void main() {
         find.text('Standings and awards are locked for this event.'),
       );
 
-      final finalizedEventRow = await Supabase.instance.client
+      final finalizedEventRow = await SupabaseBootstrap.client
           .from('events')
           .select('lifecycle_status, checkin_open, scoring_open')
           .eq('id', eventId)
@@ -402,57 +402,57 @@ void main() {
       expect(finalizedEventRow['scoring_open'], isFalse);
     } finally {
       if (eventId != null) {
-        await Supabase.instance.client
+        await SupabaseBootstrap.client
             .from('guest_cover_entries')
             .delete()
             .eq('event_id', eventId);
       }
       if (eventId != null) {
-        await Supabase.instance.client
+        await SupabaseBootstrap.client
             .from('prize_awards')
             .delete()
             .eq('event_id', eventId);
       }
       if (eventId != null) {
-        await Supabase.instance.client
+        await SupabaseBootstrap.client
             .from('event_guest_tag_assignments')
             .delete()
             .eq('event_id', eventId);
       }
       if (eventId != null) {
-        await Supabase.instance.client
+        await SupabaseBootstrap.client
             .from('table_sessions')
             .delete()
             .eq('event_id', eventId);
-        await Supabase.instance.client
+        await SupabaseBootstrap.client
             .from('event_tables')
             .delete()
             .eq('event_id', eventId);
       }
       if (eventId != null) {
-        await Supabase.instance.client
+        await SupabaseBootstrap.client
             .from('event_guests')
             .delete()
             .eq('event_id', eventId);
-        await Supabase.instance.client
+        await SupabaseBootstrap.client
             .from('events')
             .delete()
             .eq('id', eventId);
       } else {
         for (final guestName in guestNames) {
-          await Supabase.instance.client
+          await SupabaseBootstrap.client
               .from('event_guests')
               .delete()
               .eq('display_name', guestName);
         }
-        await Supabase.instance.client
+        await SupabaseBootstrap.client
             .from('events')
             .delete()
             .eq('title', eventTitle);
       }
 
       for (final uid in [...normalizedPlayerTagUids, normalizedTableTagUid]) {
-        await Supabase.instance.client
+        await SupabaseBootstrap.client
             .from('nfc_tags')
             .delete()
             .eq('uid_hex', uid);

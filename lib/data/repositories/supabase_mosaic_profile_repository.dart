@@ -1,6 +1,6 @@
 import 'package:mosaic/data/models/hand_evidence_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 typedef MosaicProfileRpcRunner = Future<dynamic> Function(
   String functionName,

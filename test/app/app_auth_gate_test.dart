@@ -784,4 +784,24 @@ void main() {
     );
     expect(find.text('Missing Supabase URL'), findsOneWidget);
   });
+
+  testWidgets('startup error handles long diagnostics without overflow',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 500));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final diagnostic = List.filled(
+      80,
+      'objective_c.framework/objective_c failed to load dynamic library',
+    ).join('\n');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MosaicApp(startupError: diagnostic),
+      ),
+    );
+
+    expect(find.text('Unable to Start Mosaic'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

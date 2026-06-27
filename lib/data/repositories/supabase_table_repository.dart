@@ -3,7 +3,7 @@ import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 typedef TableRpcSingleRunner = Future<Map<String, dynamic>> Function(
   String functionName,

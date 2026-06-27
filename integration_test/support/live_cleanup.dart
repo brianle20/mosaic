@@ -1,5 +1,5 @@
 import 'live_fixture_state.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:mosaic/data/supabase/supabase_bootstrap.dart';
 
 class LiveCleanupOperation {
   const LiveCleanupOperation(this.label);
@@ -30,7 +30,7 @@ List<LiveCleanupOperation> plannedCleanupOperations(LiveFixtureState state) {
 }
 
 Future<void> cleanupLiveFixture(LiveFixtureState state) async {
-  final client = Supabase.instance.client;
+  final client = SupabaseBootstrap.client;
 
   if (state.eventId != null) {
     await client

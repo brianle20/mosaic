@@ -2,7 +2,7 @@ import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/guest_display_names.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 typedef CurrentUserIdReader = String? Function();
 typedef GuestByIdLoader = Future<Map<String, dynamic>> Function(String guestId);

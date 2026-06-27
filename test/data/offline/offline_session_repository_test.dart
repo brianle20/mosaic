@@ -10,7 +10,7 @@ import 'package:mosaic/data/offline/offline_session_projector.dart';
 import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/sqlite_offline_store.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

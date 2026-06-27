@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:mosaic/data/supabase/supabase_bootstrap.dart';
 
 Future<String> lookupEventIdByTitle(String eventTitle) async {
-  final row = await Supabase.instance.client
+  final row = await SupabaseBootstrap.client
       .from('events')
       .select('id')
       .eq('title', eventTitle)
@@ -12,7 +12,7 @@ Future<String> lookupEventIdByTitle(String eventTitle) async {
 }
 
 Future<List<Map<String, dynamic>>> loadGuestRows(String eventId) async {
-  return (await Supabase.instance.client
+  return (await SupabaseBootstrap.client
           .from('event_guests')
           .select('id, display_name, attendance_status, cover_status')
           .eq('event_id', eventId)
@@ -21,7 +21,7 @@ Future<List<Map<String, dynamic>>> loadGuestRows(String eventId) async {
 }
 
 Future<String> lookupSessionId(String eventId, String tableId) async {
-  final rows = await Supabase.instance.client
+  final rows = await SupabaseBootstrap.client
       .from('table_sessions')
       .select('id, status')
       .eq('event_id', eventId)
@@ -31,14 +31,14 @@ Future<String> lookupSessionId(String eventId, String tableId) async {
 }
 
 Future<List<dynamic>> loadLeaderboard(String eventId) async {
-  return await Supabase.instance.client.rpc(
+  return await SupabaseBootstrap.client.rpc(
     'get_event_leaderboard',
     params: {'target_event_id': eventId},
   ) as List<dynamic>;
 }
 
 Future<void> assertNoRowsExistForEvent(String eventId) async {
-  final client = Supabase.instance.client;
+  final client = SupabaseBootstrap.client;
 
   final coverEntries = await client
       .from('guest_cover_entries')

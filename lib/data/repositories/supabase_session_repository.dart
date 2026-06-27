@@ -3,7 +3,7 @@ import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 typedef SessionListLoader = Future<List<Map<String, dynamic>>> Function(
   String eventId,

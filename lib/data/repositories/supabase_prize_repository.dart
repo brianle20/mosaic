@@ -1,7 +1,7 @@
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 typedef PrizePlanLoader = Future<Map<String, dynamic>?> Function(
     String eventId);

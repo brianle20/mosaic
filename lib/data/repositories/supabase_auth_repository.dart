@@ -1,6 +1,6 @@
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 typedef CurrentUserReader = User? Function();
 typedef AuthStateChangesReader = Stream<AuthState> Function();

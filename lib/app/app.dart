@@ -24,13 +24,13 @@ import 'package:mosaic/data/repositories/supabase_seating_repository.dart';
 import 'package:mosaic/data/repositories/supabase_session_repository.dart';
 import 'package:mosaic/data/repositories/supabase_staff_repository.dart';
 import 'package:mosaic/data/repositories/supabase_table_repository.dart';
+import 'package:mosaic/data/supabase/supabase_bootstrap.dart';
 import 'package:mosaic/features/auth/controllers/auth_controller.dart';
 import 'package:mosaic/features/auth/screens/host_sign_in_screen.dart';
 import 'package:mosaic/features/events/screens/event_list_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service_factory.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/keyboard_dismiss_region.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MosaicApp extends StatefulWidget {
   const MosaicApp({
@@ -198,7 +198,7 @@ class _MosaicAppState extends State<MosaicApp> {
 
   Future<_LoadedRepositories> _loadRepositories() async {
     final cache = await LocalCache.create();
-    final client = Supabase.instance.client;
+    final client = SupabaseBootstrap.client;
     final offlineStore = await SqliteOfflineStore.open();
     final reachability = DefaultNetworkReachability(client: client);
     final supabaseAuthRepository = SupabaseAuthRepository.fromClient(client);
@@ -364,37 +364,43 @@ class _StartupErrorScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    size: 32,
-                    color: Theme.of(context).colorScheme.primary,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 32,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Unable to Start Mosaic',
+                        style: Theme.of(context).textTheme.titleMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Check the app configuration and try again.',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      SelectableText(
+                        message,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Unable to Start Mosaic',
-                    style: Theme.of(context).textTheme.titleMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Check the app configuration and try again.',
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    message,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
+                ),
               ),
             ),
           ),

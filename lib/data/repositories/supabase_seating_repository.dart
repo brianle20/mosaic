@@ -3,7 +3,7 @@ import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 typedef SeatingRpcListRunner = Future<List<Map<String, dynamic>>> Function(
   String functionName,

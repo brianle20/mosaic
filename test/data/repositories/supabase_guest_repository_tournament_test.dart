@@ -6,7 +6,7 @@ import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/supabase_guest_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 void main() {
   group('SupabaseGuestRepository tournament fields', () {

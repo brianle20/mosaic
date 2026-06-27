@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:mosaic/data/supabase/supabase_bootstrap.dart';
 
 import 'live_backend_assertions.dart';
 import 'live_test_harness.dart';
@@ -138,13 +138,13 @@ Future<String> createTableViaUi(
     find.text('Ready'),
   ]);
 
-  final tagRows = await Supabase.instance.client
+  final tagRows = await SupabaseBootstrap.client
       .from('nfc_tags')
       .select('id')
       .eq('uid_hex', normalizedTableTagUid);
   expect(tagRows, isNotEmpty);
 
-  final tableRows = await Supabase.instance.client
+  final tableRows = await SupabaseBootstrap.client
       .from('event_tables')
       .select('id')
       .eq('event_id', eventId)
@@ -285,7 +285,7 @@ Future<void> addGuestViaUi(
 }
 
 Future<void> checkInGuestViaRpc(String guestId) async {
-  await Supabase.instance.client.rpc(
+  await SupabaseBootstrap.client.rpc(
     'check_in_guest',
     params: {'target_event_guest_id': guestId},
   );
@@ -295,7 +295,7 @@ Future<void> registerPlayerTagViaRpc(
   String tagUid, {
   String? displayLabel,
 }) async {
-  await Supabase.instance.client.rpc(
+  await SupabaseBootstrap.client.rpc(
     'register_nfc_tag',
     params: {
       'scanned_uid': tagUid,
@@ -310,7 +310,7 @@ Future<void> upsertFixedPrizePlanViaRpc(
   required List<int> fixedAmounts,
   String note = 'Live blocker test prize plan',
 }) async {
-  await Supabase.instance.client.rpc(
+  await SupabaseBootstrap.client.rpc(
     'upsert_prize_plan',
     params: {
       'target_event_id': eventId,

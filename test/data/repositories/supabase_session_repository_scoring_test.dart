@@ -8,7 +8,7 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/supabase_session_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 void main() {
   group('SupabaseSessionRepository scoring', () {

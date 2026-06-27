@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/repositories/supabase_leaderboard_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 void main() {
   group('SupabaseLeaderboardRepository', () {

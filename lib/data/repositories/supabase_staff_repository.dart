@@ -1,6 +1,6 @@
 import 'package:mosaic/data/models/staff_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase/supabase.dart';
 
 typedef StaffRpcRunner = Future<dynamic> Function(
   String functionName,
