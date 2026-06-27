@@ -23,6 +23,7 @@ void main() {
         client: SupabaseClient('https://example.com', 'publishable-key'),
         cache: cache,
         currentUserIdReader: () => 'usr_01',
+        guestProfilesByNameLoader: (_, __) async => const [],
         profileOnEventChecker: ({
           required eventId,
           required guestProfileId,
@@ -89,6 +90,7 @@ void main() {
         client: SupabaseClient('https://example.com', 'publishable-key'),
         cache: cache,
         currentUserIdReader: () => 'usr_01',
+        guestProfilesByNameLoader: (_, __) async => const [],
         profileOnEventChecker: ({
           required eventId,
           required guestProfileId,
@@ -209,6 +211,7 @@ void main() {
         client: SupabaseClient('https://example.com', 'publishable-key'),
         cache: cache,
         currentUserIdReader: () => 'usr_01',
+        guestProfilesByNameLoader: (_, __) async => const [],
         profileOnEventChecker: ({
           required eventId,
           required guestProfileId,
@@ -266,6 +269,7 @@ void main() {
         client: SupabaseClient('https://example.com', 'publishable-key'),
         cache: cache,
         currentUserIdReader: () => 'usr_01',
+        guestProfilesByNameLoader: (_, __) async => const [],
         profileOnEventChecker: ({
           required eventId,
           required guestProfileId,
@@ -303,6 +307,157 @@ void main() {
       );
 
       expect(capturedProfileInsert['public_display_name'], 'Alice C.');
+    });
+
+    test('creating a name-only guest reuses one matching saved profile',
+        () async {
+      final server = await _FakeGuestPostgrestServer.start(
+        guestProfileRows: [
+          _guestProfileRow(
+            id: 'prf_alice',
+            ownerUserId: 'usr_01',
+            displayName: 'Alice Wong',
+            normalizedName: 'alice wong',
+            publicDisplayName: 'Alice W.',
+          ),
+        ],
+      );
+      addTearDown(server.close);
+      final cache = await LocalCache.create();
+      var insertedProfile = false;
+      late Map<String, dynamic> capturedEventGuestInsert;
+      final repository = SupabaseGuestRepository(
+        client: SupabaseClient(server.url, 'publishable-key'),
+        cache: cache,
+        currentUserIdReader: () => 'usr_01',
+        profileOnEventChecker: ({
+          required eventId,
+          required guestProfileId,
+        }) async {
+          expect(eventId, 'evt_01');
+          expect(guestProfileId, 'prf_alice');
+        },
+        guestProfileInsertRunner: (json) async {
+          insertedProfile = true;
+          return {
+            'id': 'prf_new',
+            ...json,
+            'row_version': 1,
+          };
+        },
+        eventGuestInsertRunner: (json) async {
+          capturedEventGuestInsert = json;
+          return {
+            'id': 'gst_alice',
+            ...json,
+            'attendance_status': 'expected',
+            'cover_status': 'paid',
+            'cover_amount_cents': 2000,
+            'is_comped': false,
+            'has_scored_play': false,
+            'guest_profile': _guestProfileRow(
+              id: 'prf_alice',
+              ownerUserId: 'usr_01',
+              displayName: 'Alice Wong',
+              normalizedName: 'alice wong',
+              publicDisplayName: 'Alice W.',
+            ),
+          };
+        },
+      );
+
+      await repository.createGuest(
+        const CreateGuestInput(
+          eventId: 'evt_01',
+          displayName: 'Alice Wong',
+          normalizedName: 'alice wong',
+          coverStatus: CoverStatus.paid,
+          coverAmountCents: 2000,
+          isComped: false,
+        ),
+      );
+
+      expect(insertedProfile, isFalse);
+      expect(capturedEventGuestInsert['guest_profile_id'], 'prf_alice');
+    });
+
+    test(
+        'creating a name-only guest inserts when saved profile match is ambiguous',
+        () async {
+      final server = await _FakeGuestPostgrestServer.start(
+        guestProfileRows: [
+          _guestProfileRow(
+            id: 'prf_alice_1',
+            ownerUserId: 'usr_01',
+            displayName: 'Alice Wong',
+            normalizedName: 'alice wong',
+            publicDisplayName: 'Alice W.',
+          ),
+          _guestProfileRow(
+            id: 'prf_alice_2',
+            ownerUserId: 'usr_01',
+            displayName: 'Alice Wong',
+            normalizedName: 'alice wong',
+            publicDisplayName: 'Alice W.',
+          ),
+        ],
+      );
+      addTearDown(server.close);
+      final cache = await LocalCache.create();
+      late Map<String, dynamic> capturedProfileInsert;
+      late Map<String, dynamic> capturedEventGuestInsert;
+      final repository = SupabaseGuestRepository(
+        client: SupabaseClient(server.url, 'publishable-key'),
+        cache: cache,
+        currentUserIdReader: () => 'usr_01',
+        profileOnEventChecker: ({
+          required eventId,
+          required guestProfileId,
+        }) async {
+          expect(eventId, 'evt_01');
+          expect(guestProfileId, 'prf_new');
+        },
+        guestProfileInsertRunner: (json) async {
+          capturedProfileInsert = json;
+          return {
+            'id': 'prf_new',
+            ...json,
+            'row_version': 1,
+          };
+        },
+        eventGuestInsertRunner: (json) async {
+          capturedEventGuestInsert = json;
+          return {
+            'id': 'gst_alice',
+            ...json,
+            'attendance_status': 'expected',
+            'cover_status': 'paid',
+            'cover_amount_cents': 2000,
+            'is_comped': false,
+            'has_scored_play': false,
+            'guest_profile': _guestProfileRow(
+              id: 'prf_new',
+              ownerUserId: 'usr_01',
+              displayName: 'Alice Wong',
+              normalizedName: 'alice wong',
+            ),
+          };
+        },
+      );
+
+      await repository.createGuest(
+        const CreateGuestInput(
+          eventId: 'evt_01',
+          displayName: 'Alice Wong',
+          normalizedName: 'alice wong',
+          coverStatus: CoverStatus.paid,
+          coverAmountCents: 2000,
+          isComped: false,
+        ),
+      );
+
+      expect(capturedProfileInsert['normalized_name'], 'alice wong');
+      expect(capturedEventGuestInsert['guest_profile_id'], 'prf_new');
     });
 
     test('updating a guest writes contact fields to profile but not event row',
@@ -562,17 +717,26 @@ Map<String, dynamic> _guestProfileRow({
 }
 
 class _FakeGuestPostgrestServer {
-  _FakeGuestPostgrestServer._(this._server);
+  _FakeGuestPostgrestServer._(
+    this._server, {
+    required List<Map<String, dynamic>> guestProfileRows,
+  }) : _guestProfileRows = guestProfileRows;
 
   final HttpServer _server;
+  final List<Map<String, dynamic>> _guestProfileRows;
   final _jsonBodiesByTable = <String, List<Map<String, dynamic>>>{};
   final _queriesByTable = <String, List<Map<String, List<String>>>>{};
 
   String get url => 'http://${_server.address.host}:${_server.port}';
 
-  static Future<_FakeGuestPostgrestServer> start() async {
+  static Future<_FakeGuestPostgrestServer> start({
+    List<Map<String, dynamic>> guestProfileRows = const [],
+  }) async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    final fake = _FakeGuestPostgrestServer._(server);
+    final fake = _FakeGuestPostgrestServer._(
+      server,
+      guestProfileRows: guestProfileRows,
+    );
     server.listen(fake._handleRequest);
     return fake;
   }
@@ -611,7 +775,7 @@ class _FakeGuestPostgrestServer {
     }
 
     final responseBody = switch ((request.method, table)) {
-      ('GET', 'guest_profiles') => <Map<String, dynamic>>[],
+      ('GET', 'guest_profiles') => _guestProfileRows,
       ('PATCH', 'guest_profiles') => <String, dynamic>{},
       ('PATCH', 'event_guests') => {
           ..._guestRow(

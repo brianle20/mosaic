@@ -12,6 +12,10 @@ typedef CoverEntriesLoader = Future<List<Map<String, dynamic>>> Function(
 typedef GuestProfilesLoader = Future<List<Map<String, dynamic>>> Function(
   String ownerUserId,
 );
+typedef GuestProfilesByNameLoader = Future<List<Map<String, dynamic>>> Function(
+  String ownerUserId,
+  String normalizedName,
+);
 typedef ProfileOnEventChecker = Future<void> Function({
   required String eventId,
   required String guestProfileId,
@@ -36,6 +40,7 @@ class SupabaseGuestRepository implements GuestRepository {
     GuestByIdLoader? guestByIdLoader,
     CoverEntriesLoader? coverEntriesLoader,
     GuestProfilesLoader? guestProfilesLoader,
+    GuestProfilesByNameLoader? guestProfilesByNameLoader,
     CurrentUserIdReader? currentUserIdReader,
     ProfileOnEventChecker? profileOnEventChecker,
     GuestProfileInsertRunner? guestProfileInsertRunner,
@@ -44,6 +49,7 @@ class SupabaseGuestRepository implements GuestRepository {
   })  : _guestByIdLoader = guestByIdLoader,
         _coverEntriesLoader = coverEntriesLoader,
         _guestProfilesLoader = guestProfilesLoader,
+        _guestProfilesByNameLoader = guestProfilesByNameLoader,
         _currentUserIdReader = currentUserIdReader,
         _profileOnEventChecker = profileOnEventChecker,
         _guestProfileInsertRunner = guestProfileInsertRunner,
@@ -55,6 +61,7 @@ class SupabaseGuestRepository implements GuestRepository {
   final GuestByIdLoader? _guestByIdLoader;
   final CoverEntriesLoader? _coverEntriesLoader;
   final GuestProfilesLoader? _guestProfilesLoader;
+  final GuestProfilesByNameLoader? _guestProfilesByNameLoader;
   final CurrentUserIdReader? _currentUserIdReader;
   final ProfileOnEventChecker? _profileOnEventChecker;
   final GuestProfileInsertRunner? _guestProfileInsertRunner;
@@ -512,6 +519,22 @@ class SupabaseGuestRepository implements GuestRepository {
       );
     }
 
+    if (_isNameOnlyCreate(input)) {
+      final nameProfiles = await _findProfilesByName(
+        userId: userId,
+        normalizedName: input.normalizedName,
+      );
+      if (nameProfiles.length == 1) {
+        return _fillBlankProfileFields(
+          profile: nameProfiles.single,
+          publicDisplayName: publicDisplayName,
+          phoneE164: input.phoneE164,
+          emailLower: input.emailLower,
+          instagramHandle: input.instagramHandle,
+        );
+      }
+    }
+
     final inserted = await _insertGuestProfile({
       'owner_user_id': userId,
       'display_name': input.displayName,
@@ -586,6 +609,40 @@ class SupabaseGuestRepository implements GuestRepository {
         .maybeSingle();
     final castRow = _castRow(row);
     return castRow == null ? null : GuestProfileRecord.fromJson(castRow);
+  }
+
+  Future<List<GuestProfileRecord>> _findProfilesByName({
+    required String userId,
+    required String normalizedName,
+  }) async {
+    final guestProfilesByNameLoader = _guestProfilesByNameLoader;
+    if (guestProfilesByNameLoader != null) {
+      final rows = await guestProfilesByNameLoader(userId, normalizedName);
+      return rows
+          .map((row) => GuestProfileRecord.fromJson(row))
+          .toList(growable: false);
+    }
+
+    final rows = await client
+        .from('guest_profiles')
+        .select()
+        .eq('owner_user_id', userId)
+        .eq('normalized_name', normalizedName)
+        .order('display_name', ascending: true)
+        .limit(2);
+
+    return rows
+        .map((row) => GuestProfileRecord.fromJson(
+              (row as Map).cast<String, dynamic>(),
+            ))
+        .toList(growable: false);
+  }
+
+  bool _isNameOnlyCreate(CreateGuestInput input) {
+    return input.normalizedName.isNotEmpty &&
+        input.phoneE164 == null &&
+        input.emailLower == null &&
+        input.instagramHandle == null;
   }
 
   Future<GuestProfileRecord> _fillBlankProfileFields({
