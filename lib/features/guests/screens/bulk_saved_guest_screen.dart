@@ -171,7 +171,7 @@ class _BulkSavedGuestScreenState extends State<BulkSavedGuestScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildFooter(),
+      bottomNavigationBar: _shouldShowFooter ? _buildFooter() : null,
     );
   }
 
@@ -232,6 +232,20 @@ class _BulkSavedGuestScreenState extends State<BulkSavedGuestScreen> {
           onTap: () => _controller.toggleSelection(profile.id),
         );
       },
+    );
+  }
+
+  bool get _shouldShowFooter {
+    if (_controller.isLoading || _controller.error != null) {
+      return false;
+    }
+
+    if (_controller.selectedCount > 0) {
+      return true;
+    }
+
+    return _controller.filteredProfiles.any(
+      (profile) => !_controller.isAlreadyAdded(profile.id),
     );
   }
 

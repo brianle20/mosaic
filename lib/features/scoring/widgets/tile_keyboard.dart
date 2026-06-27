@@ -158,15 +158,57 @@ class _TileSection extends StatelessWidget {
             runSpacing: 8,
             children: [
               for (final tile in tiles)
-                OutlinedButton(
-                  onPressed: draft.canAddTile(tile.id)
-                      ? () => onAddTile(tile.id)
-                      : null,
-                  child: Text(tile.label),
+                _TileButton(
+                  tile: tile,
+                  enabled: draft.canAddTile(tile.id),
+                  onPressed: () => onAddTile(tile.id),
                 ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TileButton extends StatelessWidget {
+  const _TileButton({
+    required this.tile,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  static const _standardSize = Size(52, 48);
+  static const _wideSize = Size(112, 48);
+
+  final MahjongTile tile;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = tile.category == MahjongTileCategory.flowerSeason
+        ? _wideSize
+        : _standardSize;
+
+    return SizedBox(
+      width: size.width,
+      height: size.height,
+      child: OutlinedButton(
+        onPressed: enabled ? onPressed : null,
+        style: OutlinedButton.styleFrom(
+          minimumSize: size,
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+        child: Text(
+          tile.label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }

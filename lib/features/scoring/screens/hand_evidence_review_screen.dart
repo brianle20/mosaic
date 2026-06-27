@@ -3,8 +3,12 @@ import 'package:mosaic/data/models/hand_evidence_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_entry_draft.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_fan_calculator.dart';
+import 'package:mosaic/features/scoring/models/mahjong_tile.dart';
 import 'package:mosaic/features/scoring/widgets/tile_keyboard.dart';
+import 'package:mosaic/widgets/app_chrome.dart';
+import 'package:mosaic/widgets/app_surfaces.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 class HandEvidenceReviewScreen extends StatefulWidget {
   const HandEvidenceReviewScreen({
@@ -29,6 +33,10 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
   Object? _loadError;
   var _isSaving = false;
   String? _saveError;
+  Uri? _photoUri;
+  Object? _photoError;
+  var _isPhotoLoading = false;
+  var _photoRequestToken = 0;
 
   @override
   void initState() {
@@ -41,7 +49,11 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
       _isLoading = true;
       _loadError = null;
       _saveError = null;
+      _photoUri = null;
+      _photoError = null;
+      _isPhotoLoading = false;
     });
+    _photoRequestToken++;
 
     try {
       final records = await widget.mosaicProfileRepository
@@ -55,6 +67,9 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         _selectedRecord = null;
         _tileDraft = HandTileEntryDraft();
         _isLoading = false;
+        _photoUri = null;
+        _photoError = null;
+        _isPhotoLoading = false;
       });
     } catch (error) {
       if (!mounted) {
@@ -67,6 +82,9 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         _tileDraft = HandTileEntryDraft();
         _isLoading = false;
         _loadError = error;
+        _photoUri = null;
+        _photoError = null;
+        _isPhotoLoading = false;
       });
     }
   }
@@ -78,9 +96,41 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
 
     setState(() {
       _selectedRecord = record;
-      _tileDraft = HandTileEntryDraft();
+      _tileDraft =
+          _draftFromTileEntry(record.tileEntry) ?? HandTileEntryDraft();
       _saveError = null;
+      _photoUri = null;
+      _photoError = null;
+      _isPhotoLoading = true;
     });
+    _loadPhotoForRecord(record);
+  }
+
+  Future<void> _loadPhotoForRecord(HandEvidenceReviewRecord record) async {
+    final requestToken = ++_photoRequestToken;
+    try {
+      final uri = await widget.mosaicProfileRepository
+          .createHandPhotoSignedUrl(record.photo);
+      if (!mounted || requestToken != _photoRequestToken) {
+        return;
+      }
+
+      setState(() {
+        _photoUri = uri;
+        _photoError = null;
+        _isPhotoLoading = false;
+      });
+    } catch (error) {
+      if (!mounted || requestToken != _photoRequestToken) {
+        return;
+      }
+
+      setState(() {
+        _photoUri = null;
+        _photoError = error;
+        _isPhotoLoading = false;
+      });
+    }
   }
 
   Future<void> _saveTiles() async {
@@ -185,8 +235,9 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Hand Evidence Review')),
+    return SoftHostScaffold(
+      title: 'Hand Review',
+      showBackButton: true,
       body: _buildBody(context),
     );
   }
@@ -230,6 +281,7 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
       builder: (context, constraints) {
         if (constraints.maxWidth >= 720) {
           return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
                 width: 340,
@@ -239,23 +291,24 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
                   onSelectRecord: _selectRecord,
                 ),
               ),
-              const VerticalDivider(width: 1),
+              const SizedBox(width: 14),
               Expanded(child: _buildEditor()),
             ],
           );
         }
 
+        final isShort = constraints.maxHeight < 560;
         return Column(
           children: [
             SizedBox(
-              height: 240,
+              height: isShort ? 96 : 220,
               child: _HandEvidenceQueue(
                 records: _records,
                 selectedRecord: _selectedRecord,
                 onSelectRecord: _selectRecord,
               ),
             ),
-            const Divider(height: 1),
+            SizedBox(height: isShort ? 8 : 12),
             Expanded(child: _buildEditor()),
           ],
         );
@@ -266,37 +319,77 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
   Widget _buildEditor() {
     final record = _selectedRecord;
     if (record == null) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: EmptyStateCard(
-            icon: Icons.touch_app_outlined,
-            title: 'Select a hand to review.',
-            message: 'Choose a queue row to enter tiles.',
-          ),
-        ),
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          const emptyState = Padding(
+            padding: EdgeInsets.all(24),
+            child: EmptyStateCard(
+              icon: Icons.touch_app_outlined,
+              title: 'Select a hand to review.',
+              message: 'Choose a queue row to enter tiles.',
+            ),
+          );
+
+          if (constraints.maxHeight < 240) {
+            return const SingleChildScrollView(child: emptyState);
+          }
+
+          return const Center(child: emptyState);
+        },
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _HandEvidenceEditorHeader(
-          record: record,
-          isSaving: _isSaving,
-          saveError: _saveError,
-          onSave: _saveTiles,
-        ),
-        Expanded(
-          child: TileKeyboard(
-            draft: _tileDraft,
-            onAddTile: _addTile,
-            onRemoveTile: _removeTile,
-            onClear: _clearTiles,
-            onSetWinningTile: _setWinningTile,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxHeight < 360;
+        final gap = isCompact ? 8.0 : 12.0;
+        final photoHeight = isCompact ? 144.0 : 180.0;
+        final keyboard = TileKeyboard(
+          draft: _tileDraft,
+          onAddTile: _addTile,
+          onRemoveTile: _removeTile,
+          onClear: _clearTiles,
+          onSetWinningTile: _setWinningTile,
+        );
+        final children = [
+          _HandEvidenceEditorHeader(
+            record: record,
+            isSaving: _isSaving,
+            saveError: _saveError,
+            onSave: _saveTiles,
           ),
-        ),
-      ],
+          SizedBox(height: gap),
+          _HandPhotoPreview(
+            record: record,
+            photoUri: _photoUri,
+            isLoading: _isPhotoLoading,
+            error: _photoError,
+            height: photoHeight,
+          ),
+          SizedBox(height: gap),
+        ];
+
+        if (isCompact) {
+          return ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              ...children,
+              SizedBox(
+                height: 360,
+                child: keyboard,
+              ),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ...children,
+            Expanded(child: keyboard),
+          ],
+        );
+      },
     );
   }
 }
@@ -315,14 +408,17 @@ class _HandEvidenceQueue extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.zero,
       itemCount: records.length,
       itemBuilder: (context, index) {
         final record = records[index];
-        return _HandEvidenceReviewRow(
-          record: record,
-          isSelected: selectedRecord?.handResultId == record.handResultId,
-          onTap: () => onSelectRecord(record),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _HandEvidenceReviewRow(
+            record: record,
+            isSelected: selectedRecord?.handResultId == record.handResultId,
+            onTap: () => onSelectRecord(record),
+          ),
         );
       },
     );
@@ -343,42 +439,43 @@ class _HandEvidenceReviewRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final status = _reviewStatusLabel(record);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: isSelected
-            ? colorScheme.primaryContainer
-            : colorScheme.surface.withValues(alpha: 0.84),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: colorScheme.outlineVariant),
-        ),
-        child: ListTile(
-          onTap: onTap,
-          leading: const Icon(Icons.fact_check_outlined),
-          title: Text(
-            record.handResultId,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w800),
+    return AppListSurface(
+      onTap: onTap,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  _reviewTitle(record),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: isSelected ? colorScheme.primary : null,
+                      ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              StatusChip(
+                label: _reviewStatusLabel(record),
+                tone: _reviewStatusTone(record),
+              ),
+            ],
           ),
-          subtitle: Text(
+          const SizedBox(height: 6),
+          Text(
             _metadataLabel(record),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-          ),
-          trailing: Text(
-            status,
-            textAlign: TextAlign.end,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: isSelected
-                      ? colorScheme.onPrimaryContainer
-                      : colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -401,27 +498,47 @@ class _HandEvidenceEditorHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final error = saveError;
-    return Material(
-      color: colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Review ${record.handResultId}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AppListSurface(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  StatusChip(
+                    label: _reviewStatusLabel(record),
+                    tone: _reviewStatusTone(record),
                   ),
-                ),
-                FilledButton.icon(
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Review ${_reviewTitle(record)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _metadataLabel(record),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
                   onPressed: isSaving ? null : onSave,
                   icon: isSaving
                       ? const SizedBox.square(
@@ -431,27 +548,154 @@ class _HandEvidenceEditorHeader extends StatelessWidget {
                       : const Icon(Icons.save_outlined),
                   label: const Text('Save Tiles'),
                 ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              _metadataLabel(record),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-            ),
-            if (error != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                error,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.error,
-                      fontWeight: FontWeight.w700,
-                    ),
               ),
             ],
-          ],
+          ),
         ),
+        if (error != null) ...[
+          const SizedBox(height: 10),
+          InlineErrorBanner(message: error),
+        ],
+      ],
+    );
+  }
+}
+
+class _HandPhotoPreview extends StatelessWidget {
+  const _HandPhotoPreview({
+    required this.record,
+    required this.photoUri,
+    required this.isLoading,
+    required this.error,
+    required this.height,
+  });
+
+  final HandEvidenceReviewRecord record;
+  final Uri? photoUri;
+  final bool isLoading;
+  final Object? error;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final uri = photoUri;
+    final photoError = error;
+
+    return Container(
+      height: height,
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Winning hand photo',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                width: double.infinity,
+                color:
+                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                child: Builder(
+                  builder: (context) {
+                    if (isLoading) {
+                      return const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 8),
+                            Text('Loading photo'),
+                          ],
+                        ),
+                      );
+                    }
+
+                    if (photoError != null) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.broken_image_outlined,
+                                color: colorScheme.error,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Photo could not be loaded',
+                                style: TextStyle(color: colorScheme.error),
+                              ),
+                              Text(
+                                photoError.toString(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (uri == null) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.image_not_supported_outlined,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(height: 6),
+                              const Text('Photo unavailable'),
+                              Text(
+                                record.photo.clientPhotoId,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+
+                    return Image.network(
+                      uri.toString(),
+                      fit: BoxFit.contain,
+                      width: double.infinity,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Center(
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -473,6 +717,83 @@ HandEvidenceReviewRecord _withTileEntry(
     roundWindTileId: record.roundWindTileId,
     tileEntry: tileEntry,
   );
+}
+
+HandTileEntryDraft? _draftFromTileEntry(HandTileEntryRecord? tileEntry) {
+  final tilesJson = tileEntry?.tilesJson;
+  try {
+    if (tilesJson is List) {
+      final tileIds = _splitTileIds(tilesJson);
+      return HandTileEntryDraft(
+        coreTileIds: tileIds.coreTileIds,
+        flowerTileIds: tileIds.flowerTileIds,
+      );
+    }
+
+    if (tilesJson is! Map) {
+      return null;
+    }
+
+    final coreTileIds = _stringListFromJson(tilesJson['tiles']);
+    final flowerTileIds = _stringListFromJson(tilesJson['flowers']);
+    final winningTileKnown = tilesJson['winningTileKnown'] == true;
+    final winningTileValue =
+        tilesJson['winningTileId'] ?? tilesJson['winningTile'];
+    final winningTileId = winningTileValue is String ? winningTileValue : null;
+
+    return HandTileEntryDraft(
+      coreTileIds: coreTileIds,
+      flowerTileIds: flowerTileIds,
+      winningTileId: winningTileId,
+      winningTileKnown: winningTileKnown,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+({List<String> coreTileIds, List<String> flowerTileIds}) _splitTileIds(
+  List<dynamic> values,
+) {
+  final coreTileIds = <String>[];
+  final flowerTileIds = <String>[];
+
+  for (final value in values) {
+    if (value is! String) {
+      continue;
+    }
+
+    try {
+      final tile = MahjongTile.byId(value);
+      if (tile.category == MahjongTileCategory.flowerSeason) {
+        flowerTileIds.add(value);
+      } else {
+        coreTileIds.add(value);
+      }
+    } on FormatException {
+      continue;
+    }
+  }
+
+  return (coreTileIds: coreTileIds, flowerTileIds: flowerTileIds);
+}
+
+List<String> _stringListFromJson(Object? value) {
+  if (value == null) {
+    return const [];
+  }
+
+  if (value is! List) {
+    throw const FormatException('Expected a list of tile ids.');
+  }
+
+  return [
+    for (final item in value)
+      if (item is String)
+        item
+      else
+        throw const FormatException('Expected tile id string.'),
+  ];
 }
 
 String _metadataLabel(HandEvidenceReviewRecord record) {
@@ -502,6 +823,14 @@ String _metadataLabel(HandEvidenceReviewRecord record) {
   return parts.join(' • ');
 }
 
+String _reviewTitle(HandEvidenceReviewRecord record) {
+  final handNumber = record.handNumber;
+  if (handNumber != null) {
+    return 'Hand $handNumber';
+  }
+  return record.handResultId;
+}
+
 String _reviewStatusLabel(HandEvidenceReviewRecord record) {
   final tileEntry = record.tileEntry;
   if (tileEntry == null) {
@@ -514,5 +843,20 @@ String _reviewStatusLabel(HandEvidenceReviewRecord record) {
     HandTileReviewStatus.underDeclared => 'Under-declared',
     HandTileReviewStatus.flagged => 'Flagged',
     HandTileReviewStatus.resolved => 'Resolved',
+  };
+}
+
+StatusChipTone _reviewStatusTone(HandEvidenceReviewRecord record) {
+  final tileEntry = record.tileEntry;
+  if (tileEntry == null) {
+    return StatusChipTone.warning;
+  }
+
+  return switch (tileEntry.reviewStatus) {
+    HandTileReviewStatus.unreviewed => StatusChipTone.neutral,
+    HandTileReviewStatus.matched => StatusChipTone.success,
+    HandTileReviewStatus.underDeclared => StatusChipTone.warning,
+    HandTileReviewStatus.flagged => StatusChipTone.danger,
+    HandTileReviewStatus.resolved => StatusChipTone.success,
   };
 }

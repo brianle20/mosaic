@@ -1549,7 +1549,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HandEvidenceReviewScreen), findsOneWidget);
-    expect(find.text('Hand Evidence Review'), findsOneWidget);
+    expect(find.text('Hand Review'), findsOneWidget);
   });
 
   testWidgets('hand evidence review action follows event access rules',

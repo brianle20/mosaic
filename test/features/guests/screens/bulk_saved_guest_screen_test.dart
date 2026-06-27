@@ -95,6 +95,26 @@ void main() {
     expect(find.text('Brian Le'), findsOneWidget);
   });
 
+  testWidgets('hides footer while saved profiles are pending', (tester) async {
+    final gate = Completer<void>();
+    final repository = _RecordingGuestRepository(
+      profiles: [
+        _profile(id: 'prf_brian', displayName: 'Brian Le'),
+      ],
+      listProfilesGate: gate,
+    );
+
+    await _pumpScreen(tester, repository: repository);
+    await tester.pump();
+
+    expect(find.text('Bulk defaults'), findsNothing);
+    expect(find.text('0 selected'), findsNothing);
+    expect(find.text('Add 0 Guests'), findsNothing);
+
+    gate.complete();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('shows load error with retry', (tester) async {
     final repository = _RecordingGuestRepository(
       profiles: [
@@ -125,6 +145,25 @@ void main() {
     expect(repository.listProfileCalls, 2);
   });
 
+  testWidgets('hides footer while load error is shown', (tester) async {
+    final repository = _RecordingGuestRepository(
+      profiles: [
+        _profile(id: 'prf_brian', displayName: 'Brian Le'),
+      ],
+      loadPlans: [
+        _ProfileLoadPlan(error: StateError('profile load failed')),
+      ],
+    );
+
+    await _pumpScreen(tester, repository: repository);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Something needs attention'), findsOneWidget);
+    expect(find.text('Bulk defaults'), findsNothing);
+    expect(find.text('0 selected'), findsNothing);
+    expect(find.text('Add 0 Guests'), findsNothing);
+  });
+
   testWidgets('shows no saved guests empty state', (tester) async {
     final repository = _RecordingGuestRepository(profiles: const []);
 
@@ -138,6 +177,18 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('hides footer when no saved guests exist', (tester) async {
+    final repository = _RecordingGuestRepository(profiles: const []);
+
+    await _pumpScreen(tester, repository: repository);
+    await tester.pumpAndSettle();
+
+    expect(find.text('No saved guests yet'), findsOneWidget);
+    expect(find.text('Bulk defaults'), findsNothing);
+    expect(find.text('0 selected'), findsNothing);
+    expect(find.text('Add 0 Guests'), findsNothing);
   });
 
   testWidgets('shows all-added empty state while keeping disabled rows', (
@@ -165,6 +216,9 @@ void main() {
     );
     expect(find.text('Ada Fu'), findsOneWidget);
     expect(find.text('Already added'), findsOneWidget);
+    expect(find.text('Bulk defaults'), findsNothing);
+    expect(find.text('0 selected'), findsNothing);
+    expect(find.text('Add 0 Guests'), findsNothing);
   });
 
   testWidgets('shows no search results empty state', (tester) async {
@@ -186,6 +240,9 @@ void main() {
     expect(find.text('No matching saved guests'), findsOneWidget);
     expect(find.text('No saved guests match this search.'), findsOneWidget);
     expect(find.text('Ada Fu'), findsNothing);
+    expect(find.text('Bulk defaults'), findsNothing);
+    expect(find.text('0 selected'), findsNothing);
+    expect(find.text('Add 0 Guests'), findsNothing);
   });
 
   testWidgets('searches identity fields and shows checkmark for selection', (
@@ -231,6 +288,77 @@ void main() {
     );
     expect(find.text('1 selected'), findsOneWidget);
     expect(find.text('Add 1 Guest'), findsOneWidget);
+  });
+
+  testWidgets('shows footer when at least one filtered profile is selectable', (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository(
+      profiles: [
+        _profile(id: 'prf_ada', displayName: 'Ada Fu'),
+        _profile(id: 'prf_brian', displayName: 'Brian Le'),
+      ],
+    );
+
+    await _pumpScreen(
+      tester,
+      repository: repository,
+      existingGuests: [
+        _guest(id: 'gst_ada', guestProfileId: 'prf_ada'),
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bulk defaults'), findsOneWidget);
+    expect(find.text('0 selected'), findsOneWidget);
+    expect(find.text('Add 0 Guests'), findsOneWidget);
+
+    await tester.enterText(find.byKey(bulkSavedGuestSearchFieldKey), 'Ada');
+    await tester.pump();
+
+    expect(find.text('Ada Fu'), findsOneWidget);
+    expect(find.text('Already added'), findsOneWidget);
+    expect(find.text('Bulk defaults'), findsNothing);
+    expect(find.text('0 selected'), findsNothing);
+    expect(find.text('Add 0 Guests'), findsNothing);
+  });
+
+  testWidgets('keeps selected footer visible after filtering selection away', (
+    tester,
+  ) async {
+    final repository = _RecordingGuestRepository(
+      profiles: [
+        _profile(id: 'prf_ada', displayName: 'Ada Fu'),
+        _profile(id: 'prf_brian', displayName: 'Brian Le'),
+      ],
+    );
+
+    await _pumpScreen(
+      tester,
+      repository: repository,
+      existingGuests: [
+        _guest(id: 'gst_ada', guestProfileId: 'prf_ada'),
+      ],
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Brian Le'));
+    await tester.pump();
+
+    await tester.enterText(find.byKey(bulkSavedGuestSearchFieldKey), 'Ada');
+    await tester.pump();
+
+    expect(find.text('Ada Fu'), findsOneWidget);
+    expect(find.text('Already added'), findsOneWidget);
+    expect(find.text('Brian Le'), findsNothing);
+    expect(find.text('1 selected'), findsOneWidget);
+    expect(find.text('Add 1 Guest'), findsOneWidget);
+
+    await tester.tap(find.text('Add 1 Guest'));
+    await tester.pumpAndSettle();
+
+    expect(repository.createdInputs, hasLength(1));
+    expect(repository.createdInputs.single.guestProfileId, 'prf_brian');
   });
 
   testWidgets(

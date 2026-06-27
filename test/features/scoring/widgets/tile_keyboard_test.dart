@@ -39,6 +39,27 @@ void main() {
     expect(find.text('Plum 1'), findsOneWidget);
   });
 
+  testWidgets('tile buttons use stable fixed constraints', (tester) async {
+    await tester.pumpWidget(buildSubject());
+
+    final oneManSize =
+        tester.getSize(find.widgetWithText(OutlinedButton, '1M'));
+    final eastSize =
+        tester.getSize(find.widgetWithText(OutlinedButton, 'East'));
+
+    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Plum 1'));
+    await tester.pumpAndSettle();
+    final plumSize =
+        tester.getSize(find.widgetWithText(OutlinedButton, 'Plum 1'));
+
+    expect(oneManSize.width, 52);
+    expect(oneManSize.height, 48);
+    expect(eastSize.width, 52);
+    expect(eastSize.height, 48);
+    expect(plumSize.width, 112);
+    expect(plumSize.height, 48);
+  });
+
   testWidgets('selects and clears tiles', (tester) async {
     final selected = <String>[];
     await tester.pumpWidget(buildSubject(

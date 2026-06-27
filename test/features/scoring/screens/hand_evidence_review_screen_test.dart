@@ -6,6 +6,7 @@ import 'package:mosaic/data/models/hand_evidence_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_fan_calculator.dart';
 import 'package:mosaic/features/scoring/screens/hand_evidence_review_screen.dart';
+import 'package:mosaic/widgets/status_chip.dart';
 
 void main() {
   testWidgets('renders empty state when no review photos exist',
@@ -22,7 +23,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Hand Evidence Review'), findsOneWidget);
+    expect(find.text('Hand Review'), findsOneWidget);
     expect(find.text('No hand evidence to review.'), findsOneWidget);
   });
 
@@ -106,9 +107,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('hand_01'), findsOneWidget);
+    expect(find.text('Hand 7'), findsOneWidget);
     expect(find.text('hand_02'), findsOneWidget);
-    expect(find.textContaining('Hand 7'), findsOneWidget);
     expect(find.textContaining('Table A'), findsOneWidget);
     expect(find.textContaining('Ava'), findsOneWidget);
     expect(find.textContaining('Declared 3 fan'), findsOneWidget);
@@ -117,7 +117,15 @@ void main() {
     expect(find.text('Matched'), findsOneWidget);
     expect(find.text('Under-declared'), findsOneWidget);
     expect(find.text('Flagged'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Resolved'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
     expect(find.text('Resolved'), findsOneWidget);
+    expect(find.byType(StatusChip), findsWidgets);
   });
 
   testWidgets('opens editor when tapping queue row', (tester) async {
@@ -144,13 +152,385 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Hand 7'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review Hand 7'), findsOneWidget);
+    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(find.text('Selected tiles (0)'), findsOneWidget);
+
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -120));
+    await tester.pump();
+    expect(find.text('Characters'), findsOneWidget);
+  });
+
+  testWidgets('caps long editor metadata on short mobile viewports',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 840);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                handNumber: 7,
+                tableLabel: List.filled(10, 'Long Table Name').join(' '),
+                winnerName: List.filled(10, 'Long Winner Name').join(' '),
+                declaredFanCount: 3,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Hand 7'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(find.text('Selected tiles (0)'), findsOneWidget);
+  });
+
+  testWidgets('keeps compact landscape editor usable with long metadata',
+      (tester) async {
+    tester.view.physicalSize = const Size(640, 480);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                handNumber: 7,
+                tableLabel: List.filled(10, 'Long Table Name').join(' '),
+                winnerName: List.filled(10, 'Long Winner Name').join(' '),
+                declaredFanCount: 3,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Hand 7'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Save Tiles'), findsOneWidget);
+
+    final editorScrollable = find.byType(Scrollable).at(1);
+    await tester.drag(editorScrollable, const Offset(0, -380));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, '1M'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(editorScrollable, const Offset(0, 260));
+    await tester.pumpAndSettle();
+    expect(find.text('Selected tiles (1)'), findsOneWidget);
+  });
+
+  testWidgets('hydrates existing tile entry and preserves it when saved',
+      (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          tileEntry: _tileEntry(
+            handResultId: 'hand_01',
+            reviewStatus: HandTileReviewStatus.unreviewed,
+            tilesJson: const {
+              'schemaVersion': 1,
+              'tiles': ['man_1', 'man_2', 'man_3'],
+              'flowers': ['plum_1'],
+              'winningTileId': 'man_3',
+              'winningTileKnown': true,
+              'groups': [],
+            },
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('hand_01'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Review hand_01'), findsOneWidget);
-    expect(find.text('Save Tiles'), findsOneWidget);
-    expect(find.text('Selected tiles (0)'), findsOneWidget);
-    expect(find.text('Characters'), findsOneWidget);
+    expect(find.text('Selected tiles (4)'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, '1M'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, '2M'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, '3M'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, 'Plum 1'), findsOneWidget);
+    final winningChip =
+        tester.widget<InputChip>(find.widgetWithText(InputChip, '3M'));
+    expect(winningChip.selected, isTrue);
+
+    await tester.tap(find.text('Save Tiles'));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedTilesJson?['tiles'], ['man_1', 'man_2', 'man_3']);
+    expect(repository.savedTilesJson?['flowers'], ['plum_1']);
+    expect(repository.savedTilesJson?['winningTile'], 'man_3');
+    expect(repository.savedTilesJson?['winningTileKnown'], isTrue);
+  });
+
+  testWidgets('hydrates legacy array tile entry and preserves it when saved',
+      (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          tileEntry: _tileEntry(
+            handResultId: 'hand_01',
+            reviewStatus: HandTileReviewStatus.unreviewed,
+            tilesJson: const ['man_1', 'east'],
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('hand_01'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Selected tiles (2)'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, '1M'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, 'East'), findsOneWidget);
+
+    await tester.tap(find.text('Save Tiles'));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedTilesJson?['tiles'], ['man_1', 'east']);
+  });
+
+  testWidgets('splits legacy array flowers when hydrating and saving',
+      (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          tileEntry: _tileEntry(
+            handResultId: 'hand_01',
+            reviewStatus: HandTileReviewStatus.unreviewed,
+            tilesJson: const ['man_1', 'plum_1'],
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('hand_01'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Selected tiles (2)'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, '1M'), findsOneWidget);
+    expect(find.widgetWithText(InputChip, 'Plum 1'), findsOneWidget);
+
+    await tester.tap(find.text('Save Tiles'));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedTilesJson?['tiles'], ['man_1']);
+    expect(repository.savedTilesJson?['flowers'], ['plum_1']);
+  });
+
+  testWidgets('requests and renders signed hand photo when row is selected',
+      (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      signedPhotoUrl: Uri.parse('https://example.com/photo.jpg'),
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          handNumber: 7,
+          tableLabel: 'Table A',
+          winnerName: 'Ava',
+          declaredFanCount: 3,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Hand 7'));
+    await tester.pumpAndSettle();
+
+    expect(repository.requestedPhotoIds, ['photo_01']);
+    expect(find.text('Winning hand photo'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+    final image = tester.widget<Image>(find.byType(Image));
+    expect(image.image, isA<NetworkImage>());
+    expect((image.image as NetworkImage).url, 'https://example.com/photo.jpg');
+  });
+
+  testWidgets('renders photo unavailable panel when signed URL is null',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('hand_01'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Photo unavailable'), findsOneWidget);
+    expect(find.text('client_photo_01'), findsWidgets);
+  });
+
+  testWidgets('keeps tile entry usable while photo URL is pending',
+      (tester) async {
+    final pendingPhotoUrl = Completer<Uri?>();
+    final repository = _FakeMosaicProfileRepository(
+      pendingPhotoUrl: pendingPhotoUrl,
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('hand_01'));
+    await tester.pump();
+
+    expect(find.text('Loading photo'), findsOneWidget);
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -120));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(OutlinedButton, '1M'));
+    await tester.pump();
+
+    await _showSelectedTileCount(tester, 1, settle: false);
+    expect(find.text('Selected tiles (1)'), findsOneWidget);
+
+    pendingPhotoUrl.complete(Uri.parse('https://example.com/photo.jpg'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Image), findsOneWidget);
+  });
+
+  testWidgets('renders photo error panel when signed URL lookup fails',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            photoUrlError: StateError('signed URL denied'),
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('hand_01'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Photo could not be loaded'), findsOneWidget);
+    expect(find.textContaining('signed URL denied'), findsOneWidget);
   });
 
   testWidgets('saves under-declared tile entry and updates queue status',
@@ -220,7 +600,7 @@ void main() {
     expect(savedGroups as List<dynamic>, isNotEmpty);
     expect(repository.savedCalculatedFanCount, 5);
     expect(repository.savedCalculationVersion, handTileCalculationVersion);
-    expect(find.text('Under-declared'), findsOneWidget);
+    expect(find.text('Under-declared'), findsWidgets);
   });
 
   testWidgets('uses review row wind context when saving calculated fan',
@@ -316,8 +696,11 @@ void main() {
     await tester.tap(find.text('Save Tiles'));
     await tester.pump();
 
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -120));
+    await tester.pump();
     await tester.tap(find.widgetWithText(OutlinedButton, '2M'));
     await tester.pump();
+    await _showSelectedTileCount(tester, 1, settle: false);
     expect(find.text('Selected tiles (1)'), findsOneWidget);
 
     pendingSave.complete(_tileEntry(
@@ -480,6 +863,9 @@ class _FakeMosaicProfileRepository implements MosaicProfileRepository {
     this.saveError,
     this.savedEntry,
     this.pendingSave,
+    this.signedPhotoUrl,
+    this.photoUrlError,
+    this.pendingPhotoUrl,
   });
 
   final List<HandEvidenceReviewRecord> records;
@@ -487,6 +873,10 @@ class _FakeMosaicProfileRepository implements MosaicProfileRepository {
   final Object? saveError;
   final HandTileEntryRecord? savedEntry;
   final Completer<HandTileEntryRecord>? pendingSave;
+  final Uri? signedPhotoUrl;
+  final Object? photoUrlError;
+  final Completer<Uri?>? pendingPhotoUrl;
+  final requestedPhotoIds = <String>[];
   String? savedHandResultId;
   Map<String, dynamic>? savedTilesJson;
   int? savedCalculatedFanCount;
@@ -504,7 +894,20 @@ class _FakeMosaicProfileRepository implements MosaicProfileRepository {
   }
 
   @override
-  Future<Uri?> createHandPhotoSignedUrl(HandPhotoRecord photo) async => null;
+  Future<Uri?> createHandPhotoSignedUrl(HandPhotoRecord photo) async {
+    requestedPhotoIds.add(photo.id);
+    final thrown = photoUrlError;
+    if (thrown != null) {
+      throw thrown;
+    }
+
+    final pending = pendingPhotoUrl;
+    if (pending != null) {
+      return pending.future;
+    }
+
+    return signedPhotoUrl;
+  }
 
   @override
   Future<HandTileEntryRecord> upsertHandTileEntry({
@@ -583,18 +986,20 @@ HandTileEntryRecord _tileEntry({
   required HandTileReviewStatus reviewStatus,
   int? calculatedFanCount,
   int? declaredFanCount,
+  Object? tilesJson,
 }) {
   return HandTileEntryRecord(
     id: 'tile_entry_$handResultId',
     handResultId: handResultId,
     enteredAt: DateTime.utc(2026, 6, 25, 19),
-    tilesJson: const {
-      'schemaVersion': 1,
-      'tiles': [],
-      'flowers': [],
-      'winningTileKnown': false,
-      'groups': [],
-    },
+    tilesJson: tilesJson ??
+        const {
+          'schemaVersion': 1,
+          'tiles': [],
+          'flowers': [],
+          'winningTileKnown': false,
+          'groups': [],
+        },
     calculatedFanCount: calculatedFanCount,
     declaredFanCount: declaredFanCount,
     calculationVersion: 'hk_tile_review_v1',
@@ -619,7 +1024,11 @@ Future<void> _tapTile(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
-Future<void> _showSelectedTileCount(WidgetTester tester, int count) async {
+Future<void> _showSelectedTileCount(
+  WidgetTester tester,
+  int count, {
+  bool settle = true,
+}) async {
   final finder = find.text('Selected tiles ($count)');
   if (finder.evaluate().isEmpty) {
     await tester.scrollUntilVisible(
@@ -630,5 +1039,9 @@ Future<void> _showSelectedTileCount(WidgetTester tester, int count) async {
   } else {
     await tester.ensureVisible(finder);
   }
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+  }
 }
