@@ -45,6 +45,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   int? _penaltySeatIndex;
   bool _choosingFalseWinCaller = false;
   bool _isCapturingPhoto = false;
+  bool _showValidationSummary = false;
   CapturedHandPhoto? _capturedPhoto;
   late final HandPhotoService _handPhotoService;
   late final TextEditingController _fanCountController;
@@ -166,6 +167,22 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
         draft.washoutDealerWaitingError != null;
   }
 
+  String? get _firstDraftError {
+    final draft = _draft;
+    return draft.winnerSeatError ??
+        draft.fanCountError ??
+        draft.winTypeError ??
+        draft.discarderSeatError ??
+        draft.washoutFieldError ??
+        draft.falseWinPenaltySeatError ??
+        draft.washoutDealerWaitingError ??
+        draft.photoEvidenceError;
+  }
+
+  String? get _saveBlockingMessage =>
+      (_showValidationSummary ? _firstDraftError : null) ??
+      _controller.submitError;
+
   Future<void> _captureWinningHandPhoto() async {
     if (_isCapturingPhoto) {
       return;
@@ -206,10 +223,15 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     }
 
     if (!_draft.isValid) {
-      setState(() {});
+      setState(() {
+        _showValidationSummary = true;
+      });
       return;
     }
 
+    setState(() {
+      _showValidationSummary = false;
+    });
     final detail = await _controller.submit(
       tableSessionId: _sessionDetail.session.id,
       draft: _draft,
@@ -418,17 +440,35 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final saveBlockingMessage = _saveBlockingMessage;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.initialHand == null ? 'Record Hand' : 'Edit Hand'),
       ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
-        child: FilledButton(
-          onPressed: _controller.isSubmitting || _choosingFalseWinCaller
-              ? null
-              : _submit,
-          child: Text(_controller.isSubmitting ? 'Saving...' : 'Save Hand'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (saveBlockingMessage != null) ...[
+              Text(
+                saveBlockingMessage,
+                key: const ValueKey('saveHandValidationSummary'),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            FilledButton(
+              onPressed: _controller.isSubmitting || _choosingFalseWinCaller
+                  ? null
+                  : _submit,
+              child: Text(_controller.isSubmitting ? 'Saving...' : 'Save Hand'),
+            ),
+          ],
         ),
       ),
       body: SingleChildScrollView(

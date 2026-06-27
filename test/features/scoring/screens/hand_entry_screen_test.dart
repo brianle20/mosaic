@@ -563,6 +563,35 @@ void main() {
     expect(repository.recordedInput, isNull);
   });
 
+  testWidgets('save hand shows validation blocker near the save button',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+          handPhotoService: _FakeHandPhotoService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tapVisible(tester, find.text('Capture winning hand photo'));
+    expect(find.text('Photo captured'), findsOneWidget);
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    final summary = tester.widget<Text>(
+      find.byKey(const ValueKey('saveHandValidationSummary')),
+    );
+    expect(summary.data, 'Select a winner.');
+    expect(repository.recordedInput, isNull);
+  });
+
   testWidgets(
       'expired round can save the final hand and returns completed detail',
       (tester) async {
