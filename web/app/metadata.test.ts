@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { metadata as eventsMetadata } from "./events/page";
 import { generateMetadata as generatePointsRaceMetadata } from "./events/[eventSlug]/standings/graph/page";
 import { generateMetadata as generateStandingsMetadata } from "./events/[eventSlug]/standings/page";
 
@@ -24,6 +25,28 @@ describe("site metadata assets", () => {
           purpose: "any maskable",
         },
       ],
+    });
+  });
+
+  it("defines public events directory metadata", () => {
+    expect(eventsMetadata).toMatchObject({
+      title: "Events",
+      description: "Public Mosaic mahjong event standings and points races.",
+      alternates: {
+        canonical: "/events",
+      },
+      openGraph: {
+        title: "Events",
+        description: "Public Mosaic mahjong event standings and points races.",
+        url: "/events",
+        siteName: "Mosaic",
+        type: "website",
+      },
+      twitter: {
+        card: "summary",
+        title: "Events",
+        description: "Public Mosaic mahjong event standings and points races.",
+      },
     });
   });
 });

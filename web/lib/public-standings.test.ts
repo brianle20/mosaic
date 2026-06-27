@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  fetchPublicEvents,
   fetchPublicStandings,
   getNotPrizeEligibleRows,
   getPrizePlacementRows,
+  mapPublicEventRow,
   mapPublicStandingsSnapshotPayload,
   mapBonusResultRow,
   mapLeaderboardRow,
@@ -98,6 +100,99 @@ describe("public standings data mapping", () => {
     expect(row).not.toHaveProperty("phone");
     expect(row).not.toHaveProperty("qualificationPoints");
     expect(row).not.toHaveProperty("paymentStatus");
+  });
+
+  it("maps public event directory rows without private fields", () => {
+    const row = mapPublicEventRow({
+      event_id: "event-1",
+      public_slug: "summer-open",
+      title: "Summer Open",
+      standings_updated_at: "2026-06-27T12:30:00.000Z",
+      owner_user_id: "user-1",
+      email: "host@example.com",
+    });
+
+    expect(row).toEqual({
+      eventId: "event-1",
+      publicSlug: "summer-open",
+      title: "Summer Open",
+      standingsUpdatedAt: "2026-06-27T12:30:00.000Z",
+    });
+    expect(row).not.toHaveProperty("ownerUserId");
+    expect(row).not.toHaveProperty("email");
+  });
+
+  it("normalizes blank public event fields and nullable update timestamps", () => {
+    const row = mapPublicEventRow({
+      event_id: "event-2",
+      public_slug: "  ",
+      title: "  ",
+      standings_updated_at: null,
+    });
+
+    expect(row).toEqual({
+      eventId: "event-2",
+      publicSlug: "",
+      title: "Mosaic event",
+      standingsUpdatedAt: null,
+    });
+  });
+
+  it("fetches public events sorted by latest standings update and title", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          event_id: "event-3",
+          public_slug: "zeta-open",
+          title: "Zeta Open",
+          standings_updated_at: null,
+        },
+        {
+          event_id: "event-5",
+          public_slug: "alpha-open",
+          title: "Alpha Open",
+          standings_updated_at: null,
+        },
+        {
+          event_id: "event-1",
+          public_slug: "summer-open",
+          title: "Summer Open",
+          standings_updated_at: "2026-06-27T12:30:00.000Z",
+        },
+        {
+          event_id: "event-2",
+          public_slug: "autumn-open",
+          title: "Autumn Open",
+          standings_updated_at: "2026-06-27T13:30:00.000Z",
+        },
+        {
+          event_id: "event-4",
+          public_slug: "",
+          title: "Broken Event",
+          standings_updated_at: "2026-06-27T14:30:00.000Z",
+        },
+      ],
+      error: null,
+    });
+
+    const result = await fetchPublicEvents({ rpc });
+
+    expect(rpc).toHaveBeenCalledWith("get_public_events");
+    expect(result.map((event) => event.publicSlug)).toEqual([
+      "autumn-open",
+      "summer-open",
+      "alpha-open",
+      "zeta-open",
+    ]);
+  });
+
+  it("surfaces public event directory RPC errors", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: "directory unavailable" },
+    });
+
+    await expect(fetchPublicEvents({ rpc })).rejects.toThrow("directory unavailable");
   });
 
   it("returns empty lists for empty RPC results", async () => {

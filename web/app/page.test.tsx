@@ -74,6 +74,10 @@ describe("LandingPage", () => {
     render(<LandingPage />);
 
     expect(screen.getByRole("banner")).toHaveTextContent("Mosaic");
+    expect(screen.getByRole("link", { name: "Events" })).toHaveAttribute(
+      "href",
+      "/events",
+    );
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", {

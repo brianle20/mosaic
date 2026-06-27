@@ -54,6 +54,14 @@ export type PublicEventSummaryRpcRow = {
   [key: string]: unknown;
 };
 
+export type PublicEventDirectoryRpcRow = {
+  event_id: string;
+  public_slug: string | null;
+  title: string | null;
+  standings_updated_at: string | null;
+  [key: string]: unknown;
+};
+
 export type PublicEventResolutionRpcRow = {
   event_id: string;
   public_slug: string;
@@ -133,17 +141,33 @@ export type PublicStandingsSnapshot = {
   updatedAt: string | null;
 };
 
+export type PublicEventDirectoryRow = {
+  eventId: string;
+  publicSlug: string;
+  title: string;
+  standingsUpdatedAt: string | null;
+};
+
 export type PublicStandingsRpcClient = {
-  rpc: (
-    fn:
-      | "get_public_event_summary"
-      | "get_public_event_leaderboard"
-      | "get_public_event_bonus_results"
-      | "get_public_event_finals_leaderboard"
-      | "get_public_event_points_timeline"
-      | "resolve_public_event_id",
-    args: { target_event_id: string } | { target_public_slug: string },
-  ) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>;
+  rpc: {
+    (fn: "get_public_events"): PromiseLike<{
+      data: unknown[] | null;
+      error: { message?: string } | null;
+    }>;
+    (
+      fn:
+        | "get_public_event_summary"
+        | "get_public_event_leaderboard"
+        | "get_public_event_bonus_results"
+        | "get_public_event_finals_leaderboard"
+        | "get_public_event_points_timeline",
+      args: { target_event_id: string },
+    ): PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>;
+    (
+      fn: "resolve_public_event_id",
+      args: { target_public_slug: string },
+    ): PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>;
+  };
 };
 
 export type PublicStandingsSnapshotRow = {
@@ -194,6 +218,54 @@ export function mapLeaderboardRow(row: PublicLeaderboardRpcRow): PublicLeaderboa
     discardLosses: Number(row.discard_losses ?? 0),
     rank: Number(row.rank ?? 0),
   }, row.tournament_status);
+}
+
+export function mapPublicEventRow(
+  row: PublicEventDirectoryRpcRow,
+): PublicEventDirectoryRow {
+  return {
+    eventId: row.event_id,
+    publicSlug: row.public_slug?.trim() || "",
+    title: row.title?.trim() || "Mosaic event",
+    standingsUpdatedAt: readNullableString(row.standings_updated_at),
+  };
+}
+
+function publicEventDirectorySort(
+  left: PublicEventDirectoryRow,
+  right: PublicEventDirectoryRow,
+): number {
+  if (left.standingsUpdatedAt && right.standingsUpdatedAt) {
+    const updatedCompare = right.standingsUpdatedAt.localeCompare(left.standingsUpdatedAt);
+    if (updatedCompare !== 0) {
+      return updatedCompare;
+    }
+  }
+
+  if (left.standingsUpdatedAt && !right.standingsUpdatedAt) {
+    return -1;
+  }
+
+  if (!left.standingsUpdatedAt && right.standingsUpdatedAt) {
+    return 1;
+  }
+
+  return left.title.localeCompare(right.title);
+}
+
+export async function fetchPublicEvents(
+  client: PublicStandingsRpcClient,
+): Promise<PublicEventDirectoryRow[]> {
+  const result = await Promise.resolve(client.rpc("get_public_events"));
+
+  if (result.error) {
+    throw new Error(result.error.message ?? "Unable to load public events.");
+  }
+
+  return (result.data ?? [])
+    .map((row) => mapPublicEventRow(row as PublicEventDirectoryRpcRow))
+    .filter((event) => event.publicSlug.length > 0)
+    .sort(publicEventDirectorySort);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

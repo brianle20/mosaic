@@ -135,9 +135,9 @@ npm run test
 npm run build
 ```
 
-The web app includes the marketing landing page, dynamic public standings at
-`/events/[eventSlug]/standings`, and a points-race graph at
-`/events/[eventSlug]/standings/graph`.
+The web app includes the marketing landing page, a public events directory at
+`/events`, dynamic public standings at `/events/[eventSlug]/standings`, and a
+points-race graph at `/events/[eventSlug]/standings/graph`.
 
 ## Database
 

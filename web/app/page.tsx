@@ -69,9 +69,12 @@ export default function LandingPage() {
           <Image src="/mosaic-app-icon.png" alt="" width={40} height={40} priority />
           <span>Mosaic</span>
         </Link>
-        <SalesEmailLink className="landing-header-email" location="header">
-          {salesEmail}
-        </SalesEmailLink>
+        <nav className="public-nav landing-nav" aria-label="Public navigation">
+          <Link href="/events">Events</Link>
+          <SalesEmailLink className="landing-header-email" location="header">
+            {salesEmail}
+          </SalesEmailLink>
+        </nav>
       </header>
 
       <main>
