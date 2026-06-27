@@ -433,6 +433,27 @@ void main() {
       expect(cachedGuests.map((guest) => guest.id), ['gst_02']);
     });
 
+    test('undoGuestCheckIn only targets guests with no scored play', () async {
+      final server = await _FakeGuestPostgrestServer.start();
+      addTearDown(server.close);
+      final cache = await LocalCache.create();
+      final repository = SupabaseGuestRepository(
+        client: SupabaseClient(server.url, 'publishable-key'),
+        cache: cache,
+      );
+
+      await repository.undoGuestCheckIn('gst_undo');
+
+      final query = server.lastQueryFor('event_guests');
+      expect(query['id'], ['eq.gst_undo']);
+      expect(query['has_scored_play'], ['eq.false']);
+      expect(query['select']?.single, contains('guest_profile'));
+      expect(server.lastJsonBodyFor('event_guests'), {
+        'attendance_status': 'expected',
+        'checked_in_at': null,
+      });
+    });
+
     group('saved guest profiles', () {
       test('lists profiles scoped to the current host', () async {
         final cache = await LocalCache.create();
@@ -545,6 +566,7 @@ class _FakeGuestPostgrestServer {
 
   final HttpServer _server;
   final _jsonBodiesByTable = <String, List<Map<String, dynamic>>>{};
+  final _queriesByTable = <String, List<Map<String, List<String>>>>{};
 
   String get url => 'http://${_server.address.host}:${_server.port}';
 
@@ -563,10 +585,22 @@ class _FakeGuestPostgrestServer {
     return bodies.last;
   }
 
+  Map<String, List<String>> lastQueryFor(String table) {
+    final queries = _queriesByTable[table];
+    if (queries == null || queries.isEmpty) {
+      throw StateError('No query captured for $table.');
+    }
+    return queries.last;
+  }
+
   Future<void> close() => _server.close(force: true);
 
   Future<void> _handleRequest(HttpRequest request) async {
     final table = request.uri.pathSegments.last;
+    _queriesByTable
+        .putIfAbsent(table, () => [])
+        .add(request.uri.queryParametersAll);
+
     if (request.method == 'PATCH' || request.method == 'POST') {
       final body = await utf8.decoder.bind(request).join();
       if (body.isNotEmpty) {
