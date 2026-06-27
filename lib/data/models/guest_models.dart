@@ -159,8 +159,6 @@ class CreateGuestInput {
       'display_name': displayName,
       'normalized_name': normalizedName,
       'public_display_name': publicDisplayName,
-      'phone_e164': phoneE164,
-      'email_lower': emailLower,
       'attendance_status': 'expected',
       'tournament_status': _eventTournamentStatusToJson(tournamentStatus),
       'cover_status': _coverStatusToJson(coverStatus),
@@ -209,8 +207,6 @@ class UpdateGuestInput {
       'display_name': displayName,
       'normalized_name': normalizedName,
       'public_display_name': publicDisplayName,
-      'phone_e164': phoneE164,
-      'email_lower': emailLower,
       if (tournamentStatus != null)
         'tournament_status': _eventTournamentStatusToJson(tournamentStatus!),
       'cover_status': _coverStatusToJson(coverStatus),

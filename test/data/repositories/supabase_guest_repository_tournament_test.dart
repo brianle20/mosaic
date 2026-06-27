@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -134,6 +137,71 @@ void main() {
       );
     });
 
+    test('creating a guest writes contact fields to profile but not event row',
+        () async {
+      final server = await _FakeGuestPostgrestServer.start();
+      addTearDown(server.close);
+      final cache = await LocalCache.create();
+      late Map<String, dynamic> capturedProfileInsert;
+      late Map<String, dynamic> capturedEventGuestInsert;
+      final repository = SupabaseGuestRepository(
+        client: SupabaseClient(server.url, 'publishable-key'),
+        cache: cache,
+        currentUserIdReader: () => 'usr_01',
+        profileOnEventChecker: ({
+          required eventId,
+          required guestProfileId,
+        }) async {},
+        guestProfileInsertRunner: (json) async {
+          capturedProfileInsert = json;
+          return {
+            'id': 'prf_contact',
+            ...json,
+            'row_version': 1,
+          };
+        },
+        eventGuestInsertRunner: (json) async {
+          capturedEventGuestInsert = json;
+          return {
+            'id': 'gst_contact',
+            ...json,
+            'attendance_status': 'expected',
+            'cover_status': 'paid',
+            'cover_amount_cents': 2000,
+            'is_comped': false,
+            'has_scored_play': false,
+            'guest_profile': const {
+              'id': 'prf_contact',
+              'owner_user_id': 'usr_01',
+              'display_name': 'Contact Guest',
+              'normalized_name': 'contact guest',
+              'public_display_name': 'Contact G.',
+              'phone_e164': '+14155552671',
+              'email_lower': 'contact@example.com',
+            },
+          };
+        },
+      );
+
+      await repository.createGuest(
+        const CreateGuestInput(
+          eventId: 'evt_01',
+          displayName: 'Contact Guest',
+          normalizedName: 'contact guest',
+          phoneE164: '+14155552671',
+          emailLower: 'contact@example.com',
+          coverStatus: CoverStatus.paid,
+          coverAmountCents: 2000,
+          isComped: false,
+        ),
+      );
+
+      expect(capturedProfileInsert['phone_e164'], '+14155552671');
+      expect(capturedProfileInsert['email_lower'], 'contact@example.com');
+      expect(capturedEventGuestInsert, isNot(contains('phone_e164')));
+      expect(capturedEventGuestInsert, isNot(contains('email_lower')));
+    });
+
     test('returned guest keeps event public name over profile default',
         () async {
       final cache = await LocalCache.create();
@@ -235,6 +303,53 @@ void main() {
       );
 
       expect(capturedProfileInsert['public_display_name'], 'Alice C.');
+    });
+
+    test('updating a guest writes contact fields to profile but not event row',
+        () async {
+      final server = await _FakeGuestPostgrestServer.start();
+      addTearDown(server.close);
+      final cache = await LocalCache.create();
+      final repository = SupabaseGuestRepository(
+        client: SupabaseClient(server.url, 'publishable-key'),
+        cache: cache,
+        currentUserIdReader: () => 'usr_01',
+        guestByIdLoader: (guestId) async => _guestRow(
+          id: guestId,
+          guestProfileId: 'prf_contact',
+        ),
+      );
+
+      await repository.updateGuest(
+        const UpdateGuestInput(
+          id: 'gst_contact',
+          eventId: 'evt_01',
+          displayName: 'Contact Guest',
+          normalizedName: 'contact guest',
+          phoneE164: '+14155552671',
+          emailLower: 'contact@example.com',
+          coverStatus: CoverStatus.paid,
+          coverAmountCents: 2000,
+          isComped: false,
+        ),
+      );
+
+      expect(
+        server.lastJsonBodyFor('guest_profiles')['phone_e164'],
+        '+14155552671',
+      );
+      expect(
+        server.lastJsonBodyFor('guest_profiles')['email_lower'],
+        'contact@example.com',
+      );
+      expect(
+        server.lastJsonBodyFor('event_guests'),
+        isNot(contains('phone_e164')),
+      );
+      expect(
+        server.lastJsonBodyFor('event_guests'),
+        isNot(contains('email_lower')),
+      );
     });
 
     test('updating tournament status targets the event guest row', () async {
@@ -389,12 +504,13 @@ void main() {
 
 Map<String, dynamic> _guestRow({
   required String id,
+  String guestProfileId = 'prf_01',
   String tournamentStatus = 'open_play_only',
 }) {
   return {
     'id': id,
     'event_id': 'evt_01',
-    'guest_profile_id': 'prf_01',
+    'guest_profile_id': guestProfileId,
     'display_name': 'Brian Le',
     'normalized_name': 'brian le',
     'public_display_name': 'Brian L.',
@@ -422,4 +538,73 @@ Map<String, dynamic> _guestProfileRow({
     'public_display_name': publicDisplayName,
     'row_version': 1,
   };
+}
+
+class _FakeGuestPostgrestServer {
+  _FakeGuestPostgrestServer._(this._server);
+
+  final HttpServer _server;
+  final _jsonBodiesByTable = <String, List<Map<String, dynamic>>>{};
+
+  String get url => 'http://${_server.address.host}:${_server.port}';
+
+  static Future<_FakeGuestPostgrestServer> start() async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final fake = _FakeGuestPostgrestServer._(server);
+    server.listen(fake._handleRequest);
+    return fake;
+  }
+
+  Map<String, dynamic> lastJsonBodyFor(String table) {
+    final bodies = _jsonBodiesByTable[table];
+    if (bodies == null || bodies.isEmpty) {
+      throw StateError('No JSON body captured for $table.');
+    }
+    return bodies.last;
+  }
+
+  Future<void> close() => _server.close(force: true);
+
+  Future<void> _handleRequest(HttpRequest request) async {
+    final table = request.uri.pathSegments.last;
+    if (request.method == 'PATCH' || request.method == 'POST') {
+      final body = await utf8.decoder.bind(request).join();
+      if (body.isNotEmpty) {
+        _jsonBodiesByTable
+            .putIfAbsent(table, () => [])
+            .add((jsonDecode(body) as Map).cast<String, dynamic>());
+      }
+    }
+
+    final responseBody = switch ((request.method, table)) {
+      ('GET', 'guest_profiles') => <Map<String, dynamic>>[],
+      ('PATCH', 'guest_profiles') => <String, dynamic>{},
+      ('PATCH', 'event_guests') => {
+          ..._guestRow(
+            id: 'gst_contact',
+            guestProfileId: 'prf_contact',
+          ),
+          'display_name': 'Contact Guest',
+          'normalized_name': 'contact guest',
+          'public_display_name': 'Contact G.',
+          'attendance_status': 'expected',
+          'guest_profile': const {
+            'id': 'prf_contact',
+            'owner_user_id': 'usr_01',
+            'display_name': 'Contact Guest',
+            'normalized_name': 'contact guest',
+            'public_display_name': 'Contact G.',
+            'phone_e164': '+14155552671',
+            'email_lower': 'contact@example.com',
+          },
+        },
+      _ => <String, dynamic>{},
+    };
+
+    request.response
+      ..statusCode = HttpStatus.ok
+      ..headers.contentType = ContentType.json
+      ..write(jsonEncode(responseBody));
+    await request.response.close();
+  }
 }

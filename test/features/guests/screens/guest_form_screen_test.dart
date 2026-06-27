@@ -36,13 +36,20 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
       'is_comped': input.isComped,
       'has_scored_play': false,
       'guest_profile_id': input.guestProfileId,
-      'phone_e164': input.phoneE164,
-      'email_lower': input.emailLower,
-      'instagram_handle': input.instagramHandle,
       'tournament_status': eventTournamentStatusToJson(
         input.tournamentStatus,
       ),
       'note': input.note,
+      'guest_profile': {
+        'id': input.guestProfileId ?? 'prf_01',
+        'owner_user_id': 'usr_01',
+        'display_name': input.displayName,
+        'normalized_name': input.normalizedName,
+        'public_display_name': input.publicDisplayName,
+        'phone_e164': input.phoneE164,
+        'email_lower': input.emailLower,
+        'instagram_handle': input.instagramHandle,
+      },
     });
   }
 
@@ -108,14 +115,21 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
       'is_comped': input.isComped,
       'has_scored_play': false,
       'guest_profile_id': 'prf_01',
-      'phone_e164': input.phoneE164,
-      'email_lower': input.emailLower,
-      'instagram_handle': input.instagramHandle,
       'tournament_status': eventTournamentStatusToJson(
         input.tournamentStatus ?? EventTournamentStatus.openPlayOnly,
       ),
       'note': input.note,
       'public_display_name': input.publicDisplayName,
+      'guest_profile': {
+        'id': 'prf_01',
+        'owner_user_id': 'usr_01',
+        'display_name': input.displayName,
+        'normalized_name': input.normalizedName,
+        'public_display_name': input.publicDisplayName,
+        'phone_e164': input.phoneE164,
+        'email_lower': input.emailLower,
+        'instagram_handle': input.instagramHandle,
+      },
     });
   }
 }

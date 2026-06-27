@@ -174,6 +174,18 @@ void main() {
       expect(guest.instagramHandle, 'alice.tiles');
     });
 
+    test('event row contact fields are legacy fallback without joined profile',
+        () {
+      final guest = EventGuestRecord.fromJson({
+        ..._eventGuestJson(publicDisplayName: 'Event Alice'),
+        'phone_e164': '+15550000000',
+        'email_lower': 'old.event@example.com',
+      });
+
+      expect(guest.phoneE164, '+15550000000');
+      expect(guest.emailLower, 'old.event@example.com');
+    });
+
     test('create and update inputs serialize public display names', () {
       final createInput = CreateGuestInput(
         eventId: 'evt_01',
