@@ -25,11 +25,16 @@ class OfflineSessionProjector {
     required SessionDetailRecord detail,
     required List<OfflineMutationRecord> mutations,
   }) {
+    final remoteHandMutationIds = detail.hands
+        .map((hand) => hand.clientMutationId)
+        .whereType<String>()
+        .toSet();
     final relevant = mutations
         .where(
           (mutation) =>
               mutation.sessionId == detail.session.id &&
-              mutation.status != OfflineMutationStatus.synced,
+              mutation.status != OfflineMutationStatus.synced &&
+              !remoteHandMutationIds.contains(mutation.id),
         )
         .toList(growable: false)
       ..sort((left, right) => left.createdAt.compareTo(right.createdAt));

@@ -180,6 +180,48 @@ void main() {
       expect(projected.syncSnapshot.blockedHandIds, isEmpty);
     });
 
+    test('does not duplicate a pending mutation already returned by server',
+        () {
+      final projected = const OfflineSessionProjector().project(
+        detail: _detail(
+          currentDealerSeatIndex: 1,
+          completedGamesCount: 1,
+          handCount: 1,
+          hands: [
+            _hand(
+              id: 'hand_01',
+              handNumber: 1,
+              winnerSeatIndex: 2,
+              winType: HandWinType.discard,
+              eastSeatIndexBeforeHand: 0,
+              eastSeatIndexAfterHand: 1,
+              enteredAt: DateTime.utc(2026, 6, 18, 20),
+              dealerRotated: true,
+              clientMutationId: 'mut_01',
+            ),
+          ],
+        ),
+        mutations: [
+          _mutation(
+            id: 'mut_01',
+            localHandNumber: 1,
+            payload: const {
+              'target_table_session_id': 'ses_01',
+              'target_result_type': 'win',
+              'target_winner_seat_index': 2,
+              'target_win_type': 'discard',
+              'target_discarder_seat_index': 1,
+              'target_fan_count': 3,
+            },
+          ),
+        ],
+      );
+
+      expect(projected.detail.hands.map((hand) => hand.id), ['hand_01']);
+      expect(projected.syncSnapshot.pendingHandIds, isEmpty);
+      expect(projected.syncSnapshot.pendingCount, 0);
+    });
+
     test('preserves false win penalties from the cached detail', () {
       final projected = const OfflineSessionProjector().project(
         detail: _detail(
@@ -434,6 +476,7 @@ HandResultRecord _hand({
   required int eastSeatIndexAfterHand,
   required DateTime enteredAt,
   bool dealerRotated = false,
+  String? clientMutationId,
 }) {
   return HandResultRecord(
     id: id,
@@ -450,5 +493,6 @@ HandResultRecord _hand({
     status: HandResultStatus.recorded,
     enteredByUserId: 'usr_01',
     enteredAt: enteredAt,
+    clientMutationId: clientMutationId,
   );
 }
