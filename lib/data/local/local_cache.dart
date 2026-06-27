@@ -145,7 +145,7 @@ class LocalCache {
   Future<void> saveGuests(String eventId, List<EventGuestRecord> guests) async {
     await _preferences.setString(
       '$_guestListKeyPrefix$eventId',
-      jsonEncode(guests.map((guest) => guest.toJson()).toList()),
+      jsonEncode(guests.map((guest) => guest.toCacheJson()).toList()),
     );
   }
 

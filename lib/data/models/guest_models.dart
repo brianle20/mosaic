@@ -306,7 +306,13 @@ class EventGuestRecord {
         publicDisplayName: publicDisplayName,
       );
 
-  Map<String, dynamic> toJson() {
+  /// Serializes the event guest read/cache shape.
+  ///
+  /// This intentionally preserves legacy event-row contact fields for cached
+  /// historical rows. Do not use this as a Supabase `event_guests` write
+  /// payload; use [CreateGuestInput.toInsertJson] or
+  /// [UpdateGuestInput.toUpdateJson] instead.
+  Map<String, dynamic> toCacheJson() {
     return {
       'id': id,
       'event_id': eventId,
@@ -329,6 +335,8 @@ class EventGuestRecord {
       'row_version': rowVersion,
     };
   }
+
+  Map<String, dynamic> toJson() => toCacheJson();
 }
 
 @immutable

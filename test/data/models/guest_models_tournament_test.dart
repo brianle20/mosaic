@@ -186,6 +186,17 @@ void main() {
       expect(guest.emailLower, 'old.event@example.com');
     });
 
+    test('cache json preserves legacy event row contact fields', () {
+      final guest = EventGuestRecord.fromJson({
+        ..._eventGuestJson(publicDisplayName: 'Event Alice'),
+        'phone_e164': '+15550000000',
+        'email_lower': 'old.event@example.com',
+      });
+
+      expect(guest.toCacheJson()['phone_e164'], '+15550000000');
+      expect(guest.toCacheJson()['email_lower'], 'old.event@example.com');
+    });
+
     test('create and update inputs serialize public display names', () {
       final createInput = CreateGuestInput(
         eventId: 'evt_01',
