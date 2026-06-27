@@ -107,6 +107,8 @@ abstract interface class GuestRepository {
 
   Future<EventGuestRecord> createGuest(CreateGuestInput input);
 
+  Future<List<EventGuestRecord>> createGuests(BulkCreateGuestsInput input);
+
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input);
 
   Future<void> removeGuest(String guestId);

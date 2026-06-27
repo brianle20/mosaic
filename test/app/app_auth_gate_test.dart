@@ -193,6 +193,11 @@ class _FakeGuestRepository implements GuestRepository {
   }
 
   @override
+  Future<List<EventGuestRecord>> createGuests(BulkCreateGuestsInput input) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<GuestProfileMatch>> findGuestProfileMatches(
     GuestProfileLookupInput input,
   ) async =>

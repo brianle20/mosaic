@@ -30,6 +30,10 @@ typedef RpcSingleRunner = Future<Map<String, dynamic>> Function(
   String functionName,
   Map<String, dynamic> params,
 );
+typedef RpcListRunner = Future<List<Map<String, dynamic>>> Function(
+  String functionName,
+  Map<String, dynamic> params,
+);
 
 const _eventGuestSelect = '*, guest_profile:guest_profiles(*)';
 
@@ -46,6 +50,7 @@ class SupabaseGuestRepository implements GuestRepository {
     GuestProfileInsertRunner? guestProfileInsertRunner,
     EventGuestInsertRunner? eventGuestInsertRunner,
     RpcSingleRunner? rpcSingleRunner,
+    RpcListRunner? rpcListRunner,
   })  : _guestByIdLoader = guestByIdLoader,
         _coverEntriesLoader = coverEntriesLoader,
         _guestProfilesLoader = guestProfilesLoader,
@@ -54,7 +59,8 @@ class SupabaseGuestRepository implements GuestRepository {
         _profileOnEventChecker = profileOnEventChecker,
         _guestProfileInsertRunner = guestProfileInsertRunner,
         _eventGuestInsertRunner = eventGuestInsertRunner,
-        _rpcSingleRunner = rpcSingleRunner;
+        _rpcSingleRunner = rpcSingleRunner,
+        _rpcListRunner = rpcListRunner;
 
   final SupabaseClient client;
   final LocalCache cache;
@@ -67,6 +73,7 @@ class SupabaseGuestRepository implements GuestRepository {
   final GuestProfileInsertRunner? _guestProfileInsertRunner;
   final EventGuestInsertRunner? _eventGuestInsertRunner;
   final RpcSingleRunner? _rpcSingleRunner;
+  final RpcListRunner? _rpcListRunner;
 
   String? _currentUserId() {
     final userIdReader = _currentUserIdReader;
@@ -123,6 +130,43 @@ class SupabaseGuestRepository implements GuestRepository {
     final guest = EventGuestRecord.fromJson(inserted);
     await _saveMergedGuestList(input.eventId, guest);
     return guest;
+  }
+
+  @override
+  Future<List<EventGuestRecord>> createGuests(
+    BulkCreateGuestsInput input,
+  ) async {
+    if (input.guests.isEmpty) {
+      return const [];
+    }
+
+    final firstGuest = input.guests.first;
+    final guestProfileIds = input.guests
+        .map((guest) => guest.guestProfileId)
+        .nonNulls
+        .toList(growable: false);
+    if (guestProfileIds.length != input.guests.length) {
+      throw StateError('Bulk guest adds require saved guest profiles.');
+    }
+    if (input.guests.any((guest) => guest.eventId != input.eventId)) {
+      throw StateError('Bulk guest adds must target a single event.');
+    }
+
+    final rows = await _runRpcList(
+      'add_saved_guests_to_event',
+      {
+        'target_event_id': input.eventId,
+        'target_guest_profile_ids': guestProfileIds,
+        'target_tournament_status':
+            eventTournamentStatusToJson(firstGuest.tournamentStatus),
+        'target_cover_status': coverStatusToJson(firstGuest.coverStatus),
+        'target_cover_amount_cents': firstGuest.coverAmountCents,
+        'target_is_comped': firstGuest.isComped,
+      },
+    );
+    final guests = rows.map(EventGuestRecord.fromJson).toList(growable: false);
+    await _saveMergedGuestLists(input.eventId, guests);
+    return guests;
   }
 
   @override
@@ -438,10 +482,23 @@ class SupabaseGuestRepository implements GuestRepository {
     String eventId,
     EventGuestRecord guest,
   ) async {
+    await _saveMergedGuestLists(eventId, [guest]);
+  }
+
+  Future<void> _saveMergedGuestLists(
+    String eventId,
+    List<EventGuestRecord> guests,
+  ) async {
+    if (guests.isEmpty) {
+      return;
+    }
+
+    final guestIds = guests.map((guest) => guest.id).toSet();
     final currentGuests = await readCachedGuests(eventId);
     final mergedGuests = [
-      ...currentGuests.where((currentGuest) => currentGuest.id != guest.id),
-      guest,
+      ...currentGuests
+          .where((currentGuest) => !guestIds.contains(currentGuest.id)),
+      ...guests,
     ]..sort((left, right) => left.displayName.compareTo(right.displayName));
     await cache.saveGuests(eventId, mergedGuests);
   }
@@ -855,6 +912,25 @@ class SupabaseGuestRepository implements GuestRepository {
     }
 
     return row;
+  }
+
+  Future<List<Map<String, dynamic>>> _runRpcList(
+    String functionName,
+    Map<String, dynamic> params,
+  ) async {
+    final rpcListRunner = _rpcListRunner;
+    if (rpcListRunner != null) {
+      return rpcListRunner(functionName, params);
+    }
+
+    final result = await client.rpc(functionName, params: params);
+    if (result is! List) {
+      throw StateError('RPC $functionName did not return a list.');
+    }
+
+    return result
+        .map((row) => (row as Map).cast<String, dynamic>())
+        .toList(growable: false);
   }
 
   Map<String, dynamic>? _castMaybeSingleRpcRow(dynamic value) {

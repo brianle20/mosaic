@@ -376,8 +376,12 @@ void main() {
     await tester.tap(find.text('Add 1 Guest'));
     await tester.pumpAndSettle();
 
-    expect(repository.createdInputs, hasLength(1));
-    expect(repository.createdInputs.single.guestProfileId, 'prf_brian');
+    expect(repository.createdInputs, isEmpty);
+    expect(repository.bulkCreatedInputs, hasLength(1));
+    expect(
+      repository.bulkCreatedInputs.single.guests.single.guestProfileId,
+      'prf_brian',
+    );
   });
 
   testWidgets(
@@ -420,15 +424,17 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(poppedResult, 1);
-      expect(repository.createdInputs, hasLength(1));
-      expect(repository.createdInputs.single.guestProfileId, 'prf_brian');
+      expect(repository.createdInputs, isEmpty);
+      expect(repository.bulkCreatedInputs, hasLength(1));
+      final input = repository.bulkCreatedInputs.single.guests.single;
+      expect(input.guestProfileId, 'prf_brian');
       expect(
-        repository.createdInputs.single.tournamentStatus,
+        input.tournamentStatus,
         EventTournamentStatus.qualifying,
       );
-      expect(repository.createdInputs.single.coverStatus, CoverStatus.paid);
-      expect(repository.createdInputs.single.coverAmountCents, 3125);
-      expect(repository.createdInputs.single.isComped, isFalse);
+      expect(input.coverStatus, CoverStatus.paid);
+      expect(input.coverAmountCents, 3125);
+      expect(input.isComped, isFalse);
     },
   );
 
@@ -478,7 +484,7 @@ void main() {
 
     expect(poppedResult, 1);
     expect(
-      repository.createdInputs.single.tournamentStatus,
+      repository.bulkCreatedInputs.single.guests.single.tournamentStatus,
       EventTournamentStatus.openPlayOnly,
     );
   });
@@ -514,7 +520,9 @@ void main() {
     expect(find.text('Added 1 guest. 1 could not be added.'), findsOneWidget);
     expect(find.text('1 selected'), findsOneWidget);
     expect(find.text('Add 1 Guest'), findsOneWidget);
-    expect(repository.createdInputs, hasLength(2));
+    expect(repository.createdInputs, isEmpty);
+    expect(repository.bulkCreatedInputs, hasLength(1));
+    expect(repository.bulkCreatedInputs.single.guests, hasLength(2));
   });
 
   testWidgets('complete failure stays on screen and shows a snackbar', (
@@ -543,7 +551,9 @@ void main() {
     expect(poppedResult, isNull);
     expect(find.text('Add From Saved Guests'), findsOneWidget);
     expect(find.text('Could not add selected guests.'), findsOneWidget);
-    expect(repository.createdInputs, hasLength(1));
+    expect(repository.createdInputs, isEmpty);
+    expect(repository.bulkCreatedInputs, hasLength(1));
+    expect(repository.bulkCreatedInputs.single.guests, hasLength(1));
   });
 }
 
@@ -621,6 +631,7 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
   final List<_ProfileLoadPlan> _loadPlans;
   Completer<void>? listProfilesGate;
   final createdInputs = <CreateGuestInput>[];
+  final bulkCreatedInputs = <BulkCreateGuestsInput>[];
   int listProfileCalls = 0;
 
   @override
@@ -659,6 +670,35 @@ class _RecordingGuestRepository extends ThrowingGuestRepository {
       coverAmountCents: input.coverAmountCents,
       isComped: input.isComped,
     );
+  }
+
+  @override
+  Future<List<EventGuestRecord>> createGuests(
+      BulkCreateGuestsInput input) async {
+    bulkCreatedInputs.add(input);
+    return input.guests
+        .where(
+          (guestInput) => !_failingProfileIds.contains(
+            guestInput.guestProfileId,
+          ),
+        )
+        .map(
+          (guestInput) => _guest(
+            id: 'gst_${guestInput.guestProfileId}',
+            guestProfileId: guestInput.guestProfileId ?? 'missing_profile',
+            displayName: guestInput.displayName,
+            normalizedName: guestInput.normalizedName,
+            publicDisplayName: guestInput.publicDisplayName,
+            phoneE164: guestInput.phoneE164,
+            emailLower: guestInput.emailLower,
+            instagramHandle: guestInput.instagramHandle,
+            tournamentStatus: guestInput.tournamentStatus,
+            coverStatus: guestInput.coverStatus,
+            coverAmountCents: guestInput.coverAmountCents,
+            isComped: guestInput.isComped,
+          ),
+        )
+        .toList(growable: false);
   }
 }
 

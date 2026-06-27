@@ -396,8 +396,9 @@ void main() {
 
       expect(result.addedCount, 1);
       expect(result.failedCount, 0);
-      expect(repository.createInputs, hasLength(1));
-      final input = repository.createInputs.single;
+      expect(repository.createInputs, isEmpty);
+      expect(repository.bulkCreateInputs, hasLength(1));
+      final input = repository.bulkCreateInputs.single.guests.single;
       expect(input.eventId, 'evt_01');
       expect(input.guestProfileId, 'prf_alice');
       expect(input.displayName, 'Alice Wong');
@@ -440,7 +441,9 @@ void main() {
 
       expect(result.addedCount, 1);
       expect(result.failedCount, 0);
-      final input = repository.createInputs.single;
+      expect(repository.createInputs, isEmpty);
+      expect(repository.bulkCreateInputs, hasLength(1));
+      final input = repository.bulkCreateInputs.single.guests.single;
       expect(input.guestProfileId, 'prf_saved');
       expect(input.displayName, 'Saved Player');
       expect(input.normalizedName, 'saved player');
@@ -452,6 +455,42 @@ void main() {
       expect(input.coverStatus, CoverStatus.paid);
       expect(input.coverAmountCents, 2500);
       expect(input.isComped, isFalse);
+    });
+
+    test('addSelectedGuests submits selected saved profiles in one bulk call',
+        () async {
+      final repository = _FakeGuestRepository(
+        profiles: [
+          _profile(id: 'prf_alice', displayName: 'Alice Wong'),
+          _profile(id: 'prf_brian', displayName: 'Brian Le'),
+        ],
+      );
+      final controller = _controller(repository);
+      await controller.loadProfiles();
+      controller.coverStatus = CoverStatus.paid;
+      controller.coverAmountCents = 2500;
+      controller.toggleSelection('prf_alice');
+      controller.toggleSelection('prf_brian');
+
+      final result = await controller.addSelectedGuests();
+
+      expect(result.addedCount, 2);
+      expect(result.failedCount, 0);
+      expect(repository.createInputs, isEmpty);
+      expect(repository.bulkCreateInputs, hasLength(1));
+      final input = repository.bulkCreateInputs.single;
+      expect(input.eventId, 'evt_01');
+      expect(
+        input.guests.map((guest) => guest.guestProfileId),
+        ['prf_alice', 'prf_brian'],
+      );
+      expect(
+          input.guests.every((guest) => guest.coverStatus == CoverStatus.paid),
+          isTrue);
+      expect(controller.isSelected('prf_alice'), isFalse);
+      expect(controller.isSelected('prf_brian'), isFalse);
+      expect(controller.isAlreadyAdded('prf_alice'), isTrue);
+      expect(controller.isAlreadyAdded('prf_brian'), isTrue);
     });
 
     test(
@@ -548,7 +587,8 @@ void main() {
 
       expect(secondResult.addedCount, 0);
       expect(secondResult.failedCount, 0);
-      expect(repository.createInputs, hasLength(1));
+      expect(repository.createInputs, isEmpty);
+      expect(repository.bulkCreateInputs, hasLength(1));
       expect(controller.isSubmitting, isTrue);
 
       repository.createGuestGate!.complete();
@@ -616,6 +656,7 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   final Completer<void>? createGuestGate;
   Completer<void>? createGuestStarted;
   final createInputs = <CreateGuestInput>[];
+  final bulkCreateInputs = <BulkCreateGuestsInput>[];
   int listProfileCalls = 0;
 
   @override
@@ -663,6 +704,39 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
       coverAmountCents: input.coverAmountCents,
       isComped: input.isComped,
     );
+  }
+
+  @override
+  Future<List<EventGuestRecord>> createGuests(
+    BulkCreateGuestsInput input,
+  ) async {
+    createGuestStarted ??= Completer<void>();
+    bulkCreateInputs.add(input);
+    if (createGuestStarted?.isCompleted == false) {
+      createGuestStarted!.complete();
+    }
+    await createGuestGate?.future;
+    return input.guests
+        .where((guestInput) {
+          return !_failingProfileIds.contains(guestInput.guestProfileId);
+        })
+        .map(
+          (guestInput) => _guest(
+            id: 'gst_${guestInput.guestProfileId}',
+            guestProfileId: guestInput.guestProfileId ?? 'missing_profile',
+            displayName: guestInput.displayName,
+            normalizedName: guestInput.normalizedName,
+            publicDisplayName: guestInput.publicDisplayName,
+            phoneE164: guestInput.phoneE164,
+            emailLower: guestInput.emailLower,
+            instagramHandle: guestInput.instagramHandle,
+            tournamentStatus: guestInput.tournamentStatus,
+            coverStatus: guestInput.coverStatus,
+            coverAmountCents: guestInput.coverAmountCents,
+            isComped: guestInput.isComped,
+          ),
+        )
+        .toList(growable: false);
   }
 }
 

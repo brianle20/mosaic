@@ -175,62 +175,58 @@ class BulkSavedGuestController extends ChangeNotifier {
     _isSubmitting = true;
     _notifyIfActive();
 
-    var addedCount = 0;
-    var failedCount = 0;
     var changedSelection = false;
 
     try {
+      final addedGuests = await _guestRepository.createGuests(
+        BulkCreateGuestsInput(
+          eventId: eventId,
+          guests: selectedProfiles
+              .map(
+                (profile) => CreateGuestInput(
+                  eventId: eventId,
+                  guestProfileId: profile.id,
+                  displayName: profile.displayName,
+                  normalizedName: profile.normalizedName,
+                  publicDisplayName: profile.publicDisplayName,
+                  phoneE164: profile.phoneE164,
+                  emailLower: profile.emailLower,
+                  instagramHandle: profile.instagramHandle,
+                  tournamentStatus: _tournamentStatus,
+                  coverStatus: _coverStatus,
+                  coverAmountCents: _coverAmountCents,
+                  isComped: _coverStatus == CoverStatus.comped,
+                ),
+              )
+              .toList(growable: false),
+        ),
+      );
+      if (_isDisposed) {
+        return const BulkSavedGuestAddResult(addedCount: 0, failedCount: 0);
+      }
+
+      final addedProfileIds =
+          addedGuests.map((guest) => guest.guestProfileId).toSet();
       for (final profile in selectedProfiles) {
-        if (_isDisposed) {
-          return BulkSavedGuestAddResult(
-            addedCount: addedCount,
-            failedCount: failedCount,
-          );
-        }
-
-        try {
-          await _guestRepository.createGuest(
-            CreateGuestInput(
-              eventId: eventId,
-              guestProfileId: profile.id,
-              displayName: profile.displayName,
-              normalizedName: profile.normalizedName,
-              publicDisplayName: profile.publicDisplayName,
-              phoneE164: profile.phoneE164,
-              emailLower: profile.emailLower,
-              instagramHandle: profile.instagramHandle,
-              tournamentStatus: _tournamentStatus,
-              coverStatus: _coverStatus,
-              coverAmountCents: _coverAmountCents,
-              isComped: _coverStatus == CoverStatus.comped,
-            ),
-          );
-          if (_isDisposed) {
-            return BulkSavedGuestAddResult(
-              addedCount: addedCount,
-              failedCount: failedCount,
-            );
-          }
-
-          addedCount += 1;
+        if (addedProfileIds.contains(profile.id)) {
           _alreadyAddedProfileIds.add(profile.id);
           changedSelection =
               _selectedProfileIds.remove(profile.id) || changedSelection;
-        } catch (_) {
-          if (_isDisposed) {
-            return BulkSavedGuestAddResult(
-              addedCount: addedCount,
-              failedCount: failedCount,
-            );
-          }
-
-          failedCount += 1;
         }
       }
 
       return BulkSavedGuestAddResult(
-        addedCount: addedCount,
-        failedCount: failedCount,
+        addedCount: addedGuests.length,
+        failedCount: selectedProfiles.length - addedGuests.length,
+      );
+    } catch (_) {
+      if (_isDisposed) {
+        return const BulkSavedGuestAddResult(addedCount: 0, failedCount: 0);
+      }
+
+      return BulkSavedGuestAddResult(
+        addedCount: 0,
+        failedCount: selectedProfiles.length,
       );
     } finally {
       _isSubmitting = false;

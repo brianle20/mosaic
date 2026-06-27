@@ -115,6 +115,10 @@ class ThrowingGuestRepository implements GuestRepository {
       throw UnimplementedError();
 
   @override
+  Future<List<EventGuestRecord>> createGuests(BulkCreateGuestsInput input) =>
+      throw UnimplementedError();
+
+  @override
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) =>
       throw UnimplementedError();
 

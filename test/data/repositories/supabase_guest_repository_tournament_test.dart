@@ -81,6 +81,113 @@ void main() {
       expect(guest.tournamentStatus, EventTournamentStatus.qualifying);
     });
 
+    test('bulk creating saved guests calls RPC once and refreshes cache',
+        () async {
+      final cache = await LocalCache.create();
+      late String capturedFunctionName;
+      late Map<String, dynamic> capturedParams;
+      final repository = SupabaseGuestRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcListRunner: (functionName, params) async {
+          capturedFunctionName = functionName;
+          capturedParams = params;
+          return [
+            {
+              'id': 'gst_ada',
+              'event_id': 'evt_01',
+              'guest_profile_id': 'prf_ada',
+              'display_name': 'Ada Lovelace',
+              'normalized_name': 'ada lovelace',
+              'public_display_name': 'Ada L.',
+              'attendance_status': 'expected',
+              'tournament_status': 'qualified',
+              'cover_status': 'paid',
+              'cover_amount_cents': 2500,
+              'is_comped': false,
+              'has_scored_play': false,
+              'guest_profile': {
+                'id': 'prf_ada',
+                'owner_user_id': 'usr_01',
+                'display_name': 'Ada Lovelace',
+                'normalized_name': 'ada lovelace',
+                'public_display_name': 'Ada L.',
+              },
+            },
+            {
+              'id': 'gst_grace',
+              'event_id': 'evt_01',
+              'guest_profile_id': 'prf_grace',
+              'display_name': 'Grace Hopper',
+              'normalized_name': 'grace hopper',
+              'public_display_name': 'Grace H.',
+              'attendance_status': 'expected',
+              'tournament_status': 'qualified',
+              'cover_status': 'paid',
+              'cover_amount_cents': 2500,
+              'is_comped': false,
+              'has_scored_play': false,
+              'guest_profile': {
+                'id': 'prf_grace',
+                'owner_user_id': 'usr_01',
+                'display_name': 'Grace Hopper',
+                'normalized_name': 'grace hopper',
+                'public_display_name': 'Grace H.',
+              },
+            },
+          ];
+        },
+      );
+
+      final guests = await repository.createGuests(
+        const BulkCreateGuestsInput(
+          eventId: 'evt_01',
+          guests: [
+            CreateGuestInput(
+              eventId: 'evt_01',
+              guestProfileId: 'prf_ada',
+              displayName: 'Ada Lovelace',
+              normalizedName: 'ada lovelace',
+              publicDisplayName: 'Ada L.',
+              coverStatus: CoverStatus.paid,
+              coverAmountCents: 2500,
+              isComped: false,
+            ),
+            CreateGuestInput(
+              eventId: 'evt_01',
+              guestProfileId: 'prf_grace',
+              displayName: 'Grace Hopper',
+              normalizedName: 'grace hopper',
+              publicDisplayName: 'Grace H.',
+              coverStatus: CoverStatus.paid,
+              coverAmountCents: 2500,
+              isComped: false,
+            ),
+          ],
+        ),
+      );
+
+      expect(capturedFunctionName, 'add_saved_guests_to_event');
+      expect(capturedParams['target_event_id'], 'evt_01');
+      expect(capturedParams['target_guest_profile_ids'], [
+        'prf_ada',
+        'prf_grace',
+      ]);
+      expect(capturedParams['target_tournament_status'], 'qualified');
+      expect(capturedParams['target_cover_status'], 'paid');
+      expect(capturedParams['target_cover_amount_cents'], 2500);
+      expect(capturedParams['target_is_comped'], false);
+      expect(guests.map((guest) => guest.displayName), [
+        'Ada Lovelace',
+        'Grace Hopper',
+      ]);
+      expect(
+        (await repository.readCachedGuests('evt_01'))
+            .map((guest) => guest.displayName),
+        ['Ada Lovelace', 'Grace Hopper'],
+      );
+    });
+
     test('creating a guest preserves an explicit public display name',
         () async {
       final cache = await LocalCache.create();

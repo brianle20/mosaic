@@ -171,6 +171,17 @@ class CreateGuestInput {
 }
 
 @immutable
+class BulkCreateGuestsInput {
+  const BulkCreateGuestsInput({
+    required this.eventId,
+    required this.guests,
+  });
+
+  final String eventId;
+  final List<CreateGuestInput> guests;
+}
+
+@immutable
 class UpdateGuestInput {
   const UpdateGuestInput({
     required this.id,
@@ -571,6 +582,10 @@ EventTournamentStatus eventTournamentStatusFromJson(String value) {
 
 String eventTournamentStatusToJson(EventTournamentStatus value) {
   return _eventTournamentStatusToJson(value);
+}
+
+String coverStatusToJson(CoverStatus value) {
+  return _coverStatusToJson(value);
 }
 
 EventTournamentStatus _eventTournamentStatusFromJson(String value) {
