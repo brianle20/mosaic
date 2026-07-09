@@ -13,7 +13,8 @@ import 'package:mosaic/services/media/hand_photo_service.dart';
 enum _PlayerScanTarget { winner, discarder, penaltyCaller }
 
 const _tableSeatOrder = [0, 3, 1, 2];
-const _quickFanCounts = [3, 4, 5, 6];
+const _quickFanCounts = [3, 4, 5, 6, 7];
+const _maximumWinningFan = 13;
 
 class HandEntryScreen extends StatefulWidget {
   const HandEntryScreen({
@@ -48,7 +49,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   bool _showValidationSummary = false;
   CapturedHandPhoto? _capturedPhoto;
   late final HandPhotoService _handPhotoService;
-  late final TextEditingController _fanCountController;
+  late int _fanCount;
 
   @override
   void initState() {
@@ -65,9 +66,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     _winnerSeatIndex = initialHand?.winnerSeatIndex;
     _discarderSeatIndex = initialHand?.discarderSeatIndex;
     _penaltySeatIndex = initialHand?.penaltySeatIndex;
-    _fanCountController = TextEditingController(
-      text: initialHand?.fanCount?.toString() ?? '',
-    );
+    _fanCount = (initialHand?.fanCount ?? minimumWinningFan)
+        .clamp(minimumWinningFan, _maximumWinningFan)
+        .toInt();
   }
 
   @override
@@ -83,7 +84,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     _controller
       ..removeListener(_handleUpdate)
       ..dispose();
-    _fanCountController.dispose();
     super.dispose();
   }
 
@@ -118,9 +118,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
         discarderSeatIndex:
             _resultType == HandResultType.win ? _discarderSeatIndex : null,
         penaltySeatIndex: _isEditingLegacyFalseWin ? _penaltySeatIndex : null,
-        fanCount: _resultType == HandResultType.win
-            ? int.tryParse(_fanCountController.text)
-            : null,
+        fanCount: _resultType == HandResultType.win ? _fanCount : null,
         dealerWasWaitingAtDraw: null,
         blockedWinnerSeatIndexes:
             widget.initialHand == null ? _blockedWinnerSeatIndexes : const {},
@@ -305,8 +303,12 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   void _setFanCount(int fanCount) {
     setState(() {
-      _fanCountController.text = fanCount.toString();
+      _fanCount = fanCount.clamp(minimumWinningFan, _maximumWinningFan).toInt();
     });
+  }
+
+  void _adjustFanCount(int delta) {
+    _setFanCount(_fanCount + delta);
   }
 
   String _seatLabel(int seatIndex) {
@@ -667,20 +669,17 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                           for (final fanCount in _quickFanCounts)
                             ChoiceChip(
                               label: Text('${fanCount}F'),
-                              selected:
-                                  int.tryParse(_fanCountController.text) ==
-                                      fanCount,
+                              selected: _fanCount == fanCount,
                               onSelected: (_) => _setFanCount(fanCount),
                             ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _fanCountController,
-                        decoration:
-                            const InputDecoration(labelText: 'Fan Count'),
-                        keyboardType: TextInputType.number,
-                        onChanged: (_) => setState(() {}),
+                      _FanCountPicker(
+                        fanCount: _fanCount,
+                        onChanged: _setFanCount,
+                        onDecrement: () => _adjustFanCount(-1),
+                        onIncrement: () => _adjustFanCount(1),
                       ),
                       if (_draft.fanCountError != null) ...[
                         const SizedBox(height: 6),
@@ -700,16 +699,18 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                                 : 'Retake winning hand photo',
                           ),
                         ),
-                      if (_existingPhotoStatusLabel case final photoStatus?) ...[
+                      if (_existingPhotoStatusLabel
+                          case final photoStatus?) ...[
                         const SizedBox(height: 6),
                         Text(
                           photoStatus,
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -797,9 +798,95 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
     final winner =
         _winnerSeatIndex == null ? 'Unknown' : _seatLabel(_winnerSeatIndex!);
-    final fanCount = int.tryParse(_fanCountController.text) ?? 0;
     final winType = _winType == HandWinType.discard ? 'discard' : 'self-draw';
-    return '$winner wins by $winType for $fanCount fan.';
+    return '$winner wins by $winType for $_fanCount fan.';
+  }
+}
+
+class _FanCountPicker extends StatelessWidget {
+  const _FanCountPicker({
+    required this.fanCount,
+    required this.onChanged,
+    required this.onDecrement,
+    required this.onIncrement,
+  });
+
+  final int fanCount;
+  final ValueChanged<int> onChanged;
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final canDecrement = fanCount > minimumWinningFan;
+    final canIncrement = fanCount < _maximumWinningFan;
+
+    return Semantics(
+      key: const ValueKey('fanCountPicker'),
+      label: 'Fan Count',
+      value: '$fanCount fan',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '${fanCount}F',
+            key: const ValueKey('fanCountValueLabel'),
+            textAlign: TextAlign.center,
+            style: theme.textTheme.displaySmall?.copyWith(
+              color: colorScheme.primary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              IconButton.filledTonal(
+                key: const ValueKey('fanCountDecrement'),
+                onPressed: canDecrement ? onDecrement : null,
+                icon: const Icon(Icons.remove),
+                tooltip: 'Decrease fan count',
+              ),
+              Expanded(
+                child: Slider(
+                  key: const ValueKey('fanCountSlider'),
+                  value: fanCount.toDouble(),
+                  min: minimumWinningFan.toDouble(),
+                  max: _maximumWinningFan.toDouble(),
+                  divisions: _maximumWinningFan - minimumWinningFan,
+                  label: '${fanCount}F',
+                  semanticFormatterCallback: (value) => '${value.round()} fan',
+                  onChanged: (value) => onChanged(value.round()),
+                ),
+              ),
+              IconButton.filledTonal(
+                key: const ValueKey('fanCountIncrement'),
+                onPressed: canIncrement ? onIncrement : null,
+                icon: const Icon(Icons.add),
+                tooltip: 'Increase fan count',
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 58),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '$minimumWinningFan',
+                  style: theme.textTheme.bodySmall,
+                ),
+                Text(
+                  '$_maximumWinningFan',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
