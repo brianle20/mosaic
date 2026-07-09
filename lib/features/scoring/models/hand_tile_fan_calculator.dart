@@ -33,7 +33,7 @@ HandTileFanReviewResult calculateHandTileFanReview({
 }) {
   final grouping = groupStandardWinningHand(draft.coreTileIds);
 
-  if (!grouping.isValid || declaredFanCount == null) {
+  if (!grouping.isValid) {
     return HandTileFanReviewResult(
       calculatedFanCount: null,
       reviewStatus: HandTileReviewStatus.unreviewed,
@@ -51,10 +51,12 @@ HandTileFanReviewResult calculateHandTileFanReview({
 
   return HandTileFanReviewResult(
     calculatedFanCount: calculatedFanCount,
-    reviewStatus: _reviewStatusFor(
-      calculatedFanCount: calculatedFanCount,
-      declaredFanCount: declaredFanCount,
-    ),
+    reviewStatus: declaredFanCount == null
+        ? HandTileReviewStatus.unreviewed
+        : _reviewStatusFor(
+            calculatedFanCount: calculatedFanCount,
+            declaredFanCount: declaredFanCount,
+          ),
     grouping: grouping,
   );
 }

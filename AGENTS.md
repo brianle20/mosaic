@@ -156,6 +156,16 @@ Do not claim the simulator is fixed until launch output or a screenshot confirms
   - Developer Mode enabled
   - cable connection may be required
 - Confirm the target device id before running/installing.
+- Do not install a debug build when the user wants to open the app normally from the phone Home Screen.
+  - Debug iOS builds can launch only when started by Flutter tooling or Xcode.
+  - If opened directly, they may crash with `Cannot create a FlutterEngine instance in debug mode without Flutter tooling or Xcode`.
+- For a physical phone push intended for normal use, install a profile or release build:
+  - Preferred quick deploy: `flutter run -d <device_id> --profile --no-pub`.
+  - After it installs, stop the attached run if needed, then verify standalone launch:
+    `xcrun devicectl device process launch --device <device_id> --terminate-existing com.mosaicmahjong.mosaic`.
+  - To verify it does not immediately crash, use:
+    `xcrun devicectl device process launch --device <device_id> --terminate-existing --console --timeout 20 com.mosaicmahjong.mosaic`.
+    A timeout while waiting for termination means the app stayed running; a signal or FlutterEngine debug-mode error means the push is not valid.
 
 ## Testing And Verification
 
@@ -184,4 +194,3 @@ Do not claim the simulator is fixed until launch output or a screenshot confirms
 - For codebase questions under `/Users/brian/Documents/repos`, prefer the central Graphify graph when practical.
 - After modifying Mosaic code, attempt a Graphify update from `/Users/brian/Documents/repos` when practical.
 - If Graphify cannot update because semantic extraction needs an API key, report that clearly.
-

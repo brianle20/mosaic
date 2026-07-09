@@ -118,7 +118,7 @@ void main() {
     expect(result.reviewStatus, HandTileReviewStatus.matched);
   });
 
-  test('returns unreviewed when declared fan is null', () {
+  test('calculates fan while unreviewed when declared fan is null', () {
     final draft = HandTileEntryDraft(
       coreTileIds: const [
         'man_1',
@@ -146,7 +146,7 @@ void main() {
       isSelfDraw: false,
     );
 
-    expect(result.calculatedFanCount, isNull);
+    expect(result.calculatedFanCount, 0);
     expect(result.reviewStatus, HandTileReviewStatus.unreviewed);
     expect(result.grouping.isValid, isTrue);
   });

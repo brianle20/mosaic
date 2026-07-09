@@ -27,7 +27,7 @@ class MahjongTile {
   bool get isCore => category != MahjongTileCategory.flowerSeason;
 
   static MahjongTile byId(String id) {
-    final tile = tilesById[id];
+    final tile = tilesById[id] ?? tilesById[_legacyTileIdAliases[id]];
     if (tile == null) {
       throw FormatException('Unknown mahjong tile id: $id', id);
     }
@@ -320,14 +320,14 @@ const flowerSeasonTiles = [
     maxCopies: 1,
   ),
   MahjongTile(
-    id: 'bamboo_flower_3',
-    label: 'Bamboo 3',
+    id: 'chrysanthemum_3',
+    label: 'Chrysanthemum 3',
     category: MahjongTileCategory.flowerSeason,
     maxCopies: 1,
   ),
   MahjongTile(
-    id: 'chrysanthemum_4',
-    label: 'Chrysanthemum 4',
+    id: 'bamboo_flower_4',
+    label: 'Bamboo 4',
     category: MahjongTileCategory.flowerSeason,
     maxCopies: 1,
   ),
@@ -368,3 +368,8 @@ const allMahjongTiles = [
 final Map<String, MahjongTile> tilesById = Map.unmodifiable({
   for (final tile in allMahjongTiles) tile.id: tile,
 });
+
+const _legacyTileIdAliases = {
+  'bamboo_flower_3': 'chrysanthemum_3',
+  'chrysanthemum_4': 'bamboo_flower_4',
+};

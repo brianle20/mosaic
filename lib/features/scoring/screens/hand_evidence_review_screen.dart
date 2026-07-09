@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/hand_evidence_models.dart';
+import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_entry_draft.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_fan_calculator.dart';
@@ -8,17 +10,19 @@ import 'package:mosaic/features/scoring/widgets/tile_keyboard.dart';
 import 'package:mosaic/widgets/app_chrome.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
-import 'package:mosaic/widgets/status_chip.dart';
 
 class HandEvidenceReviewScreen extends StatefulWidget {
   const HandEvidenceReviewScreen({
     super.key,
     required this.eventId,
     required this.mosaicProfileRepository,
+    this.handLedgerLoader,
   });
 
   final String eventId;
   final MosaicProfileRepository mosaicProfileRepository;
+  final Future<List<EventHandLedgerEntry>> Function(String eventId)?
+      handLedgerLoader;
 
   @override
   State<HandEvidenceReviewScreen> createState() =>
@@ -27,16 +31,20 @@ class HandEvidenceReviewScreen extends StatefulWidget {
 
 class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
   var _records = <HandEvidenceReviewRecord>[];
+  var _ledgerEntriesByHandId = <String, EventHandLedgerEntry>{};
   HandEvidenceReviewRecord? _selectedRecord;
   HandTileEntryDraft _tileDraft = HandTileEntryDraft();
   var _isLoading = true;
   Object? _loadError;
   var _isSaving = false;
+  var _hasSavedCurrentDraft = false;
+  var _statusFilter = _HandEvidenceStatusFilter.missingTiles;
   String? _saveError;
   Uri? _photoUri;
   Object? _photoError;
   var _isPhotoLoading = false;
   var _photoRequestToken = 0;
+  final _editorRevision = ValueNotifier(0);
 
   @override
   void initState() {
@@ -44,9 +52,16 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
     _loadReviewRecords();
   }
 
+  @override
+  void dispose() {
+    _editorRevision.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadReviewRecords() async {
     setState(() {
       _isLoading = true;
+      _hasSavedCurrentDraft = false;
       _loadError = null;
       _saveError = null;
       _photoUri = null;
@@ -56,17 +71,21 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
     _photoRequestToken++;
 
     try {
+      final ledgerEntriesFuture = _loadLedgerEntries();
       final records = await widget.mosaicProfileRepository
           .listHandEvidenceReview(widget.eventId);
+      final ledgerEntries = await ledgerEntriesFuture;
       if (!mounted) {
         return;
       }
 
       setState(() {
         _records = records;
+        _ledgerEntriesByHandId = _ledgerEntriesByHandIdFrom(ledgerEntries);
         _selectedRecord = null;
         _tileDraft = HandTileEntryDraft();
         _isLoading = false;
+        _hasSavedCurrentDraft = false;
         _photoUri = null;
         _photoError = null;
         _isPhotoLoading = false;
@@ -78,14 +97,29 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
 
       setState(() {
         _records = [];
+        _ledgerEntriesByHandId = {};
         _selectedRecord = null;
         _tileDraft = HandTileEntryDraft();
         _isLoading = false;
+        _hasSavedCurrentDraft = false;
         _loadError = error;
         _photoUri = null;
         _photoError = null;
         _isPhotoLoading = false;
       });
+    }
+  }
+
+  Future<List<EventHandLedgerEntry>> _loadLedgerEntries() async {
+    final loader = widget.handLedgerLoader;
+    if (loader == null) {
+      return const [];
+    }
+
+    try {
+      return await loader(widget.eventId);
+    } catch (_) {
+      return const [];
     }
   }
 
@@ -98,12 +132,55 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
       _selectedRecord = record;
       _tileDraft =
           _draftFromTileEntry(record.tileEntry) ?? HandTileEntryDraft();
+      _hasSavedCurrentDraft = false;
       _saveError = null;
       _photoUri = null;
       _photoError = null;
       _isPhotoLoading = true;
     });
+    _notifyEditorChanged();
     _loadPhotoForRecord(record);
+  }
+
+  void _notifyEditorChanged() {
+    _editorRevision.value += 1;
+  }
+
+  Future<void> _openMobileEditor(
+    HandEvidenceReviewRecord record,
+    int queuePosition,
+  ) async {
+    _selectRecord(record);
+    if (!mounted || _selectedRecord?.handResultId != record.handResultId) {
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) {
+          return ValueListenableBuilder<int>(
+            valueListenable: _editorRevision,
+            builder: (context, _, __) {
+              final selectedRecord = _selectedRecord ?? record;
+              final selectedPosition = _selectedRecordPosition ?? queuePosition;
+              final selectedLedgerEntry =
+                  _ledgerEntriesByHandId[selectedRecord.handResultId];
+              return SoftHostScaffold(
+                title: _reviewTitle(
+                  selectedRecord,
+                  ledgerEntry: selectedLedgerEntry,
+                  queuePosition: selectedPosition,
+                ),
+                showBackButton: true,
+                compactTitle: true,
+                contentPadding: const EdgeInsets.fromLTRB(10, 46, 10, 8),
+                body: _buildEditor(returnAfterSave: true),
+              );
+            },
+          );
+        },
+      ),
+    );
   }
 
   Future<void> _loadPhotoForRecord(HandEvidenceReviewRecord record) async {
@@ -120,6 +197,7 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         _photoError = null;
         _isPhotoLoading = false;
       });
+      _notifyEditorChanged();
     } catch (error) {
       if (!mounted || requestToken != _photoRequestToken) {
         return;
@@ -130,10 +208,11 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         _photoError = error;
         _isPhotoLoading = false;
       });
+      _notifyEditorChanged();
     }
   }
 
-  Future<void> _saveTiles() async {
+  Future<void> _saveTiles({bool returnAfterSave = false}) async {
     final record = _selectedRecord;
     if (record == null || _isSaving) {
       return;
@@ -141,8 +220,10 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
 
     setState(() {
       _isSaving = true;
+      _hasSavedCurrentDraft = false;
       _saveError = null;
     });
+    _notifyEditorChanged();
 
     try {
       final review = calculateHandTileFanReview(
@@ -176,7 +257,12 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         _records = updatedRecords;
         _selectedRecord = updatedRecord;
         _isSaving = false;
+        _hasSavedCurrentDraft = true;
       });
+      _notifyEditorChanged();
+      if (returnAfterSave && mounted) {
+        Navigator.of(context).maybePop();
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -184,8 +270,10 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
 
       setState(() {
         _isSaving = false;
+        _hasSavedCurrentDraft = false;
         _saveError = 'Unable to save tiles. ${error.toString()}';
       });
+      _notifyEditorChanged();
     }
   }
 
@@ -196,8 +284,10 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
 
     setState(() {
       _tileDraft = _tileDraft.addTile(tileId);
+      _hasSavedCurrentDraft = false;
       _saveError = null;
     });
+    _notifyEditorChanged();
   }
 
   void _removeTile(String tileId) {
@@ -207,8 +297,10 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
 
     setState(() {
       _tileDraft = _tileDraft.removeTile(tileId);
+      _hasSavedCurrentDraft = false;
       _saveError = null;
     });
+    _notifyEditorChanged();
   }
 
   void _clearTiles() {
@@ -217,9 +309,16 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
     }
 
     setState(() {
-      _tileDraft = HandTileEntryDraft();
+      _tileDraft = _tileDraft.copyWith(
+        coreTileIds: const [],
+        flowerTileIds: const [],
+        winningTileId: null,
+        winningTileKnown: false,
+      );
+      _hasSavedCurrentDraft = false;
       _saveError = null;
     });
+    _notifyEditorChanged();
   }
 
   void _setWinningTile(String tileId) {
@@ -229,8 +328,51 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
 
     setState(() {
       _tileDraft = _tileDraft.setWinningTile(tileId);
+      _hasSavedCurrentDraft = false;
       _saveError = null;
     });
+    _notifyEditorChanged();
+  }
+
+  void _setPhotoRotationQuarterTurns(int quarterTurns) {
+    if (_isSaving) {
+      return;
+    }
+
+    setState(() {
+      _tileDraft = _tileDraft.copyWith(
+        photoRotationQuarterTurns: quarterTurns,
+      );
+      _hasSavedCurrentDraft = false;
+      _saveError = null;
+    });
+    _notifyEditorChanged();
+  }
+
+  Future<void> _openPhotoViewer() async {
+    final uri = _photoUri;
+    final record = _selectedRecord;
+    if (uri == null || record == null) {
+      return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (context) {
+          return _HandPhotoViewer(
+            title: _reviewTitle(
+              record,
+              ledgerEntry: _selectedLedgerEntry,
+              queuePosition: _selectedRecordPosition,
+            ),
+            photoUri: uri,
+            initialRotationQuarterTurns: _tileDraft.photoRotationQuarterTurns,
+            onRotationChanged: _setPhotoRotationQuarterTurns,
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -285,38 +427,65 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
             children: [
               SizedBox(
                 width: 340,
-                child: _HandEvidenceQueue(
-                  records: _records,
+                child: _HandEvidenceQueuePanel(
+                  records: _filteredRecords,
+                  allRecords: _records,
+                  statusFilter: _statusFilter,
+                  onStatusFilterChanged: _setStatusFilter,
+                  ledgerEntriesByHandId: _ledgerEntriesByHandId,
                   selectedRecord: _selectedRecord,
-                  onSelectRecord: _selectRecord,
+                  onSelectRecord: (record, _) => _selectRecord(record),
                 ),
               ),
               const SizedBox(width: 14),
-              Expanded(child: _buildEditor()),
+              Expanded(
+                child: _buildEditor(),
+              ),
             ],
           );
         }
 
-        final isShort = constraints.maxHeight < 560;
-        return Column(
-          children: [
-            SizedBox(
-              height: isShort ? 96 : 220,
-              child: _HandEvidenceQueue(
-                records: _records,
-                selectedRecord: _selectedRecord,
-                onSelectRecord: _selectRecord,
-              ),
-            ),
-            SizedBox(height: isShort ? 8 : 12),
-            Expanded(child: _buildEditor()),
-          ],
+        return _HandEvidenceQueuePanel(
+          records: _filteredRecords,
+          allRecords: _records,
+          statusFilter: _statusFilter,
+          onStatusFilterChanged: _setStatusFilter,
+          ledgerEntriesByHandId: _ledgerEntriesByHandId,
+          selectedRecord: null,
+          onSelectRecord: _openMobileEditor,
         );
       },
     );
   }
 
-  Widget _buildEditor() {
+  List<HandEvidenceReviewRecord> get _filteredRecords {
+    return [
+      for (final record in _records)
+        if (_statusFilter.matches(record)) record,
+    ];
+  }
+
+  void _setStatusFilter(_HandEvidenceStatusFilter filter) {
+    setState(() {
+      _statusFilter = filter;
+    });
+  }
+
+  int? get _selectedRecordPosition {
+    final selectedRecord = _selectedRecord;
+    if (selectedRecord == null) {
+      return null;
+    }
+    final index = _records.indexWhere(
+      (record) => record.handResultId == selectedRecord.handResultId,
+    );
+    if (index == -1) {
+      return null;
+    }
+    return index + 1;
+  }
+
+  Widget _buildEditor({bool returnAfterSave = false}) {
     final record = _selectedRecord;
     if (record == null) {
       return LayoutBuilder(
@@ -325,8 +494,8 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
             padding: EdgeInsets.all(24),
             child: EmptyStateCard(
               icon: Icons.touch_app_outlined,
-              title: 'Select a hand to review.',
-              message: 'Choose a queue row to enter tiles.',
+              title: 'Select a photo to review.',
+              message: 'Choose a row to enter tiles.',
             ),
           );
 
@@ -341,9 +510,11 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCompact = constraints.maxHeight < 360;
-        final gap = isCompact ? 8.0 : 12.0;
-        final photoHeight = isCompact ? 144.0 : 180.0;
+        final isCompact = constraints.maxHeight < 520;
+        final gap = isCompact ? 6.0 : 8.0;
+        final photoHeight = (constraints.maxHeight * (isCompact ? 0.26 : 0.34))
+            .clamp(isCompact ? 132.0 : 190.0, isCompact ? 168.0 : 300.0)
+            .toDouble();
         final keyboard = TileKeyboard(
           draft: _tileDraft,
           onAddTile: _addTile,
@@ -351,33 +522,32 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
           onClear: _clearTiles,
           onSetWinningTile: _setWinningTile,
         );
-        final children = [
-          _HandEvidenceEditorHeader(
-            record: record,
-            isSaving: _isSaving,
-            saveError: _saveError,
-            onSave: _saveTiles,
-          ),
-          SizedBox(height: gap),
+        final topContent = [
           _HandPhotoPreview(
             record: record,
             photoUri: _photoUri,
             isLoading: _isPhotoLoading,
             error: _photoError,
             height: photoHeight,
+            rotationQuarterTurns: _tileDraft.photoRotationQuarterTurns,
+            onOpenPhoto: _openPhotoViewer,
           ),
           SizedBox(height: gap),
         ];
+        final bottomSaveBar = _BottomSaveBar(
+          isSaving: _isSaving,
+          isSaved: _hasSavedCurrentDraft,
+          saveError: _saveError,
+          onSave: () => _saveTiles(returnAfterSave: returnAfterSave),
+        );
 
         if (isCompact) {
-          return ListView(
-            padding: EdgeInsets.zero,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              ...children,
-              SizedBox(
-                height: 360,
-                child: keyboard,
-              ),
+              ...topContent,
+              Expanded(child: keyboard),
+              bottomSaveBar,
             ],
           );
         }
@@ -385,25 +555,129 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            ...children,
+            ...topContent,
             Expanded(child: keyboard),
+            bottomSaveBar,
           ],
         );
       },
     );
+  }
+
+  EventHandLedgerEntry? get _selectedLedgerEntry {
+    final selectedRecord = _selectedRecord;
+    if (selectedRecord == null) {
+      return null;
+    }
+    return _ledgerEntriesByHandId[selectedRecord.handResultId];
+  }
+}
+
+class _HandEvidenceQueuePanel extends StatelessWidget {
+  const _HandEvidenceQueuePanel({
+    required this.records,
+    required this.allRecords,
+    required this.statusFilter,
+    required this.onStatusFilterChanged,
+    required this.ledgerEntriesByHandId,
+    required this.selectedRecord,
+    required this.onSelectRecord,
+  });
+
+  final List<HandEvidenceReviewRecord> records;
+  final List<HandEvidenceReviewRecord> allRecords;
+  final _HandEvidenceStatusFilter statusFilter;
+  final ValueChanged<_HandEvidenceStatusFilter> onStatusFilterChanged;
+  final Map<String, EventHandLedgerEntry> ledgerEntriesByHandId;
+  final HandEvidenceReviewRecord? selectedRecord;
+  final void Function(HandEvidenceReviewRecord record, int queuePosition)
+      onSelectRecord;
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      key: ValueKey(statusFilter),
+      length: _HandEvidenceStatusFilter.values.length,
+      initialIndex: statusFilter.index,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            onTap: (index) {
+              onStatusFilterChanged(_HandEvidenceStatusFilter.values[index]);
+            },
+            tabs: [
+              for (final filter in _HandEvidenceStatusFilter.values)
+                Tab(text: filter.label),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: records.isEmpty
+                ? Center(
+                    child: EmptyStateCard(
+                      icon: Icons.filter_list_off,
+                      title: 'No ${statusFilter.label.toLowerCase()} hands.',
+                      message: 'Try another status tab.',
+                    ),
+                  )
+                : _HandEvidenceQueue(
+                    records: records,
+                    allRecords: allRecords,
+                    ledgerEntriesByHandId: ledgerEntriesByHandId,
+                    selectedRecord: selectedRecord,
+                    onSelectRecord: onSelectRecord,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _HandEvidenceStatusFilter {
+  missingTiles('No tiles'),
+  flagged('Flagged'),
+  done('Done'),
+  all('All');
+
+  const _HandEvidenceStatusFilter(this.label);
+
+  final String label;
+
+  bool matches(HandEvidenceReviewRecord record) {
+    final status = record.tileEntry?.reviewStatus;
+    return switch (this) {
+      _HandEvidenceStatusFilter.missingTiles => record.tileEntry == null,
+      _HandEvidenceStatusFilter.flagged =>
+        status == HandTileReviewStatus.unreviewed ||
+            status == HandTileReviewStatus.flagged,
+      _HandEvidenceStatusFilter.done =>
+        status == HandTileReviewStatus.matched ||
+            status == HandTileReviewStatus.underDeclared ||
+            status == HandTileReviewStatus.resolved,
+      _HandEvidenceStatusFilter.all => true,
+    };
   }
 }
 
 class _HandEvidenceQueue extends StatelessWidget {
   const _HandEvidenceQueue({
     required this.records,
+    required this.allRecords,
+    required this.ledgerEntriesByHandId,
     required this.selectedRecord,
     required this.onSelectRecord,
   });
 
   final List<HandEvidenceReviewRecord> records;
+  final List<HandEvidenceReviewRecord> allRecords;
+  final Map<String, EventHandLedgerEntry> ledgerEntriesByHandId;
   final HandEvidenceReviewRecord? selectedRecord;
-  final ValueChanged<HandEvidenceReviewRecord> onSelectRecord;
+  final void Function(HandEvidenceReviewRecord record, int queuePosition)
+      onSelectRecord;
 
   @override
   Widget build(BuildContext context) {
@@ -412,12 +686,22 @@ class _HandEvidenceQueue extends StatelessWidget {
       itemCount: records.length,
       itemBuilder: (context, index) {
         final record = records[index];
+        final queuePosition = allRecords.indexWhere(
+              (queuedRecord) =>
+                  queuedRecord.handResultId == record.handResultId,
+            ) +
+            1;
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: _HandEvidenceReviewRow(
             record: record,
+            ledgerEntry: ledgerEntriesByHandId[record.handResultId],
+            queuePosition: queuePosition > 0 ? queuePosition : index + 1,
             isSelected: selectedRecord?.handResultId == record.handResultId,
-            onTap: () => onSelectRecord(record),
+            onTap: () => onSelectRecord(
+              record,
+              queuePosition > 0 ? queuePosition : index + 1,
+            ),
           ),
         );
       },
@@ -428,17 +712,22 @@ class _HandEvidenceQueue extends StatelessWidget {
 class _HandEvidenceReviewRow extends StatelessWidget {
   const _HandEvidenceReviewRow({
     required this.record,
+    required this.ledgerEntry,
+    required this.queuePosition,
     required this.isSelected,
     required this.onTap,
   });
 
   final HandEvidenceReviewRecord record;
+  final EventHandLedgerEntry? ledgerEntry;
+  final int queuePosition;
   final bool isSelected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final statusBadge = _reviewStatusBadge(record.tileEntry?.reviewStatus);
     return AppListSurface(
       onTap: onTap,
       padding: const EdgeInsets.all(14),
@@ -450,7 +739,11 @@ class _HandEvidenceReviewRow extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  _reviewTitle(record),
+                  _reviewTitle(
+                    record,
+                    ledgerEntry: ledgerEntry,
+                    queuePosition: queuePosition,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -459,16 +752,15 @@ class _HandEvidenceReviewRow extends StatelessWidget {
                       ),
                 ),
               ),
-              const SizedBox(width: 8),
-              StatusChip(
-                label: _reviewStatusLabel(record),
-                tone: _reviewStatusTone(record),
-              ),
+              if (statusBadge != null) ...[
+                const SizedBox(width: 8),
+                _SmallReviewStatusBadge(label: statusBadge),
+              ],
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            _metadataLabel(record),
+            _metadataLabel(record, ledgerEntry: ledgerEntry),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -481,82 +773,78 @@ class _HandEvidenceReviewRow extends StatelessWidget {
   }
 }
 
-class _HandEvidenceEditorHeader extends StatelessWidget {
-  const _HandEvidenceEditorHeader({
-    required this.record,
+class _SmallReviewStatusBadge extends StatelessWidget {
+  const _SmallReviewStatusBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSecondaryContainer,
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomSaveBar extends StatelessWidget {
+  const _BottomSaveBar({
     required this.isSaving,
+    required this.isSaved,
     required this.saveError,
     required this.onSave,
   });
 
-  final HandEvidenceReviewRecord record;
   final bool isSaving;
+  final bool isSaved;
   final String? saveError;
   final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final error = saveError;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AppListSurface(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  StatusChip(
-                    label: _reviewStatusLabel(record),
-                    tone: _reviewStatusTone(record),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Review ${_reviewTitle(record)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (error != null) ...[
+              InlineErrorBanner(message: error),
               const SizedBox(height: 8),
-              Text(
-                _metadataLabel(record),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: isSaving ? null : onSave,
-                  icon: isSaving
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.save_outlined),
-                  label: const Text('Save Tiles'),
-                ),
-              ),
             ],
-          ),
+            FilledButton.icon(
+              onPressed: isSaving ? null : onSave,
+              icon: isSaving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      isSaved
+                          ? Icons.check_circle_outline
+                          : Icons.save_outlined,
+                    ),
+              label: Text(isSaved ? 'Saved' : 'Save Tiles'),
+            ),
+          ],
         ),
-        if (error != null) ...[
-          const SizedBox(height: 10),
-          InlineErrorBanner(message: error),
-        ],
-      ],
+      ),
     );
   }
 }
@@ -568,6 +856,8 @@ class _HandPhotoPreview extends StatelessWidget {
     required this.isLoading,
     required this.error,
     required this.height,
+    required this.rotationQuarterTurns,
+    required this.onOpenPhoto,
   });
 
   final HandEvidenceReviewRecord record;
@@ -575,6 +865,8 @@ class _HandPhotoPreview extends StatelessWidget {
   final bool isLoading;
   final Object? error;
   final double height;
+  final int rotationQuarterTurns;
+  final VoidCallback onOpenPhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -585,113 +877,248 @@ class _HandPhotoPreview extends StatelessWidget {
     return Container(
       height: height,
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: colorScheme.surface.withValues(alpha: 0.88),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: colorScheme.outlineVariant),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Winning hand photo',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w800,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          key: const Key('hand-photo-preview'),
+          width: double.infinity,
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+          child: Builder(
+            builder: (context) {
+              if (isLoading) {
+                return const Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 8),
+                        Text('Loading photo'),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              if (photoError != null) {
+                return _PhotoStatusPanel(
+                  icon: Icons.broken_image_outlined,
+                  iconColor: colorScheme.error,
+                  title: 'Photo could not be loaded',
+                  titleColor: colorScheme.error,
+                  detail: photoError.toString(),
+                );
+              }
+
+              if (uri == null) {
+                return _PhotoStatusPanel(
+                  icon: Icons.image_not_supported_outlined,
+                  iconColor: colorScheme.onSurfaceVariant,
+                  title: 'Photo unavailable',
+                  detail: 'The captured photo could not be opened.',
+                );
+              }
+
+              return GestureDetector(
+                onTap: onOpenPhoto,
+                child: RotatedBox(
+                  quarterTurns: rotationQuarterTurns,
+                  child: Image.network(
+                    uri.toString(),
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      );
+                    },
+                  ),
                 ),
+              );
+            },
           ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                width: double.infinity,
-                color:
-                    colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                child: Builder(
-                  builder: (context) {
-                    if (isLoading) {
-                      return const Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 8),
-                            Text('Loading photo'),
-                          ],
-                        ),
-                      );
-                    }
+        ),
+      ),
+    );
+  }
+}
 
-                    if (photoError != null) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.broken_image_outlined,
-                                color: colorScheme.error,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Photo could not be loaded',
-                                style: TextStyle(color: colorScheme.error),
-                              ),
-                              Text(
-                                photoError.toString(),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
+class _PhotoStatusPanel extends StatelessWidget {
+  const _PhotoStatusPanel({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    this.titleColor,
+    this.detail,
+  });
 
-                    if (uri == null) {
-                      return Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.image_not_supported_outlined,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(height: 6),
-                              const Text('Photo unavailable'),
-                              Text(
-                                'The captured photo could not be opened.',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final Color? titleColor;
+  final String? detail;
 
-                    return Image.network(
-                      uri.toString(),
-                      fit: BoxFit.contain,
-                      width: double.infinity,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Center(
-                          child: Icon(
-                            Icons.broken_image_outlined,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        );
-                      },
-                    );
-                  },
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth:
+                      (constraints.maxWidth - 12).clamp(0, 480).toDouble(),
                 ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: iconColor),
+                    const SizedBox(height: 4),
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: titleColor),
+                    ),
+                    if (detail != null)
+                      Text(
+                        detail!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HandPhotoViewer extends StatefulWidget {
+  const _HandPhotoViewer({
+    required this.title,
+    required this.photoUri,
+    required this.initialRotationQuarterTurns,
+    required this.onRotationChanged,
+  });
+
+  final String title;
+  final Uri photoUri;
+  final int initialRotationQuarterTurns;
+  final ValueChanged<int> onRotationChanged;
+
+  @override
+  State<_HandPhotoViewer> createState() => _HandPhotoViewerState();
+}
+
+class _HandPhotoViewerState extends State<_HandPhotoViewer> {
+  late int _rotationQuarterTurns;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotationQuarterTurns = widget.initialRotationQuarterTurns % 4;
+  }
+
+  void _setRotation(int quarterTurns) {
+    final normalizedQuarterTurns = quarterTurns % 4;
+    setState(() {
+      _rotationQuarterTurns = normalizedQuarterTurns;
+    });
+    widget.onRotationChanged(normalizedQuarterTurns);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        title: Text(widget.title),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 5,
+              child: Center(
+                child: RotatedBox(
+                  quarterTurns: _rotationQuarterTurns,
+                  child: Image.network(
+                    widget.photoUri.toString(),
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        Icons.broken_image_outlined,
+                        color: colorScheme.onSurfaceVariant,
+                        size: 48,
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Tooltip(
+                      message: 'Rotate left',
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            _setRotation(_rotationQuarterTurns - 1),
+                        icon: const Icon(Icons.rotate_left),
+                        label: const Text('Left'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Tooltip(
+                      message: 'Rotate right',
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            _setRotation(_rotationQuarterTurns + 1),
+                        icon: const Icon(Icons.rotate_right),
+                        label: const Text('Right'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    tooltip: 'Reset',
+                    onPressed: () => _setRotation(0),
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ],
               ),
             ),
           ),
@@ -740,12 +1167,16 @@ HandTileEntryDraft? _draftFromTileEntry(HandTileEntryRecord? tileEntry) {
     final winningTileValue =
         tilesJson['winningTileId'] ?? tilesJson['winningTile'];
     final winningTileId = winningTileValue is String ? winningTileValue : null;
+    final photoRotationValue = tilesJson['photoRotationQuarterTurns'];
+    final photoRotationQuarterTurns =
+        photoRotationValue is num ? photoRotationValue.toInt() : 0;
 
     return HandTileEntryDraft(
       coreTileIds: coreTileIds,
       flowerTileIds: flowerTileIds,
       winningTileId: winningTileId,
       winningTileKnown: winningTileKnown,
+      photoRotationQuarterTurns: photoRotationQuarterTurns,
     );
   } catch (_) {
     return null;
@@ -796,7 +1227,40 @@ List<String> _stringListFromJson(Object? value) {
   ];
 }
 
-String _metadataLabel(HandEvidenceReviewRecord record) {
+Map<String, EventHandLedgerEntry> _ledgerEntriesByHandIdFrom(
+  List<EventHandLedgerEntry> entries,
+) {
+  return {
+    for (final entry in entries)
+      if (entry.rowType == EventHandLedgerRowType.hand) entry.handId: entry,
+  };
+}
+
+String? _reviewStatusBadge(HandTileReviewStatus? status) {
+  return switch (status) {
+    HandTileReviewStatus.matched => 'Matched',
+    HandTileReviewStatus.underDeclared => 'Under',
+    HandTileReviewStatus.resolved => 'Resolved',
+    _ => null,
+  };
+}
+
+String _metadataLabel(
+  HandEvidenceReviewRecord record, {
+  EventHandLedgerEntry? ledgerEntry,
+}) {
+  if (ledgerEntry != null) {
+    final parts = <String>[];
+    final winnerName =
+        _trimmedOrNull(record.winnerName) ?? _winnerNameFromLedger(ledgerEntry);
+    if (winnerName != null) {
+      parts.add(winnerName);
+    }
+    parts.add(_ledgerResultSummary(ledgerEntry));
+    parts.add(_formatCapturedTime(record.photo.capturedAt));
+    return parts.join(' • ');
+  }
+
   final parts = <String>[];
   final handNumber = record.handNumber;
   final tableLabel = record.tableLabel;
@@ -807,14 +1271,14 @@ String _metadataLabel(HandEvidenceReviewRecord record) {
     parts.add(tableLabel);
   }
   if (winnerName != null && winnerName.trim().isNotEmpty) {
-    parts.add('Winner $winnerName');
+    parts.add(winnerName.trim());
   }
   if (declaredFanCount != null) {
     parts.add('Declared $declaredFanCount fan');
   }
 
   if (parts.isEmpty) {
-    return 'Captured ${_formatCapturedAt(record.photo.capturedAt)}';
+    return _formatCapturedTime(record.photo.capturedAt);
   }
 
   if (handNumber != null) {
@@ -824,7 +1288,15 @@ String _metadataLabel(HandEvidenceReviewRecord record) {
   return parts.join(' • ');
 }
 
-String _reviewTitle(HandEvidenceReviewRecord record) {
+String _reviewTitle(
+  HandEvidenceReviewRecord record, {
+  EventHandLedgerEntry? ledgerEntry,
+  int? queuePosition,
+}) {
+  if (ledgerEntry != null) {
+    return _ledgerHandLabel(ledgerEntry);
+  }
+
   final handNumber = record.handNumber;
   if (handNumber != null) {
     return 'Hand $handNumber';
@@ -837,7 +1309,56 @@ String _reviewTitle(HandEvidenceReviewRecord record) {
   if (tableLabel != null) {
     return '$tableLabel winning hand';
   }
-  return 'Captured winning hand';
+  if (queuePosition != null) {
+    return 'Photo $queuePosition';
+  }
+  return 'Photo';
+}
+
+String _ledgerHandLabel(EventHandLedgerEntry entry) {
+  return '${_explicitTableLabel(entry.tableLabel)} · '
+      'Session ${entry.sessionNumberForTable} · Hand ${entry.handNumber}';
+}
+
+String _explicitTableLabel(String tableLabel) {
+  final trimmed = tableLabel.trim();
+  if (trimmed.toLowerCase().startsWith('table ')) {
+    return trimmed;
+  }
+  return 'Table $trimmed';
+}
+
+String? _winnerNameFromLedger(EventHandLedgerEntry entry) {
+  EventHandLedgerCell? winnerCell;
+  for (final cell in entry.cells) {
+    if (cell.pointsDelta <= 0) {
+      continue;
+    }
+    if (winnerCell == null || cell.pointsDelta > winnerCell.pointsDelta) {
+      winnerCell = cell;
+    }
+  }
+  return _trimmedOrNull(winnerCell?.displayName);
+}
+
+String _ledgerResultSummary(EventHandLedgerEntry entry) {
+  if (entry.status == HandResultStatus.voided) {
+    return 'voided';
+  }
+  if (entry.resultType == HandResultType.washout) {
+    return 'draw';
+  }
+  if (entry.resultType == HandResultType.falseWinPenalty) {
+    return '${entry.fanCount ?? 6} fan false win penalty';
+  }
+
+  final winType = switch (entry.winType) {
+    HandWinType.discard => 'discard',
+    HandWinType.selfDraw => 'self-draw',
+    null => 'win',
+  };
+  final fanCount = entry.fanCount;
+  return fanCount == null ? winType : '$fanCount fan $winType';
 }
 
 String? _trimmedOrNull(String? value) {
@@ -848,59 +1369,10 @@ String? _trimmedOrNull(String? value) {
   return trimmed;
 }
 
-String _formatCapturedAt(DateTime capturedAt) {
-  final month = _monthName(capturedAt.month);
-  final hour = capturedAt.hour % 12 == 0 ? 12 : capturedAt.hour % 12;
-  final minute = capturedAt.minute.toString().padLeft(2, '0');
-  final meridiem = capturedAt.hour < 12 ? 'AM' : 'PM';
-  return '$month ${capturedAt.day}, ${capturedAt.year} at '
-      '$hour:$minute $meridiem';
-}
-
-String _monthName(int month) {
-  return switch (month) {
-    1 => 'Jan',
-    2 => 'Feb',
-    3 => 'Mar',
-    4 => 'Apr',
-    5 => 'May',
-    6 => 'Jun',
-    7 => 'Jul',
-    8 => 'Aug',
-    9 => 'Sep',
-    10 => 'Oct',
-    11 => 'Nov',
-    12 => 'Dec',
-    _ => 'Date',
-  };
-}
-
-String _reviewStatusLabel(HandEvidenceReviewRecord record) {
-  final tileEntry = record.tileEntry;
-  if (tileEntry == null) {
-    return 'Needs tiles';
-  }
-
-  return switch (tileEntry.reviewStatus) {
-    HandTileReviewStatus.unreviewed => 'Unreviewed',
-    HandTileReviewStatus.matched => 'Matched',
-    HandTileReviewStatus.underDeclared => 'Under-declared',
-    HandTileReviewStatus.flagged => 'Flagged',
-    HandTileReviewStatus.resolved => 'Resolved',
-  };
-}
-
-StatusChipTone _reviewStatusTone(HandEvidenceReviewRecord record) {
-  final tileEntry = record.tileEntry;
-  if (tileEntry == null) {
-    return StatusChipTone.warning;
-  }
-
-  return switch (tileEntry.reviewStatus) {
-    HandTileReviewStatus.unreviewed => StatusChipTone.neutral,
-    HandTileReviewStatus.matched => StatusChipTone.success,
-    HandTileReviewStatus.underDeclared => StatusChipTone.warning,
-    HandTileReviewStatus.flagged => StatusChipTone.danger,
-    HandTileReviewStatus.resolved => StatusChipTone.success,
-  };
+String _formatCapturedTime(DateTime capturedAt) {
+  final localTime = capturedAt.toLocal();
+  final hour = localTime.hour % 12 == 0 ? 12 : localTime.hour % 12;
+  final minute = localTime.minute.toString().padLeft(2, '0');
+  final meridiem = localTime.hour < 12 ? 'AM' : 'PM';
+  return '$hour:$minute $meridiem';
 }

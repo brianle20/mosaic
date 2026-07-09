@@ -271,6 +271,7 @@ class AppRouter {
           builder: (_) => HandEvidenceReviewScreen(
             eventId: args.eventId,
             mosaicProfileRepository: mosaicProfileRepository,
+            handLedgerLoader: sessionRepository.loadEventHandLedger,
           ),
           settings: settings,
         );

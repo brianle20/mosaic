@@ -9,6 +9,7 @@ class SoftHostScaffold extends StatelessWidget {
     this.onBack,
     this.actions = const [],
     this.extendBehindAppBar = true,
+    this.compactTitle = false,
     this.contentPadding = const EdgeInsets.fromLTRB(
       16,
       kToolbarHeight + 12,
@@ -23,6 +24,7 @@ class SoftHostScaffold extends StatelessWidget {
   final VoidCallback? onBack;
   final List<Widget> actions;
   final bool extendBehindAppBar;
+  final bool compactTitle;
   final EdgeInsetsGeometry contentPadding;
 
   @override
@@ -32,6 +34,7 @@ class SoftHostScaffold extends StatelessWidget {
       key: const ValueKey('softHostScaffold'),
       extendBodyBehindAppBar: extendBehindAppBar,
       appBar: AppBar(
+        toolbarHeight: compactTitle ? 44 : kToolbarHeight,
         backgroundColor: Colors.transparent,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
@@ -42,11 +45,16 @@ class SoftHostScaffold extends StatelessWidget {
                   visualKey: const ValueKey('softHostBackButton'),
                   icon: Icons.chevron_left,
                   tooltip: 'Back',
+                  compact: compactTitle,
                   onPressed: onBack ?? () => Navigator.of(context).maybePop(),
                 ),
               )
             : null,
-        title: GlassTitlePill(title: title),
+        title: GlassTitlePill(
+          title: title,
+          maxWidth: compactTitle ? 300 : 220,
+          compact: compactTitle,
+        ),
         centerTitle: true,
         actions: [
           for (final action in actions)
@@ -88,19 +96,21 @@ class GlassCircleButton extends StatelessWidget {
     required this.onPressed,
     this.visualKey,
     this.tooltip,
+    this.compact = false,
   });
 
   final IconData icon;
   final VoidCallback onPressed;
   final Key? visualKey;
   final String? tooltip;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final button = Center(
       child: SizedBox.square(
         key: visualKey,
-        dimension: 40,
+        dimension: compact ? 34 : 40,
         child: Material(
           color: Colors.white.withValues(alpha: 0.46),
           shape: const CircleBorder(),
@@ -111,7 +121,7 @@ class GlassCircleButton extends StatelessWidget {
             child: Icon(
               icon,
               color: Theme.of(context).colorScheme.onSurface,
-              size: 22,
+              size: compact ? 19 : 22,
             ),
           ),
         ),
@@ -134,17 +144,22 @@ class GlassTitlePill extends StatelessWidget {
     super.key,
     required this.title,
     this.maxWidth = 220,
+    this.compact = false,
   });
 
   final String title;
   final double maxWidth;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       key: ValueKey('glassTitlePill-$title'),
       constraints: BoxConstraints(maxWidth: maxWidth),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 10 : 14,
+        vertical: compact ? 5 : 8,
+      ),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.52),
         borderRadius: BorderRadius.circular(999),
@@ -153,9 +168,12 @@ class GlassTitlePill extends StatelessWidget {
       child: Text(
         title,
         overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
-            ),
+        style: (compact
+                ? Theme.of(context).textTheme.labelLarge
+                : Theme.of(context).textTheme.titleMedium)
+            ?.copyWith(
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }

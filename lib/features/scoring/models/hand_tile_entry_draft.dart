@@ -25,8 +25,10 @@ class HandTileEntryDraft {
     List<String> flowerTileIds = const [],
     String? winningTileId,
     bool winningTileKnown = false,
+    int photoRotationQuarterTurns = 0,
   }) {
     final normalizedWinningTileId = winningTileKnown ? winningTileId : null;
+    final normalizedPhotoRotationQuarterTurns = photoRotationQuarterTurns % 4;
     _validate(
       coreTileIds: coreTileIds,
       flowerTileIds: flowerTileIds,
@@ -39,6 +41,7 @@ class HandTileEntryDraft {
       flowerTileIds: flowerTileIds,
       winningTileId: normalizedWinningTileId,
       winningTileKnown: winningTileKnown,
+      photoRotationQuarterTurns: normalizedPhotoRotationQuarterTurns,
     );
   }
 
@@ -47,6 +50,7 @@ class HandTileEntryDraft {
     required List<String> flowerTileIds,
     required this.winningTileId,
     required this.winningTileKnown,
+    required this.photoRotationQuarterTurns,
   })  : coreTileIds = List.unmodifiable(coreTileIds),
         flowerTileIds = List.unmodifiable(flowerTileIds);
 
@@ -54,6 +58,7 @@ class HandTileEntryDraft {
   final List<String> flowerTileIds;
   final String? winningTileId;
   final bool winningTileKnown;
+  final int photoRotationQuarterTurns;
 
   int get selectedCount => coreTileIds.length + flowerTileIds.length;
 
@@ -110,6 +115,7 @@ class HandTileEntryDraft {
       if (winningTileKnown && winningTileId != null)
         'winningTile': winningTileId,
       'winningTileKnown': winningTileKnown,
+      'photoRotationQuarterTurns': photoRotationQuarterTurns,
       'groups': [
         for (final group in groups)
           _copyJsonLikeValue(group) as Map<String, dynamic>,
@@ -122,6 +128,7 @@ class HandTileEntryDraft {
     List<String>? flowerTileIds,
     Object? winningTileId = _notProvided,
     bool? winningTileKnown,
+    int? photoRotationQuarterTurns,
   }) {
     return HandTileEntryDraft(
       coreTileIds: coreTileIds ?? this.coreTileIds,
@@ -130,6 +137,8 @@ class HandTileEntryDraft {
           ? this.winningTileId
           : winningTileId as String?,
       winningTileKnown: winningTileKnown ?? this.winningTileKnown,
+      photoRotationQuarterTurns:
+          photoRotationQuarterTurns ?? this.photoRotationQuarterTurns,
     );
   }
 
@@ -162,6 +171,7 @@ class HandTileEntryDraft {
           lastWinningTileOccurrenceWasRemoved ? null : currentWinningTileId,
       winningTileKnown:
           lastWinningTileOccurrenceWasRemoved ? false : winningTileKnown,
+      photoRotationQuarterTurns: photoRotationQuarterTurns,
     );
   }
 
