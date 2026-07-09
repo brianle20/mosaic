@@ -666,7 +666,7 @@ class _HandPhotoPreview extends StatelessWidget {
                               const SizedBox(height: 6),
                               const Text('Photo unavailable'),
                               Text(
-                                record.photo.clientPhotoId,
+                                'The captured photo could not be opened.',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodySmall,
@@ -803,9 +803,6 @@ String _metadataLabel(HandEvidenceReviewRecord record) {
   final winnerName = record.winnerName;
   final declaredFanCount = record.declaredFanCount;
 
-  if (handNumber != null) {
-    parts.add('Hand $handNumber');
-  }
   if (tableLabel != null && tableLabel.trim().isNotEmpty) {
     parts.add(tableLabel);
   }
@@ -817,7 +814,11 @@ String _metadataLabel(HandEvidenceReviewRecord record) {
   }
 
   if (parts.isEmpty) {
-    return record.photo.clientPhotoId;
+    return 'Captured ${_formatCapturedAt(record.photo.capturedAt)}';
+  }
+
+  if (handNumber != null) {
+    parts.insert(0, 'Hand $handNumber');
   }
 
   return parts.join(' • ');
@@ -828,7 +829,50 @@ String _reviewTitle(HandEvidenceReviewRecord record) {
   if (handNumber != null) {
     return 'Hand $handNumber';
   }
-  return record.handResultId;
+  final winnerName = _trimmedOrNull(record.winnerName);
+  if (winnerName != null) {
+    return "$winnerName's winning hand";
+  }
+  final tableLabel = _trimmedOrNull(record.tableLabel);
+  if (tableLabel != null) {
+    return '$tableLabel winning hand';
+  }
+  return 'Captured winning hand';
+}
+
+String? _trimmedOrNull(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed;
+}
+
+String _formatCapturedAt(DateTime capturedAt) {
+  final month = _monthName(capturedAt.month);
+  final hour = capturedAt.hour % 12 == 0 ? 12 : capturedAt.hour % 12;
+  final minute = capturedAt.minute.toString().padLeft(2, '0');
+  final meridiem = capturedAt.hour < 12 ? 'AM' : 'PM';
+  return '$month ${capturedAt.day}, ${capturedAt.year} at '
+      '$hour:$minute $meridiem';
+}
+
+String _monthName(int month) {
+  return switch (month) {
+    1 => 'Jan',
+    2 => 'Feb',
+    3 => 'Mar',
+    4 => 'Apr',
+    5 => 'May',
+    6 => 'Jun',
+    7 => 'Jul',
+    8 => 'Aug',
+    9 => 'Sep',
+    10 => 'Oct',
+    11 => 'Nov',
+    12 => 'Dec',
+    _ => 'Date',
+  };
 }
 
 String _reviewStatusLabel(HandEvidenceReviewRecord record) {

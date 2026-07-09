@@ -108,7 +108,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hand 7'), findsOneWidget);
-    expect(find.text('hand_02'), findsOneWidget);
+    expect(find.text("Ben's winning hand"), findsOneWidget);
     expect(find.textContaining('Table A'), findsOneWidget);
     expect(find.textContaining('Ava'), findsOneWidget);
     expect(find.textContaining('Declared 3 fan'), findsOneWidget);
@@ -126,6 +126,37 @@ void main() {
     await tester.pump();
     expect(find.text('Resolved'), findsOneWidget);
     expect(find.byType(StatusChip), findsWidgets);
+  });
+
+  testWidgets('uses user-friendly labels when review metadata is missing',
+      (tester) async {
+    const handResultId = 'ed4a21bd-4a68-473b-a123-7d23513f1c4f';
+    const clientPhotoId = 'ab121f44-24d5-49a3-ba69-94872cde1959';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: handResultId,
+                clientPhotoId: clientPhotoId,
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Captured winning hand'), findsOneWidget);
+    expect(find.textContaining('Captured Jun 25, 2026 at 6:30 PM'),
+        findsOneWidget);
+    expect(find.textContaining(handResultId), findsNothing);
+    expect(find.textContaining(clientPhotoId), findsNothing);
   });
 
   testWidgets('opens editor when tapping queue row', (tester) async {
@@ -290,7 +321,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Captured winning hand'));
     await tester.pumpAndSettle();
 
     expect(find.text('Selected tiles (4)'), findsOneWidget);
@@ -339,7 +370,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Captured winning hand'));
     await tester.pumpAndSettle();
 
     expect(find.text('Selected tiles (2)'), findsOneWidget);
@@ -380,7 +411,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Captured winning hand'));
     await tester.pumpAndSettle();
 
     expect(find.text('Selected tiles (2)'), findsOneWidget);
@@ -454,11 +485,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Captured winning hand'));
     await tester.pumpAndSettle();
 
     expect(find.text('Photo unavailable'), findsOneWidget);
-    expect(find.text('client_photo_01'), findsWidgets);
+    expect(
+      find.text('The captured photo could not be opened.'),
+      findsOneWidget,
+    );
+    expect(find.text('client_photo_01'), findsNothing);
   });
 
   testWidgets('keeps tile entry usable while photo URL is pending',
@@ -486,7 +521,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Captured winning hand'));
     await tester.pump();
 
     expect(find.text('Loading photo'), findsOneWidget);
@@ -526,7 +561,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Captured winning hand'));
     await tester.pumpAndSettle();
 
     expect(find.text('Photo could not be loaded'), findsOneWidget);
@@ -565,7 +600,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text("Ava's winning hand"));
     await tester.pumpAndSettle();
 
     for (final label in [
@@ -636,7 +671,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Captured winning hand'));
     await tester.pumpAndSettle();
 
     for (final label in [
@@ -688,7 +723,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Captured winning hand'));
     await tester.pumpAndSettle();
     await _tapTile(tester, '1M');
     await _showSelectedTileCount(tester, 1);
@@ -719,12 +754,14 @@ void main() {
           handResultId: 'hand_01',
           clientPhotoId: 'client_photo_01',
           capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          handNumber: 1,
         ),
         _reviewRecord(
           id: 'photo_02',
           handResultId: 'hand_02',
           clientPhotoId: 'client_photo_02',
           capturedAt: DateTime.utc(2026, 6, 25, 18, 45),
+          handNumber: 2,
         ),
       ],
       pendingSave: pendingSave,
@@ -740,7 +777,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Hand 1'));
     await tester.pumpAndSettle();
     await _tapTile(tester, '1M');
     await _showSelectedTileCount(tester, 1);
@@ -748,10 +785,10 @@ void main() {
     await tester.tap(find.text('Save Tiles'));
     await tester.pump();
 
-    await tester.tap(find.text('hand_02'));
+    await tester.tap(find.text('Hand 2'));
     await tester.pump();
 
-    expect(find.text('Review hand_01'), findsOneWidget);
+    expect(find.text('Review Hand 1'), findsOneWidget);
     expect(find.text('Selected tiles (1)'), findsOneWidget);
 
     pendingSave.complete(_tileEntry(
@@ -782,14 +819,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Captured winning hand'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Unable to save tiles.'), findsOneWidget);
     expect(find.textContaining('save denied'), findsOneWidget);
-    expect(find.text('Review hand_01'), findsOneWidget);
+    expect(find.text('Review Captured winning hand'), findsOneWidget);
   });
 
   testWidgets('selecting another row resets draft and clears save error',
@@ -805,12 +842,14 @@ void main() {
                 handResultId: 'hand_01',
                 clientPhotoId: 'client_photo_01',
                 capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                handNumber: 1,
               ),
               _reviewRecord(
                 id: 'photo_02',
                 handResultId: 'hand_02',
                 clientPhotoId: 'client_photo_02',
                 capturedAt: DateTime.utc(2026, 6, 25, 18, 45),
+                handNumber: 2,
               ),
             ],
             saveError: StateError('save denied'),
@@ -820,7 +859,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('hand_01'));
+    await tester.tap(find.text('Hand 1'));
     await tester.pumpAndSettle();
     await _tapTile(tester, '1M');
     await _showSelectedTileCount(tester, 1);
@@ -830,10 +869,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Unable to save tiles.'), findsOneWidget);
 
-    await tester.tap(find.text('hand_02'));
+    await tester.tap(find.text('Hand 2'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Review hand_02'), findsOneWidget);
+    expect(find.text('Review Hand 2'), findsOneWidget);
     expect(find.textContaining('Unable to save tiles.'), findsNothing);
     await _showSelectedTileCount(tester, 0);
     expect(find.text('Selected tiles (0)'), findsOneWidget);
