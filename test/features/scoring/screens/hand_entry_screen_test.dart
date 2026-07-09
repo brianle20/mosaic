@@ -31,15 +31,19 @@ class _FakeHandPhotoService implements HandPhotoService {
   }
 }
 
-class _RecordingSessionRepository implements SessionRepository {
+class _RecordingSessionRepository
+    implements SessionRepository, FalseWinPenaltyCorrectionRepository {
   RecordHandResultInput? recordedInput;
   EditHandResultInput? editedInput;
   VoidHandResultInput? voidedInput;
+  VoidFalseWinPenaltyInput? voidedFalseWinPenalty;
   RecordFalseWinPenaltyInput? recordedFalseWinPenalty;
   int recordFalseWinPenaltyCallCount = 0;
   Completer<SessionDetailRecord>? recordFalseWinPenaltyCompleter;
   SessionDetailRecord Function(RecordFalseWinPenaltyInput input)?
       falseWinPenaltyResponseBuilder;
+  SessionDetailRecord Function(VoidFalseWinPenaltyInput input)?
+      voidFalseWinPenaltyResponseBuilder;
   SessionStatus recordHandSessionStatus = SessionStatus.active;
 
   @override
@@ -173,6 +177,15 @@ class _RecordingSessionRepository implements SessionRepository {
       return pendingResponse.future;
     }
     return falseWinPenaltyResponseBuilder?.call(input) ??
+        _detailFromStatus(HandResultStatus.recorded);
+  }
+
+  @override
+  Future<SessionDetailRecord> voidFalseWinPenalty(
+    VoidFalseWinPenaltyInput input,
+  ) async {
+    voidedFalseWinPenalty = input;
+    return voidFalseWinPenaltyResponseBuilder?.call(input) ??
         _detailFromStatus(HandResultStatus.recorded);
   }
 
@@ -1001,7 +1014,9 @@ void main() {
     expect(repository.recordedInput, isNull);
     expect(routeResult, isNull);
     expect(find.text('Record Hand'), findsOneWidget);
-    expect(find.text('False win callers: Carol Ng (South)'), findsOneWidget);
+    expect(find.text('False wins'), findsOneWidget);
+    expect(find.text('Carol Ng'), findsOneWidget);
+    expect(find.text('South - 6 fan penalty'), findsOneWidget);
 
     await tapVisible(
       tester,
@@ -1010,6 +1025,46 @@ void main() {
 
     expect(
         find.text('False win callers cannot win this hand.'), findsOneWidget);
+  });
+
+  testWidgets('pending false win row can be removed before saving hand',
+      (tester) async {
+    final repository = _RecordingSessionRepository()
+      ..voidFalseWinPenaltyResponseBuilder = (_) => buildDetail(
+            currentDealerSeatIndex: 1,
+            falseWinPenalties: const [],
+          );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(
+            currentDealerSeatIndex: 1,
+            falseWinPenalties: [
+              falseWinPenaltyJson(
+                penaltySeatIndex: 2,
+                status: 'pending',
+              ),
+            ],
+          ),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('False wins'), findsOneWidget);
+    expect(find.text('Carol Ng'), findsOneWidget);
+    expect(find.text('South - 6 fan penalty'), findsOneWidget);
+
+    await tapVisible(tester, find.text('Remove'));
+
+    expect(
+      repository.voidedFalseWinPenalty?.handFalseWinPenaltyId,
+      'penalty-2',
+    );
+    expect(find.text('Carol Ng'), findsNothing);
   });
 
   testWidgets('save hand is disabled while choosing a false win caller',
@@ -1125,6 +1180,49 @@ void main() {
     expect(repository.editedInput?.handResultId, 'hand_legacy_false_win');
     expect(repository.editedInput?.resultType, HandResultType.falseWinPenalty);
     expect(repository.editedInput?.penaltySeatIndex, 2);
+  });
+
+  testWidgets('attached false win row can be removed while editing saved hand',
+      (tester) async {
+    final repository = _RecordingSessionRepository()
+      ..voidFalseWinPenaltyResponseBuilder = (_) => buildDetail(
+            currentDealerSeatIndex: 1,
+            falseWinPenalties: const [],
+          );
+    final initialHand = HandResultRecord.fromJson(existingWinHandJson());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(
+            currentDealerSeatIndex: 1,
+            falseWinPenalties: [
+              falseWinPenaltyJson(
+                penaltySeatIndex: 3,
+                status: 'attached',
+                handResultId: 'hand_01',
+              ),
+            ],
+          ),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+          initialHand: initialHand,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('False wins attached to this hand'), findsOneWidget);
+    expect(find.text('Dee Wu'), findsOneWidget);
+    expect(find.text('North - 6 fan penalty'), findsOneWidget);
+
+    await tapVisible(tester, find.text('Remove'));
+
+    expect(
+      repository.voidedFalseWinPenalty?.handFalseWinPenaltyId,
+      'penalty-3',
+    );
+    expect(find.text('Dee Wu'), findsNothing);
   });
 
   testWidgets('editing existing winner ignores pending false win blockers',

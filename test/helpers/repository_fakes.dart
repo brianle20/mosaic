@@ -204,7 +204,8 @@ class ThrowingTableRepository implements TableRepository {
       throw UnimplementedError();
 }
 
-class ThrowingSessionRepository implements SessionRepository {
+class ThrowingSessionRepository
+    implements SessionRepository, FalseWinPenaltyCorrectionRepository {
   const ThrowingSessionRepository();
 
   @override
@@ -273,6 +274,12 @@ class ThrowingSessionRepository implements SessionRepository {
   @override
   Future<SessionDetailRecord> recordFalseWinPenalty(
     RecordFalseWinPenaltyInput input,
+  ) =>
+      throw UnimplementedError();
+
+  @override
+  Future<SessionDetailRecord> voidFalseWinPenalty(
+    VoidFalseWinPenaltyInput input,
   ) =>
       throw UnimplementedError();
 

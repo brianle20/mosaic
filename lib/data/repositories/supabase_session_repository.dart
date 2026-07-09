@@ -30,7 +30,8 @@ typedef SessionTableLabelLoader = Future<String?> Function(String tableId);
 typedef SessionEventHandLedgerLoader = Future<List<Map<String, dynamic>>>
     Function(String eventId);
 
-class SupabaseSessionRepository implements SessionRepository {
+class SupabaseSessionRepository
+    implements SessionRepository, FalseWinPenaltyCorrectionRepository {
   SupabaseSessionRepository({
     required this.client,
     required this.cache,
@@ -256,6 +257,18 @@ class SupabaseSessionRepository implements SessionRepository {
   ) async {
     final penaltyRow = await _runRpcSingle(
       'record_false_win_penalty',
+      input.toRpcParams(),
+    );
+    final sessionId = penaltyRow['table_session_id'] as String;
+    return loadSessionDetail(sessionId);
+  }
+
+  @override
+  Future<SessionDetailRecord> voidFalseWinPenalty(
+    VoidFalseWinPenaltyInput input,
+  ) async {
+    final penaltyRow = await _runRpcSingle(
+      'void_false_win_penalty',
       input.toRpcParams(),
     );
     final sessionId = penaltyRow['table_session_id'] as String;

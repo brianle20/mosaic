@@ -150,6 +150,14 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   Set<int> get _blockedWinnerSeatIndexes =>
       _sessionDetail.pendingFalseWinPenaltySeatIndexes.toSet();
 
+  List<FalseWinPenaltyRecord> get _attachedFalseWinPenalties {
+    final handId = widget.initialHand?.id;
+    if (handId == null) {
+      return const [];
+    }
+    return _sessionDetail.falseWinPenaltiesForHand(handId);
+  }
+
   bool get _roundExpired =>
       widget.initialHand == null &&
       _sessionHasRoundTimer &&
@@ -310,6 +318,23 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     });
   }
 
+  Future<void> _voidFalseWinPenalty(FalseWinPenaltyRecord penalty) async {
+    final detail = await _controller.voidFalseWinPenalty(
+      handFalseWinPenaltyId: penalty.id,
+      correctionNote: 'Removed false win caller',
+    );
+    if (!mounted || detail == null) {
+      return;
+    }
+
+    setState(() {
+      _sessionDetail = detail;
+      if (_penaltySeatIndex == penalty.penaltySeatIndex) {
+        _penaltySeatIndex = null;
+      }
+    });
+  }
+
   void _setFanCount(int fanCount) {
     setState(() {
       _fanCount = fanCount.clamp(minimumWinningFan, _maximumWinningFan).toInt();
@@ -322,15 +347,19 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   String _seatLabel(int seatIndex) {
     final guestName = _seatName(seatIndex);
+    final wind = _seatWindLabel(seatIndex);
+    return '$guestName ($wind)';
+  }
+
+  String _seatWindLabel(int seatIndex) {
     final relativeSeatIndex = (seatIndex - _labelEastSeatIndex) % 4;
-    final wind = switch (relativeSeatIndex) {
+    return switch (relativeSeatIndex) {
       0 => 'East',
       1 => 'South',
       2 => 'West',
       3 => 'North',
       _ => 'Seat',
     };
-    return '$guestName ($wind)';
   }
 
   void _selectSeat(int seatIndex,
@@ -454,15 +483,23 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   }
 
   String _seatLabelLines(int seatIndex) {
-    final relativeSeatIndex = (seatIndex - _labelEastSeatIndex) % 4;
-    final wind = switch (relativeSeatIndex) {
-      0 => 'East',
-      1 => 'South',
-      2 => 'West',
-      3 => 'North',
-      _ => 'Seat',
-    };
-    return '$wind\n${_seatName(seatIndex)}';
+    return '${_seatWindLabel(seatIndex)}\n${_seatName(seatIndex)}';
+  }
+
+  Widget _buildFalseWinPenaltyList({
+    required String title,
+    required List<FalseWinPenaltyRecord> penalties,
+    String? emptyLabel,
+  }) {
+    return _FalseWinPenaltyList(
+      title: title,
+      emptyLabel: emptyLabel,
+      penalties: penalties,
+      seatNameFor: _seatName,
+      seatWindFor: _seatWindLabel,
+      isSubmitting: _controller.isSubmitting,
+      onRemove: _voidFalseWinPenalty,
+    );
   }
 
   String get _winBonusesSummary {
@@ -720,11 +757,18 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                           label: const Text('Record False Win'),
                         ),
                       ],
-                      if (_sessionDetail
-                          .pendingFalseWinPenalties.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'False win callers: ${_sessionDetail.pendingFalseWinPenalties.map((penalty) => _seatLabel(penalty.penaltySeatIndex)).join(', ')}',
+                      const SizedBox(height: 12),
+                      _buildFalseWinPenaltyList(
+                        title: 'False wins',
+                        emptyLabel: 'No false wins recorded',
+                        penalties: _sessionDetail.pendingFalseWinPenalties,
+                      ),
+                      if (widget.initialHand != null &&
+                          _attachedFalseWinPenalties.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        _buildFalseWinPenaltyList(
+                          title: 'False wins attached to this hand',
+                          penalties: _attachedFalseWinPenalties,
                         ),
                       ],
                     ],
@@ -953,6 +997,128 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
         ? ''
         : ' Bonuses: ${winBonuses.map((bonus) => bonus.label).join(', ')}.';
     return '$winner wins by $winType for $_fanCount fan.$bonuses';
+  }
+}
+
+class _FalseWinPenaltyList extends StatelessWidget {
+  const _FalseWinPenaltyList({
+    required this.title,
+    required this.penalties,
+    required this.seatNameFor,
+    required this.seatWindFor,
+    required this.isSubmitting,
+    required this.onRemove,
+    this.emptyLabel,
+  });
+
+  final String title;
+  final String? emptyLabel;
+  final List<FalseWinPenaltyRecord> penalties;
+  final String Function(int seatIndex) seatNameFor;
+  final String Function(int seatIndex) seatWindFor;
+  final bool isSubmitting;
+  final ValueChanged<FalseWinPenaltyRecord> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (penalties.isEmpty)
+          Text(
+            emptyLabel ?? 'No false wins',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          )
+        else
+          Column(
+            children: [
+              for (final penalty in penalties) ...[
+                _FalseWinPenaltyRow(
+                  penalty: penalty,
+                  seatName: seatNameFor(penalty.penaltySeatIndex),
+                  seatWind: seatWindFor(penalty.penaltySeatIndex),
+                  isSubmitting: isSubmitting,
+                  onRemove: () => onRemove(penalty),
+                ),
+                if (penalty != penalties.last) const SizedBox(height: 8),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _FalseWinPenaltyRow extends StatelessWidget {
+  const _FalseWinPenaltyRow({
+    required this.penalty,
+    required this.seatName,
+    required this.seatWind,
+    required this.isSubmitting,
+    required this.onRemove,
+  });
+
+  final FalseWinPenaltyRecord penalty;
+  final String seatName;
+  final String seatWind;
+  final bool isSubmitting;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_outlined,
+              color: colorScheme.primary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    seatName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$seatWind - ${penalty.fanCount} fan penalty',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: isSubmitting ? null : onRemove,
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

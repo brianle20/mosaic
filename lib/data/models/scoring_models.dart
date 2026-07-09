@@ -382,6 +382,24 @@ class VoidHandResultInput {
 }
 
 @immutable
+class VoidFalseWinPenaltyInput {
+  const VoidFalseWinPenaltyInput({
+    required this.handFalseWinPenaltyId,
+    this.correctionNote,
+  });
+
+  final String handFalseWinPenaltyId;
+  final String? correctionNote;
+
+  Map<String, dynamic> toRpcParams() {
+    return {
+      'target_hand_false_win_penalty_id': handFalseWinPenaltyId,
+      'target_correction_note': correctionNote,
+    };
+  }
+}
+
+@immutable
 class RecordFalseWinPenaltyInput {
   const RecordFalseWinPenaltyInput({
     required this.tableSessionId,

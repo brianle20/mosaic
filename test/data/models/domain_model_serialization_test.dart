@@ -459,6 +459,19 @@ void main() {
       });
     });
 
+    test('serializes void false win penalty input for current RPC signature',
+        () {
+      const input = VoidFalseWinPenaltyInput(
+        handFalseWinPenaltyId: 'penalty-1',
+        correctionNote: 'wrong caller',
+      );
+
+      expect(input.toRpcParams(), {
+        'target_hand_false_win_penalty_id': 'penalty-1',
+        'target_correction_note': 'wrong caller',
+      });
+    });
+
     test('stores ruleset and rotation policy explicitly', () {
       final record = TableSessionRecord.fromJson(const {
         'id': 'ses_01',

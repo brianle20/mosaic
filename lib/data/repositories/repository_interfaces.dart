@@ -216,6 +216,12 @@ abstract interface class SessionRepository {
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input);
 }
 
+abstract interface class FalseWinPenaltyCorrectionRepository {
+  Future<SessionDetailRecord> voidFalseWinPenalty(
+    VoidFalseWinPenaltyInput input,
+  );
+}
+
 abstract interface class HandEvidenceRepository {
   Future<void> uploadAndAttachHandPhoto({
     required String eventId,

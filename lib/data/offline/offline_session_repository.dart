@@ -13,7 +13,10 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:uuid/uuid.dart';
 
 class OfflineSessionRepository
-    implements SessionRepository, SessionSyncStatusProvider {
+    implements
+        SessionRepository,
+        FalseWinPenaltyCorrectionRepository,
+        SessionSyncStatusProvider {
   OfflineSessionRepository({
     required this.inner,
     required this.store,
@@ -111,6 +114,20 @@ class OfflineSessionRepository
     }
 
     return _enqueueRecordFalseWinPenalty(input);
+  }
+
+  @override
+  Future<SessionDetailRecord> voidFalseWinPenalty(
+    VoidFalseWinPenaltyInput input,
+  ) async {
+    if (!await reachability.isReachable()) {
+      throw const OfflineUnsupportedOperationException(
+        'False win corrections are unavailable while offline.',
+      );
+    }
+
+    return (inner as FalseWinPenaltyCorrectionRepository)
+        .voidFalseWinPenalty(input);
   }
 
   Future<bool> _hasQueuedMutations(String sessionId) async {

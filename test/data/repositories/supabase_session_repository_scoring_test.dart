@@ -304,6 +304,51 @@ void main() {
       expect(detail.pendingFalseWinPenaltySeatIndexes, [2]);
     });
 
+    test('voids false win penalty through scoring RPC and refreshes detail',
+        () async {
+      late String rpcName;
+      late Map<String, dynamic> rpcParams;
+      final cache = await LocalCache.create();
+      final repository = SupabaseSessionRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcSingleRunner: (functionName, params) async {
+          rpcName = functionName;
+          rpcParams = params;
+          return {
+            'id': 'penalty-1',
+            'table_session_id': 'ses_01',
+          };
+        },
+        sessionDetailLoader: (_) async => _sessionDetailJson(
+          hands: [
+            _handJson(
+              id: 'hand_01',
+              handNumber: 1,
+              winnerSeatIndex: 0,
+              winType: 'self_draw',
+              fanCount: 3,
+            ),
+          ],
+          falseWinPenalties: const [],
+        ),
+      );
+
+      final detail = await repository.voidFalseWinPenalty(
+        const VoidFalseWinPenaltyInput(
+          handFalseWinPenaltyId: 'penalty-1',
+          correctionNote: 'wrong caller',
+        ),
+      );
+
+      expect(rpcName, 'void_false_win_penalty');
+      expect(rpcParams, {
+        'target_hand_false_win_penalty_id': 'penalty-1',
+        'target_correction_note': 'wrong caller',
+      });
+      expect(detail.falseWinPenalties, isEmpty);
+    });
+
     test('records hand with offline idempotency params when provided',
         () async {
       final cache = await LocalCache.create();

@@ -9,6 +9,7 @@ import '../../../helpers/repository_fakes.dart';
 class _RecordingSessionRepository extends ThrowingSessionRepository {
   RecordHandResultInput? recordInput;
   RecordFalseWinPenaltyInput? falseWinPenaltyInput;
+  VoidFalseWinPenaltyInput? voidFalseWinPenaltyInput;
 
   @override
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
@@ -21,6 +22,14 @@ class _RecordingSessionRepository extends ThrowingSessionRepository {
     RecordFalseWinPenaltyInput input,
   ) async {
     falseWinPenaltyInput = input;
+    return _emptySessionDetail();
+  }
+
+  @override
+  Future<SessionDetailRecord> voidFalseWinPenalty(
+    VoidFalseWinPenaltyInput input,
+  ) async {
+    voidFalseWinPenaltyInput = input;
     return _emptySessionDetail();
   }
 
@@ -65,6 +74,27 @@ void main() {
       expect(detail, isNotNull);
       expect(repository.falseWinPenaltyInput?.tableSessionId, 'session-1');
       expect(repository.falseWinPenaltyInput?.penaltySeatIndex, 3);
+      expect(controller.submitError, isNull);
+    });
+
+    test('voids false win penalty through repository', () async {
+      final repository = _RecordingSessionRepository();
+      final controller = HandEntryController(sessionRepository: repository);
+
+      final detail = await controller.voidFalseWinPenalty(
+        handFalseWinPenaltyId: 'penalty-1',
+        correctionNote: 'wrong caller',
+      );
+
+      expect(detail, isNotNull);
+      expect(
+        repository.voidFalseWinPenaltyInput?.handFalseWinPenaltyId,
+        'penalty-1',
+      );
+      expect(
+        repository.voidFalseWinPenaltyInput?.correctionNote,
+        'wrong caller',
+      );
       expect(controller.submitError, isNull);
     });
 
