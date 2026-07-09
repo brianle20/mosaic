@@ -475,9 +475,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       return 'None selected';
     }
 
-    return winBonuses
-        .map((bonus) => '+${bonus.fanValue}F ${bonus.label}')
-        .join(', ');
+    return winBonuses.map((bonus) => bonus.label).join(', ');
   }
 
   void _toggleWinBonus(HandWinBonus bonus, bool selected) {
@@ -542,21 +540,65 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
           ),
         ),
         if (_winBonusesExpanded) ...[
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final bonus in HandWinBonus.values)
-                FilterChip(
-                  label: Text('${bonus.label} +${bonus.fanValue}F'),
-                  selected: _winBonuses?.contains(bonus) ?? false,
-                  onSelected: (selected) => _toggleWinBonus(bonus, selected),
-                ),
-            ],
+          const SizedBox(height: 4),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 8.0;
+              final columns = constraints.maxWidth >= 300 ? 2 : 1;
+              final optionWidth =
+                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: 2,
+                children: [
+                  for (final bonus in HandWinBonus.values)
+                    _buildWinBonusOption(bonus, optionWidth),
+                ],
+              );
+            },
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildWinBonusOption(HandWinBonus bonus, double width) {
+    final selected = _winBonuses?.contains(bonus) ?? false;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: colorScheme.onSurface,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        );
+    return SizedBox(
+      key: ValueKey('winBonusOption-${bonus.id}'),
+      width: width,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _toggleWinBonus(bonus, !selected),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Checkbox(
+                value: selected,
+                onChanged: (value) => _toggleWinBonus(bonus, value ?? false),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              const SizedBox(width: 2),
+              Expanded(
+                child: Text(
+                  bonus.label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: textStyle,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -763,7 +805,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                       _buildWinBonusesPicker(),
                       const SizedBox(height: 16),
                       Text(
-                        'Quick fan',
+                        'Declared fan',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
                               fontWeight: FontWeight.w800,
                             ),

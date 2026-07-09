@@ -557,7 +557,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Win bonuses'), findsOneWidget);
-    expect(find.text('Moon Under the Sea +1F'), findsOneWidget);
+    expect(find.text('Moon Under the Sea'), findsOneWidget);
+    expect(find.text('Moon Under the Sea +1F'), findsNothing);
   });
 
   testWidgets('keeps logged win bonuses visible after saving tiles',
@@ -585,12 +586,14 @@ void main() {
 
     await tester.tap(find.text("Ava's winning hand"));
     await tester.pumpAndSettle();
-    expect(find.text('Moon Under the Sea +1F'), findsOneWidget);
+    expect(find.text('Moon Under the Sea'), findsOneWidget);
+    expect(find.text('Moon Under the Sea +1F'), findsNothing);
 
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Moon Under the Sea +1F'), findsOneWidget);
+    expect(find.text('Moon Under the Sea'), findsOneWidget);
+    expect(find.text('Moon Under the Sea +1F'), findsNothing);
     expect(find.text('Win bonuses not recorded'), findsNothing);
   });
 

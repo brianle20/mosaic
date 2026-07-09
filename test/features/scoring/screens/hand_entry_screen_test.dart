@@ -460,7 +460,7 @@ void main() {
     expect(find.text('1. Result'), findsOneWidget);
     expect(find.text('2. Winner'), findsOneWidget);
     expect(find.text('3. Score'), findsOneWidget);
-    expect(find.text('Quick fan'), findsOneWidget);
+    expect(find.text('Declared fan'), findsOneWidget);
 
     final quickFanLabels = tester
         .widgetList<ChoiceChip>(find.byType(ChoiceChip))
@@ -554,7 +554,8 @@ void main() {
 
     expect(find.text('Win bonuses'), findsOneWidget);
     expect(find.text('None selected'), findsOneWidget);
-    expect(find.widgetWithText(FilterChip, 'Concealed Hand +1F'), findsNothing);
+    expect(find.text('Concealed Hand'), findsNothing);
+    expect(find.text('Concealed Hand +1F'), findsNothing);
 
     await tapVisible(tester, find.text('Win bonuses'));
 
@@ -564,11 +565,11 @@ void main() {
     );
     await tapVisible(
       tester,
-      find.widgetWithText(FilterChip, 'Concealed Hand +1F'),
+      find.text('Concealed Hand'),
     );
     await tapVisible(
       tester,
-      find.widgetWithText(FilterChip, 'Moon Under the Sea +1F'),
+      find.text('Moon Under the Sea'),
     );
     await tapVisible(tester, find.widgetWithText(ChoiceChip, '5F'));
 
@@ -687,7 +688,7 @@ void main() {
     await tapVisible(tester, find.text('Win bonuses'));
     await tapVisible(
       tester,
-      find.widgetWithText(FilterChip, 'Concealed Hand +1F'),
+      find.text('Concealed Hand'),
     );
 
     await tester.tap(find.text('Save Hand'));
@@ -712,13 +713,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('+1F Robbing the Kong'), findsOneWidget);
+    expect(find.text('Robbing the Kong'), findsOneWidget);
     await tapVisible(tester, find.text('Win bonuses'));
 
-    final chip = tester.widget<FilterChip>(
-      find.widgetWithText(FilterChip, 'Robbing the Kong +1F'),
+    final checkbox = tester.widget<Checkbox>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('winBonusOption-robbing_the_kong'),
+        ),
+        matching: find.byType(Checkbox),
+      ),
     );
-    expect(chip.selected, isTrue);
+    expect(checkbox.value, isTrue);
   });
 
   testWidgets('player labels use current dealer as east', (tester) async {

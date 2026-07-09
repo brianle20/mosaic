@@ -594,10 +594,9 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
-          runSpacing: 8,
+          runSpacing: 4,
           children: [
-            for (final bonus in bonuses)
-              Chip(label: Text('${bonus.label} +${bonus.fanValue}F')),
+            for (final bonus in bonuses) Text(bonus.label),
           ],
         ),
       ],
