@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +12,7 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_fan_calculator.dart';
 import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 import 'package:mosaic/features/scoring/screens/hand_evidence_review_screen.dart';
+import 'package:mosaic/features/scoring/widgets/hand_photo_preview.dart';
 import 'package:mosaic/features/scoring/widgets/tile_keyboard.dart';
 
 void main() {
@@ -438,7 +441,7 @@ void main() {
     await tester.tap(find.text('Photo 1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(find.text('Incomplete Hand'), findsOneWidget);
     expect(find.text('Selected (0)'), findsOneWidget);
   });
 
@@ -477,9 +480,7 @@ void main() {
     await _showAllHands(tester);
     await tester.tap(find.text('Hand 1'));
     await tester.pumpAndSettle();
-    await _tapTile(tester, '1D');
-    await _tapTile(tester, '2D');
-    await _tapTile(tester, '3D');
+    await _enterValidHand(tester);
 
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
@@ -491,6 +492,13 @@ void main() {
   });
 
   testWidgets('opens editor when tapping queue row', (tester) async {
+    tester.view.physicalSize = const Size(390, 840);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
     await tester.pumpWidget(
       MaterialApp(
         home: HandEvidenceReviewScreen(
@@ -519,19 +527,211 @@ void main() {
     await tester.tap(find.text('Hand 7'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(find.text('Incomplete Hand'), findsOneWidget);
     expect(find.text('Selected (0)'), findsOneWidget);
     expect(
-      tester.getCenter(find.text('Save Tiles')).dy,
+      tester.getSize(find.byKey(HandPhotoPreview.previewKey)).height,
+      128,
+    );
+    final previewTopBefore =
+        tester.getTopLeft(find.byKey(HandPhotoPreview.previewKey)).dy;
+    expect(
+      tester.getCenter(find.text('Incomplete Hand')).dy,
       greaterThan(tester.getTopLeft(find.byKey(TileKeyboard.tileListKey)).dy),
     );
 
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -120));
+    final trayTopBefore =
+        tester.getTopLeft(find.byKey(TileKeyboard.selectedTrayKey)).dy;
+    await tester.drag(
+        find.byKey(TileKeyboard.tileListKey), const Offset(0, -120));
     await tester.pump();
+
+    expect(tester.getTopLeft(find.byKey(TileKeyboard.selectedTrayKey)).dy,
+        trayTopBefore);
+    expect(
+      tester.getTopLeft(find.byKey(HandPhotoPreview.previewKey)).dy,
+      previewTopBefore,
+    );
     expect(find.text('Characters'), findsOneWidget);
   });
 
-  testWidgets('shows logged win bonuses in editor context', (tester) async {
+  testWidgets('keeps calculated desktop photo height instead of mobile 128',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byKey(HandPhotoPreview.previewKey)).height,
+      289.68,
+    );
+  });
+
+  testWidgets('disables save while hand is incomplete', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                declaredFanCount: 3,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Incomplete Hand'), findsOneWidget);
+    expect(find.text('Incomplete hand'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+  });
+
+  testWidgets('disables save when 14 core tiles are invalid', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                declaredFanCount: 3,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+    for (final label in [
+      '1M',
+      '1M',
+      '1M',
+      '2M',
+      '2M',
+      '2M',
+      '4M',
+      '5M',
+      '7M',
+      '1D',
+      '2D',
+      '4D',
+      'East',
+      'South',
+    ]) {
+      await _tapTile(tester, label);
+    }
+
+    expect(find.text('Invalid Hand'), findsOneWidget);
+    expect(find.text('Invalid tile grouping'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+  });
+
+  testWidgets('enables save when 14 core tiles form a valid hand',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                declaredFanCount: 3,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+    await _enterValidHand(tester);
+
+    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNotNull);
+  });
+
+  testWidgets('shows special hands as saveable without invalid grouping',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                declaredFanCount: 13,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+    await _enterThirteenOrphans(tester);
+
+    expect(find.text('Thirteen Orphans'), findsOneWidget);
+    expect(find.text('Invalid tile grouping'), findsNothing);
+    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNotNull);
+  });
+
+  testWidgets('shows declaration and fan breakdown in tile editor',
+      (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: HandEvidenceReviewScreen(
@@ -544,6 +744,8 @@ void main() {
                 clientPhotoId: 'client_photo_01',
                 capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
                 winnerName: 'Ava',
+                declaredFanCount: 3,
+                winType: 'self_draw',
                 winBonuses: const [HandWinBonus.moonUnderTheSea],
               ),
             ],
@@ -556,9 +758,67 @@ void main() {
     await tester.tap(find.text("Ava's winning hand"));
     await tester.pumpAndSettle();
 
-    expect(find.text('Win bonuses'), findsOneWidget);
+    expect(find.text('Declared 3 fan self-draw'), findsOneWidget);
+    expect(find.text('Self-Pick'), findsOneWidget);
     expect(find.text('Moon Under the Sea'), findsOneWidget);
-    expect(find.text('Moon Under the Sea +1F'), findsNothing);
+    expect(find.text('+1'), findsNWidgets(2));
+    expect(find.text('Incomplete hand'), findsOneWidget);
+  });
+
+  testWidgets('final review shows declared-null discard context',
+      (tester) async {
+    await _pumpWinContextEditor(
+      tester,
+      winType: 'discard',
+    );
+
+    expect(find.text('Declared fan not recorded'), findsOneWidget);
+    expect(find.text('Discard win'), findsOneWidget);
+  });
+
+  testWidgets('final review shows declared-null self-draw context and fan',
+      (tester) async {
+    await _pumpWinContextEditor(
+      tester,
+      winType: 'self_draw',
+    );
+
+    expect(find.text('Declared fan not recorded'), findsOneWidget);
+    expect(find.text('Self-Pick'), findsOneWidget);
+    expect(find.text('+1'), findsOneWidget);
+  });
+
+  testWidgets('final review shows known empty win bonuses', (tester) async {
+    await _pumpWinContextEditor(
+      tester,
+      winBonuses: const [],
+    );
+
+    expect(find.text('Win bonuses: None'), findsOneWidget);
+    expect(find.text('Win bonuses not recorded'), findsNothing);
+  });
+
+  testWidgets('final review shows null win bonuses as not recorded',
+      (tester) async {
+    await _pumpWinContextEditor(
+      tester,
+      winBonuses: null,
+    );
+
+    expect(find.text('Win bonuses not recorded'), findsOneWidget);
+    expect(find.text('Win bonuses: None'), findsNothing);
+  });
+
+  testWidgets('final review keeps non-empty logged win bonuses visible',
+      (tester) async {
+    await _pumpWinContextEditor(
+      tester,
+      winBonuses: const [HandWinBonus.moonUnderTheSea],
+    );
+
+    expect(find.text('Moon Under the Sea'), findsOneWidget);
+    expect(find.text('Win bonuses not recorded'), findsNothing);
+    expect(find.text('Win bonuses: None'), findsNothing);
   });
 
   testWidgets('keeps logged win bonuses visible after saving tiles',
@@ -589,6 +849,7 @@ void main() {
     expect(find.text('Moon Under the Sea'), findsOneWidget);
     expect(find.text('Moon Under the Sea +1F'), findsNothing);
 
+    await _enterValidHand(tester);
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
 
@@ -623,6 +884,7 @@ void main() {
     await tester.tap(find.text("Ava's winning hand"));
     await tester.pumpAndSettle();
 
+    expect(find.text('Declared fan not recorded'), findsOneWidget);
     expect(find.text('Win bonuses not recorded'), findsOneWidget);
   });
 
@@ -662,7 +924,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(find.text('Incomplete Hand'), findsOneWidget);
     expect(find.text('Selected (0)'), findsOneWidget);
   });
 
@@ -702,11 +964,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(find.text('Incomplete Hand'), findsOneWidget);
     expect(find.text('Selected (0)'), findsOneWidget);
+    expect(
+      tester.getSize(find.byKey(HandPhotoPreview.previewKey)).height,
+      132,
+    );
   });
 
-  testWidgets('hydrates existing tile entry and preserves it when saved',
+  testWidgets('hydrates existing valid tile entry without creating changes',
       (tester) async {
     final repository = _FakeMosaicProfileRepository(
       records: [
@@ -720,7 +986,22 @@ void main() {
             reviewStatus: HandTileReviewStatus.unreviewed,
             tilesJson: const {
               'schemaVersion': 1,
-              'tiles': ['man_1', 'man_2', 'man_3'],
+              'tiles': [
+                'man_1',
+                'man_2',
+                'man_3',
+                'dot_4',
+                'dot_5',
+                'dot_6',
+                'bamboo_1',
+                'bamboo_2',
+                'bamboo_3',
+                'east',
+                'east',
+                'east',
+                'south',
+                'south',
+              ],
               'flowers': ['plum_1'],
               'winningTileId': 'man_3',
               'winningTileKnown': true,
@@ -745,7 +1026,7 @@ void main() {
     await tester.tap(find.text('Photo 1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Selected (4)'), findsOneWidget);
+    expect(find.text('Selected (15)'), findsOneWidget);
     expect(
         find.byKey(TileKeyboard.selectedTileKey('man_1', 0)), findsOneWidget);
     expect(
@@ -753,15 +1034,73 @@ void main() {
     expect(
         find.byKey(TileKeyboard.selectedTileKey('man_3', 2)), findsOneWidget);
     expect(
-        find.byKey(TileKeyboard.selectedTileKey('plum_1', 3)), findsOneWidget);
+        find.byKey(TileKeyboard.selectedTileKey('plum_1', 14)), findsOneWidget);
 
-    await tester.tap(find.text('Save Tiles'));
+    expect(find.text('No Changes'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+    expect(repository.savedTilesJson, isNull);
+  });
+
+  testWidgets('saved valid hand enables save only for semantic changes',
+      (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          tileEntry: _tileEntry(
+            handResultId: 'hand_01',
+            reviewStatus: HandTileReviewStatus.unreviewed,
+            tilesJson: _validSavedHandTilesJson,
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _showAllHands(tester);
+    await tester.tap(find.text('Photo 1'));
     await tester.pumpAndSettle();
 
-    expect(repository.savedTilesJson?['tiles'], ['man_1', 'man_2', 'man_3']);
-    expect(repository.savedTilesJson?['flowers'], ['plum_1']);
-    expect(repository.savedTilesJson?['winningTile'], 'man_3');
-    expect(repository.savedTilesJson?['winningTileKnown'], isTrue);
+    expect(find.text('No Changes'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+
+    await _tapTile(tester, 'Plum');
+
+    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNotNull);
+    final staleSave = _lastFilledButton(tester).onPressed;
+
+    await tester.tap(
+      find.byKey(TileKeyboard.selectedTileKey('plum_1', 14)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No Changes'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+
+    await tester.tap(
+      find.byKey(TileKeyboard.selectedTileKey('man_1', 0)),
+    );
+    await tester.pumpAndSettle();
+    await _tapTile(tester, '1M');
+
+    expect(find.text('No Changes'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+
+    staleSave?.call();
+    await tester.pumpAndSettle();
+    expect(repository.savedTilesJson, isNull);
   });
 
   testWidgets('shows saved confirmation after successful tile save',
@@ -790,7 +1129,7 @@ void main() {
     await _showAllHands(tester);
     await tester.tap(find.text('Photo 1'));
     await tester.pumpAndSettle();
-    await _tapTile(tester, '1M');
+    await _enterValidHand(tester);
 
     expect(find.text('Save Tiles'), findsOneWidget);
     expect(find.text('Saved'), findsNothing);
@@ -798,17 +1137,33 @@ void main() {
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
 
-    expect(repository.savedTilesJson?['tiles'], ['man_1']);
+    expect(repository.savedTilesJson?['tiles'], [
+      'man_1',
+      'man_2',
+      'man_3',
+      'dot_4',
+      'dot_5',
+      'dot_6',
+      'bamboo_1',
+      'bamboo_2',
+      'bamboo_3',
+      'east',
+      'east',
+      'east',
+      'south',
+      'south',
+    ]);
     expect(find.text('Saved'), findsOneWidget);
     expect(find.text('Save Tiles'), findsNothing);
+    expect(_lastFilledButton(tester).onPressed, isNull);
 
-    await _tapTile(tester, '2M');
+    await _tapTile(tester, 'Plum');
 
     expect(find.text('Save Tiles'), findsOneWidget);
     expect(find.text('Saved'), findsNothing);
   });
 
-  testWidgets('hydrates legacy array tile entry and preserves it when saved',
+  testWidgets('hydrates valid legacy array tile entry without creating changes',
       (tester) async {
     final repository = _FakeMosaicProfileRepository(
       records: [
@@ -820,7 +1175,22 @@ void main() {
           tileEntry: _tileEntry(
             handResultId: 'hand_01',
             reviewStatus: HandTileReviewStatus.unreviewed,
-            tilesJson: const ['man_1', 'east'],
+            tilesJson: const [
+              'man_1',
+              'man_2',
+              'man_3',
+              'dot_4',
+              'dot_5',
+              'dot_6',
+              'bamboo_1',
+              'bamboo_2',
+              'bamboo_3',
+              'east',
+              'east',
+              'east',
+              'south',
+              'south',
+            ],
           ),
         ),
       ],
@@ -840,18 +1210,17 @@ void main() {
     await tester.tap(find.text('Photo 1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Selected (2)'), findsOneWidget);
+    expect(find.text('Selected (14)'), findsOneWidget);
     expect(
         find.byKey(TileKeyboard.selectedTileKey('man_1', 0)), findsOneWidget);
-    expect(find.byKey(TileKeyboard.selectedTileKey('east', 1)), findsOneWidget);
+    expect(find.byKey(TileKeyboard.selectedTileKey('east', 9)), findsOneWidget);
 
-    await tester.tap(find.text('Save Tiles'));
-    await tester.pumpAndSettle();
-
-    expect(repository.savedTilesJson?['tiles'], ['man_1', 'east']);
+    expect(find.text('No Changes'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+    expect(repository.savedTilesJson, isNull);
   });
 
-  testWidgets('splits legacy array flowers when hydrating and saving',
+  testWidgets('splits valid legacy array flowers without creating changes',
       (tester) async {
     final repository = _FakeMosaicProfileRepository(
       records: [
@@ -863,7 +1232,23 @@ void main() {
           tileEntry: _tileEntry(
             handResultId: 'hand_01',
             reviewStatus: HandTileReviewStatus.unreviewed,
-            tilesJson: const ['man_1', 'plum_1'],
+            tilesJson: const [
+              'man_1',
+              'man_2',
+              'man_3',
+              'dot_4',
+              'dot_5',
+              'dot_6',
+              'bamboo_1',
+              'bamboo_2',
+              'bamboo_3',
+              'east',
+              'east',
+              'east',
+              'south',
+              'south',
+              'plum_1',
+            ],
           ),
         ),
       ],
@@ -883,20 +1268,19 @@ void main() {
     await tester.tap(find.text('Photo 1'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Selected (2)'), findsOneWidget);
+    expect(find.text('Selected (15)'), findsOneWidget);
     expect(
         find.byKey(TileKeyboard.selectedTileKey('man_1', 0)), findsOneWidget);
     expect(
-        find.byKey(TileKeyboard.selectedTileKey('plum_1', 1)), findsOneWidget);
+        find.byKey(TileKeyboard.selectedTileKey('plum_1', 14)), findsOneWidget);
 
-    await tester.tap(find.text('Save Tiles'));
-    await tester.pumpAndSettle();
-
-    expect(repository.savedTilesJson?['tiles'], ['man_1']);
-    expect(repository.savedTilesJson?['flowers'], ['plum_1']);
+    expect(find.text('No Changes'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+    expect(repository.savedTilesJson, isNull);
   });
 
-  testWidgets('requests and renders signed hand photo when row is selected',
+  _testWidgetsWithImageHttpClient(
+      'requests and renders signed hand photo when row is selected',
       (tester) async {
     final repository = _FakeMosaicProfileRepository(
       signedPhotoUrl: Uri.parse('https://example.com/photo.jpg'),
@@ -925,7 +1309,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Hand 7'));
-    await tester.pumpAndSettle();
+    await _waitForPhotoReady(tester);
 
     expect(repository.requestedPhotoIds, ['photo_01']);
     expect(find.text('Photo'), findsNothing);
@@ -937,7 +1321,58 @@ void main() {
     expect((image.image as NetworkImage).url, 'https://example.com/photo.jpg');
   });
 
-  testWidgets('saves reviewed photo rotation with tile entry', (tester) async {
+  testWidgets('waits for signed photo response to decode before controls show',
+      (tester) async {
+    final pendingResponse = Completer<HttpClientResponse>();
+    debugNetworkImageHttpClientProvider = () => _TestImageHttpClient(
+          response: pendingResponse.future,
+        );
+    try {
+      final repository = _FakeMosaicProfileRepository(
+        signedPhotoUrl: Uri.parse('https://example.com/delayed-photo.jpg'),
+        records: [
+          _reviewRecord(
+            id: 'photo_01',
+            handResultId: 'hand_01',
+            clientPhotoId: 'client_photo_01',
+            capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HandEvidenceReviewScreen(
+            eventId: 'evt_01',
+            mosaicProfileRepository: repository,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _showAllHands(tester);
+      await tester.tap(find.text('Photo 1'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Loading photo'), findsOneWidget);
+      expect(find.byKey(HandPhotoPreview.recenterKey), findsNothing);
+      expect(find.byKey(HandPhotoPreview.expandKey), findsNothing);
+
+      pendingResponse.complete(_TestImageHttpClientResponse());
+      await _waitForPhotoReady(tester);
+
+      expect(find.text('Loading photo'), findsNothing);
+      expect(find.byKey(HandPhotoPreview.recenterKey), findsOneWidget);
+      expect(find.byKey(HandPhotoPreview.expandKey), findsOneWidget);
+    } finally {
+      debugNetworkImageHttpClientProvider = null;
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+    }
+  });
+
+  _testWidgetsWithImageHttpClient(
+      'saves reviewed photo rotation with tile entry', (tester) async {
     final repository = _FakeMosaicProfileRepository(
       signedPhotoUrl: Uri.parse('https://example.com/photo.jpg'),
       records: [
@@ -962,7 +1397,7 @@ void main() {
 
     await _showAllHands(tester);
     await tester.tap(find.text('Photo 1'));
-    await tester.pumpAndSettle();
+    await _waitForPhotoReady(tester);
     expect(find.text('Open photo'), findsNothing);
     expect(find.text('Open'), findsNothing);
     await tester.tap(find.byKey(const Key('hand-photo-preview')));
@@ -972,13 +1407,135 @@ void main() {
     await _tapStatusTab(tester, 'Done');
     await tester.pumpAndSettle();
 
+    await _enterValidHand(tester);
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
 
     expect(repository.savedTilesJson?['photoRotationQuarterTurns'], 1);
   });
 
-  testWidgets('clear tiles keeps reviewed photo rotation', (tester) async {
+  _testWidgetsWithImageHttpClient(
+      'full-screen Reset restores transform and rotation', (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      signedPhotoUrl: Uri.parse('https://example.com/photo.jpg'),
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          tileEntry: _tileEntry(
+            handResultId: 'hand_01',
+            reviewStatus: HandTileReviewStatus.unreviewed,
+            tilesJson: _validSavedHandTilesJson,
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _showAllHands(tester);
+    await tester.tap(find.text('Photo 1'));
+    await _waitForPhotoReady(tester);
+    await tester.tap(find.byKey(HandPhotoPreview.expandKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Rotate right'));
+    await tester.pump();
+
+    final viewerFinder = find.byType(InteractiveViewer);
+    expect(viewerFinder, findsOneWidget);
+    final viewer = tester.widget<InteractiveViewer>(viewerFinder);
+    viewer.transformationController!.value = Matrix4.identity()
+      ..scaleByDouble(2.0, 2.0, 2.0, 1.0);
+    await tester.pump();
+    await tester.tap(find.byTooltip('Reset'));
+    await tester.pump();
+
+    expect(
+      viewer.transformationController!.value.storage,
+      orderedEquals(Matrix4.identity().storage),
+    );
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('No Changes'), findsOneWidget);
+  });
+
+  testWidgets('clear disables save for an existing saved tile entry',
+      (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          tileEntry: _tileEntry(
+            handResultId: 'hand_01',
+            reviewStatus: HandTileReviewStatus.unreviewed,
+            tilesJson: const {
+              'schemaVersion': 1,
+              'tiles': [
+                'man_1',
+                'man_2',
+                'man_3',
+                'dot_4',
+                'dot_5',
+                'dot_6',
+                'bamboo_1',
+                'bamboo_2',
+                'bamboo_3',
+                'east',
+                'east',
+                'east',
+                'south',
+                'south',
+              ],
+              'flowers': [],
+              'winningTileKnown': false,
+              'groups': [],
+            },
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _showAllHands(tester);
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('No Changes'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+
+    await tester.tap(find.text('Clear'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Incomplete Hand'), findsOneWidget);
+    expect(find.text('Selected (0)'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+    expect(repository.savedTilesJson, isNull);
+  });
+
+  _testWidgetsWithImageHttpClient(
+      're-entering a valid hand after clear keeps reviewed photo rotation',
+      (tester) async {
     final repository = _FakeMosaicProfileRepository(
       signedPhotoUrl: Uri.parse('https://example.com/photo.jpg'),
       records: [
@@ -1015,7 +1572,7 @@ void main() {
 
     await _showAllHands(tester);
     await tester.tap(find.text('Photo 1'));
-    await tester.pumpAndSettle();
+    await _waitForPhotoReady(tester);
     await tester.tap(find.byKey(const Key('hand-photo-preview')));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Rotate right'));
@@ -1025,10 +1582,11 @@ void main() {
 
     await tester.tap(find.text('Clear'));
     await tester.pumpAndSettle();
+    await _enterValidHand(tester);
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
 
-    expect(repository.savedTilesJson?['tiles'], isEmpty);
+    expect(repository.savedTilesJson?['tiles'], hasLength(14));
     expect(repository.savedTilesJson?['photoRotationQuarterTurns'], 1);
   });
 
@@ -1062,10 +1620,12 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('client_photo_01'), findsNothing);
+    expect(find.byKey(HandPhotoPreview.recenterKey), findsNothing);
+    expect(find.byKey(HandPhotoPreview.expandKey), findsNothing);
   });
 
-  testWidgets('keeps tile entry usable while photo URL is pending',
-      (tester) async {
+  _testWidgetsWithImageHttpClient(
+      'keeps tile entry usable while photo URL is pending', (tester) async {
     final pendingPhotoUrl = Completer<Uri?>();
     final repository = _FakeMosaicProfileRepository(
       pendingPhotoUrl: pendingPhotoUrl,
@@ -1093,16 +1653,15 @@ void main() {
     await tester.pump();
 
     expect(find.text('Loading photo'), findsOneWidget);
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -120));
-    await tester.pump();
-    await tester.tap(find.widgetWithText(OutlinedButton, '1M'));
-    await tester.pump();
+    expect(find.byKey(HandPhotoPreview.recenterKey), findsNothing);
+    expect(find.byKey(HandPhotoPreview.expandKey), findsNothing);
+    await _tapTile(tester, '1M', settle: false);
 
     await _showSelectedTileCount(tester, 1, settle: false);
     expect(find.text('Selected (1)'), findsOneWidget);
 
     pendingPhotoUrl.complete(Uri.parse('https://example.com/photo.jpg'));
-    await tester.pumpAndSettle();
+    await _waitForPhotoReady(tester);
 
     expect(find.byType(Image), findsOneWidget);
   });
@@ -1134,6 +1693,8 @@ void main() {
 
     expect(find.text('Photo could not be loaded'), findsOneWidget);
     expect(find.textContaining('signed URL denied'), findsOneWidget);
+    expect(find.byKey(HandPhotoPreview.recenterKey), findsNothing);
+    expect(find.byKey(HandPhotoPreview.expandKey), findsNothing);
   });
 
   testWidgets('saves under-declared tile entry and updates queue status',
@@ -1191,6 +1752,11 @@ void main() {
       await _tapTile(tester, label);
     }
 
+    expect(find.text('Seat Flower / Season'), findsWidgets);
+    expect(find.text('Seat Wind'), findsOneWidget);
+    expect(find.text('Round Wind'), findsOneWidget);
+    expect(find.text('Red Dragon'), findsOneWidget);
+
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
 
@@ -1211,7 +1777,7 @@ void main() {
     expect(find.text('Under'), findsOneWidget);
   });
 
-  testWidgets('saves historical unknown win bonus review as unreviewed',
+  testWidgets('saves historical unknown win bonus mismatch as unreviewed',
       (tester) async {
     final repository = _FakeMosaicProfileRepository(
       records: [
@@ -1221,7 +1787,7 @@ void main() {
           clientPhotoId: 'client_photo_01',
           capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
           winnerName: 'Ava',
-          declaredFanCount: 8,
+          declaredFanCount: 2,
           winBonuses: null,
         ),
       ],
@@ -1239,10 +1805,11 @@ void main() {
 
     await tester.tap(find.text("Ava's winning hand"));
     await tester.pumpAndSettle();
+    await _enterValidHand(tester);
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
 
-    expect(repository.savedCalculatedFanCount, isNull);
+    expect(repository.savedCalculatedFanCount, 3);
     expect(repository.savedReviewStatus, HandTileReviewStatus.unreviewed);
   });
 
@@ -1304,7 +1871,7 @@ void main() {
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
 
-    expect(repository.savedCalculatedFanCount, 1);
+    expect(repository.savedCalculatedFanCount, 2);
   });
 
   testWidgets('ignores tile edits while save is pending', (tester) async {
@@ -1333,18 +1900,15 @@ void main() {
 
     await tester.tap(find.text('Photo 1'));
     await tester.pumpAndSettle();
-    await _tapTile(tester, '1M');
-    await _showSelectedTileCount(tester, 1);
+    await _enterValidHand(tester);
+    await _showSelectedTileCount(tester, 14);
 
     await tester.tap(find.text('Save Tiles'));
     await tester.pump();
 
-    await tester.drag(find.byType(Scrollable).last, const Offset(0, -120));
-    await tester.pump();
-    await tester.tap(find.widgetWithText(OutlinedButton, '2M'));
-    await tester.pump();
-    await _showSelectedTileCount(tester, 1, settle: false);
-    expect(find.text('Selected (1)'), findsOneWidget);
+    await _tapTile(tester, '2M', settle: false);
+    await _showSelectedTileCount(tester, 14, settle: false);
+    expect(find.text('Selected (14)'), findsOneWidget);
 
     pendingSave.complete(_tileEntry(
       handResultId: 'hand_01',
@@ -1387,8 +1951,8 @@ void main() {
 
     await tester.tap(find.text('Hand 1'));
     await tester.pumpAndSettle();
-    await _tapTile(tester, '1M');
-    await _showSelectedTileCount(tester, 1);
+    await _enterValidHand(tester);
+    await _showSelectedTileCount(tester, 14);
 
     await tester.tap(find.text('Save Tiles'));
     await tester.pump();
@@ -1396,7 +1960,7 @@ void main() {
     await tester.tap(find.text('Hand 2'));
     await tester.pump();
 
-    expect(find.text('Selected (1)'), findsOneWidget);
+    expect(find.text('Selected (14)'), findsOneWidget);
 
     pendingSave.complete(_tileEntry(
       handResultId: 'hand_01',
@@ -1428,12 +1992,15 @@ void main() {
 
     await tester.tap(find.text('Photo 1'));
     await tester.pumpAndSettle();
+    await _enterValidHand(tester);
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Unable to save tiles.'), findsOneWidget);
     expect(find.textContaining('save denied'), findsOneWidget);
     expect(find.text('Photo 1'), findsWidgets);
+    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNotNull);
   });
 
   testWidgets('selecting another row resets draft and clears save error',
@@ -1468,9 +2035,9 @@ void main() {
 
     await tester.tap(find.text('Hand 1'));
     await tester.pumpAndSettle();
-    await _tapTile(tester, '1M');
-    await _showSelectedTileCount(tester, 1);
-    expect(find.text('Selected (1)'), findsOneWidget);
+    await _enterValidHand(tester);
+    await _showSelectedTileCount(tester, 14);
+    expect(find.text('Selected (14)'), findsOneWidget);
 
     await tester.tap(find.text('Save Tiles'));
     await tester.pumpAndSettle();
@@ -1646,6 +2213,30 @@ EventHandLedgerEntry _ledgerEntry({
   );
 }
 
+const _validSavedHandTilesJson = {
+  'schemaVersion': 1,
+  'tiles': [
+    'man_1',
+    'man_2',
+    'man_3',
+    'dot_4',
+    'dot_5',
+    'dot_6',
+    'bamboo_1',
+    'bamboo_2',
+    'bamboo_3',
+    'east',
+    'east',
+    'east',
+    'south',
+    'south',
+  ],
+  'flowers': <String>[],
+  'winningTileKnown': false,
+  'photoRotationQuarterTurns': 0,
+  'groups': <Object>[],
+};
+
 HandEvidenceReviewRecord _reviewRecord({
   required String id,
   required String handResultId,
@@ -1713,7 +2304,15 @@ HandTileEntryRecord _tileEntry({
   );
 }
 
-Future<void> _tapTile(WidgetTester tester, String label) async {
+Future<void> _tapTile(
+  WidgetTester tester,
+  String label, {
+  bool settle = true,
+}) async {
+  Future<void> pumpAfterAction() {
+    return settle ? tester.pumpAndSettle() : tester.pump();
+  }
+
   final scrollTarget = find.byKey(TileKeyboard.tileListKey);
   final finder = scrollTarget.evaluate().isEmpty
       ? find.widgetWithText(OutlinedButton, label)
@@ -1724,7 +2323,7 @@ Future<void> _tapTile(WidgetTester tester, String label) async {
   if (finder.evaluate().isEmpty && scrollTarget.evaluate().isNotEmpty) {
     for (var attempt = 0; attempt < 4; attempt += 1) {
       await tester.drag(scrollTarget, const Offset(0, 320));
-      await tester.pumpAndSettle();
+      await pumpAfterAction();
     }
   }
   for (var attempt = 0;
@@ -1735,18 +2334,126 @@ Future<void> _tapTile(WidgetTester tester, String label) async {
     } else {
       await tester.drag(find.byType(Scrollable).last, const Offset(0, -260));
     }
-    await tester.pumpAndSettle();
+    await pumpAfterAction();
   }
   expect(finder, findsOneWidget,
       reason: 'Could not find tile button "$label".');
   await tester.ensureVisible(finder);
-  await tester.pumpAndSettle();
+  await pumpAfterAction();
   await tester.tap(finder);
+  await pumpAfterAction();
+}
+
+Future<void> _enterValidHand(WidgetTester tester) async {
+  await _enterTileFixture(tester, [
+    '1M',
+    '2M',
+    '3M',
+    '4D',
+    '5D',
+    '6D',
+    '1B',
+    '2B',
+    '3B',
+    'East',
+    'East',
+    'East',
+    'South',
+    'South',
+  ]);
+}
+
+Future<void> _enterThirteenOrphans(WidgetTester tester) async {
+  await _enterTileFixture(tester, [
+    '1M',
+    '9M',
+    '1D',
+    '9D',
+    '1B',
+    '9B',
+    'East',
+    'South',
+    'West',
+    'North',
+    'Red',
+    'Green',
+    'White',
+    'East',
+  ]);
+}
+
+Future<void> _enterTileFixture(
+  WidgetTester tester,
+  List<String> labels,
+) async {
+  final tileList = find.byKey(TileKeyboard.tileListKey);
+  final callbacks = <String, VoidCallback>{};
+  for (final label in labels.toSet()) {
+    final button = tester.widget<OutlinedButton>(
+      find.descendant(
+        of: tileList,
+        matching: find.widgetWithText(OutlinedButton, label),
+      ),
+    );
+    callbacks[label] = button.onPressed!;
+  }
+  for (final label in labels) {
+    callbacks[label]!();
+  }
   await tester.pumpAndSettle();
 }
 
 Future<void> _showAllHands(WidgetTester tester) async {
   await _tapStatusTab(tester, 'All');
+}
+
+Future<void> _pumpWinContextEditor(
+  WidgetTester tester, {
+  String? winType,
+  int? declaredFanCount,
+  List<HandWinBonus>? winBonuses = const [],
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: HandEvidenceReviewScreen(
+        eventId: 'evt_01',
+        mosaicProfileRepository: _FakeMosaicProfileRepository(
+          records: [
+            _reviewRecord(
+              id: 'photo_01',
+              handResultId: 'hand_01',
+              clientPhotoId: 'client_photo_01',
+              capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+              winnerName: 'Ava',
+              winType: winType,
+              declaredFanCount: declaredFanCount,
+              winBonuses: winBonuses,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text("Ava's winning hand"));
+  await tester.pumpAndSettle();
+}
+
+Future<void> _waitForPhotoReady(WidgetTester tester) async {
+  for (var attempt = 0; attempt < 50; attempt += 1) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump();
+    if (find.byKey(HandPhotoPreview.recenterKey).evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  expect(find.byKey(HandPhotoPreview.recenterKey), findsOneWidget);
+}
+
+FilledButton _lastFilledButton(WidgetTester tester) {
+  return tester.widget<FilledButton>(find.byType(FilledButton).last);
 }
 
 Future<void> _tapStatusTab(WidgetTester tester, String label) async {
@@ -1777,4 +2484,82 @@ Future<void> _showSelectedTileCount(
   } else {
     await tester.pump();
   }
+}
+
+void _testWidgetsWithImageHttpClient(
+  String description,
+  WidgetTesterCallback callback,
+) {
+  testWidgets(description, (tester) async {
+    debugNetworkImageHttpClientProvider = _TestImageHttpClient.new;
+    try {
+      await callback(tester);
+    } finally {
+      debugNetworkImageHttpClientProvider = null;
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+    }
+  });
+}
+
+class _TestImageHttpClient implements HttpClient {
+  _TestImageHttpClient({Future<HttpClientResponse>? response})
+      : _response = response ?? Future.value(_TestImageHttpClientResponse());
+
+  final Future<HttpClientResponse> _response;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async {
+    return _TestImageHttpClientRequest(_response);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _TestImageHttpClientRequest implements HttpClientRequest {
+  _TestImageHttpClientRequest(this.response);
+
+  final Future<HttpClientResponse> response;
+
+  @override
+  Future<HttpClientResponse> close() => response;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _TestImageHttpClientResponse extends Stream<List<int>>
+    implements HttpClientResponse {
+  static final _bytes = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  );
+
+  @override
+  int get contentLength => _bytes.length;
+
+  @override
+  HttpClientResponseCompressionState get compressionState =>
+      HttpClientResponseCompressionState.notCompressed;
+
+  @override
+  int get statusCode => HttpStatus.ok;
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int>)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return Stream<List<int>>.value(_bytes).listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

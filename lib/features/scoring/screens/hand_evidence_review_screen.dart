@@ -6,6 +6,7 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_entry_draft.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_fan_calculator.dart';
 import 'package:mosaic/features/scoring/models/mahjong_tile.dart';
+import 'package:mosaic/features/scoring/widgets/hand_photo_preview.dart';
 import 'package:mosaic/features/scoring/widgets/tile_keyboard.dart';
 import 'package:mosaic/widgets/app_chrome.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
@@ -34,6 +35,7 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
   var _ledgerEntriesByHandId = <String, EventHandLedgerEntry>{};
   HandEvidenceReviewRecord? _selectedRecord;
   HandTileEntryDraft _tileDraft = HandTileEntryDraft();
+  HandTileEntryDraft _baselineTileDraft = HandTileEntryDraft();
   var _isLoading = true;
   Object? _loadError;
   var _isSaving = false;
@@ -84,6 +86,7 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         _ledgerEntriesByHandId = _ledgerEntriesByHandIdFrom(ledgerEntries);
         _selectedRecord = null;
         _tileDraft = HandTileEntryDraft();
+        _baselineTileDraft = HandTileEntryDraft();
         _isLoading = false;
         _hasSavedCurrentDraft = false;
         _photoUri = null;
@@ -100,6 +103,7 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         _ledgerEntriesByHandId = {};
         _selectedRecord = null;
         _tileDraft = HandTileEntryDraft();
+        _baselineTileDraft = HandTileEntryDraft();
         _isLoading = false;
         _hasSavedCurrentDraft = false;
         _loadError = error;
@@ -128,10 +132,12 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
       return;
     }
 
+    final selectedDraft =
+        _draftFromTileEntry(record.tileEntry) ?? HandTileEntryDraft();
     setState(() {
       _selectedRecord = record;
-      _tileDraft =
-          _draftFromTileEntry(record.tileEntry) ?? HandTileEntryDraft();
+      _tileDraft = selectedDraft;
+      _baselineTileDraft = selectedDraft;
       _hasSavedCurrentDraft = false;
       _saveError = null;
       _photoUri = null;
@@ -145,6 +151,9 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
   void _notifyEditorChanged() {
     _editorRevision.value += 1;
   }
+
+  bool get _hasUnsavedTileChanges =>
+      !_tileDraft.hasSameEditableContentAs(_baselineTileDraft);
 
   Future<void> _openMobileEditor(
     HandEvidenceReviewRecord record,
@@ -218,6 +227,21 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
       return;
     }
 
+    if (!_hasUnsavedTileChanges) {
+      return;
+    }
+
+    final review = _currentReviewFor(record);
+    if (!review.canSave) {
+      setState(() {
+        _saveError = review.isComplete
+            ? 'This tile selection is not a valid winning hand.'
+            : 'Select 14 core tiles before saving.';
+      });
+      _notifyEditorChanged();
+      return;
+    }
+
     setState(() {
       _isSaving = true;
       _hasSavedCurrentDraft = false;
@@ -226,14 +250,6 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
     _notifyEditorChanged();
 
     try {
-      final review = calculateHandTileFanReview(
-        draft: _tileDraft,
-        declaredFanCount: record.declaredFanCount,
-        seatWindTileId: record.seatWindTileId ?? 'east',
-        roundWindTileId: record.roundWindTileId ?? 'east',
-        isSelfDraw: record.winType == 'self_draw',
-        winBonuses: record.winBonuses,
-      );
       final savedEntry =
           await widget.mosaicProfileRepository.upsertHandTileEntry(
         handResultId: record.handResultId,
@@ -258,6 +274,7 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
       setState(() {
         _records = updatedRecords;
         _selectedRecord = updatedRecord;
+        _baselineTileDraft = _tileDraft;
         _isSaving = false;
         _hasSavedCurrentDraft = true;
       });
@@ -277,6 +294,17 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
       });
       _notifyEditorChanged();
     }
+  }
+
+  HandTileFanReviewResult _currentReviewFor(HandEvidenceReviewRecord record) {
+    return calculateHandTileFanReview(
+      draft: _tileDraft,
+      declaredFanCount: record.declaredFanCount,
+      seatWindTileId: record.seatWindTileId ?? 'east',
+      roundWindTileId: record.roundWindTileId ?? 'east',
+      isSelfDraw: record.winType == 'self_draw',
+      winBonuses: record.winBonuses,
+    );
   }
 
   void _addTile(String tileId) {
@@ -514,9 +542,13 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
       builder: (context, constraints) {
         final isCompact = constraints.maxHeight < 520;
         final gap = isCompact ? 6.0 : 8.0;
-        final photoHeight = (constraints.maxHeight * (isCompact ? 0.26 : 0.34))
-            .clamp(isCompact ? 132.0 : 190.0, isCompact ? 168.0 : 300.0)
-            .toDouble();
+        final photoHeight = returnAfterSave
+            ? 128.0
+            : (constraints.maxHeight * (isCompact ? 0.26 : 0.34))
+                .clamp(isCompact ? 132.0 : 190.0, isCompact ? 168.0 : 300.0)
+                .toDouble();
+        final photoImage =
+            _photoUri == null ? null : NetworkImage(_photoUri.toString());
         final keyboard = TileKeyboard(
           draft: _tileDraft,
           onAddTile: _addTile,
@@ -524,10 +556,11 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
           onClear: _clearTiles,
           onSetWinningTile: _setWinningTile,
         );
+        final currentReview = _currentReviewFor(record);
         final topContent = [
-          _HandPhotoPreview(
-            record: record,
-            photoUri: _photoUri,
+          HandPhotoPreview(
+            photoId: record.photo.id,
+            photoImage: photoImage,
             isLoading: _isPhotoLoading,
             error: _photoError,
             height: photoHeight,
@@ -535,12 +568,27 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
             onOpenPhoto: _openPhotoViewer,
           ),
           SizedBox(height: gap),
-          _buildWinBonusContext(record),
+          _FanBreakdownPanel(
+            record: record,
+            review: currentReview,
+            isCompact: isCompact,
+          ),
           SizedBox(height: gap),
         ];
+        final hasUnsavedChanges = _hasUnsavedTileChanges;
+        final canSave = currentReview.canSave && hasUnsavedChanges;
+        final disabledLabel = _hasSavedCurrentDraft
+            ? 'Saved'
+            : !currentReview.isComplete
+                ? 'Incomplete Hand'
+                : !currentReview.canSave
+                    ? 'Invalid Hand'
+                    : 'No Changes';
         final bottomSaveBar = _BottomSaveBar(
           isSaving: _isSaving,
           isSaved: _hasSavedCurrentDraft,
+          canSave: canSave,
+          disabledLabel: disabledLabel,
           saveError: _saveError,
           onSave: () => _saveTiles(returnAfterSave: returnAfterSave),
         );
@@ -575,31 +623,195 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
     }
     return _ledgerEntriesByHandId[selectedRecord.handResultId];
   }
+}
 
-  Widget _buildWinBonusContext(HandEvidenceReviewRecord record) {
-    final bonuses = record.winBonuses;
-    if (bonuses == null) {
-      return const Text('Win bonuses not recorded');
-    }
-    if (bonuses.isEmpty) {
-      return const Text('Win bonuses: None');
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Win bonuses',
-          style: TextStyle(fontWeight: FontWeight.w800),
+class _FanBreakdownPanel extends StatelessWidget {
+  const _FanBreakdownPanel({
+    required this.record,
+    required this.review,
+    required this.isCompact,
+  });
+
+  final HandEvidenceReviewRecord record;
+  final HandTileFanReviewResult review;
+  final bool isCompact;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final hasKnownWinType =
+        record.winType == 'discard' || record.winType == 'self_draw';
+    final rows = review.breakdown
+        .where(
+          (item) =>
+              item.source != HandTileFanBreakdownSource.declared &&
+              (item.source != HandTileFanBreakdownSource.winType ||
+                  hasKnownWinType),
+        )
+        .toList(growable: false);
+    final statusLabel = _statusLabel;
+    final winBonuses = record.winBonuses;
+    final winBonusesLabel = winBonuses == null
+        ? 'Win bonuses not recorded'
+        : winBonuses.isEmpty
+            ? 'Win bonuses: None'
+            : null;
+    final contextLabelStyle = theme.textTheme.bodySmall?.copyWith(
+      color: colors.onSurfaceVariant,
+      fontWeight: FontWeight.w700,
+    );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.45),
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: isCompact ? 6 : 10,
         ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            for (final bonus in bonuses) Text(bonus.label),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    _declarationLabel(record),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                if (isCompact)
+                  Text(
+                    '${review.calculatedFanCount?.toString() ?? '--'} fan',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  )
+                else
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        review.calculatedFanCount?.toString() ?? '--',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        'fan',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+            if (statusLabel != null || winBonusesLabel != null) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 12,
+                runSpacing: 2,
+                children: [
+                  if (statusLabel != null)
+                    Text(statusLabel, style: contextLabelStyle),
+                  if (winBonusesLabel != null)
+                    Text(winBonusesLabel, style: contextLabelStyle),
+                ],
+              ),
+            ],
+            if (rows.isNotEmpty) ...[
+              SizedBox(height: isCompact ? 4 : 8),
+              if (isCompact)
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final item in rows)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Row(
+                            children: [
+                              Text(
+                                item.label,
+                                style: theme.textTheme.bodySmall,
+                              ),
+                              if (item.fanValue != null) ...[
+                                const SizedBox(width: 4),
+                                Text(
+                                  '+${item.fanValue}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: colors.onSurfaceVariant,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                )
+              else
+                for (final item in rows)
+                  _FanBreakdownRow(
+                    label: item.label,
+                    fanValue: item.fanValue,
+                  ),
+            ],
           ],
         ),
-      ],
+      ),
+    );
+  }
+
+  String? get _statusLabel {
+    if (!review.isComplete) {
+      return 'Incomplete hand';
+    }
+    if (!review.canSave) {
+      return 'Invalid tile grouping';
+    }
+    return null;
+  }
+}
+
+class _FanBreakdownRow extends StatelessWidget {
+  const _FanBreakdownRow({
+    required this.label,
+    required this.fanValue,
+  });
+
+  final String label;
+  final int? fanValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: theme.textTheme.bodySmall)),
+          if (fanValue != null)
+            Text(
+              '+$fanValue',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -835,12 +1047,16 @@ class _BottomSaveBar extends StatelessWidget {
   const _BottomSaveBar({
     required this.isSaving,
     required this.isSaved,
+    required this.canSave,
+    required this.disabledLabel,
     required this.saveError,
     required this.onSave,
   });
 
   final bool isSaving;
   final bool isSaved;
+  final bool canSave;
+  final String disabledLabel;
   final String? saveError;
   final VoidCallback onSave;
 
@@ -860,7 +1076,7 @@ class _BottomSaveBar extends StatelessWidget {
               const SizedBox(height: 8),
             ],
             FilledButton.icon(
-              onPressed: isSaving ? null : onSave,
+              onPressed: isSaving || !canSave ? null : onSave,
               icon: isSaving
                   ? const SizedBox.square(
                       dimension: 18,
@@ -871,173 +1087,17 @@ class _BottomSaveBar extends StatelessWidget {
                           ? Icons.check_circle_outline
                           : Icons.save_outlined,
                     ),
-              label: Text(isSaved ? 'Saved' : 'Save Tiles'),
+              label: Text(
+                isSaved
+                    ? 'Saved'
+                    : canSave
+                        ? 'Save Tiles'
+                        : disabledLabel,
+              ),
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _HandPhotoPreview extends StatelessWidget {
-  const _HandPhotoPreview({
-    required this.record,
-    required this.photoUri,
-    required this.isLoading,
-    required this.error,
-    required this.height,
-    required this.rotationQuarterTurns,
-    required this.onOpenPhoto,
-  });
-
-  final HandEvidenceReviewRecord record;
-  final Uri? photoUri;
-  final bool isLoading;
-  final Object? error;
-  final double height;
-  final int rotationQuarterTurns;
-  final VoidCallback onOpenPhoto;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final uri = photoUri;
-    final photoError = error;
-
-    return Container(
-      height: height,
-      width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          key: const Key('hand-photo-preview'),
-          width: double.infinity,
-          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-          child: Builder(
-            builder: (context) {
-              if (isLoading) {
-                return const Center(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 8),
-                        Text('Loading photo'),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              if (photoError != null) {
-                return _PhotoStatusPanel(
-                  icon: Icons.broken_image_outlined,
-                  iconColor: colorScheme.error,
-                  title: 'Photo could not be loaded',
-                  titleColor: colorScheme.error,
-                  detail: photoError.toString(),
-                );
-              }
-
-              if (uri == null) {
-                return _PhotoStatusPanel(
-                  icon: Icons.image_not_supported_outlined,
-                  iconColor: colorScheme.onSurfaceVariant,
-                  title: 'Photo unavailable',
-                  detail: 'The captured photo could not be opened.',
-                );
-              }
-
-              return GestureDetector(
-                onTap: onOpenPhoto,
-                child: RotatedBox(
-                  quarterTurns: rotationQuarterTurns,
-                  child: Image.network(
-                    uri.toString(),
-                    fit: BoxFit.contain,
-                    width: double.infinity,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Center(
-                        child: Icon(
-                          Icons.broken_image_outlined,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PhotoStatusPanel extends StatelessWidget {
-  const _PhotoStatusPanel({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    this.titleColor,
-    this.detail,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final Color? titleColor;
-  final String? detail;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth:
-                      (constraints.maxWidth - 12).clamp(0, 480).toDouble(),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, color: iconColor),
-                    const SizedBox(height: 4),
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: titleColor),
-                    ),
-                    if (detail != null)
-                      Text(
-                        detail!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 }
@@ -1060,6 +1120,7 @@ class _HandPhotoViewer extends StatefulWidget {
 }
 
 class _HandPhotoViewerState extends State<_HandPhotoViewer> {
+  final _transformationController = TransformationController();
   late int _rotationQuarterTurns;
 
   @override
@@ -1074,6 +1135,17 @@ class _HandPhotoViewerState extends State<_HandPhotoViewer> {
       _rotationQuarterTurns = normalizedQuarterTurns;
     });
     widget.onRotationChanged(normalizedQuarterTurns);
+  }
+
+  void _resetViewer() {
+    _transformationController.value = Matrix4.identity();
+    _setRotation(0);
+  }
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
   }
 
   @override
@@ -1094,6 +1166,7 @@ class _HandPhotoViewerState extends State<_HandPhotoViewer> {
         children: [
           Expanded(
             child: InteractiveViewer(
+              transformationController: _transformationController,
               minScale: 0.5,
               maxScale: 5,
               child: Center(
@@ -1146,7 +1219,7 @@ class _HandPhotoViewerState extends State<_HandPhotoViewer> {
                   const SizedBox(width: 8),
                   IconButton.filledTonal(
                     tooltip: 'Reset',
-                    onPressed: () => _setRotation(0),
+                    onPressed: _resetViewer,
                     icon: const Icon(Icons.refresh),
                   ),
                 ],
@@ -1318,6 +1391,23 @@ String _metadataLabel(
   }
 
   return parts.join(' • ');
+}
+
+String _declarationLabel(HandEvidenceReviewRecord record) {
+  final declaredFanCount = record.declaredFanCount;
+  if (declaredFanCount == null) {
+    return 'Declared fan not recorded';
+  }
+
+  final winType = switch (record.winType) {
+    'self_draw' => 'self-draw',
+    'discard' => 'discard',
+    _ => null,
+  };
+  if (winType == null) {
+    return 'Declared $declaredFanCount fan';
+  }
+  return 'Declared $declaredFanCount fan $winType';
 }
 
 String _reviewTitle(

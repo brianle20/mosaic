@@ -27,11 +27,6 @@ class TileKeyboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tray = _SelectedTileTray(
-      draft: draft,
-      onClear: onClear,
-      onRemoveTile: onRemoveTile,
-    );
     final sections = [
       _TileSection(
         title: 'Characters',
@@ -69,28 +64,31 @@ class TileKeyboard extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxHeight < 260) {
-          return ListView(
-            key: tileListKey,
-            padding: EdgeInsets.zero,
-            children: [
-              tray,
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Column(children: sections),
-              ),
-            ],
-          );
-        }
+        final trayHeight =
+            constraints.maxHeight < _SelectedTileTray.defaultHeight + 96
+                ? (constraints.maxHeight <= 72
+                    ? constraints.maxHeight
+                    : (constraints.maxHeight * 0.55)
+                        .clamp(72.0, _SelectedTileTray.defaultHeight)
+                        .toDouble())
+                : _SelectedTileTray.defaultHeight;
 
         return Column(
           children: [
-            tray,
+            _SelectedTileTray(
+              draft: draft,
+              height: trayHeight,
+              onClear: onClear,
+              onRemoveTile: onRemoveTile,
+            ),
             Expanded(
-              child: ListView(
+              child: SingleChildScrollView(
                 key: tileListKey,
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                children: sections,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: sections,
+                ),
               ),
             ),
           ],
@@ -103,15 +101,17 @@ class TileKeyboard extends StatelessWidget {
 class _SelectedTileTray extends StatelessWidget {
   const _SelectedTileTray({
     required this.draft,
+    required this.height,
     required this.onClear,
     required this.onRemoveTile,
   });
 
   final HandTileEntryDraft draft;
+  final double height;
   final VoidCallback onClear;
   final ValueChanged<String> onRemoveTile;
 
-  static const _height = 124.0;
+  static const defaultHeight = 124.0;
   static const _tileSize = Size(40, 25);
 
   @override
@@ -125,7 +125,7 @@ class _SelectedTileTray extends StatelessWidget {
 
     return SizedBox(
       key: TileKeyboard.selectedTrayKey,
-      height: _height,
+      height: height,
       width: double.infinity,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -425,16 +425,20 @@ class _TileButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
         ),
-        child: _TileButtonLabel(tile: tile),
+        child: _TileButtonLabel(tile: tile, enabled: enabled),
       ),
     );
   }
 }
 
 class _TileButtonLabel extends StatelessWidget {
-  const _TileButtonLabel({required this.tile});
+  const _TileButtonLabel({
+    required this.tile,
+    required this.enabled,
+  });
 
   final MahjongTile tile;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -448,6 +452,7 @@ class _TileButtonLabel extends StatelessWidget {
       );
     }
 
+    final disabledColor = Theme.of(context).disabledColor;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -457,6 +462,7 @@ class _TileButtonLabel extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: enabled ? null : disabledColor,
                 fontWeight: FontWeight.w800,
               ),
         ),
@@ -465,6 +471,7 @@ class _TileButtonLabel extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
+          style: enabled ? null : TextStyle(color: disabledColor),
         ),
       ],
     );

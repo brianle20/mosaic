@@ -125,6 +125,7 @@ void main() {
       'flowers': ['plum_1'],
       'winningTile': 'bamboo_4',
       'winningTileKnown': true,
+      'photoRotationQuarterTurns': 0,
       'groups': const [],
     });
   });
@@ -190,6 +191,7 @@ void main() {
       'tiles': ['man_1'],
       'flowers': <String>[],
       'winningTileKnown': false,
+      'photoRotationQuarterTurns': 0,
       'groups': const [],
     });
   });
@@ -237,5 +239,167 @@ void main() {
 
     expect(draft.canAddTile('plum_1'), isFalse);
     expect(() => draft.addTile('plum_1'), throwsStateError);
+  });
+
+  test('legacy flower aliases hydrate and serialize as canonical ids', () {
+    const cases = [
+      (
+        alias: 'bamboo_flower_3',
+        canonical: 'chrysanthemum_3',
+      ),
+      (
+        alias: 'chrysanthemum_4',
+        canonical: 'bamboo_flower_4',
+      ),
+    ];
+
+    for (final tileCase in cases) {
+      final draft = HandTileEntryDraft(
+        flowerTileIds: [tileCase.alias],
+        winningTileId: tileCase.alias,
+        winningTileKnown: true,
+      );
+      final json = draft.toJson(groups: const []);
+
+      expect(
+        draft.flowerTileIds,
+        [tileCase.canonical],
+        reason: tileCase.alias,
+      );
+      expect(draft.winningTileId, tileCase.canonical, reason: tileCase.alias);
+      expect(json['flowers'], [tileCase.canonical], reason: tileCase.alias);
+      expect(json['winningTile'], tileCase.canonical, reason: tileCase.alias);
+    }
+  });
+
+  test('legacy flower aliases share canonical physical copy identity', () {
+    const cases = [
+      (
+        alias: 'bamboo_flower_3',
+        canonical: 'chrysanthemum_3',
+      ),
+      (
+        alias: 'chrysanthemum_4',
+        canonical: 'bamboo_flower_4',
+      ),
+    ];
+
+    for (final tileCase in cases) {
+      final added = HandTileEntryDraft().addTile(tileCase.alias);
+
+      expect(added.flowerTileIds, [tileCase.canonical]);
+      expect(added.canAddTile(tileCase.alias), isFalse);
+      expect(added.canAddTile(tileCase.canonical), isFalse);
+      expect(
+        () => HandTileEntryDraft(
+          flowerTileIds: [tileCase.alias, tileCase.canonical],
+        ),
+        throwsStateError,
+        reason: tileCase.alias,
+      );
+
+      final withWinningTile = added.setWinningTile(tileCase.alias);
+      expect(withWinningTile.winningTileId, tileCase.canonical);
+      expect(
+        withWinningTile.removeTile(tileCase.alias).flowerTileIds,
+        isEmpty,
+      );
+      expect(
+        withWinningTile.removeTile(tileCase.canonical).flowerTileIds,
+        isEmpty,
+      );
+    }
+  });
+
+  test('editable comparison treats alias reorder and revert as unchanged', () {
+    const cases = [
+      (
+        alias: 'bamboo_flower_3',
+        canonical: 'chrysanthemum_3',
+        companion: 'plum_1',
+      ),
+      (
+        alias: 'chrysanthemum_4',
+        canonical: 'bamboo_flower_4',
+        companion: 'orchid_2',
+      ),
+    ];
+
+    for (final tileCase in cases) {
+      final baseline = HandTileEntryDraft(
+        flowerTileIds: [tileCase.canonical, tileCase.companion],
+        winningTileId: tileCase.canonical,
+        winningTileKnown: true,
+      );
+      final reverted = HandTileEntryDraft(
+        flowerTileIds: [tileCase.companion, tileCase.alias],
+        winningTileId: tileCase.alias,
+        winningTileKnown: true,
+      );
+
+      expect(
+        baseline.hasSameEditableContentAs(reverted),
+        isTrue,
+        reason: tileCase.alias,
+      );
+    }
+  });
+
+  test('editable content comparison ignores tile list ordering', () {
+    final first = HandTileEntryDraft(
+      coreTileIds: const ['man_1', 'man_2', 'man_1'],
+      flowerTileIds: const ['plum_1', 'orchid_2'],
+      winningTileId: 'man_2',
+      winningTileKnown: true,
+      photoRotationQuarterTurns: 1,
+    );
+    final reordered = HandTileEntryDraft(
+      coreTileIds: const ['man_1', 'man_1', 'man_2'],
+      flowerTileIds: const ['orchid_2', 'plum_1'],
+      winningTileId: 'man_2',
+      winningTileKnown: true,
+      photoRotationQuarterTurns: 1,
+    );
+
+    expect(first.hasSameEditableContentAs(reordered), isTrue);
+  });
+
+  test('editable content comparison detects every persisted edit field', () {
+    final baseline = HandTileEntryDraft(
+      coreTileIds: const ['man_1', 'man_1', 'man_2'],
+      flowerTileIds: const ['plum_1'],
+      winningTileId: 'man_2',
+      winningTileKnown: true,
+      photoRotationQuarterTurns: 1,
+    );
+
+    expect(
+      baseline.hasSameEditableContentAs(
+        baseline.copyWith(coreTileIds: const ['man_1', 'man_2', 'man_2']),
+      ),
+      isFalse,
+    );
+    expect(
+      baseline.hasSameEditableContentAs(
+        baseline.copyWith(flowerTileIds: const ['orchid_2']),
+      ),
+      isFalse,
+    );
+    expect(
+      baseline.hasSameEditableContentAs(baseline.clearWinningTile()),
+      isFalse,
+    );
+    expect(
+      baseline.hasSameEditableContentAs(
+        baseline.copyWith(winningTileId: 'man_1', winningTileKnown: true),
+      ),
+      isFalse,
+    );
+    expect(
+      baseline.hasSameEditableContentAs(
+        baseline.copyWith(photoRotationQuarterTurns: 2),
+      ),
+      isFalse,
+    );
   });
 }

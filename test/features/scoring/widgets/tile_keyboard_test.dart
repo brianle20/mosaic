@@ -250,6 +250,28 @@ void main() {
     expect(whiteTop.dy, redTop.dy);
   });
 
+  testWidgets('left aligns honors with the other tile sections',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 840);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(buildSubject());
+
+    final charactersLeft = tester.getTopLeft(find.text('Characters')).dx;
+    final honorsLeft = tester.getTopLeft(find.text('Honors')).dx;
+    final oneManLeft =
+        tester.getTopLeft(find.widgetWithText(OutlinedButton, '1M')).dx;
+    final eastLeft =
+        tester.getTopLeft(find.widgetWithText(OutlinedButton, 'East')).dx;
+
+    expect(honorsLeft, charactersLeft);
+    expect(eastLeft, oneManLeft);
+  });
+
   testWidgets('exhausted tile button is disabled', (tester) async {
     await tester.pumpWidget(buildSubject(
       draft: HandTileEntryDraft(
@@ -261,6 +283,64 @@ void main() {
       find.widgetWithText(OutlinedButton, 'East'),
     );
     expect(eastButton.onPressed, isNull);
+  });
+
+  testWidgets('disabled flower button grays glyph number and short name',
+      (tester) async {
+    await tester.pumpWidget(buildSubject(
+      draft: HandTileEntryDraft(
+        flowerTileIds: const ['chrysanthemum_3'],
+      ),
+    ));
+    await tester.ensureVisible(find.widgetWithText(OutlinedButton, 'Chrys'));
+    await tester.pumpAndSettle();
+
+    final characterText = tester.widget<Text>(find.text('菊 3'));
+    final shortNameText = tester.widget<Text>(find.text('Chrys'));
+
+    expect(characterText.style?.color, isNotNull);
+    expect(shortNameText.style?.color, characterText.style?.color);
+  });
+
+  testWidgets('hydrated flower aliases disable canonical styled buttons',
+      (tester) async {
+    const cases = [
+      (
+        alias: 'bamboo_flower_3',
+        characterAndNumber: '菊 3',
+        shortName: 'Chrys',
+      ),
+      (
+        alias: 'chrysanthemum_4',
+        characterAndNumber: '竹 4',
+        shortName: 'Bam',
+      ),
+    ];
+
+    for (final tileCase in cases) {
+      await tester.pumpWidget(buildSubject(
+        draft: HandTileEntryDraft(flowerTileIds: [tileCase.alias]),
+      ));
+      final buttonFinder =
+          find.widgetWithText(OutlinedButton, tileCase.shortName);
+      await tester.ensureVisible(buttonFinder);
+      await tester.pumpAndSettle();
+
+      final button = tester.widget<OutlinedButton>(buttonFinder);
+      final disabledColor = Theme.of(
+        tester.element(find.byType(TileKeyboard)),
+      ).disabledColor;
+      final characterText =
+          tester.widget<Text>(find.text(tileCase.characterAndNumber));
+      final shortNameText = tester.widget<Text>(find.text(tileCase.shortName));
+
+      expect(button.onPressed, isNull, reason: tileCase.alias);
+      expect(
+        [characterText.style?.color, shortNameText.style?.color],
+        [disabledColor, disabledColor],
+        reason: tileCase.alias,
+      );
+    }
   });
 
   testWidgets('tapping selected tile removes it without a delete icon',

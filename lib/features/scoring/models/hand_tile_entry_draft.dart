@@ -18,6 +18,30 @@ dynamic _copyJsonLikeValue(dynamic value) {
   return value;
 }
 
+bool _haveSameTileCounts(List<String> first, List<String> second) {
+  if (first.length != second.length) {
+    return false;
+  }
+
+  final counts = <String, int>{};
+  for (final tileId in first) {
+    counts[tileId] = (counts[tileId] ?? 0) + 1;
+  }
+  for (final tileId in second) {
+    final nextCount = (counts[tileId] ?? 0) - 1;
+    if (nextCount < 0) {
+      return false;
+    }
+    counts[tileId] = nextCount;
+  }
+
+  return counts.values.every((count) => count == 0);
+}
+
+List<String> _canonicalTileIds(List<String> tileIds) {
+  return [for (final tileId in tileIds) MahjongTile.byId(tileId).id];
+}
+
 @immutable
 class HandTileEntryDraft {
   factory HandTileEntryDraft({
@@ -27,18 +51,22 @@ class HandTileEntryDraft {
     bool winningTileKnown = false,
     int photoRotationQuarterTurns = 0,
   }) {
-    final normalizedWinningTileId = winningTileKnown ? winningTileId : null;
+    final normalizedCoreTileIds = _canonicalTileIds(coreTileIds);
+    final normalizedFlowerTileIds = _canonicalTileIds(flowerTileIds);
+    final normalizedWinningTileId = winningTileKnown && winningTileId != null
+        ? MahjongTile.byId(winningTileId).id
+        : null;
     final normalizedPhotoRotationQuarterTurns = photoRotationQuarterTurns % 4;
     _validate(
-      coreTileIds: coreTileIds,
-      flowerTileIds: flowerTileIds,
+      coreTileIds: normalizedCoreTileIds,
+      flowerTileIds: normalizedFlowerTileIds,
       winningTileId: normalizedWinningTileId,
       winningTileKnown: winningTileKnown,
     );
 
     return HandTileEntryDraft._(
-      coreTileIds: coreTileIds,
-      flowerTileIds: flowerTileIds,
+      coreTileIds: normalizedCoreTileIds,
+      flowerTileIds: normalizedFlowerTileIds,
       winningTileId: normalizedWinningTileId,
       winningTileKnown: winningTileKnown,
       photoRotationQuarterTurns: normalizedPhotoRotationQuarterTurns,
@@ -62,45 +90,57 @@ class HandTileEntryDraft {
 
   int get selectedCount => coreTileIds.length + flowerTileIds.length;
 
+  bool hasSameEditableContentAs(HandTileEntryDraft other) {
+    return _haveSameTileCounts(coreTileIds, other.coreTileIds) &&
+        _haveSameTileCounts(flowerTileIds, other.flowerTileIds) &&
+        winningTileKnown == other.winningTileKnown &&
+        winningTileId == other.winningTileId &&
+        photoRotationQuarterTurns == other.photoRotationQuarterTurns;
+  }
+
   bool canAddTile(String tileId) {
     final tile = MahjongTile.byId(tileId);
-    return _selectedCount(tileId) < tile.maxCopies;
+    return _selectedCount(tile.id) < tile.maxCopies;
   }
 
   HandTileEntryDraft addTile(String tileId) {
     final tile = MahjongTile.byId(tileId);
-    if (!canAddTile(tileId)) {
+    if (_selectedCount(tile.id) >= tile.maxCopies) {
       throw StateError('No copies remain for mahjong tile id: $tileId');
     }
 
     if (tile.category == MahjongTileCategory.flowerSeason) {
-      return copyWith(flowerTileIds: [...flowerTileIds, tileId]);
+      return copyWith(flowerTileIds: [...flowerTileIds, tile.id]);
     }
 
-    return copyWith(coreTileIds: [...coreTileIds, tileId]);
+    return copyWith(coreTileIds: [...coreTileIds, tile.id]);
   }
 
   HandTileEntryDraft removeTile(String tileId) {
-    MahjongTile.byId(tileId);
+    final canonicalTileId = MahjongTile.byId(tileId).id;
 
-    if (flowerTileIds.contains(tileId)) {
-      return _withoutTile(flowerTileIds: _removeOne(flowerTileIds, tileId));
+    if (flowerTileIds.contains(canonicalTileId)) {
+      return _withoutTile(
+        flowerTileIds: _removeOne(flowerTileIds, canonicalTileId),
+      );
     }
 
-    if (coreTileIds.contains(tileId)) {
-      return _withoutTile(coreTileIds: _removeOne(coreTileIds, tileId));
+    if (coreTileIds.contains(canonicalTileId)) {
+      return _withoutTile(
+        coreTileIds: _removeOne(coreTileIds, canonicalTileId),
+      );
     }
 
     return this;
   }
 
   HandTileEntryDraft setWinningTile(String tileId) {
-    MahjongTile.byId(tileId);
-    if (_selectedCount(tileId) == 0) {
+    final canonicalTileId = MahjongTile.byId(tileId).id;
+    if (_selectedCount(canonicalTileId) == 0) {
       throw StateError('Winning tile must already be selected: $tileId');
     }
 
-    return copyWith(winningTileId: tileId, winningTileKnown: true);
+    return copyWith(winningTileId: canonicalTileId, winningTileKnown: true);
   }
 
   HandTileEntryDraft clearWinningTile() {
