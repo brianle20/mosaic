@@ -1,6 +1,7 @@
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/offline/offline_models.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 
 class ProjectedSessionDetail {
   const ProjectedSessionDetail({
@@ -125,6 +126,7 @@ class OfflineSessionProjector {
           penaltySeatIndex:
               _optionalInt(mutation.payload['target_penalty_seat_index']),
           fanCount: _projectedFanCount(resultType, mutation.payload),
+          winBonuses: _winBonuses(mutation.payload['target_win_bonuses']),
           dealerWasWaitingAtDraw: _optionalBool(
             mutation.payload['target_dealer_was_waiting_at_draw'],
           ),
@@ -316,12 +318,31 @@ class OfflineSessionProjector {
     };
   }
 
+  List<HandWinBonus>? _winBonuses(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is! List) {
+      throw const FormatException('Expected win bonus list or null.');
+    }
+
+    return handWinBonusesFromIds(
+      value.map((entry) {
+        if (entry is String) {
+          return entry;
+        }
+        throw const FormatException('Expected string win bonus id.');
+      }),
+    );
+  }
+
   DateTime? _optionalDateTime(Object? value) {
     return switch (value) {
       null => null,
       DateTime() => value,
       String() => DateTime.parse(value),
-      _ => throw FormatException('Expected ISO-8601 string or null, got $value.'),
+      _ =>
+        throw FormatException('Expected ISO-8601 string or null, got $value.'),
     };
   }
 

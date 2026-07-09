@@ -11,6 +11,7 @@ import 'package:mosaic/data/offline/offline_session_projector.dart';
 import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/sqlite_offline_store.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 import 'package:supabase/supabase.dart';
 
 void main() {
@@ -47,6 +48,7 @@ void main() {
             winnerSeatIndex: 0,
             winType: HandWinType.selfDraw,
             fanCount: 5,
+            winBonuses: [HandWinBonus.moonUnderTheSea],
           ),
         );
 
@@ -61,6 +63,7 @@ void main() {
         expect(mutation.baseLastRecordedHandId, isNull);
         expect(mutation.payload['target_table_session_id'], 'ses_01');
         expect(mutation.payload['target_result_type'], 'win');
+        expect(mutation.payload['target_win_bonuses'], ['moon_under_the_sea']);
         expect(
           mutation.payload['target_client_mutation_id'],
           '11111111-1111-1111-1111-111111111111',

@@ -8,6 +8,7 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_fan_calculator.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 import 'package:mosaic/features/scoring/screens/hand_evidence_review_screen.dart';
 import 'package:mosaic/features/scoring/widgets/tile_keyboard.dart';
 
@@ -528,6 +529,101 @@ void main() {
     await tester.drag(find.byType(Scrollable).last, const Offset(0, -120));
     await tester.pump();
     expect(find.text('Characters'), findsOneWidget);
+  });
+
+  testWidgets('shows logged win bonuses in editor context', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                winnerName: 'Ava',
+                winBonuses: const [HandWinBonus.moonUnderTheSea],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text("Ava's winning hand"));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Win bonuses'), findsOneWidget);
+    expect(find.text('Moon Under the Sea'), findsOneWidget);
+    expect(find.text('Moon Under the Sea +1F'), findsNothing);
+  });
+
+  testWidgets('keeps logged win bonuses visible after saving tiles',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                winnerName: 'Ava',
+                winBonuses: const [HandWinBonus.moonUnderTheSea],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text("Ava's winning hand"));
+    await tester.pumpAndSettle();
+    expect(find.text('Moon Under the Sea'), findsOneWidget);
+    expect(find.text('Moon Under the Sea +1F'), findsNothing);
+
+    await tester.tap(find.text('Save Tiles'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Moon Under the Sea'), findsOneWidget);
+    expect(find.text('Moon Under the Sea +1F'), findsNothing);
+    expect(find.text('Win bonuses not recorded'), findsNothing);
+  });
+
+  testWidgets('shows not recorded for historical unknown win bonuses',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                winnerName: 'Ava',
+                winBonuses: null,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text("Ava's winning hand"));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Win bonuses not recorded'), findsOneWidget);
   });
 
   testWidgets('caps long editor metadata on short mobile viewports',
@@ -1106,12 +1202,48 @@ void main() {
     expect(savedGroups, isA<List<dynamic>>());
     expect(savedGroups as List<dynamic>, isNotEmpty);
     expect(repository.savedCalculatedFanCount, 5);
+    expect(repository.savedReviewStatus, HandTileReviewStatus.underDeclared);
     expect(repository.savedCalculationVersion, handTileCalculationVersion);
     await _tapStatusTab(tester, 'Done');
     await tester.pumpAndSettle();
 
     expect(find.text("Ava's winning hand"), findsOneWidget);
     expect(find.text('Under'), findsOneWidget);
+  });
+
+  testWidgets('saves historical unknown win bonus review as unreviewed',
+      (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          winnerName: 'Ava',
+          declaredFanCount: 8,
+          winBonuses: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text("Ava's winning hand"));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save Tiles'));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedCalculatedFanCount, isNull);
+    expect(repository.savedReviewStatus, HandTileReviewStatus.unreviewed);
   });
 
   testWidgets('uses review row wind context when saving calculated fan',
@@ -1393,6 +1525,7 @@ class _FakeMosaicProfileRepository implements MosaicProfileRepository {
   String? savedHandResultId;
   Map<String, dynamic>? savedTilesJson;
   int? savedCalculatedFanCount;
+  HandTileReviewStatus? savedReviewStatus;
   String? savedCalculationVersion;
 
   @override
@@ -1427,11 +1560,13 @@ class _FakeMosaicProfileRepository implements MosaicProfileRepository {
     required String handResultId,
     required Map<String, dynamic> tilesJson,
     required int? calculatedFanCount,
+    required HandTileReviewStatus reviewStatus,
     required String calculationVersion,
   }) async {
     savedHandResultId = handResultId;
     savedTilesJson = tilesJson;
     savedCalculatedFanCount = calculatedFanCount;
+    savedReviewStatus = reviewStatus;
     savedCalculationVersion = calculationVersion;
     final thrown = saveError;
     if (thrown != null) {
@@ -1450,7 +1585,7 @@ class _FakeMosaicProfileRepository implements MosaicProfileRepository {
 
     return _tileEntry(
       handResultId: handResultId,
-      reviewStatus: HandTileReviewStatus.unreviewed,
+      reviewStatus: reviewStatus,
       calculatedFanCount: calculatedFanCount,
     );
   }
@@ -1523,6 +1658,7 @@ HandEvidenceReviewRecord _reviewRecord({
   int? declaredFanCount,
   String? seatWindTileId,
   String? roundWindTileId,
+  List<HandWinBonus>? winBonuses = const [],
   HandTileEntryRecord? tileEntry,
 }) {
   return HandEvidenceReviewRecord(
@@ -1534,6 +1670,7 @@ HandEvidenceReviewRecord _reviewRecord({
     declaredFanCount: declaredFanCount,
     seatWindTileId: seatWindTileId,
     roundWindTileId: roundWindTileId,
+    winBonuses: winBonuses,
     tileEntry: tileEntry,
     photo: HandPhotoRecord(
       id: id,

@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 
 enum HandPhotoUploadStatus {
   pending,
@@ -139,6 +140,7 @@ class HandEvidenceReviewRecord {
     this.declaredFanCount,
     this.seatWindTileId,
     this.roundWindTileId,
+    this.winBonuses,
     this.tileEntry,
   });
 
@@ -160,6 +162,7 @@ class HandEvidenceReviewRecord {
       declaredFanCount: _optionalInt(json, 'declared_fan_count'),
       seatWindTileId: _optionalString(json, 'seat_wind_tile_id'),
       roundWindTileId: _optionalString(json, 'round_wind_tile_id'),
+      winBonuses: _optionalWinBonuses(json, 'win_bonuses'),
       tileEntry: tileEntryId == null
           ? null
           : HandTileEntryRecord.fromJson({
@@ -178,6 +181,7 @@ class HandEvidenceReviewRecord {
   final int? declaredFanCount;
   final String? seatWindTileId;
   final String? roundWindTileId;
+  final List<HandWinBonus>? winBonuses;
   final HandTileEntryRecord? tileEntry;
 }
 
@@ -241,6 +245,27 @@ Object _jsonValue(Map<String, dynamic> json, String key) {
   }
 
   throw FormatException('Expected object or array for $key.');
+}
+
+List<HandWinBonus>? _optionalWinBonuses(
+  Map<String, dynamic> json,
+  String key,
+) {
+  final value = json[key];
+  if (value == null) {
+    return null;
+  }
+  if (value is List) {
+    final ids = <String>[];
+    for (final item in value) {
+      if (item is! String) {
+        throw FormatException('Expected string list or null for $key.');
+      }
+      ids.add(item);
+    }
+    return handWinBonusesFromIds(ids);
+  }
+  throw FormatException('Expected string list or null for $key.');
 }
 
 HandPhotoCaptureStatus _photoCaptureStatusFromJson(String value) {

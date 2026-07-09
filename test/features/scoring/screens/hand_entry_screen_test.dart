@@ -8,6 +8,7 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 import 'package:mosaic/features/scoring/screens/hand_entry_screen.dart';
 import 'package:mosaic/services/media/hand_photo_service.dart';
 
@@ -320,6 +321,38 @@ void main() {
     'gst_north': 'Dee Wu',
   };
 
+  Map<String, dynamic> existingWinHandJson() {
+    return {
+      'id': 'hand_01',
+      'table_session_id': 'ses_01',
+      'hand_number': 1,
+      'result_type': 'win',
+      'winner_seat_index': 0,
+      'win_type': 'self_draw',
+      'discarder_seat_index': null,
+      'penalty_seat_index': null,
+      'fan_count': 3,
+      'base_points': 8,
+      'dealer_was_waiting_at_draw': null,
+      'east_seat_index_before_hand': 0,
+      'east_seat_index_after_hand': 0,
+      'dealer_rotated': false,
+      'session_completed_after_hand': false,
+      'status': 'recorded',
+      'entered_by_user_id': 'usr_01',
+      'entered_at': '2026-04-24T19:05:00-07:00',
+      'correction_note': null,
+      'row_version': 1,
+      'client_mutation_id': null,
+      'photo_id': null,
+      'photo_client_id': null,
+      'photo_captured_at': null,
+      'photo_upload_status': null,
+      'photo_storage_bucket': null,
+      'photo_storage_path': null,
+    };
+  }
+
   testWidgets('seat buttons select a self-draw winner', (tester) async {
     final repository = _RecordingSessionRepository();
 
@@ -336,8 +369,6 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'East\nBob Lee'));
-    await tester.enterText(
-        find.widgetWithText(TextFormField, 'Fan Count'), '3');
     await tester.tap(find.text('Save Hand'));
     await tester.pumpAndSettle();
 
@@ -367,8 +398,7 @@ void main() {
     await tester.pumpAndSettle();
     await tapVisible(
         tester, find.widgetWithText(OutlinedButton, 'South\nCarol Ng').last);
-    await tester.enterText(
-        find.widgetWithText(TextFormField, 'Fan Count'), '5');
+    await tapVisible(tester, find.widgetWithText(ChoiceChip, '5F'));
     await tester.tap(find.text('Save Hand'));
     await tester.pumpAndSettle();
 
@@ -411,10 +441,6 @@ void main() {
       find.widgetWithText(OutlinedButton, 'South\nBob Lee').last,
     );
 
-    await tester.enterText(
-        find.widgetWithText(TextFormField, 'Fan Count'), '3');
-    await tester.pumpAndSettle();
-
     expect(find.text('Scoring Preview'), findsOneWidget);
 
     await tester.tap(find.text('Save Hand'));
@@ -443,29 +469,33 @@ void main() {
     expect(find.text('1. Result'), findsOneWidget);
     expect(find.text('2. Winner'), findsOneWidget);
     expect(find.text('3. Score'), findsOneWidget);
-    expect(find.text('Quick fan'), findsOneWidget);
+    expect(find.text('Declared fan'), findsOneWidget);
 
     final quickFanLabels = tester
         .widgetList<ChoiceChip>(find.byType(ChoiceChip))
         .map((chip) => (chip.label as Text).data)
         .where((label) => label?.endsWith('F') ?? false)
         .toList();
-    expect(quickFanLabels, ['3F', '4F', '5F', '6F']);
+    expect(quickFanLabels, ['3F', '4F', '5F', '6F', '7F']);
     expect(find.widgetWithText(ChoiceChip, '8F'), findsNothing);
     expect(find.widgetWithText(ChoiceChip, '13F'), findsNothing);
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong'));
     await tester.pumpAndSettle();
-    await tapVisible(tester, find.widgetWithText(ChoiceChip, '4F'));
+    await tapVisible(tester, find.widgetWithText(ChoiceChip, '7F'));
 
-    expect(find.widgetWithText(TextFormField, 'Fan Count'), findsOneWidget);
-    expect(find.text('Alice Wong (East) wins by self-draw for 4 fan.'),
+    expect(find.widgetWithText(TextFormField, 'Fan Count'), findsNothing);
+    expect(find.byKey(const ValueKey('fanCountSlider')), findsOneWidget);
+    expect(find.byKey(const ValueKey('fanCountDecrement')), findsOneWidget);
+    expect(find.byKey(const ValueKey('fanCountIncrement')), findsOneWidget);
+    expect(find.text('7F'), findsWidgets);
+    expect(find.text('Alice Wong (East) wins by self-draw for 7 fan.'),
         findsOneWidget);
 
     await tester.tap(find.text('Save Hand'));
     await tester.pumpAndSettle();
 
-    expect(repository.recordedInput?.fanCount, 4);
+    expect(repository.recordedInput?.fanCount, 7);
   });
 
   testWidgets('excludes the selected winner from the discarder menu',
@@ -511,9 +541,199 @@ void main() {
 
     final discarderTop = tester.getTopLeft(find.text('Choose discarder')).dy;
     final fanCountTop =
-        tester.getTopLeft(find.widgetWithText(TextFormField, 'Fan Count')).dy;
+        tester.getTopLeft(find.byKey(const ValueKey('fanCountPicker'))).dy;
 
     expect(discarderTop, lessThan(fanCountTop));
+  });
+
+  testWidgets('records selected win bonuses with a win', (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+          handPhotoService: _FakeHandPhotoService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Win bonuses'), findsOneWidget);
+    expect(find.text('None selected'), findsOneWidget);
+    expect(find.text('Concealed Hand'), findsNothing);
+    expect(find.text('Concealed Hand +1F'), findsNothing);
+
+    await tapVisible(tester, find.text('Win bonuses'));
+
+    await tapVisible(
+      tester,
+      find.widgetWithText(OutlinedButton, 'East\nAlice Wong'),
+    );
+    await tapVisible(
+      tester,
+      find.text('Concealed Hand'),
+    );
+    await tapVisible(
+      tester,
+      find.text('Moon Under the Sea'),
+    );
+    await tapVisible(tester, find.widgetWithText(ChoiceChip, '5F'));
+
+    expect(
+      find.textContaining('Bonuses: Concealed Hand, Moon Under the Sea'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput?.winBonuses, [
+      HandWinBonus.concealedHand,
+      HandWinBonus.moonUnderTheSea,
+    ]);
+  });
+
+  testWidgets('hides win bonuses for draws', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: _RecordingSessionRepository(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Win bonuses'), findsOneWidget);
+    await tester.tap(find.text('Draw'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Win bonuses'), findsNothing);
+  });
+
+  testWidgets('editing historical hand preserves unknown win bonuses',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+          initialHand: HandResultRecord.fromJson({
+            ...existingWinHandJson(),
+            'win_bonuses': null,
+          }),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Not recorded'), findsOneWidget);
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.editedInput?.winBonuses, isNull);
+  });
+
+  testWidgets(
+      'editing historical hand preserves unknown bonuses after draw toggle',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+          initialHand: HandResultRecord.fromJson({
+            ...existingWinHandJson(),
+            'win_bonuses': null,
+          }),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Draw'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Win'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Not recorded'), findsOneWidget);
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.editedInput?.winBonuses, isNull);
+  });
+
+  testWidgets('editing historical hand can record selected win bonuses',
+      (tester) async {
+    final repository = _RecordingSessionRepository();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: repository,
+          initialHand: HandResultRecord.fromJson({
+            ...existingWinHandJson(),
+            'win_bonuses': null,
+          }),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tapVisible(tester, find.text('Win bonuses'));
+    await tapVisible(
+      tester,
+      find.text('Concealed Hand'),
+    );
+
+    await tester.tap(find.text('Save Hand'));
+    await tester.pumpAndSettle();
+
+    expect(repository.editedInput?.winBonuses, [HandWinBonus.concealedHand]);
+  });
+
+  testWidgets('editing hand preselects existing win bonuses', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: _RecordingSessionRepository(),
+          initialHand: HandResultRecord.fromJson({
+            ...existingWinHandJson(),
+            'win_bonuses': ['robbing_the_kong'],
+          }),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Robbing the Kong'), findsOneWidget);
+    await tapVisible(tester, find.text('Win bonuses'));
+
+    final checkbox = tester.widget<Checkbox>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('winBonusOption-robbing_the_kong'),
+        ),
+        matching: find.byType(Checkbox),
+      ),
+    );
+    expect(checkbox.value, isTrue);
   });
 
   testWidgets('player labels use current dealer as east', (tester) async {
@@ -540,7 +760,8 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, 'South\nBob Lee'), findsNothing);
   });
 
-  testWidgets('blocks wins below three fan', (tester) async {
+  testWidgets('fan picker clamps manual adjustments between three and thirteen',
+      (tester) async {
     final repository = _RecordingSessionRepository();
 
     await tester.pumpWidget(
@@ -549,6 +770,7 @@ void main() {
           sessionDetail: buildDetail(),
           guestNamesById: seatNames,
           sessionRepository: repository,
+          handPhotoService: _FakeHandPhotoService(),
         ),
       ),
     );
@@ -557,19 +779,24 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Fan Count'),
-      '2',
-    );
-    await tester.pumpAndSettle();
+    expect(find.text('3F'), findsWidgets);
 
-    expect(find.text('Enter at least 3 fan.'), findsOneWidget);
-    expect(find.text('Scoring Preview'), findsNothing);
+    await tapVisible(tester, find.byKey(const ValueKey('fanCountDecrement')));
+
+    expect(find.text('2F'), findsNothing);
+    expect(find.text('3F'), findsWidgets);
+
+    for (var i = 0; i < 11; i += 1) {
+      await tapVisible(tester, find.byKey(const ValueKey('fanCountIncrement')));
+    }
+
+    expect(find.text('14F'), findsNothing);
+    expect(find.text('13F'), findsOneWidget);
 
     await tester.tap(find.text('Save Hand'));
     await tester.pumpAndSettle();
 
-    expect(repository.recordedInput, isNull);
+    expect(repository.recordedInput?.fanCount, 13);
   });
 
   testWidgets('save hand shows validation blocker near the save button',
@@ -642,11 +869,6 @@ void main() {
     expect(find.text('Round time has expired.'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(OutlinedButton, 'East\nAlice Wong'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Fan Count'),
-      '3',
-    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save Hand'));
     await tester.pumpAndSettle();

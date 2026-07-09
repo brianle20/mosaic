@@ -1,5 +1,6 @@
 import 'package:meta/meta.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 
 const int minimumWinningFan = 3;
 
@@ -12,6 +13,7 @@ class HandResultDraft {
     this.discarderSeatIndex,
     this.penaltySeatIndex,
     this.fanCount,
+    this.winBonuses = const [],
     this.dealerWasWaitingAtDraw,
     this.correctionNote = '',
     this.blockedWinnerSeatIndexes = const {},
@@ -27,6 +29,7 @@ class HandResultDraft {
   final int? discarderSeatIndex;
   final int? penaltySeatIndex;
   final int? fanCount;
+  final List<HandWinBonus>? winBonuses;
   final bool? dealerWasWaitingAtDraw;
   final String correctionNote;
   final Set<int> blockedWinnerSeatIndexes;
@@ -169,6 +172,9 @@ class HandResultDraft {
           resultType == HandResultType.win ? discarderSeatIndex : null,
       penaltySeatIndex: null,
       fanCount: resultType == HandResultType.win ? fanCount : null,
+      winBonuses: resultType == HandResultType.win
+          ? List<HandWinBonus>.unmodifiable(winBonuses ?? const [])
+          : null,
       dealerWasWaitingAtDraw: null,
       correctionNote:
           correctionNote.trim().isEmpty ? null : correctionNote.trim(),
@@ -195,6 +201,9 @@ class HandResultDraft {
           ? penaltySeatIndex
           : null,
       fanCount: resultType == HandResultType.win ? fanCount : null,
+      winBonuses: resultType == HandResultType.win && winBonuses != null
+          ? List<HandWinBonus>.unmodifiable(winBonuses!)
+          : null,
       dealerWasWaitingAtDraw: resultType == HandResultType.washout
           ? legacyDealerWasWaitingAtDraw
           : null,

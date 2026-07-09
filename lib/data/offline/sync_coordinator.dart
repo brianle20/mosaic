@@ -6,6 +6,7 @@ import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/offline_store.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/data/repositories/supabase_hand_evidence_repository.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 import 'package:supabase/supabase.dart';
 
 class SyncCoordinator {
@@ -220,6 +221,7 @@ class SyncCoordinator {
       ),
       penaltySeatIndex: _optionalInt(payload, 'target_penalty_seat_index'),
       fanCount: _optionalInt(payload, 'target_fan_count'),
+      winBonuses: _optionalWinBonuses(payload, 'target_win_bonuses'),
       dealerWasWaitingAtDraw: _optionalBool(
         payload,
         'target_dealer_was_waiting_at_draw',
@@ -310,6 +312,28 @@ class SyncCoordinator {
     }
 
     throw FormatException('Expected bool or null for $key.');
+  }
+
+  List<HandWinBonus>? _optionalWinBonuses(
+    Map<String, dynamic> payload,
+    String key,
+  ) {
+    final value = payload[key];
+    if (value == null) {
+      return null;
+    }
+    if (value is! List) {
+      throw FormatException('Expected list or null for $key.');
+    }
+
+    return handWinBonusesFromIds(
+      value.map((entry) {
+        if (entry is String) {
+          return entry;
+        }
+        throw FormatException('Expected string win bonus id for $key.');
+      }),
+    );
   }
 
   DateTime? _optionalDateTime(Map<String, dynamic> payload, String key) {

@@ -12,6 +12,7 @@ import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/sqlite_offline_store.dart';
 import 'package:mosaic/data/offline/sync_coordinator.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 import 'package:supabase/supabase.dart';
 
 void main() {
@@ -134,6 +135,49 @@ void main() {
             OfflineMutationStatus.synced);
       },
     );
+
+    test('sync preserves queued win bonuses when replaying hand mutations',
+        () async {
+      await store.insertMutation(
+        _mutation(
+          id: 'mut_selected',
+          payload: const {
+            'target_table_session_id': 'ses_01',
+            'target_result_type': 'win',
+            'target_winner_seat_index': 2,
+            'target_win_type': 'self_draw',
+            'target_fan_count': 6,
+            'target_win_bonuses': [
+              'moon_under_the_sea',
+              'win_by_kong_replacement',
+            ],
+          },
+        ),
+      );
+      await store.insertMutation(
+        _mutation(
+          id: 'mut_empty',
+          createdAt: DateTime.utc(2026, 6, 18, 20, 1),
+          payload: const {
+            'target_table_session_id': 'ses_01',
+            'target_result_type': 'win',
+            'target_winner_seat_index': 1,
+            'target_win_type': 'discard',
+            'target_discarder_seat_index': 2,
+            'target_fan_count': 3,
+            'target_win_bonuses': <String>[],
+          },
+        ),
+      );
+
+      await coordinator.syncNow();
+
+      expect(repository.recordedInputs.first.winBonuses, [
+        HandWinBonus.moonUnderTheSea,
+        HandWinBonus.winByKongReplacement,
+      ]);
+      expect(repository.recordedInputs.last.winBonuses, isEmpty);
+    });
 
     test('attaches remote hand id and uploads queued photo after hand sync',
         () async {

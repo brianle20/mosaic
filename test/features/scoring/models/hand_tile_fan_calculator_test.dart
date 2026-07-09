@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/hand_evidence_models.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_entry_draft.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_fan_calculator.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 
 void main() {
   test('returns unreviewed when grouping is invalid', () {
@@ -213,6 +214,107 @@ void main() {
 
     expect(result.calculatedFanCount, 3);
     expect(result.reviewStatus, HandTileReviewStatus.matched);
+  });
+
+  test('adds known win bonus fan to calculated fan', () {
+    final draft = HandTileEntryDraft(
+      coreTileIds: const [
+        'man_1',
+        'man_2',
+        'man_3',
+        'man_4',
+        'man_5',
+        'man_6',
+        'dot_1',
+        'dot_2',
+        'dot_3',
+        'bamboo_1',
+        'bamboo_2',
+        'bamboo_3',
+        'south',
+        'south',
+      ],
+    );
+
+    final result = calculateHandTileFanReview(
+      draft: draft,
+      declaredFanCount: 2,
+      seatWindTileId: 'east',
+      roundWindTileId: 'east',
+      isSelfDraw: false,
+      winBonuses: const [HandWinBonus.winByKongReplacement],
+    );
+
+    expect(result.calculatedFanCount, 2);
+    expect(result.reviewStatus, HandTileReviewStatus.matched);
+  });
+
+  test('unknown historical win bonuses avoid flagged when declared is higher',
+      () {
+    final draft = HandTileEntryDraft(
+      coreTileIds: const [
+        'man_1',
+        'man_2',
+        'man_3',
+        'man_4',
+        'man_5',
+        'man_6',
+        'dot_1',
+        'dot_2',
+        'dot_3',
+        'bamboo_1',
+        'bamboo_2',
+        'bamboo_3',
+        'south',
+        'south',
+      ],
+    );
+
+    final result = calculateHandTileFanReview(
+      draft: draft,
+      declaredFanCount: 8,
+      seatWindTileId: 'east',
+      roundWindTileId: 'east',
+      isSelfDraw: false,
+      winBonuses: null,
+    );
+
+    expect(result.calculatedFanCount, 0);
+    expect(result.reviewStatus, HandTileReviewStatus.unreviewed);
+  });
+
+  test('unknown historical win bonuses still mark under declared', () {
+    final draft = HandTileEntryDraft(
+      coreTileIds: const [
+        'east',
+        'east',
+        'east',
+        'red',
+        'red',
+        'red',
+        'man_1',
+        'man_2',
+        'man_3',
+        'dot_4',
+        'dot_5',
+        'dot_6',
+        'south',
+        'south',
+      ],
+      flowerTileIds: const ['plum_1'],
+    );
+
+    final result = calculateHandTileFanReview(
+      draft: draft,
+      declaredFanCount: 3,
+      seatWindTileId: 'east',
+      roundWindTileId: 'east',
+      isSelfDraw: true,
+      winBonuses: null,
+    );
+
+    expect(result.calculatedFanCount, greaterThan(3));
+    expect(result.reviewStatus, HandTileReviewStatus.underDeclared);
   });
 
   test('exposes calculation version constant', () {

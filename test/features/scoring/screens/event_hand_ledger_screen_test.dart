@@ -118,19 +118,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Edit Hand'), findsOneWidget);
-    expect(
-      find.widgetWithText(TextFormField, 'Fan Count'),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .widget<TextFormField>(
-            find.widgetWithText(TextFormField, 'Fan Count'),
-          )
-          .controller
-          ?.text,
-      '4',
-    );
+    expect(find.widgetWithText(TextFormField, 'Fan Count'), findsNothing);
+    expect(find.byKey(const ValueKey('fanCountPicker')), findsOneWidget);
+    expect(find.text('4F'), findsWidgets);
     expect(repository.loadedSessionIds, ['ses_02']);
 
     await tester.tap(find.text('Save Hand'));

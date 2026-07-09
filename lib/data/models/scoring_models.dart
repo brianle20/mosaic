@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 
 enum HandResultType {
   win,
@@ -41,6 +42,7 @@ class HandResultRecord {
     this.discarderSeatIndex,
     this.penaltySeatIndex,
     this.fanCount,
+    this.winBonuses,
     this.basePoints,
     this.dealerWasWaitingAtDraw,
     this.correctionNote,
@@ -65,6 +67,7 @@ class HandResultRecord {
       discarderSeatIndex: _optionalInt(json, 'discarder_seat_index'),
       penaltySeatIndex: _optionalInt(json, 'penalty_seat_index'),
       fanCount: _optionalInt(json, 'fan_count'),
+      winBonuses: _optionalWinBonuses(json, 'win_bonuses'),
       basePoints: _optionalInt(json, 'base_points'),
       dealerWasWaitingAtDraw: _optionalBool(json, 'dealer_was_waiting_at_draw'),
       eastSeatIndexBeforeHand:
@@ -97,6 +100,7 @@ class HandResultRecord {
   final int? discarderSeatIndex;
   final int? penaltySeatIndex;
   final int? fanCount;
+  final List<HandWinBonus>? winBonuses;
   final int? basePoints;
   final bool? dealerWasWaitingAtDraw;
   final int eastSeatIndexBeforeHand;
@@ -127,6 +131,7 @@ class HandResultRecord {
       'discarder_seat_index': discarderSeatIndex,
       'penalty_seat_index': penaltySeatIndex,
       'fan_count': fanCount,
+      'win_bonuses': winBonuses == null ? null : handWinBonusIds(winBonuses!),
       'base_points': basePoints,
       'dealer_was_waiting_at_draw': dealerWasWaitingAtDraw,
       'east_seat_index_before_hand': eastSeatIndexBeforeHand,
@@ -259,6 +264,7 @@ class RecordHandResultInput {
     this.discarderSeatIndex,
     this.penaltySeatIndex,
     this.fanCount,
+    this.winBonuses,
     this.dealerWasWaitingAtDraw,
     this.correctionNote,
     this.clientMutationId,
@@ -276,6 +282,7 @@ class RecordHandResultInput {
   final int? discarderSeatIndex;
   final int? penaltySeatIndex;
   final int? fanCount;
+  final List<HandWinBonus>? winBonuses;
   final bool? dealerWasWaitingAtDraw;
   final String? correctionNote;
   final String? clientMutationId;
@@ -294,6 +301,8 @@ class RecordHandResultInput {
       'target_discarder_seat_index': discarderSeatIndex,
       'target_penalty_seat_index': penaltySeatIndex,
       'target_fan_count': fanCount,
+      'target_win_bonuses':
+          winBonuses == null ? null : handWinBonusIds(winBonuses!),
       'target_dealer_was_waiting_at_draw': dealerWasWaitingAtDraw,
       'target_correction_note': correctionNote,
       'target_client_mutation_id': clientMutationId,
@@ -321,6 +330,7 @@ class EditHandResultInput {
     this.discarderSeatIndex,
     this.penaltySeatIndex,
     this.fanCount,
+    this.winBonuses,
     this.dealerWasWaitingAtDraw,
     this.correctionNote,
   });
@@ -332,6 +342,7 @@ class EditHandResultInput {
   final int? discarderSeatIndex;
   final int? penaltySeatIndex;
   final int? fanCount;
+  final List<HandWinBonus>? winBonuses;
   final bool? dealerWasWaitingAtDraw;
   final String? correctionNote;
 
@@ -344,6 +355,8 @@ class EditHandResultInput {
       'target_discarder_seat_index': discarderSeatIndex,
       'target_penalty_seat_index': penaltySeatIndex,
       'target_fan_count': fanCount,
+      'target_win_bonuses':
+          winBonuses == null ? null : handWinBonusIds(winBonuses!),
       'target_dealer_was_waiting_at_draw': dealerWasWaitingAtDraw,
       'target_correction_note': correctionNote,
     };
@@ -518,6 +531,27 @@ List<String> _stringList(Map<String, dynamic> json, String key) {
   }
 
   throw FormatException('Expected list for $key.');
+}
+
+List<HandWinBonus>? _optionalWinBonuses(
+  Map<String, dynamic> json,
+  String key,
+) {
+  final value = json[key];
+  if (value == null) {
+    return null;
+  }
+  if (value is List) {
+    final ids = <String>[];
+    for (final item in value) {
+      if (item is! String) {
+        throw FormatException('Expected string list or null for $key.');
+      }
+      ids.add(item);
+    }
+    return handWinBonusesFromIds(ids);
+  }
+  throw FormatException('Expected string list or null for $key.');
 }
 
 HandResultType _handResultTypeFromJson(String value) {

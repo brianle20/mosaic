@@ -624,6 +624,7 @@ class _MosaicProfileRepository implements MosaicProfileRepository {
     required String handResultId,
     required Map<String, dynamic> tilesJson,
     required int? calculatedFanCount,
+    required HandTileReviewStatus reviewStatus,
     required String calculationVersion,
   }) {
     throw UnimplementedError();

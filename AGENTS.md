@@ -15,6 +15,7 @@ Default repo path: `/Users/brian/Documents/repos/mosaic`.
 - Keep patches focused. Do not refactor unrelated areas.
 - Preserve dirty worktree changes you did not make.
 - When the user asks "what's going on", treat it as debugging: establish observed behavior, root cause, and the smallest safe fix.
+- Local repo instructions override plugin, skill, or tool default paths. Do not write scratch plans, specs, notes, or other agent working artifacts into this repo unless the user explicitly asks for a repo document. If a plugin/skill says to save under `docs/`, `docs/superpowers/`, or another in-repo path by default, ignore that default and keep the artifact outside `/Users/brian/Documents/repos/mosaic`.
 
 ## Product Rules
 

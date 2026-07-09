@@ -232,12 +232,14 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         seatWindTileId: record.seatWindTileId ?? 'east',
         roundWindTileId: record.roundWindTileId ?? 'east',
         isSelfDraw: record.winType == 'self_draw',
+        winBonuses: record.winBonuses,
       );
       final savedEntry =
           await widget.mosaicProfileRepository.upsertHandTileEntry(
         handResultId: record.handResultId,
         tilesJson: _tileDraft.toJson(groups: review.grouping.toJson()),
         calculatedFanCount: review.calculatedFanCount,
+        reviewStatus: review.reviewStatus,
         calculationVersion: handTileCalculationVersion,
       );
       final updatedRecord = _withTileEntry(record, savedEntry);
@@ -533,6 +535,8 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
             onOpenPhoto: _openPhotoViewer,
           ),
           SizedBox(height: gap),
+          _buildWinBonusContext(record),
+          SizedBox(height: gap),
         ];
         final bottomSaveBar = _BottomSaveBar(
           isSaving: _isSaving,
@@ -570,6 +574,33 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
       return null;
     }
     return _ledgerEntriesByHandId[selectedRecord.handResultId];
+  }
+
+  Widget _buildWinBonusContext(HandEvidenceReviewRecord record) {
+    final bonuses = record.winBonuses;
+    if (bonuses == null) {
+      return const Text('Win bonuses not recorded');
+    }
+    if (bonuses.isEmpty) {
+      return const Text('Win bonuses: None');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Win bonuses',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final bonus in bonuses) Text(bonus.label),
+          ],
+        ),
+      ],
+    );
   }
 }
 
@@ -1142,6 +1173,7 @@ HandEvidenceReviewRecord _withTileEntry(
     declaredFanCount: record.declaredFanCount,
     seatWindTileId: record.seatWindTileId,
     roundWindTileId: record.roundWindTileId,
+    winBonuses: record.winBonuses,
     tileEntry: tileEntry,
   );
 }
