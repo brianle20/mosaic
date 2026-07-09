@@ -414,7 +414,7 @@ void main() {
     expect(find.byKey(const ValueKey('table-card-tbl_01')), findsOneWidget);
     expect(
       find.text(
-        'Ready for assigned tournament seating. Enter the table to start assigned play.',
+        'Ready for assigned tournament seating. Start this table when players are seated.',
       ),
       findsOneWidget,
     );
@@ -424,7 +424,7 @@ void main() {
       findsNothing,
     );
 
-    await tester.tap(find.text('Enter Table'));
+    await tester.tap(find.text('Start Table'));
     await tester.pumpAndSettle();
 
     expect(openedArgs?.eventId, 'evt_01');
@@ -1174,7 +1174,8 @@ void main() {
     expect(find.text('Chris Lee'), findsOneWidget);
     expect(find.text('Dana Park'), findsOneWidget);
     expect(find.text('Chris Lee, Dana Park'), findsNothing);
-    expect(find.text('Enter Table'), findsOneWidget);
+    expect(find.text('Start Table'), findsNothing);
+    expect(find.text('Enter Table'), findsNothing);
 
     await _scrollTablesOverviewUntilVisible(tester, find.text('Eli Ho'));
 
@@ -1371,10 +1372,10 @@ void main() {
     expect(sessionRepository.resumedSessionIds, ['ses_active', 'ses_paused']);
   });
 
-  testWidgets('enter table fallback opens assigned tournament start flow',
+  testWidgets('assigned tournament cards do not open start-session fallback',
       (tester) async {
     final table = _table('tbl_ready', 'Table 2');
-    StartSessionArgs? openedArgs;
+    var openedStartSession = false;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -1400,7 +1401,7 @@ void main() {
         ),
         onGenerateRoute: (settings) {
           if (settings.name == AppRouter.startSessionRoute) {
-            openedArgs = settings.arguments! as StartSessionArgs;
+            openedStartSession = true;
             return MaterialPageRoute<void>(
               builder: (context) => const Scaffold(
                 body: Text('Opened Start Session'),
@@ -1414,15 +1415,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _scrollTablesOverviewUntilVisible(tester, find.text('Enter Table'));
-    await tester.tap(find.text('Enter Table'));
-    await tester.pumpAndSettle();
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Chris Lee'));
 
-    expect(openedArgs?.eventId, 'evt_01');
-    expect(openedArgs?.table.id, 'tbl_ready');
-    expect(openedArgs?.scoringPhase, EventScoringPhase.tournament);
-    expect(openedArgs?.allowAssignedTableEntry, isTrue);
-    expect(find.text('Opened Start Session'), findsOneWidget);
+    expect(find.text('Start Table'), findsNothing);
+    expect(openedStartSession, isFalse);
   });
 
   testWidgets('completed round offers next round and finals actions',
@@ -1613,7 +1609,8 @@ void main() {
     expect(find.text('Seed Four'), findsOneWidget);
     expect(find.text('Seed One'), findsOneWidget);
     expect(find.text('Ready'), findsNothing);
-    expect(find.text('Enter Table'), findsOneWidget);
+    expect(find.text('Start Table'), findsNothing);
+    expect(find.text('Enter Table'), findsNothing);
   });
 
   testWidgets('active finals assignments override stale tournament phase',
@@ -1668,10 +1665,10 @@ void main() {
         findsNothing);
   });
 
-  testWidgets('finals enter table opens assigned bonus start flow',
+  testWidgets('assigned finals cards do not open start-session fallback',
       (tester) async {
     final table = _table('tbl_champions', 'Table 1');
-    StartSessionArgs? openedArgs;
+    var openedStartSession = false;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -1703,7 +1700,7 @@ void main() {
         ),
         onGenerateRoute: (settings) {
           if (settings.name == AppRouter.startSessionRoute) {
-            openedArgs = settings.arguments! as StartSessionArgs;
+            openedStartSession = true;
             return MaterialPageRoute<void>(
               builder: (context) => const Scaffold(
                 body: Text('Opened Start Session'),
@@ -1717,14 +1714,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _scrollTablesOverviewUntilVisible(tester, find.text('Enter Table'));
-    await tester.tap(find.text('Enter Table'));
-    await tester.pumpAndSettle();
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Seed Four'));
 
-    expect(openedArgs?.eventId, 'evt_01');
-    expect(openedArgs?.table.id, 'tbl_champions');
-    expect(openedArgs?.scoringPhase, EventScoringPhase.bonus);
-    expect(openedArgs?.allowAssignedTableEntry, isTrue);
+    expect(find.text('Start Table'), findsNothing);
+    expect(openedStartSession, isFalse);
   });
 
   testWidgets('required sudden death starts from current finals table',

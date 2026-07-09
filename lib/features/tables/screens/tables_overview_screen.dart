@@ -128,19 +128,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     await _controller.load(widget.eventId);
   }
 
-  Future<void> _enterCurrentRoundTable(EventTableRecord table) async {
-    await Navigator.of(context).pushNamed(
-      AppRouter.startSessionRoute,
-      arguments: StartSessionArgs(
-        eventId: widget.eventId,
-        table: table,
-        scoringPhase: _controller.effectiveScoringPhase,
-        allowAssignedTableEntry: true,
-      ),
-    );
-    await _controller.load(widget.eventId);
-  }
-
   Future<void> _enterReadyTable(EventTableRecord table) async {
     await Navigator.of(context).pushNamed(
       AppRouter.startSessionRoute,
@@ -677,7 +664,14 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         widget.scoringOpen &&
         widget.canManageTables &&
         !widget.readOnly;
-    final canStartSuddenDeath = _canStartSuddenDeathFromCurrentTable(cardData);
+    final canStartSuddenDeath =
+        _canStartSuddenDeathFromCurrentTable(cardData) ||
+            (_controller.isSuddenDeathRequired &&
+                action == _CurrentRoundAction.enter &&
+                widget.scoringOpen &&
+                widget.canManageTables &&
+                !widget.readOnly &&
+                cardData.table.nfcTagId != null);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -732,29 +726,25 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                FilledButton(
-                  onPressed: canStartPlayIn
-                      ? () => _startPlayIn(cardData.table)
-                      : canStartSuddenDeath
-                          ? () => _startSuddenDeath(cardData.table)
-                          : action == _CurrentRoundAction.enter
-                              ? _controller.isSuddenDeathRequired
-                                  ? widget.canManageTables
-                                      ? () => _startSuddenDeath(cardData.table)
-                                      : null
-                                  : () =>
-                                      _enterCurrentRoundTable(cardData.table)
-                              : sessionId == null
-                                  ? null
-                                  : () => _openSessionDetail(sessionId),
-                  child: Text(
-                    canStartPlayIn
-                        ? 'Start Play-In'
+                if (canStartPlayIn ||
+                    canStartSuddenDeath ||
+                    action != _CurrentRoundAction.enter)
+                  FilledButton(
+                    onPressed: canStartPlayIn
+                        ? () => _startPlayIn(cardData.table)
                         : canStartSuddenDeath
-                            ? 'Start Sudden Death'
-                            : _currentRoundActionLabel(action),
+                            ? () => _startSuddenDeath(cardData.table)
+                            : sessionId == null
+                                ? null
+                                : () => _openSessionDetail(sessionId),
+                    child: Text(
+                      canStartPlayIn
+                          ? 'Start Play-In'
+                          : canStartSuddenDeath
+                              ? 'Start Sudden Death'
+                              : _currentRoundActionLabel(action),
+                    ),
                   ),
-                ),
                 if (cardData.liveSummary case final liveSummary?)
                   if (liveSummary.showRoundTimer)
                     _buildTimerActionButton(liveSummary),
@@ -1207,7 +1197,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         ? 'This table is locked with the finalized event.'
         : _isQualificationPhase
             ? widget.scoringOpen
-                ? 'Ready for assigned tournament seating. Enter the table to start assigned play.'
+                ? 'Ready for assigned tournament seating. Start this table when players are seated.'
                 : 'Open scoring before starting assigned tournament seating at this table.'
             : hasTag
                 ? canStartPlayIn
@@ -1270,7 +1260,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                       FilledButton.icon(
                         onPressed: () => _enterReadyTable(table),
                         icon: const Icon(Icons.login),
-                        label: const Text('Enter Table'),
+                        label: const Text('Start Table'),
                       ),
                     if (widget.canManageTables) ...[
                       OutlinedButton(
@@ -1351,7 +1341,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     return switch (action) {
       _CurrentRoundAction.open => 'Open Session',
       _CurrentRoundAction.view => 'View Session',
-      _CurrentRoundAction.enter => 'Enter Table',
+      _CurrentRoundAction.enter => 'Not Started',
     };
   }
 
