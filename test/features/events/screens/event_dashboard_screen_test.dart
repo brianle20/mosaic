@@ -2384,6 +2384,11 @@ void main() {
     expect(openedSeatingSettings?.name, AppRouter.seatingAssignmentsRoute);
     expect(
       (openedSeatingSettings?.arguments as SeatingAssignmentsArgs?)
+          ?.eventTitle,
+      activeCheckinOnlyEvent.title,
+    );
+    expect(
+      (openedSeatingSettings?.arguments as SeatingAssignmentsArgs?)
           ?.initialAssignments,
       seatingRepository.generatedAssignments,
     );
@@ -3078,6 +3083,10 @@ void main() {
 
     expect(_SeatingRepository.generatedTournamentRoundCount, 1);
     expect(openedSettings?.name, AppRouter.seatingAssignmentsRoute);
+    expect(
+      (openedSettings?.arguments as SeatingAssignmentsArgs?)?.eventTitle,
+      event.title,
+    );
     expect(
       (openedSettings?.arguments as SeatingAssignmentsArgs?)
           ?.initialAssignments,

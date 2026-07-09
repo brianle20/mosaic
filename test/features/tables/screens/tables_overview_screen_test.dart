@@ -1816,6 +1816,7 @@ void main() {
 
     expect(seatingRepository.startedSuddenDeathTables, ['tbl_sudden']);
     expect(openedAssignmentsArgs?.eventId, 'evt_01');
+    expect(openedAssignmentsArgs?.eventTitle, 'Friday Night Mahjong');
     expect(openedAssignmentsArgs?.initialAssignments, returnedAssignments);
     expect(find.text('Opened Seating Assignments'), findsOneWidget);
   });
@@ -1929,6 +1930,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(seatingRepository.startedSuddenDeathTables, ['tbl_champions']);
+    expect(openedAssignmentsArgs?.eventTitle, 'Friday Night Mahjong');
     expect(openedAssignmentsArgs?.initialAssignments, returnedAssignments);
     expect(find.text('Opened Seating Assignments'), findsOneWidget);
   });
@@ -2012,6 +2014,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(seatingRepository.startedSuddenDeathTables, ['tbl_sudden']);
+    expect(openedAssignmentsArgs?.eventTitle, 'Friday Night Mahjong');
     expect(openedAssignmentsArgs?.initialAssignments, returnedAssignments);
     expect(find.text('Opened Seating Assignments'), findsOneWidget);
   });
@@ -2094,6 +2097,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(seatingRepository.startedPlayInTables, ['tbl_play_in']);
+    expect(openedAssignmentsArgs?.eventTitle, 'Friday Night Mahjong');
     expect(openedAssignmentsArgs?.initialAssignments, returnedAssignments);
     expect(
       openedAssignmentsArgs?.bonusTableRoleFilter,

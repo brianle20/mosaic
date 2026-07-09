@@ -312,14 +312,13 @@ class AppRouter {
         return MaterialPageRoute<void>(
           builder: (_) => SeatingAssignmentScreen(
             eventId: args.eventId,
+            eventTitle: args.eventTitle,
             seatingRepository: seatingRepository,
             guestRepository: guestRepository,
             sessionRepository: sessionRepository,
             initialAssignments: args.initialAssignments,
             bonusTableRoleFilter: args.bonusTableRoleFilter,
             showUnassignedGuests: args.showUnassignedGuests,
-            enterTableScoringPhase: args.enterTableScoringPhase,
-            minimumTableSize: args.minimumTableSize,
           ),
           settings: settings,
         );
@@ -528,19 +527,17 @@ class StartSessionArgs {
 class SeatingAssignmentsArgs {
   const SeatingAssignmentsArgs({
     required this.eventId,
+    required this.eventTitle,
     this.initialAssignments = const [],
     this.bonusTableRoleFilter,
     this.showUnassignedGuests = true,
-    this.enterTableScoringPhase = EventScoringPhase.tournament,
-    this.minimumTableSize = 4,
   });
 
   final String eventId;
+  final String eventTitle;
   final List<SeatingAssignmentRecord> initialAssignments;
   final BonusTableRole? bonusTableRoleFilter;
   final bool showUnassignedGuests;
-  final EventScoringPhase enterTableScoringPhase;
-  final int minimumTableSize;
 }
 
 class SessionDetailArgs {

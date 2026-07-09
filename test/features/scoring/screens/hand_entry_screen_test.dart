@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/screens/hand_entry_screen.dart';
@@ -205,6 +206,14 @@ class _RecordingSessionRepository implements SessionRepository {
   Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
     String eventId,
   ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<TableSessionRecord>> startBonusAssignedTableSessions({
+    required String eventId,
+    required BonusTableRole? bonusTableRole,
+  }) {
     throw UnimplementedError();
   }
 

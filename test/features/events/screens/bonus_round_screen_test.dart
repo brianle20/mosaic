@@ -525,6 +525,14 @@ class _SessionRepository implements SessionRepository {
   }
 
   @override
+  Future<List<TableSessionRecord>> startBonusAssignedTableSessions({
+    required String eventId,
+    required BonusTableRole? bonusTableRole,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
     throw UnimplementedError();
   }

@@ -12,6 +12,10 @@ enum BonusTableRole {
   tableOfChampionsPlayIn,
 }
 
+extension BonusTableRoleJsonValue on BonusTableRole {
+  String toJsonValue() => _bonusTableRoleToJson(this);
+}
+
 @immutable
 class SeatingAssignmentRecord {
   const SeatingAssignmentRecord({

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/event_hand_ledger_controller.dart';
@@ -43,16 +44,19 @@ void main() {
       expect(controller.error, contains('ledger unavailable'));
     });
 
-    test('loads correction target from ledger row session and hand id', () async {
+    test('loads correction target from ledger row session and hand id',
+        () async {
       final detail = _sessionDetailWithHand('hand_01');
       final repository = _FakeSessionRepository(
         loadedRows: [_entry('hand_01', handNumber: 1)],
         sessionDetail: detail,
       );
-      final controller = EventHandLedgerController(sessionRepository: repository);
+      final controller =
+          EventHandLedgerController(sessionRepository: repository);
       await controller.load('evt_01');
 
-      final target = await controller.loadCorrectionTarget(controller.rows.single);
+      final target =
+          await controller.loadCorrectionTarget(controller.rows.single);
 
       expect(repository.loadedSessionIds, ['ses_01']);
       expect(target, isNotNull);
@@ -63,16 +67,19 @@ void main() {
       expect(controller.isLoadingCorrection, isFalse);
     });
 
-    test('reports a correction error when the hand is missing from session detail',
+    test(
+        'reports a correction error when the hand is missing from session detail',
         () async {
       final repository = _FakeSessionRepository(
         loadedRows: [_entry('hand_01', handNumber: 1)],
         sessionDetail: _sessionDetailWithHand('other_hand'),
       );
-      final controller = EventHandLedgerController(sessionRepository: repository);
+      final controller =
+          EventHandLedgerController(sessionRepository: repository);
       await controller.load('evt_01');
 
-      final target = await controller.loadCorrectionTarget(controller.rows.single);
+      final target =
+          await controller.loadCorrectionTarget(controller.rows.single);
 
       expect(target, isNull);
       expect(
@@ -92,7 +99,8 @@ void main() {
       );
       await controller.load('evt_01');
 
-      final target = await controller.loadCorrectionTarget(controller.rows.single);
+      final target =
+          await controller.loadCorrectionTarget(controller.rows.single);
 
       expect(target, isNull);
       expect(controller.correctionError, isNull);
@@ -114,13 +122,15 @@ void main() {
           return completer.future;
         },
       );
-      final controller = EventHandLedgerController(sessionRepository: repository);
+      final controller =
+          EventHandLedgerController(sessionRepository: repository);
       await controller.load('evt_01');
 
       await controller.loadCorrectionTarget(controller.rows.single);
       expect(controller.correctionError, isNotNull);
 
-      final snapshots = <({bool isLoadingCorrection, String? correctionError})>[];
+      final snapshots =
+          <({bool isLoadingCorrection, String? correctionError})>[];
       controller.addListener(() {
         snapshots.add((
           isLoadingCorrection: controller.isLoadingCorrection,
@@ -128,7 +138,8 @@ void main() {
         ));
       });
 
-      final targetFuture = controller.loadCorrectionTarget(controller.rows.single);
+      final targetFuture =
+          controller.loadCorrectionTarget(controller.rows.single);
       await Future<void>.delayed(Duration.zero);
 
       expect(
@@ -221,6 +232,14 @@ class _FakeSessionRepository implements SessionRepository {
   Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
     String eventId,
   ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<TableSessionRecord>> startBonusAssignedTableSessions({
+    required String eventId,
+    required BonusTableRole? bonusTableRole,
+  }) {
     throw UnimplementedError();
   }
 

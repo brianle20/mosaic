@@ -1,6 +1,7 @@
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:supabase/supabase.dart';
@@ -136,6 +137,36 @@ class SupabaseSessionRepository implements SessionRepository {
     final rows = await _runRpcList(
       'start_current_tournament_round_sessions',
       {'target_event_id': eventId},
+    );
+    final startedSessions = rows
+        .map((row) => TableSessionRecord.fromJson(row))
+        .toList(growable: false);
+
+    final currentSessions = await readCachedSessions(eventId);
+    final startedSessionIds =
+        startedSessions.map((session) => session.id).toSet();
+    final mergedSessions = [
+      ...currentSessions.where(
+        (session) => !startedSessionIds.contains(session.id),
+      ),
+      ...startedSessions,
+    ]..sort(_compareSessionsNewestFirst);
+    await cache.saveSessions(eventId, mergedSessions);
+
+    return startedSessions;
+  }
+
+  @override
+  Future<List<TableSessionRecord>> startBonusAssignedTableSessions({
+    required String eventId,
+    required BonusTableRole? bonusTableRole,
+  }) async {
+    final rows = await _runRpcList(
+      'start_bonus_assigned_table_sessions',
+      {
+        'target_event_id': eventId,
+        'target_bonus_table_role': bonusTableRole?.toJsonValue(),
+      },
     );
     final startedSessions = rows
         .map((row) => TableSessionRecord.fromJson(row))

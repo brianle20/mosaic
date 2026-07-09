@@ -165,6 +165,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         AppRouter.seatingAssignmentsRoute,
         arguments: SeatingAssignmentsArgs(
           eventId: widget.eventId,
+          eventTitle: widget.eventTitle,
           initialAssignments: assignments,
         ),
       );
@@ -190,11 +191,10 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         AppRouter.seatingAssignmentsRoute,
         arguments: SeatingAssignmentsArgs(
           eventId: widget.eventId,
+          eventTitle: widget.eventTitle,
           initialAssignments: assignments,
           bonusTableRoleFilter: BonusTableRole.tableOfChampionsSuddenDeath,
           showUnassignedGuests: false,
-          enterTableScoringPhase: EventScoringPhase.bonus,
-          minimumTableSize: 2,
         ),
       );
     }
@@ -217,11 +217,10 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         AppRouter.seatingAssignmentsRoute,
         arguments: SeatingAssignmentsArgs(
           eventId: widget.eventId,
+          eventTitle: widget.eventTitle,
           initialAssignments: assignments,
           bonusTableRoleFilter: BonusTableRole.tableOfChampionsPlayIn,
           showUnassignedGuests: false,
-          enterTableScoringPhase: EventScoringPhase.bonus,
-          minimumTableSize: 2,
         ),
       );
     }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/offline/network_reachability.dart';
 import 'package:mosaic/data/offline/offline_models.dart';
@@ -854,6 +855,13 @@ class _FakeSessionRepository implements SessionRepository {
   Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
     String eventId,
   ) async =>
+      const [];
+
+  @override
+  Future<List<TableSessionRecord>> startBonusAssignedTableSessions({
+    required String eventId,
+    required BonusTableRole? bonusTableRole,
+  }) async =>
       const [];
 }
 

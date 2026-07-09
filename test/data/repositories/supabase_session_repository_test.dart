@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/supabase_session_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -329,6 +330,116 @@ void main() {
       expect(cached.first.assignmentRound, 2);
     });
 
+    test('starts bonus assigned table sessions and caches returned rows',
+        () async {
+      final cache = await LocalCache.create();
+      await cache.saveSessions('evt_01', [
+        TableSessionRecord.fromJson(
+          _sessionJson(
+            id: 'ses_01',
+            tableId: 'tbl_replaced',
+            startedAt: '2026-06-01T18:00:00Z',
+          ),
+        ),
+        TableSessionRecord.fromJson(
+          _sessionJson(
+            id: 'ses_existing',
+            tableId: 'tbl_03',
+            startedAt: '2026-06-01T18:30:00Z',
+          ),
+        ),
+      ]);
+      final repository = SupabaseSessionRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcListRunner: (functionName, params) async {
+          expect(functionName, 'start_bonus_assigned_table_sessions');
+          expect(params, {
+            'target_event_id': 'evt_01',
+            'target_bonus_table_role': 'table_of_champions',
+          });
+          return [
+            _sessionJson(
+              id: 'ses_02',
+              tableId: 'tbl_02',
+              startedAt: '2026-06-01T19:00:00Z',
+              scoringPhase: 'bonus',
+              bonusTableRole: 'table_of_champions',
+            ),
+            _sessionJson(
+              id: 'ses_01',
+              tableId: 'tbl_01',
+              startedAt: '2026-06-01T19:00:00Z',
+              scoringPhase: 'bonus',
+              bonusTableRole: 'table_of_champions',
+            ),
+          ];
+        },
+      );
+
+      final sessions = await repository.startBonusAssignedTableSessions(
+        eventId: 'evt_01',
+        bonusTableRole: BonusTableRole.tableOfChampions,
+      );
+      final cached = await repository.readCachedSessions('evt_01');
+
+      expect(sessions.map((session) => session.id), ['ses_02', 'ses_01']);
+      expect(sessions.first.scoringPhase, EventScoringPhase.bonus);
+      expect(sessions.first.bonusTableRole, BonusTableRole.tableOfChampions);
+      expect(cached.map((session) => session.id), [
+        'ses_01',
+        'ses_02',
+        'ses_existing',
+      ]);
+      expect(cached.map((session) => session.eventTableId), [
+        'tbl_01',
+        'tbl_02',
+        'tbl_03',
+      ]);
+    });
+
+    test('starts all active bonus assigned table sessions with null role param',
+        () async {
+      final cache = await LocalCache.create();
+      final repository = SupabaseSessionRepository(
+        client: SupabaseClient('https://example.com', 'publishable-key'),
+        cache: cache,
+        rpcListRunner: (functionName, params) async {
+          expect(functionName, 'start_bonus_assigned_table_sessions');
+          expect(params, {
+            'target_event_id': 'evt_01',
+            'target_bonus_table_role': null,
+          });
+          return [
+            _sessionJson(
+              id: 'ses_champions',
+              tableId: 'tbl_champions',
+              startedAt: '2026-06-01T19:00:00Z',
+              scoringPhase: 'bonus',
+              bonusTableRole: 'table_of_champions',
+            ),
+            _sessionJson(
+              id: 'ses_redemption',
+              tableId: 'tbl_redemption',
+              startedAt: '2026-06-01T19:00:00Z',
+              scoringPhase: 'bonus',
+              bonusTableRole: 'table_of_redemption',
+            ),
+          ];
+        },
+      );
+
+      final sessions = await repository.startBonusAssignedTableSessions(
+        eventId: 'evt_01',
+        bonusTableRole: null,
+      );
+
+      expect(sessions.map((session) => session.bonusTableRole), [
+        BonusTableRole.tableOfChampions,
+        BonusTableRole.tableOfRedemption,
+      ]);
+    });
+
     test('loads and caches table label with session detail', () async {
       final cache = await LocalCache.create();
       final loadedTableIds = <String>[];
@@ -411,6 +522,8 @@ Map<String, dynamic> _sessionJson({
   required String id,
   required String tableId,
   required String startedAt,
+  String scoringPhase = 'tournament',
+  String? bonusTableRole,
 }) {
   return {
     'id': id,
@@ -421,7 +534,8 @@ Map<String, dynamic> _sessionJson({
     'rotation_policy_type': 'dealer_cycle_return_to_initial_east',
     'rotation_policy_config_json': {},
     'status': 'active',
-    'scoring_phase': 'tournament',
+    'scoring_phase': scoringPhase,
+    'bonus_table_role': bonusTableRole,
     'initial_east_seat_index': 0,
     'current_dealer_seat_index': 0,
     'dealer_pass_count': 0,

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/offline/network_reachability.dart';
 import 'package:mosaic/data/offline/offline_models.dart';
@@ -421,5 +422,21 @@ class OfflineSessionRepository
       );
     }
     return inner.startCurrentTournamentRoundSessions(eventId);
+  }
+
+  @override
+  Future<List<TableSessionRecord>> startBonusAssignedTableSessions({
+    required String eventId,
+    required BonusTableRole? bonusTableRole,
+  }) async {
+    if (!await reachability.isReachable()) {
+      throw const OfflineUnsupportedOperationException(
+        'Starting sessions is unavailable while offline.',
+      );
+    }
+    return inner.startBonusAssignedTableSessions(
+      eventId: eventId,
+      bonusTableRole: bonusTableRole,
+    );
   }
 }

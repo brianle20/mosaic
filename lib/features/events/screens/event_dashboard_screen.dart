@@ -278,7 +278,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
 
     await Navigator.of(context).pushNamed(
       AppRouter.seatingAssignmentsRoute,
-      arguments: SeatingAssignmentsArgs(eventId: event.id),
+      arguments: SeatingAssignmentsArgs(
+        eventId: event.id,
+        eventTitle: event.title,
+      ),
     );
     await _reloadDashboardAfterReturn(event.id);
   }
@@ -358,6 +361,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       AppRouter.seatingAssignmentsRoute,
       arguments: SeatingAssignmentsArgs(
         eventId: event.id,
+        eventTitle: event.title,
         initialAssignments: assignments,
       ),
     );
@@ -380,6 +384,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       AppRouter.seatingAssignmentsRoute,
       arguments: SeatingAssignmentsArgs(
         eventId: event.id,
+        eventTitle: event.title,
         initialAssignments: assignments,
       ),
     );

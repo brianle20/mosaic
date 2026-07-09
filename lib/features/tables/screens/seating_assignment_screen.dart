@@ -5,7 +5,6 @@ import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
-import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/seating_assignment_controller.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
@@ -15,25 +14,23 @@ class SeatingAssignmentScreen extends StatefulWidget {
   const SeatingAssignmentScreen({
     super.key,
     required this.eventId,
+    required this.eventTitle,
     required this.seatingRepository,
     required this.guestRepository,
     required this.sessionRepository,
     this.initialAssignments = const [],
     this.bonusTableRoleFilter,
     this.showUnassignedGuests = true,
-    this.enterTableScoringPhase = EventScoringPhase.tournament,
-    this.minimumTableSize = 4,
   });
 
   final String eventId;
+  final String eventTitle;
   final SeatingRepository seatingRepository;
   final GuestRepository guestRepository;
   final SessionRepository sessionRepository;
   final List<SeatingAssignmentRecord> initialAssignments;
   final BonusTableRole? bonusTableRoleFilter;
   final bool showUnassignedGuests;
-  final EventScoringPhase enterTableScoringPhase;
-  final int minimumTableSize;
 
   @override
   State<SeatingAssignmentScreen> createState() =>
@@ -69,30 +66,6 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
   void _handleUpdate() {
     if (mounted) {
       setState(() {});
-    }
-  }
-
-  Future<void> _enterTable(SeatingTableGroup group) async {
-    await Navigator.of(context).pushNamed(
-      AppRouter.startSessionRoute,
-      arguments: StartSessionArgs(
-        eventId: widget.eventId,
-        table: EventTableRecord.fromJson({
-          'id': group.eventTableId,
-          'event_id': widget.eventId,
-          'label': group.tableLabel,
-          'display_order': 0,
-          'default_ruleset_id': 'HK_STANDARD',
-          'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
-          'default_rotation_policy_config_json': const <String, dynamic>{},
-        }),
-        scoringPhase: widget.enterTableScoringPhase,
-        allowAssignedTableEntry: true,
-      ),
-    );
-
-    if (mounted) {
-      await _controller.load(widget.eventId);
     }
   }
 
@@ -139,6 +112,37 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
       ..showSnackBar(const SnackBar(content: Text('Seating copied.')));
   }
 
+  Future<void> _startAllTables() async {
+    await _controller.startAllTables(widget.eventId);
+    if (!mounted ||
+        _controller.error != null ||
+        !_controller.hasLiveSessions) {
+      return;
+    }
+
+    await Navigator.of(context).pushReplacementNamed(
+      AppRouter.tablesOverviewRoute,
+      arguments: TablesOverviewArgs(
+        eventId: widget.eventId,
+        eventTitle: widget.eventTitle,
+        scoringOpen: true,
+        scoringPhase: _currentSeatingScoringPhase,
+      ),
+    );
+  }
+
+  EventScoringPhase get _currentSeatingScoringPhase {
+    final assignments = _controller.assignments;
+    if (assignments.isNotEmpty &&
+        assignments.every(
+          (assignment) =>
+              assignment.assignmentType == SeatingAssignmentType.bonus,
+        )) {
+      return EventScoringPhase.bonus;
+    }
+    return EventScoringPhase.tournament;
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasAssignments = _controller.assignments.isNotEmpty;
@@ -168,6 +172,23 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              if (_controller.canStartAllTables ||
+                  _controller.isSubmitting) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed:
+                        _controller.isSubmitting ? null : _startAllTables,
+                    icon: const Icon(Icons.play_arrow),
+                    label: Text(
+                      _controller.isSubmitting
+                          ? 'Starting Tables...'
+                          : _controller.startAllTablesLabel,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
             ],
             if (!hasAssignments)
               const EmptyStateCard(
@@ -178,11 +199,7 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
               )
             else
               for (final group in _controller.tableGroups) ...[
-                _TableSeatingCard(
-                  group: group,
-                  onEnterTable: () => _enterTable(group),
-                  minimumTableSize: widget.minimumTableSize,
-                ),
+                _TableSeatingCard(group: group),
                 const SizedBox(height: 12),
               ],
             if (hasAssignments && _controller.unassignedGuests.isNotEmpty) ...[
@@ -229,15 +246,9 @@ class _UnassignedGuestsCard extends StatelessWidget {
 }
 
 class _TableSeatingCard extends StatelessWidget {
-  const _TableSeatingCard({
-    required this.group,
-    required this.onEnterTable,
-    required this.minimumTableSize,
-  });
+  const _TableSeatingCard({required this.group});
 
   final SeatingTableGroup group;
-  final VoidCallback onEnterTable;
-  final int minimumTableSize;
 
   @override
   Widget build(BuildContext context) {
@@ -259,17 +270,6 @@ class _TableSeatingCard extends StatelessWidget {
                 windLabel: _windLabel(seat.seatIndex),
                 assignment: seat,
               ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: group.seats.length >= minimumTableSize
-                    ? onEnterTable
-                    : null,
-                icon: const Icon(Icons.login),
-                label: const Text('Enter Table'),
-              ),
-            ),
           ],
         ),
       ),

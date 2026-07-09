@@ -245,6 +245,13 @@ class ThrowingSessionRepository implements SessionRepository {
       throw UnimplementedError();
 
   @override
+  Future<List<TableSessionRecord>> startBonusAssignedTableSessions({
+    required String eventId,
+    required BonusTableRole? bonusTableRole,
+  }) =>
+      throw UnimplementedError();
+
+  @override
   Future<SessionDetailRecord> pauseSession(String sessionId) =>
       throw UnimplementedError();
 

@@ -191,6 +191,11 @@ abstract interface class SessionRepository {
     String eventId,
   );
 
+  Future<List<TableSessionRecord>> startBonusAssignedTableSessions({
+    required String eventId,
+    required BonusTableRole? bonusTableRole,
+  });
+
   Future<SessionDetailRecord> pauseSession(String sessionId);
 
   Future<SessionDetailRecord> resumeSession(String sessionId);

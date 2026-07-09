@@ -4,6 +4,7 @@ import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
+import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/offline/offline_models.dart';
 import 'package:mosaic/data/offline/session_sync_status.dart';
@@ -274,6 +275,14 @@ class _FakeSessionRepository
   Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
     String eventId,
   ) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<TableSessionRecord>> startBonusAssignedTableSessions({
+    required String eventId,
+    required BonusTableRole? bonusTableRole,
+  }) {
     throw UnimplementedError();
   }
 

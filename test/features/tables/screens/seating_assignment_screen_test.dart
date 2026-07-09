@@ -143,11 +143,15 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   const _FakeSessionRepository({
     this.sessions = const [],
     this.sessionsAfterBulkStart = const [],
+    this.bulkStartError,
   });
 
   final List<TableSessionRecord> sessions;
   final List<TableSessionRecord> sessionsAfterBulkStart;
+  final Object? bulkStartError;
   static int bulkStartCallCount = 0;
+  static int bonusBulkStartCallCount = 0;
+  static BonusTableRole? lastBonusBulkStartRole;
 
   @override
   Future<SessionDetailRecord> editHand(EditHandResultInput input) {
@@ -174,7 +178,9 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 
   @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async =>
-      bulkStartCallCount > 0 ? sessionsAfterBulkStart : sessions;
+      bulkStartCallCount > 0 || bonusBulkStartCallCount > 0
+          ? sessionsAfterBulkStart
+          : sessions;
 
   @override
   Future<SessionDetailRecord> pauseSession(String sessionId) {
@@ -211,6 +217,22 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
     String eventId,
   ) async {
     bulkStartCallCount += 1;
+    if (bulkStartError != null) {
+      throw bulkStartError!;
+    }
+    return sessionsAfterBulkStart;
+  }
+
+  @override
+  Future<List<TableSessionRecord>> startBonusAssignedTableSessions({
+    required String eventId,
+    required BonusTableRole? bonusTableRole,
+  }) async {
+    bonusBulkStartCallCount += 1;
+    lastBonusBulkStartRole = bonusTableRole;
+    if (bulkStartError != null) {
+      throw bulkStartError!;
+    }
     return sessionsAfterBulkStart;
   }
 
@@ -223,6 +245,8 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 void main() {
   setUp(() {
     _FakeSessionRepository.bulkStartCallCount = 0;
+    _FakeSessionRepository.bonusBulkStartCallCount = 0;
+    _FakeSessionRepository.lastBonusBulkStartRole = null;
   });
 
   testWidgets('shows empty state without seating mutation actions',
@@ -231,6 +255,7 @@ void main() {
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: _FakeSeatingRepository(),
           guestRepository: _FakeGuestRepository(),
           sessionRepository: const _FakeSessionRepository(),
@@ -254,6 +279,7 @@ void main() {
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: _FakeSeatingRepository(
             loadedAssignments: [
               _assignment(
@@ -324,6 +350,7 @@ void main() {
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: _FakeSeatingRepository(
             loadedAssignments: [
               _assignment(
@@ -425,6 +452,7 @@ void main() {
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: _FakeSeatingRepository(
             loadedAssignments: [
               _assignment(
@@ -451,11 +479,15 @@ void main() {
     expect(find.text('Public names are still loading.'), findsOneWidget);
   });
 
-  testWidgets('seating review does not start all tables', (tester) async {
+  testWidgets('tournament seating starts all tables and opens tables route',
+      (tester) async {
+    TablesOverviewArgs? openedArgs;
+
     await tester.pumpWidget(
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: _FakeSeatingRepository(
             loadedAssignments: [
               _assignment(displayName: 'Ava East', seatIndex: 0),
@@ -471,16 +503,84 @@ void main() {
           sessionRepository: _FakeSessionRepository(
             sessionsAfterBulkStart: [_session(SessionStatus.active)],
           ),
-          minimumTableSize: 2,
         ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedArgs = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Opened Tables')),
+              settings: settings,
+            );
+          }
+          return null;
+        },
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Start All Tables'), findsNothing);
     expect(find.text('Copy Seating'), findsOneWidget);
+    expect(find.text('Start All Tables'), findsOneWidget);
+    expect(find.text('Enter Table'), findsNothing);
     expect(find.text('Table 1'), findsOneWidget);
-    expect(_FakeSessionRepository.bulkStartCallCount, 0);
+
+    await tester.tap(find.text('Start All Tables'));
+    await tester.pumpAndSettle();
+
+    expect(_FakeSessionRepository.bulkStartCallCount, 1);
+    expect(_FakeSessionRepository.bonusBulkStartCallCount, 0);
+    expect(openedArgs?.eventId, 'evt_01');
+    expect(openedArgs?.eventTitle, 'Friday Night Mahjong');
+    expect(openedArgs?.scoringOpen, isTrue);
+    expect(openedArgs?.scoringPhase, EventScoringPhase.tournament);
+    expect(find.text('Opened Tables'), findsOneWidget);
+  });
+
+  testWidgets('start error stays on seating and does not navigate',
+      (tester) async {
+    TablesOverviewArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          seatingRepository: _FakeSeatingRepository(
+            loadedAssignments: [
+              _assignment(displayName: 'Ava East', seatIndex: 0),
+              _assignment(
+                id: 'a2',
+                guestId: 'gst_02',
+                displayName: 'Ben South',
+                seatIndex: 1,
+              ),
+            ],
+          ),
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: const _FakeSessionRepository(
+            bulkStartError: 'Start failed',
+          ),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedArgs = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Opened Tables')),
+              settings: settings,
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Start All Tables'));
+    await tester.pumpAndSettle();
+
+    expect(_FakeSessionRepository.bulkStartCallCount, 1);
+    expect(openedArgs, isNull);
+    expect(find.text('Start failed'), findsOneWidget);
+    expect(find.text('Table 1'), findsOneWidget);
   });
 
   testWidgets('start all tables stays hidden without seating', (tester) async {
@@ -488,6 +588,7 @@ void main() {
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: _FakeSeatingRepository(),
           guestRepository: _FakeGuestRepository(),
           sessionRepository: const _FakeSessionRepository(),
@@ -505,6 +606,7 @@ void main() {
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: _FakeSeatingRepository(),
           guestRepository: _FakeGuestRepository(),
           sessionRepository: const _FakeSessionRepository(),
@@ -530,14 +632,13 @@ void main() {
         findsNothing);
   });
 
-  testWidgets('enter table opens assigned start session fallback',
+  testWidgets('initial assignments show start all tables and no enter table',
       (tester) async {
-    StartSessionArgs? openedArgs;
-
     await tester.pumpWidget(
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: _FakeSeatingRepository(),
           guestRepository: _FakeGuestRepository(),
           sessionRepository: const _FakeSessionRepository(),
@@ -572,28 +673,14 @@ void main() {
             ),
           ],
         ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.startSessionRoute) {
-            openedArgs = settings.arguments! as StartSessionArgs;
-            return MaterialPageRoute<void>(
-              builder: (_) => const Scaffold(body: Text('Start Session')),
-              settings: settings,
-            );
-          }
-          return null;
-        },
       ),
     );
 
     await tester.pump();
-    await tester.tap(find.text('Enter Table'));
-    await tester.pumpAndSettle();
 
-    expect(openedArgs?.eventId, 'evt_01');
-    expect(openedArgs?.table.id, 'tbl_01');
-    expect(openedArgs?.table.label, 'Table 1');
-    expect(openedArgs?.scoringPhase, EventScoringPhase.tournament);
-    expect(openedArgs?.allowAssignedTableEntry, isTrue);
+    expect(find.text('Copy Seating'), findsOneWidget);
+    expect(find.text('Start All Tables'), findsOneWidget);
+    expect(find.text('Enter Table'), findsNothing);
   });
 
   testWidgets('shows eligible guests left unassigned after loading seating',
@@ -610,6 +697,7 @@ void main() {
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: _FakeSeatingRepository(
             loadedAssignments: [
               _assignment(
@@ -651,8 +739,9 @@ void main() {
     expect(find.text('Eli Waiting'), findsOneWidget);
   });
 
-  testWidgets('sudden death seating hides non-champions and unassigned guests',
+  testWidgets('finals seating starts bonus tables and opens tables route',
       (tester) async {
+    TablesOverviewArgs? openedArgs;
     final guests = [
       _guest(id: 'gst_01', displayName: 'Champion One'),
       _guest(id: 'gst_02', displayName: 'Champion Two'),
@@ -664,6 +753,7 @@ void main() {
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: _FakeSeatingRepository(
             loadedAssignments: [
               _assignment(
@@ -699,16 +789,17 @@ void main() {
           guestRepository: _FakeGuestRepository(
             guests: guests,
           ),
-          sessionRepository: const _FakeSessionRepository(),
+          sessionRepository: _FakeSessionRepository(
+            sessionsAfterBulkStart: [_session(SessionStatus.active)],
+          ),
           bonusTableRoleFilter: BonusTableRole.tableOfChampionsSuddenDeath,
           showUnassignedGuests: false,
-          enterTableScoringPhase: EventScoringPhase.bonus,
-          minimumTableSize: 2,
         ),
         onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.startSessionRoute) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedArgs = settings.arguments! as TablesOverviewArgs;
             return MaterialPageRoute<void>(
-              builder: (_) => const Scaffold(body: Text('Start Session')),
+              builder: (_) => const Scaffold(body: Text('Opened Tables')),
               settings: settings,
             );
           }
@@ -725,11 +816,81 @@ void main() {
     expect(find.text('Redemption Player'), findsNothing);
     expect(find.text('Unassigned'), findsNothing);
     expect(find.text('Waiting Player'), findsNothing);
-    expect(find.text('Start All Tables'), findsNothing);
+    expect(find.text('Start Sudden Death'), findsOneWidget);
+    expect(find.text('Enter Table'), findsNothing);
 
-    await tester.tap(find.text('Enter Table'));
+    await tester.tap(find.text('Start Sudden Death'));
     await tester.pumpAndSettle();
-    expect(find.text('Start Session'), findsOneWidget);
+    expect(_FakeSessionRepository.bulkStartCallCount, 0);
+    expect(_FakeSessionRepository.bonusBulkStartCallCount, 1);
+    expect(openedArgs?.eventId, 'evt_01');
+    expect(openedArgs?.eventTitle, 'Friday Night Mahjong');
+    expect(openedArgs?.scoringOpen, isTrue);
+    expect(openedArgs?.scoringPhase, EventScoringPhase.bonus);
+    expect(find.text('Opened Tables'), findsOneWidget);
+  });
+
+  testWidgets('standard finals seating starts all finals bonus tables',
+      (tester) async {
+    TablesOverviewArgs? openedArgs;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SeatingAssignmentScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          seatingRepository: _FakeSeatingRepository(
+            loadedAssignments: [
+              _assignment(
+                id: 'champions_01',
+                tableId: 'tbl_champions',
+                tableLabel: 'Table 1',
+                guestId: 'gst_01',
+                displayName: 'Champion One',
+                assignmentType: SeatingAssignmentType.bonus,
+                bonusTableRole: BonusTableRole.tableOfChampions,
+              ),
+              _assignment(
+                id: 'redemption_01',
+                tableId: 'tbl_redemption',
+                tableLabel: 'Table 2',
+                guestId: 'gst_02',
+                displayName: 'Redemption One',
+                assignmentType: SeatingAssignmentType.bonus,
+                bonusTableRole: BonusTableRole.tableOfRedemption,
+              ),
+            ],
+          ),
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            sessionsAfterBulkStart: [_session(SessionStatus.active)],
+          ),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedArgs = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Opened Tables')),
+              settings: settings,
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start Finals Tables'), findsOneWidget);
+
+    await tester.tap(find.text('Start Finals Tables'));
+    await tester.pumpAndSettle();
+
+    expect(_FakeSessionRepository.bulkStartCallCount, 0);
+    expect(_FakeSessionRepository.bonusBulkStartCallCount, 1);
+    expect(_FakeSessionRepository.lastBonusBulkStartRole, isNull);
+    expect(openedArgs?.eventId, 'evt_01');
+    expect(openedArgs?.scoringPhase, EventScoringPhase.bonus);
+    expect(find.text('Opened Tables'), findsOneWidget);
   });
 
   testWidgets('live sessions do not expose seating mutation actions',
@@ -747,6 +908,7 @@ void main() {
       MaterialApp(
         home: SeatingAssignmentScreen(
           eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
           seatingRepository: repository,
           guestRepository: _FakeGuestRepository(),
           sessionRepository: _FakeSessionRepository(
