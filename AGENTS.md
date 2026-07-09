@@ -160,13 +160,17 @@ Do not claim the simulator is fixed until launch output or a screenshot confirms
 - Do not install a debug build when the user wants to open the app normally from the phone Home Screen.
   - Debug iOS builds can launch only when started by Flutter tooling or Xcode.
   - If opened directly, they may crash with `Cannot create a FlutterEngine instance in debug mode without Flutter tooling or Xcode`.
-- For a physical phone push intended for normal use, install a profile or release build:
-  - Preferred quick deploy: `flutter run -d <device_id> --profile --no-pub`.
-  - After it installs, stop the attached run if needed, then verify standalone launch:
-    `xcrun devicectl device process launch --device <device_id> --terminate-existing com.mosaicmahjong.mosaic`.
-  - To verify it does not immediately crash, use:
-    `xcrun devicectl device process launch --device <device_id> --terminate-existing --console --timeout 20 com.mosaicmahjong.mosaic`.
-    A timeout while waiting for termination means the app stayed running; a signal or FlutterEngine debug-mode error means the push is not valid.
+- For a physical phone push intended for normal use, always install a release build.
+  - Do not use `flutter run --debug` or `flutter run --profile` for a Home Screen build on a physical iPhone.
+  - Release build path:
+    1. `flutter build ios --release --no-pub`
+    2. `xcrun devicectl device uninstall app --device <device_id> --timeout 30 com.mosaicmahjong.mosaic || true`
+    3. `xcrun devicectl device install app --device <device_id> --timeout 90 build/ios/iphoneos/Runner.app`
+  - Verify installation with:
+    `xcrun devicectl device info apps --device <device_id> --timeout 30 | rg -C 3 'Mosaic|com.mosaicmahjong.mosaic'`
+  - If launch behavior matters, ask the user to open Mosaic from the phone after install and then check for fresh crash logs:
+    `xcrun devicectl device info files --device <device_id> --timeout 30 --domain-type systemCrashLogs --recurse --columns '*' | rg -i 'Runner|Mosaic|mosaic' | tail`
+  - `devicectl process launch` can hang before returning a PID on some wired iOS/Xcode combinations. Do not treat that hang as proof the app is missing; verify the installed app list and crash logs.
 
 ## Testing And Verification
 
