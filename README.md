@@ -121,6 +121,13 @@ Use manual NFC entry during development with:
 flutter run --dart-define=MOSAIC_USE_MANUAL_NFC=true
 ```
 
+For iOS simulator pushes, use the helper so manual NFC entry is always baked
+into the simulator build:
+
+```sh
+tool/run_ios_simulator_debug.sh
+```
+
 ## Run The Web App
 
 ```sh

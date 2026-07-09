@@ -117,10 +117,10 @@ Mosaic often needs to be pushed to a simulator during UI work. Do not stop at "b
 1. Run `flutter devices`.
 2. Identify the booted simulator and target id.
 3. Confirm the bundle id from Xcode project if needed. Expected: `com.mosaicmahjong.mosaic`.
-4. Build: `flutter build ios --simulator --debug`.
-5. Install: `xcrun simctl install booted build/ios/iphonesimulator/Runner.app`.
-6. Launch: `xcrun simctl launch booted com.mosaicmahjong.mosaic`.
-7. If startup behavior matters, capture a screenshot: `xcrun simctl io booted screenshot /tmp/mosaic-simulator.png`.
+4. Build, install, and launch with `tool/run_ios_simulator_debug.sh`.
+   - This always passes `--dart-define=MOSAIC_USE_MANUAL_NFC=true` so simulator builds use manual NFC entry instead of native NFC.
+5. If startup behavior matters, capture a screenshot by running:
+   `MOSAIC_SIMULATOR_SCREENSHOT_PATH=/tmp/mosaic-simulator.png tool/run_ios_simulator_debug.sh`.
 
 ### Known Simulator Failure: Native Framework Wrong Platform
 
@@ -136,12 +136,12 @@ Fix path:
 
 1. Run `flutter clean`.
 2. Run `flutter pub get`.
-3. Run `flutter build ios --simulator --debug`.
+3. Run `flutter build ios --simulator --debug --dart-define=MOSAIC_USE_MANUAL_NFC=true`.
 4. Verify framework platform:
    `xcrun vtool -show-build build/ios/iphonesimulator/Runner.app/Frameworks/objective_c.framework/objective_c`
 5. Confirm it says `platform IOSSIMULATOR`.
 6. Uninstall stale app: `xcrun simctl uninstall booted com.mosaicmahjong.mosaic`.
-7. Reinstall and launch.
+7. Reinstall and launch with `tool/run_ios_simulator_debug.sh`.
 8. Capture a screenshot if the prior failure was visual/startup related.
 
 Do not claim the simulator is fixed until launch output or a screenshot confirms the app starts.
