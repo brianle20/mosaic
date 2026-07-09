@@ -269,6 +269,39 @@ void main() {
     expect(sql, contains("status = 'voided'"));
     expect(sql, contains('hand_result_id = existing_hand.id'));
   });
+
+  test('same-hand false win migration adds direct penalty void RPC', () {
+    final sql = File(
+      'supabase/migrations/20260709210000_void_false_win_penalty.sql',
+    ).readAsStringSync();
+    final functionSql = _extractFunction(sql, 'public.void_false_win_penalty');
+
+    expect(
+      sql,
+      contains('create or replace function public.void_false_win_penalty'),
+    );
+    expect(functionSql, contains('target_hand_false_win_penalty_id uuid'));
+    expect(
+      functionSql,
+      contains('from public.hand_false_win_penalties\n  where id = target_hand_false_win_penalty_id'),
+    );
+    expect(functionSql, contains('app_private.require_owned_session'));
+    expect(functionSql, contains('app_private.require_event_for_hand_correction'));
+    expect(functionSql, contains("status = 'voided'"));
+    expect(
+      functionSql,
+      contains('hand_false_win_penalty_id = existing_penalty.id'),
+    );
+    expect(functionSql, contains('public.recalculate_session(session_row.id)'));
+    expect(functionSql, contains("'hand_false_win_penalty'"));
+    expect(functionSql, contains("'void'"));
+    expect(
+      sql,
+      contains(
+        'grant execute on function public.void_false_win_penalty(uuid, text)',
+      ),
+    );
+  });
 }
 
 String _extractFunction(String sql, String functionName) {

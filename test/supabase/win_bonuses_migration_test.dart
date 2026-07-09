@@ -8,7 +8,7 @@ void main() {
 
   setUpAll(() {
     final migrationFile = File(
-      'supabase/migrations/20260709200000_win_bonuses.sql',
+      'supabase/migrations/20260709201000_win_bonuses.sql',
     );
     expect(migrationFile.existsSync(), isTrue);
     migration = migrationFile.readAsStringSync();
