@@ -564,6 +564,7 @@ class _FakeMosaicProfileRepository implements MosaicProfileRepository {
     required String handResultId,
     required Map<String, dynamic> tilesJson,
     required int? calculatedFanCount,
+    required HandTileReviewStatus reviewStatus,
     required String calculationVersion,
   }) {
     throw StateError('upsertHandTileEntry is not used by this test fake.');
@@ -772,7 +773,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Hand Evidence Review'), findsOneWidget);
+    expect(find.text('Hand Review'), findsOneWidget);
   });
 
   testWidgets('renders a clearer startup error state', (tester) async {

@@ -79,6 +79,7 @@ class SupabaseMosaicProfileRepository implements MosaicProfileRepository {
     required String handResultId,
     required Map<String, dynamic> tilesJson,
     required int? calculatedFanCount,
+    required HandTileReviewStatus reviewStatus,
     required String calculationVersion,
   }) async {
     final response = await _rpcRunner(
@@ -87,6 +88,7 @@ class SupabaseMosaicProfileRepository implements MosaicProfileRepository {
         'target_hand_result_id': handResultId,
         'target_tiles_json': tilesJson,
         'target_calculated_fan_count': calculatedFanCount,
+        'target_review_status': _reviewStatusToJson(reviewStatus),
         'target_calculation_version': calculationVersion,
       },
     );
@@ -94,6 +96,16 @@ class SupabaseMosaicProfileRepository implements MosaicProfileRepository {
       _singleRowMap('upsert_hand_tile_entry', response),
     );
   }
+}
+
+String _reviewStatusToJson(HandTileReviewStatus status) {
+  return switch (status) {
+    HandTileReviewStatus.unreviewed => 'unreviewed',
+    HandTileReviewStatus.matched => 'matched',
+    HandTileReviewStatus.flagged => 'flagged',
+    HandTileReviewStatus.underDeclared => 'under_declared',
+    HandTileReviewStatus.resolved => 'resolved',
+  };
 }
 
 Map<String, dynamic> _rowMap(Object? row) {

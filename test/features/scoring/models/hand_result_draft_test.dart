@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 
 void main() {
   group('HandResultDraft', () {
@@ -200,5 +201,154 @@ void main() {
       expect(validDraft.toRecordInput(tableSessionId: 'ses_01').winType,
           HandWinType.selfDraw);
     });
+
+    test('win record input serializes explicit win bonuses', () {
+      const draft = HandResultDraft(
+        resultType: HandResultType.win,
+        winnerSeatIndex: 0,
+        fanCount: 5,
+        winType: HandWinType.selfDraw,
+        winBonuses: [HandWinBonus.concealedHand, HandWinBonus.moonUnderTheSea],
+      );
+
+      final input = draft.toRecordInput(tableSessionId: 'ses_01');
+
+      expect(input.winBonuses, [
+        HandWinBonus.concealedHand,
+        HandWinBonus.moonUnderTheSea,
+      ]);
+      expect(input.toRpcParams()['target_win_bonuses'], [
+        'concealed_hand',
+        'moon_under_the_sea',
+      ]);
+    });
+
+    test('win record input normalizes unknown win bonuses to explicit empty',
+        () {
+      const draft = HandResultDraft(
+        resultType: HandResultType.win,
+        winnerSeatIndex: 0,
+        fanCount: 3,
+        winType: HandWinType.selfDraw,
+        winBonuses: null,
+      );
+
+      expect(
+        draft
+            .toRecordInput(tableSessionId: 'ses_01')
+            .toRpcParams()['target_win_bonuses'],
+        <String>[],
+      );
+    });
+
+    test('known empty win bonuses serialize as an empty list', () {
+      const draft = HandResultDraft(
+        resultType: HandResultType.win,
+        winnerSeatIndex: 0,
+        fanCount: 3,
+        winType: HandWinType.selfDraw,
+        winBonuses: [],
+      );
+
+      expect(
+        draft
+            .toRecordInput(tableSessionId: 'ses_01')
+            .toRpcParams()['target_win_bonuses'],
+        <String>[],
+      );
+    });
+
+    test('non-win drafts clear win bonuses', () {
+      const draw = HandResultDraft(
+        resultType: HandResultType.washout,
+        winBonuses: [HandWinBonus.concealedHand],
+      );
+      const penalty = HandResultDraft(
+        resultType: HandResultType.falseWinPenalty,
+        penaltySeatIndex: 1,
+        winBonuses: [HandWinBonus.moonUnderTheSea],
+      );
+
+      expect(draw.toRecordInput(tableSessionId: 'ses_01').winBonuses, isNull);
+      expect(penalty.toEditInput(handResultId: 'hand_01').winBonuses, isNull);
+    });
+
+    test('win edit input preserves unknown win bonuses', () {
+      const draft = HandResultDraft(
+        resultType: HandResultType.win,
+        winnerSeatIndex: 0,
+        fanCount: 3,
+        winType: HandWinType.selfDraw,
+        winBonuses: null,
+      );
+
+      expect(draft.toEditInput(handResultId: 'hand_01').winBonuses, isNull);
+      expect(
+        draft.toEditInput(handResultId: 'hand_01').toRpcParams(),
+        containsPair('target_win_bonuses', null),
+      );
+    });
+
+    test('hand result record preserves unknown empty and selected bonuses', () {
+      final unknown = HandResultRecord.fromJson({
+        ..._handResultJson(),
+        'win_bonuses': null,
+      });
+      final none = HandResultRecord.fromJson({
+        ..._handResultJson(),
+        'win_bonuses': <String>[],
+      });
+      final selected = HandResultRecord.fromJson({
+        ..._handResultJson(),
+        'win_bonuses': ['robbing_the_kong'],
+      });
+
+      expect(unknown.winBonuses, isNull);
+      expect(none.winBonuses, isEmpty);
+      expect(selected.winBonuses, [HandWinBonus.robbingTheKong]);
+      expect(selected.toJson()['win_bonuses'], ['robbing_the_kong']);
+    });
+
+    test('hand result record rejects malformed win bonus arrays', () {
+      expect(
+        () => HandResultRecord.fromJson({
+          ..._handResultJson(),
+          'win_bonuses': [1],
+        }),
+        throwsA(isA<FormatException>()),
+      );
+    });
   });
+}
+
+Map<String, dynamic> _handResultJson() {
+  return {
+    'id': 'hand_01',
+    'table_session_id': 'ses_01',
+    'hand_number': 1,
+    'result_type': 'win',
+    'winner_seat_index': 0,
+    'win_type': 'self_draw',
+    'discarder_seat_index': null,
+    'penalty_seat_index': null,
+    'fan_count': 3,
+    'base_points': null,
+    'dealer_was_waiting_at_draw': null,
+    'east_seat_index_before_hand': 0,
+    'east_seat_index_after_hand': 0,
+    'dealer_rotated': false,
+    'session_completed_after_hand': false,
+    'status': 'recorded',
+    'entered_by_user_id': 'host_01',
+    'entered_at': '2026-07-09T12:00:00Z',
+    'correction_note': null,
+    'row_version': 1,
+    'client_mutation_id': null,
+    'photo_id': null,
+    'photo_client_id': null,
+    'photo_captured_at': null,
+    'photo_upload_status': null,
+    'photo_storage_bucket': null,
+    'photo_storage_path': null,
+  };
 }

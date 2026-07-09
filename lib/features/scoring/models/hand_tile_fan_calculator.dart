@@ -2,6 +2,7 @@ import 'package:meta/meta.dart';
 import 'package:mosaic/data/models/hand_evidence_models.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_entry_draft.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_grouping.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 
 const String handTileCalculationVersion = 'hk_tile_review_v1';
 
@@ -30,6 +31,7 @@ HandTileFanReviewResult calculateHandTileFanReview({
   required String seatWindTileId,
   required String roundWindTileId,
   required bool isSelfDraw,
+  List<HandWinBonus>? winBonuses = const [],
 }) {
   final grouping = groupStandardWinningHand(draft.coreTileIds);
 
@@ -42,12 +44,13 @@ HandTileFanReviewResult calculateHandTileFanReview({
   }
 
   final calculatedFanCount = _calculateConservativeFanCount(
-    draft: draft,
-    grouping: grouping,
-    seatWindTileId: seatWindTileId,
-    roundWindTileId: roundWindTileId,
-    isSelfDraw: isSelfDraw,
-  );
+        draft: draft,
+        grouping: grouping,
+        seatWindTileId: seatWindTileId,
+        roundWindTileId: roundWindTileId,
+        isSelfDraw: isSelfDraw,
+      ) +
+      handWinBonusFanTotal(winBonuses ?? const []);
 
   return HandTileFanReviewResult(
     calculatedFanCount: calculatedFanCount,
@@ -56,6 +59,7 @@ HandTileFanReviewResult calculateHandTileFanReview({
         : _reviewStatusFor(
             calculatedFanCount: calculatedFanCount,
             declaredFanCount: declaredFanCount,
+            winBonusesKnown: winBonuses != null,
           ),
     grouping: grouping,
   );
@@ -96,7 +100,12 @@ int _calculateConservativeFanCount({
 HandTileReviewStatus _reviewStatusFor({
   required int calculatedFanCount,
   required int declaredFanCount,
+  required bool winBonusesKnown,
 }) {
+  if (!winBonusesKnown && calculatedFanCount <= declaredFanCount) {
+    return HandTileReviewStatus.unreviewed;
+  }
+
   if (calculatedFanCount == declaredFanCount) {
     return HandTileReviewStatus.matched;
   }

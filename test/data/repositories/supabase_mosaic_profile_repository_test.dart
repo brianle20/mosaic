@@ -74,6 +74,7 @@ void main() {
           'melds': const [],
         },
         calculatedFanCount: 4,
+        reviewStatus: HandTileReviewStatus.underDeclared,
         calculationVersion: 'hk-v1',
       );
 
@@ -84,6 +85,7 @@ void main() {
           'melds': const [],
         },
         'target_calculated_fan_count': 4,
+        'target_review_status': 'under_declared',
         'target_calculation_version': 'hk-v1',
       });
       expect(entry.id, 'tile_01');

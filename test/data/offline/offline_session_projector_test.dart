@@ -3,6 +3,7 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/offline/offline_models.dart';
 import 'package:mosaic/data/offline/offline_session_projector.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 
 void main() {
   group('OfflineSessionProjector', () {
@@ -34,6 +35,33 @@ void main() {
       expect(hand.correctionNote, 'Pending sync');
       expect(projected.detail.session.currentDealerSeatIndex, 0);
       expect(projected.syncSnapshot.pendingHandIds, {'pending:mut_01'});
+    });
+
+    test('projects queued win bonuses onto pending hands', () {
+      final projected = const OfflineSessionProjector().project(
+        detail: _detail(currentDealerSeatIndex: 0),
+        mutations: [
+          _mutation(
+            id: 'mut_01',
+            payload: const {
+              'target_table_session_id': 'ses_01',
+              'target_result_type': 'win',
+              'target_winner_seat_index': 0,
+              'target_win_type': 'self_draw',
+              'target_fan_count': 6,
+              'target_win_bonuses': [
+                'moon_under_the_sea',
+                'win_by_kong_replacement',
+              ],
+            },
+          ),
+        ],
+      );
+
+      expect(projected.detail.hands.single.winBonuses, [
+        HandWinBonus.moonUnderTheSea,
+        HandWinBonus.winByKongReplacement,
+      ]);
     });
 
     test('rotates dealer on second post-cap dealer self draw', () {

@@ -7,6 +7,7 @@ import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/hand_entry_controller.dart';
 import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
+import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 import 'package:mosaic/services/media/hand_photo_service.dart';
 
@@ -47,9 +48,11 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   bool _choosingFalseWinCaller = false;
   bool _isCapturingPhoto = false;
   bool _showValidationSummary = false;
+  bool _winBonusesExpanded = false;
   CapturedHandPhoto? _capturedPhoto;
   late final HandPhotoService _handPhotoService;
   late int _fanCount;
+  late List<HandWinBonus>? _winBonuses;
 
   @override
   void initState() {
@@ -69,6 +72,11 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     _fanCount = (initialHand?.fanCount ?? minimumWinningFan)
         .clamp(minimumWinningFan, _maximumWinningFan)
         .toInt();
+    _winBonuses = initialHand == null
+        ? <HandWinBonus>[]
+        : initialHand.winBonuses == null
+            ? null
+            : List<HandWinBonus>.from(initialHand.winBonuses!);
   }
 
   @override
@@ -119,6 +127,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
             _resultType == HandResultType.win ? _discarderSeatIndex : null,
         penaltySeatIndex: _isEditingLegacyFalseWin ? _penaltySeatIndex : null,
         fanCount: _resultType == HandResultType.win ? _fanCount : null,
+        winBonuses: _resultType == HandResultType.win ? _winBonuses : const [],
         dealerWasWaitingAtDraw: null,
         blockedWinnerSeatIndexes:
             widget.initialHand == null ? _blockedWinnerSeatIndexes : const {},
@@ -456,6 +465,101 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     return '$wind\n${_seatName(seatIndex)}';
   }
 
+  String get _winBonusesSummary {
+    final winBonuses = _winBonuses;
+    if (winBonuses == null) {
+      return 'Not recorded';
+    }
+
+    if (winBonuses.isEmpty) {
+      return 'None selected';
+    }
+
+    return winBonuses
+        .map((bonus) => '+${bonus.fanValue}F ${bonus.label}')
+        .join(', ');
+  }
+
+  void _toggleWinBonus(HandWinBonus bonus, bool selected) {
+    setState(() {
+      final winBonuses = _winBonuses ?? <HandWinBonus>[];
+      if (selected) {
+        if (!winBonuses.contains(bonus)) {
+          _winBonuses = [...winBonuses, bonus];
+        }
+      } else {
+        _winBonuses = winBonuses
+            .where((selectedBonus) => selectedBonus != bonus)
+            .toList();
+      }
+    });
+  }
+
+  Widget _buildWinBonusesPicker() {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () {
+            setState(() {
+              _winBonusesExpanded = !_winBonusesExpanded;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Win bonuses',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _winBonusesSummary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  _winBonusesExpanded ? Icons.expand_less : Icons.expand_more,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_winBonusesExpanded) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final bonus in HandWinBonus.values)
+                FilterChip(
+                  label: Text('${bonus.label} +${bonus.fanValue}F'),
+                  selected: _winBonuses?.contains(bonus) ?? false,
+                  onSelected: (selected) => _toggleWinBonus(bonus, selected),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final saveBlockingMessage = _saveBlockingMessage;
@@ -555,6 +659,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                               _penaltySeatIndex = null;
                               _winType = null;
                               _capturedPhoto = null;
+                              _winBonusesExpanded = false;
                             } else {
                               _winType ??= HandWinType.selfDraw;
                               _penaltySeatIndex = null;
@@ -654,6 +759,8 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                           Text(_draft.discarderSeatError!),
                         ],
                       ],
+                      const SizedBox(height: 16),
+                      _buildWinBonusesPicker(),
                       const SizedBox(height: 16),
                       Text(
                         'Quick fan',
@@ -799,7 +906,11 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     final winner =
         _winnerSeatIndex == null ? 'Unknown' : _seatLabel(_winnerSeatIndex!);
     final winType = _winType == HandWinType.discard ? 'discard' : 'self-draw';
-    return '$winner wins by $winType for $_fanCount fan.';
+    final winBonuses = _winBonuses ?? const <HandWinBonus>[];
+    final bonuses = winBonuses.isEmpty
+        ? ''
+        : ' Bonuses: ${winBonuses.map((bonus) => bonus.label).join(', ')}.';
+    return '$winner wins by $winType for $_fanCount fan.$bonuses';
   }
 }
 
