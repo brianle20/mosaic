@@ -115,4 +115,81 @@ void main() {
     await tester.pump();
     expect(refreshCount, 0);
   });
+
+  testWidgets('covered route drops a queued follow-up refresh', (tester) async {
+    final signal = _FakeOfflineRecoverySignal();
+    addTearDown(signal.dispose);
+    final firstRefresh = Completer<void>();
+    final navigatorKey = GlobalKey<NavigatorState>();
+    var refreshCount = 0;
+    await tester.pumpWidget(
+      OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          navigatorKey: navigatorKey,
+          home: ReconnectRefreshListener(
+            onRefresh: () async {
+              refreshCount += 1;
+              if (refreshCount == 1) {
+                await firstRefresh.future;
+              }
+            },
+            child: const Text('underlying route'),
+          ),
+        ),
+      ),
+    );
+
+    signal.emit();
+    signal.emit();
+    await tester.pump();
+    expect(refreshCount, 1);
+
+    navigatorKey.currentState!.push(
+      MaterialPageRoute<void>(builder: (_) => const Text('top route')),
+    );
+    await tester.pumpAndSettle();
+    firstRefresh.complete();
+    await tester.pumpAndSettle();
+    expect(refreshCount, 1);
+  });
+
+  testWidgets('rebind drops queued refreshes from the old signal',
+      (tester) async {
+    final oldSignal = _FakeOfflineRecoverySignal();
+    final newSignal = _FakeOfflineRecoverySignal();
+    addTearDown(oldSignal.dispose);
+    addTearDown(newSignal.dispose);
+    final firstRefresh = Completer<void>();
+    var refreshCount = 0;
+
+    Widget build(OfflineRecoverySignal signal) {
+      return OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          home: ReconnectRefreshListener(
+            onRefresh: () async {
+              refreshCount += 1;
+              if (refreshCount == 1) {
+                await firstRefresh.future;
+              }
+            },
+            child: const SizedBox(),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(build(oldSignal));
+    oldSignal.emit();
+    oldSignal.emit();
+    await tester.pump();
+    expect(refreshCount, 1);
+
+    await tester.pumpWidget(build(newSignal));
+    await tester.pump();
+    firstRefresh.complete();
+    await tester.pumpAndSettle();
+    expect(refreshCount, 1);
+  });
 }

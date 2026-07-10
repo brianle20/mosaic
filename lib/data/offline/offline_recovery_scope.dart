@@ -45,6 +45,7 @@ class _ReconnectRefreshListenerState extends State<ReconnectRefreshListener> {
   var _lastGeneration = 0;
   var _refreshing = false;
   var _refreshQueued = false;
+  var _listenerToken = 0;
 
   @override
   void didChangeDependencies() {
@@ -53,14 +54,18 @@ class _ReconnectRefreshListenerState extends State<ReconnectRefreshListener> {
     if (identical(next, _signal)) {
       return;
     }
+    final token = ++_listenerToken;
     unawaited(_subscription?.cancel());
     _signal = next;
     _lastGeneration = next?.generation ?? 0;
-    _subscription = next?.generations.listen(_handleGeneration);
+    _refreshQueued = false;
+    _subscription = next?.generations.listen(
+      (generation) => _handleGeneration(token, generation),
+    );
   }
 
-  void _handleGeneration(int generation) {
-    if (!mounted || generation <= _lastGeneration) {
+  void _handleGeneration(int token, int generation) {
+    if (!mounted || token != _listenerToken || generation <= _lastGeneration) {
       return;
     }
     _lastGeneration = generation;
@@ -68,21 +73,30 @@ class _ReconnectRefreshListenerState extends State<ReconnectRefreshListener> {
       return;
     }
     _refreshQueued = true;
-    unawaited(_drainRefreshes());
+    unawaited(_drainRefreshes(token));
   }
 
-  Future<void> _drainRefreshes() async {
+  Future<void> _drainRefreshes(int token) async {
     if (_refreshing) {
       return;
     }
     _refreshing = true;
     try {
-      while (mounted && _refreshQueued) {
+      while (mounted && token == _listenerToken && _refreshQueued) {
         _refreshQueued = false;
+        if (!mounted || token != _listenerToken) {
+          break;
+        }
+        if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+          break;
+        }
         await widget.onRefresh();
       }
     } finally {
       _refreshing = false;
+      if (mounted && _refreshQueued) {
+        unawaited(_drainRefreshes(_listenerToken));
+      }
     }
   }
 
