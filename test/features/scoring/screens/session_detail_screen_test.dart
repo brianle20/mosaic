@@ -176,6 +176,7 @@ class _FakeSessionRepository
   SessionSyncSnapshot syncSnapshot;
   SessionDetailRecord? recordHandDetail;
   String? endedReason;
+  int retryBlockedPhotoUploadsCount = 0;
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -229,7 +230,9 @@ class _FakeSessionRepository
       const Stream.empty();
 
   @override
-  Future<void> retryBlockedPhotoUploads(String sessionId) async {}
+  Future<void> retryBlockedPhotoUploads(String sessionId) async {
+    retryBlockedPhotoUploadsCount += 1;
+  }
 
   @override
   Future<SessionDetailRecord> pauseSession(String sessionId) async {
@@ -412,6 +415,33 @@ SessionDetailRecord _buildDetail(
           ]
         : [],
   });
+}
+
+SessionDetailRecord _detailWithPhoto({required String clientPhotoId}) {
+  return _buildDetail(
+    SessionStatus.active,
+    hands: [
+      {
+        'id': 'hand_01',
+        'table_session_id': 'ses_01',
+        'hand_number': 1,
+        'result_type': 'win',
+        'winner_seat_index': 2,
+        'win_type': 'discard',
+        'discarder_seat_index': 0,
+        'fan_count': 3,
+        'base_points': 8,
+        'east_seat_index_before_hand': 0,
+        'east_seat_index_after_hand': 1,
+        'dealer_rotated': true,
+        'session_completed_after_hand': false,
+        'status': 'recorded',
+        'entered_by_user_id': 'usr_01',
+        'entered_at': '2026-04-24T19:05:00-07:00',
+        'photo_client_id': clientPhotoId,
+      },
+    ],
+  );
 }
 
 void main() {
@@ -875,6 +905,35 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Blocked'), findsOneWidget);
+  });
+
+  testWidgets('photo warning keeps Record Hand enabled and retries',
+      (tester) async {
+    final repository = _FakeSessionRepository(
+      detail: _detailWithPhoto(clientPhotoId: 'photo_01'),
+      syncSnapshot: SessionSyncSnapshot(
+        sessionId: 'ses_01',
+        blockedPhotoClientIds: const {'photo_01'},
+        photoBlockedReason: 'storage rejected upload',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Photo upload needs attention'), findsOneWidget);
+    expect(find.text('Record Hand'), findsOneWidget);
+    await tester.tap(find.text('Retry Upload'));
+    await tester.pump();
+    expect(repository.retryBlockedPhotoUploadsCount, 1);
   });
 
   testWidgets('voided hands render in a separate archive section',

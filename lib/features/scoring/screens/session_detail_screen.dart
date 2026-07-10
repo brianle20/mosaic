@@ -201,6 +201,13 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
                       padding: const EdgeInsets.only(bottom: 16),
                       child: InlineErrorBanner(message: message),
                     ),
+                  if (viewModel.blockedPhotoUploadMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: _PhotoUploadWarningSurface(
+                        onRetry: _controller.retryBlockedPhotoUploads,
+                      ),
+                    ),
                   _SessionHeader(
                     viewModel: viewModel,
                     status: detail.session.status,
@@ -342,6 +349,12 @@ class _SessionHeader extends StatelessWidget {
                   label: pendingSyncLabel,
                   tone: StatusChipTone.warning,
                 ),
+              if (viewModel.pendingPhotoUploadLabel
+                  case final String pendingPhotoUploadLabel)
+                StatusChip(
+                  label: pendingPhotoUploadLabel,
+                  tone: StatusChipTone.warning,
+                ),
               if (viewModel.blockedSyncMessage != null)
                 const StatusChip(
                   label: 'Sync blocked',
@@ -363,6 +376,36 @@ class _SessionHeader extends StatelessWidget {
               tone: _roundTimeTone(viewModel),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PhotoUploadWarningSurface extends StatelessWidget {
+  const _PhotoUploadWarningSurface({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppListSurface(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Photo upload needs attention',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 6),
+          const Text('A winning hand photo needs attention.'),
+          const SizedBox(height: 10),
+          OutlinedButton(
+            onPressed: onRetry,
+            child: const Text('Retry Upload'),
+          ),
         ],
       ),
     );
@@ -728,7 +771,9 @@ class _HandHistory extends StatelessWidget {
 }
 
 StatusChipTone _handSyncStatusTone(String label) {
-  return label == 'Blocked' ? StatusChipTone.danger : StatusChipTone.warning;
+  return label == 'Blocked' || label == 'Photo needs attention'
+      ? StatusChipTone.danger
+      : StatusChipTone.warning;
 }
 
 StatusChipTone _statusTone(SessionStatus status) {

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/offline/offline_models.dart';
 import 'package:mosaic/features/scoring/models/session_detail_view_models.dart';
 
 void main() {
@@ -363,6 +364,41 @@ void main() {
       expect(viewModel.hands, isEmpty);
       expect(viewModel.emptyHandHistoryLabel, 'No hands recorded yet.');
     });
+
+    test('shows photo upload separately after hand mutation resolves', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detailWithPhoto(clientPhotoId: 'photo_01'),
+        guestNamesById: _guestNamesById,
+        syncSnapshot: SessionSyncSnapshot(
+          sessionId: 'ses_01',
+          pendingPhotoClientIds: const {'photo_01'},
+          pendingPhotoCount: 1,
+        ),
+      );
+
+      expect(viewModel.pendingSyncLabel, isNull);
+      expect(viewModel.pendingPhotoUploadLabel, '1 photo pending upload');
+      expect(viewModel.hands.single.syncStatusLabel, 'Photo pending');
+    });
+
+    test('blocked photo is visible but does not mark hand sync blocked', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detailWithPhoto(clientPhotoId: 'photo_01'),
+        guestNamesById: _guestNamesById,
+        syncSnapshot: SessionSyncSnapshot(
+          sessionId: 'ses_01',
+          blockedPhotoClientIds: const {'photo_01'},
+          photoBlockedReason: 'storage rejected upload',
+        ),
+      );
+
+      expect(viewModel.blockedSyncMessage, isNull);
+      expect(
+        viewModel.blockedPhotoUploadMessage,
+        'A winning hand photo needs attention.',
+      );
+      expect(viewModel.hands.single.syncStatusLabel, 'Photo needs attention');
+    });
   });
 }
 
@@ -454,9 +490,17 @@ SessionDetailRecord _detail({
   });
 }
 
+SessionDetailRecord _detailWithPhoto({required String clientPhotoId}) {
+  return _detail(
+    hands: [_discardWinHand(photoClientId: clientPhotoId)],
+    settlements: _discardSettlements(),
+  );
+}
+
 Map<String, Object?> _discardWinHand({
   String id = 'hand_01',
   int handNumber = 1,
+  String? photoClientId,
 }) {
   return {
     'id': id,
@@ -475,6 +519,7 @@ Map<String, Object?> _discardWinHand({
     'status': 'recorded',
     'entered_by_user_id': 'usr_01',
     'entered_at': '2026-04-24T19:05:00-07:00',
+    'photo_client_id': photoClientId,
   };
 }
 

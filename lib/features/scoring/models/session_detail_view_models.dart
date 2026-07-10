@@ -19,7 +19,9 @@ class SessionDetailViewModel {
     required this.isRoundExpired,
     required this.isRoundEndingSoon,
     required this.pendingSyncLabel,
+    required this.pendingPhotoUploadLabel,
     required this.blockedSyncMessage,
+    required this.blockedPhotoUploadMessage,
     required this.seats,
     required this.hands,
     required this.archivedHands,
@@ -38,7 +40,9 @@ class SessionDetailViewModel {
   final bool isRoundExpired;
   final bool isRoundEndingSoon;
   final String? pendingSyncLabel;
+  final String? pendingPhotoUploadLabel;
   final String? blockedSyncMessage;
+  final String? blockedPhotoUploadMessage;
   final List<SessionSeatViewModel> seats;
   final List<SessionHandViewModel> hands;
   final List<SessionHandViewModel> archivedHands;
@@ -118,7 +122,9 @@ SessionDetailViewModel buildSessionDetailViewModel({
     isRoundExpired: roundTime?.isExpired ?? false,
     isRoundEndingSoon: roundTime?.isEndingSoon ?? false,
     pendingSyncLabel: _pendingSyncLabel(syncSnapshot),
+    pendingPhotoUploadLabel: _pendingPhotoUploadLabel(syncSnapshot),
     blockedSyncMessage: _blockedSyncMessage(syncSnapshot),
+    blockedPhotoUploadMessage: _blockedPhotoUploadMessage(syncSnapshot),
     seats: detail.seats
         .map(
           (seat) => SessionSeatViewModel(
@@ -139,7 +145,7 @@ SessionDetailViewModel buildSessionDetailViewModel({
             title: 'Hand ${hand.handNumber}',
             summaryLabel: _handSummary(detail, guestNamesById, hand),
             isVoided: hand.status == HandResultStatus.voided,
-            syncStatusLabel: _handSyncStatusLabel(syncSnapshot, hand.id),
+            syncStatusLabel: _handSyncStatusLabel(syncSnapshot, hand),
           ),
         )
         .toList(growable: false),
@@ -152,7 +158,7 @@ SessionDetailViewModel buildSessionDetailViewModel({
             title: 'Voided Hand ${hand.handNumber}',
             summaryLabel: _handSummary(detail, guestNamesById, hand),
             isVoided: true,
-            syncStatusLabel: _handSyncStatusLabel(syncSnapshot, hand.id),
+            syncStatusLabel: _handSyncStatusLabel(syncSnapshot, hand),
           ),
         )
         .toList(growable: false),
@@ -170,6 +176,16 @@ String? _pendingSyncLabel(SessionSyncSnapshot? syncSnapshot) {
   return '$pendingCount $noun pending sync';
 }
 
+String? _pendingPhotoUploadLabel(SessionSyncSnapshot? syncSnapshot) {
+  final pendingCount = syncSnapshot?.pendingPhotoCount ?? 0;
+  if (pendingCount <= 0) {
+    return null;
+  }
+
+  final noun = pendingCount == 1 ? 'photo' : 'photos';
+  return '$pendingCount $noun pending upload';
+}
+
 String? _blockedSyncMessage(SessionSyncSnapshot? syncSnapshot) {
   if (syncSnapshot == null || !syncSnapshot.isBlocked) {
     return null;
@@ -185,18 +201,35 @@ String? _blockedSyncMessage(SessionSyncSnapshot? syncSnapshot) {
   return '$baseMessage $reason';
 }
 
+String? _blockedPhotoUploadMessage(SessionSyncSnapshot? syncSnapshot) {
+  if (syncSnapshot == null || !syncSnapshot.hasBlockedPhotoUploads) {
+    return null;
+  }
+
+  return 'A winning hand photo needs attention.';
+}
+
 String? _handSyncStatusLabel(
   SessionSyncSnapshot? syncSnapshot,
-  String handId,
+  HandResultRecord hand,
 ) {
   if (syncSnapshot == null) {
     return null;
   }
-  if (syncSnapshot.blockedHandIds.contains(handId)) {
+  if (syncSnapshot.blockedHandIds.contains(hand.id)) {
     return 'Blocked';
   }
-  if (syncSnapshot.pendingHandIds.contains(handId)) {
+  if (syncSnapshot.pendingHandIds.contains(hand.id)) {
     return 'Pending';
+  }
+  final photoId = hand.photoClientId;
+  if (photoId != null &&
+      syncSnapshot.blockedPhotoClientIds.contains(photoId)) {
+    return 'Photo needs attention';
+  }
+  if (photoId != null &&
+      syncSnapshot.pendingPhotoClientIds.contains(photoId)) {
+    return 'Photo pending';
   }
 
   return null;
