@@ -76,11 +76,13 @@ class SyncCoordinator implements OfflineRecoverySignal {
   var _isSyncing = false;
   var _syncRequested = false;
   var _isForeground = true;
-  var _isInitialized = false;
+  Future<void>? _initializeFuture;
   var _lifecycleReady = false;
+  var _resumeRequested = false;
   var _isDisposed = false;
   var _generation = 0;
   var _retryDelayIndex = 0;
+  Set<String> _knownPendingWorkIds = const {};
 
   static const _retryDelays = [
     Duration(seconds: 1),
@@ -99,12 +101,20 @@ class SyncCoordinator implements OfflineRecoverySignal {
   @override
   Stream<int> get generations => _generationController.stream;
 
-  Future<void> initialize() async {
-    if (_isDisposed || _isInitialized) {
-      return;
+  Future<void> initialize() {
+    if (_isDisposed) {
+      return Future<void>.value();
     }
-    _isInitialized = true;
+    final existing = _initializeFuture;
+    if (existing != null) {
+      return existing;
+    }
+    final initialization = _initializeInternal();
+    _initializeFuture = initialization;
+    return initialization;
+  }
 
+  Future<void> _initializeInternal() async {
     _reachabilitySubscription = _reachability.onReachable.listen((_) {
       if (_isDisposed || !_isForeground || !_lifecycleReady) {
         return;
@@ -113,15 +123,7 @@ class SyncCoordinator implements OfflineRecoverySignal {
       unawaited(syncNow(trigger: OfflineRecoveryTrigger.reachable));
     });
     _storeSubscription = _store.changes.listen((_) {
-      if (_isDisposed || !_lifecycleReady) {
-        return;
-      }
-      if (_isSyncing) {
-        _syncRequested = true;
-        return;
-      }
-      _resetRetryBackoff();
-      unawaited(syncNow(trigger: OfflineRecoveryTrigger.queuedWork));
+      unawaited(_handleStoreChange());
     });
 
     await _store.resetSyncingToPending();
@@ -131,6 +133,28 @@ class SyncCoordinator implements OfflineRecoverySignal {
     await _store.resetPhotoUploadsUploadingToPending();
     _lifecycleReady = true;
     await syncNow(trigger: OfflineRecoveryTrigger.startup);
+    if (_resumeRequested && _isForeground && !_isDisposed) {
+      _resumeRequested = false;
+      await syncNow(trigger: OfflineRecoveryTrigger.resumed);
+    } else {
+      _resumeRequested = false;
+    }
+  }
+
+  Future<void> _handleStoreChange() async {
+    if (_isDisposed || !_lifecycleReady) {
+      return;
+    }
+    if (_isSyncing) {
+      final pendingWorkIds = await _readPendingWorkIds();
+      if (pendingWorkIds.difference(_knownPendingWorkIds).isNotEmpty) {
+        _resetRetryBackoff();
+      }
+      _syncRequested = true;
+      return;
+    }
+    _resetRetryBackoff();
+    unawaited(syncNow(trigger: OfflineRecoveryTrigger.queuedWork));
   }
 
   void setForeground(bool foreground) {
@@ -143,6 +167,10 @@ class SyncCoordinator implements OfflineRecoverySignal {
       return;
     }
     _resetRetryBackoff();
+    if (!_lifecycleReady && _initializeFuture != null) {
+      _resumeRequested = true;
+      return;
+    }
     unawaited(syncNow(trigger: OfflineRecoveryTrigger.resumed));
   }
 
@@ -205,6 +233,12 @@ class SyncCoordinator implements OfflineRecoverySignal {
   }
 
   Future<_SyncPassResult> _syncPass() async {
+    final mutations = await _store.readPendingMutations();
+    final pendingPhotoUploads = await _store.readPendingPhotoUploads();
+    _knownPendingWorkIds = {
+      ...mutations.map((mutation) => 'mutation:${mutation.id}'),
+      ...pendingPhotoUploads.map((upload) => 'photo:${upload.id}'),
+    };
     if (!await _reachability.isReachable()) {
       return _SyncPassResult(
         retryableWorkRemains: await _hasRetryableWork(),
@@ -212,7 +246,6 @@ class SyncCoordinator implements OfflineRecoverySignal {
     }
 
     var madeProgress = false;
-    final mutations = await _store.readPendingMutations();
     for (final mutation in mutations) {
       await _store.markSyncing(mutation.id, attemptedAt: _now().toUtc());
 
@@ -400,6 +433,15 @@ class SyncCoordinator implements OfflineRecoverySignal {
     return (await _store.readPendingPhotoUploads()).any(
       (upload) => upload.remoteHandResultId != null,
     );
+  }
+
+  Future<Set<String>> _readPendingWorkIds() async {
+    final mutations = await _store.readPendingMutations();
+    final uploads = await _store.readPendingPhotoUploads();
+    return {
+      ...mutations.map((mutation) => 'mutation:${mutation.id}'),
+      ...uploads.map((upload) => 'photo:${upload.id}'),
+    };
   }
 
   void _resetRetryBackoff() {

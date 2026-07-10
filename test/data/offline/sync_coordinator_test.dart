@@ -9,6 +9,7 @@ import 'package:mosaic/data/offline/network_reachability.dart';
 import 'package:mosaic/data/offline/offline_models.dart';
 import 'package:mosaic/data/offline/offline_session_projector.dart';
 import 'package:mosaic/data/offline/offline_session_repository.dart';
+import 'package:mosaic/data/offline/offline_store.dart';
 import 'package:mosaic/data/offline/sqlite_offline_store.dart';
 import 'package:mosaic/data/offline/sync_coordinator.dart';
 import 'package:mosaic/data/offline/sync_retry_scheduler.dart';
@@ -70,7 +71,7 @@ void main() {
       await store.insertMutation(_mutation(id: 'mut_01'));
 
       await coordinator.syncNow();
-      expect(scheduler.scheduledDelay, const Duration(seconds: 1));
+      expect(scheduler.scheduledDelays.last, const Duration(seconds: 1));
       await scheduler.fire();
       expect(scheduler.scheduledDelay, const Duration(seconds: 2));
       await scheduler.fire();
@@ -81,6 +82,44 @@ void main() {
       expect(scheduler.scheduledDelay, const Duration(seconds: 30));
       await scheduler.fire();
       expect(scheduler.scheduledDelay, const Duration(seconds: 30));
+    });
+
+    test('queued work during a capped retry resets backoff', () async {
+      await store.insertMutation(_mutation(id: 'mut_01'));
+      repository.errors.addAll(List<Object>.filled(
+        6,
+        const NetworkUnavailableException('socket closed'),
+      ));
+      await coordinator.initialize();
+
+      await scheduler.fire();
+      await scheduler.fire();
+      await scheduler.fire();
+      await scheduler.fire();
+      expect(scheduler.scheduledDelay, const Duration(seconds: 30));
+
+      final reachabilityCheck = Completer<bool>();
+      reachability.nextCheckCompleter = reachabilityCheck;
+      repository.errors.add(
+        const NetworkUnavailableException('socket closed'),
+      );
+      repository.errors.addAll(List<Object>.filled(
+        20,
+        const NetworkUnavailableException('socket closed'),
+      ));
+      final activeRetry = scheduler.fire();
+      await pumpEventQueue();
+      await store.insertMutation(
+        _mutation(
+          id: 'mut_02',
+          createdAt: DateTime.utc(2026, 6, 18, 20, 1),
+        ),
+      );
+      reachabilityCheck.complete(true);
+      await activeRetry;
+      await pumpEventQueue(times: 20);
+
+      expect(scheduler.scheduledDelays.last, const Duration(seconds: 1));
     });
 
     test('background cancels retry and resume requests recovery', () async {
@@ -96,6 +135,59 @@ void main() {
       coordinator.setForeground(true);
       await pumpEventQueue();
       expect(repository.recordedInputs.single.clientMutationId, 'mut_01');
+    });
+
+    test('resume during initialization waits for startup recovery', () async {
+      await store.insertMutation(_mutation(id: 'mut_01'));
+
+      final resetGate = Completer<void>();
+      final blockingStore = _BlockingOfflineStore(store, resetGate);
+      coordinator = SyncCoordinator(
+        store: blockingStore,
+        reachability: reachability,
+        sessionRepository: repository,
+        retryScheduler: scheduler,
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
+      );
+
+      final initializing = coordinator.initialize();
+      await pumpEventQueue();
+      coordinator.setForeground(false);
+      coordinator.setForeground(true);
+      await pumpEventQueue(times: 10);
+
+      expect(repository.recordedInputs, isEmpty);
+
+      resetGate.complete();
+      await initializing;
+      await pumpEventQueue(times: 10);
+
+      expect(
+        repository.recordedInputs.map((input) => input.clientMutationId),
+        ['mut_01'],
+      );
+    });
+
+    test('concurrent initialize callers await one startup recovery', () async {
+      await store.insertMutation(_mutation(id: 'mut_01'));
+      final reachabilityCheck = Completer<bool>();
+      reachability.nextCheckCompleter = reachabilityCheck;
+      var secondCompleted = false;
+
+      final first = coordinator.initialize();
+      final second = coordinator.initialize().then((_) {
+        secondCompleted = true;
+      });
+
+      await Future<void>.delayed(Duration.zero);
+      expect(secondCompleted, isFalse);
+      reachabilityCheck.complete(true);
+      await Future.wait([first, second]);
+
+      expect(
+        repository.recordedInputs.map((input) => input.clientMutationId),
+        ['mut_01'],
+      );
     });
 
     test('confirmed upload marks uploaded before deleting local file',
@@ -663,6 +755,7 @@ class _FakeReachability implements NetworkReachability {
       : _reachableEvents = StreamController<void>.broadcast(sync: true);
 
   bool reachable;
+  Completer<bool>? nextCheckCompleter;
   final StreamController<void> _reachableEvents;
 
   @override
@@ -673,7 +766,11 @@ class _FakeReachability implements NetworkReachability {
   Future<void> close() => _reachableEvents.close();
 
   @override
-  Future<bool> isReachable() async => reachable;
+  Future<bool> isReachable() async {
+    final completer = nextCheckCompleter;
+    nextCheckCompleter = null;
+    return completer?.future ?? reachable;
+  }
 
   @override
   bool isNetworkException(Object error) => error is NetworkUnavailableException;
@@ -681,6 +778,7 @@ class _FakeReachability implements NetworkReachability {
 
 class _FakeSyncRetryScheduler implements SyncRetryScheduler {
   Duration? scheduledDelay;
+  final List<Duration> scheduledDelays = [];
   void Function()? _callback;
 
   bool get hasScheduledCallback => _callback != null;
@@ -688,6 +786,7 @@ class _FakeSyncRetryScheduler implements SyncRetryScheduler {
   @override
   void schedule(Duration delay, void Function() callback) {
     scheduledDelay = delay;
+    scheduledDelays.add(delay);
     _callback = callback;
   }
 
@@ -736,6 +835,143 @@ class _FakeHandPhotoStorage implements HandPhotoStorage {
     _existing.add(sourcePath);
     return sourcePath;
   }
+}
+
+class _BlockingOfflineStore implements OfflineStore {
+  _BlockingOfflineStore(this._delegate, this._resetGate);
+
+  final OfflineStore _delegate;
+  final Completer<void> _resetGate;
+
+  @override
+  Stream<OfflineStoreChange> get changes => _delegate.changes;
+
+  @override
+  Future<void> insertMutation(OfflineMutationRecord mutation) =>
+      _delegate.insertMutation(mutation);
+
+  @override
+  Future<void> insertPhotoUpload(OfflinePhotoUploadRecord upload) =>
+      _delegate.insertPhotoUpload(upload);
+
+  @override
+  Future<void> insertMutationWithPhotoUpload(
+    OfflineMutationRecord mutation,
+    OfflinePhotoUploadRecord upload,
+  ) =>
+      _delegate.insertMutationWithPhotoUpload(mutation, upload);
+
+  @override
+  Future<OfflineMutationRecord?> readMutation(String id) =>
+      _delegate.readMutation(id);
+
+  @override
+  Future<OfflinePhotoUploadRecord?> readPhotoUpload(String id) =>
+      _delegate.readPhotoUpload(id);
+
+  @override
+  Future<OfflinePhotoUploadRecord?> readPhotoUploadForMutation(
+    String mutationId,
+  ) =>
+      _delegate.readPhotoUploadForMutation(mutationId);
+
+  @override
+  Future<List<OfflineMutationRecord>> readPendingMutations() =>
+      _delegate.readPendingMutations();
+
+  @override
+  Future<List<OfflineMutationRecord>> readMutationsForSession(
+          String sessionId) =>
+      _delegate.readMutationsForSession(sessionId);
+
+  @override
+  Future<List<OfflinePhotoUploadRecord>> readPendingPhotoUploads() =>
+      _delegate.readPendingPhotoUploads();
+
+  @override
+  Future<List<OfflinePhotoUploadRecord>> readPhotoUploadsForSession(
+    String sessionId,
+  ) =>
+      _delegate.readPhotoUploadsForSession(sessionId);
+
+  @override
+  Future<void> markSyncing(String id, {required DateTime attemptedAt}) =>
+      _delegate.markSyncing(id, attemptedAt: attemptedAt);
+
+  @override
+  Future<void> markSynced(String id) => _delegate.markSynced(id);
+
+  @override
+  Future<void> markFailed(String id, String error) =>
+      _delegate.markFailed(id, error);
+
+  @override
+  Future<void> markSessionBlocked(String sessionId, String error) =>
+      _delegate.markSessionBlocked(sessionId, error);
+
+  @override
+  Future<void> markPhotoUploadUploading(
+    String id, {
+    required DateTime attemptedAt,
+  }) =>
+      _delegate.markPhotoUploadUploading(id, attemptedAt: attemptedAt);
+
+  @override
+  Future<void> markPhotoUploadUploaded(
+    String id, {
+    required String storagePath,
+  }) =>
+      _delegate.markPhotoUploadUploaded(id, storagePath: storagePath);
+
+  @override
+  Future<void> markPhotoUploadFailed(String id, String error) =>
+      _delegate.markPhotoUploadFailed(id, error);
+
+  @override
+  Future<void> markPhotoUploadBlocked(String id, String error) =>
+      _delegate.markPhotoUploadBlocked(id, error);
+
+  @override
+  Future<void> markPhotoUploadBlockedForMutation(
+    String mutationId,
+    String error,
+  ) =>
+      _delegate.markPhotoUploadBlockedForMutation(mutationId, error);
+
+  @override
+  Future<void> attachRemoteHandResultToPhotoUpload(
+    String mutationId,
+    String remoteHandResultId,
+  ) =>
+      _delegate.attachRemoteHandResultToPhotoUpload(
+        mutationId,
+        remoteHandResultId,
+      );
+
+  @override
+  Future<void> resetPhotoUploadsUploadingToPending() =>
+      _delegate.resetPhotoUploadsUploadingToPending();
+
+  @override
+  Future<void> resetPhotoUploadToPending(String id) =>
+      _delegate.resetPhotoUploadToPending(id);
+
+  @override
+  Future<void> resetSyncingToPending() async {
+    await _resetGate.future;
+    await _delegate.resetSyncingToPending();
+  }
+
+  @override
+  Future<void> resetBlockedMutationsToPending({
+    required String lastErrorContains,
+  }) =>
+      _delegate.resetBlockedMutationsToPending(
+        lastErrorContains: lastErrorContains,
+      );
+
+  @override
+  Future<void> close() => _delegate.close();
 }
 
 class _FakeSessionRepository implements SessionRepository {
