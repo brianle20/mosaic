@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/offline/network_reachability.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import '../../../helpers/repository_fakes.dart';
@@ -8,9 +13,15 @@ import 'package:mosaic/features/events/screens/event_list_screen.dart';
 import 'package:mosaic/widgets/status_chip.dart';
 
 class _FakeEventRepository extends ThrowingEventRepository {
-  _FakeEventRepository(this.events);
+  _FakeEventRepository(
+    this.events, {
+    List<EventRecord>? cachedEvents,
+  }) : _cachedEvents = List<EventRecord>.from(cachedEvents ?? events);
 
   final List<EventRecord> events;
+  final List<EventRecord> _cachedEvents;
+  int remoteLoadCount = 0;
+  Object? remoteError;
 
   @override
   Future<EventRecord> createEvent(CreateEventInput input) {
@@ -68,12 +79,36 @@ class _FakeEventRepository extends ThrowingEventRepository {
   }
 
   @override
-  Future<List<EventRecord>> listEvents() async =>
-      List<EventRecord>.from(events);
+  Future<List<EventRecord>> listEvents() async {
+    remoteLoadCount += 1;
+    final remoteError = this.remoteError;
+    if (remoteError != null) {
+      throw remoteError;
+    }
+    return List<EventRecord>.from(events);
+  }
 
   @override
   Future<List<EventRecord>> readCachedEvents() async =>
-      List<EventRecord>.from(events);
+      List<EventRecord>.from(_cachedEvents);
+}
+
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  int _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  Future<void> dispose() => _controller.close();
 }
 
 void main() {
@@ -654,5 +689,40 @@ void main() {
     expect(find.text('Create Event'), findsNothing);
     expect(find.text('Friday Night Mahjong'), findsOneWidget);
     expect(find.text('Event Scorer'), findsOneWidget);
+  });
+
+  testWidgets('revalidates cached events silently after recovery',
+      (tester) async {
+    final repository = _FakeEventRepository([
+      eventRecord(
+        id: 'evt_01',
+        title: 'Cached event title',
+        startsAt: '2026-04-24T19:00:00-07:00',
+        lifecycleStatus: 'draft',
+        createdAt: '2026-04-24T17:00:00-07:00',
+      ),
+    ]);
+    final signal = _FakeOfflineRecoverySignal();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OfflineRecoveryScope(
+          signal: signal,
+          child: EventListScreen(eventRepository: repository),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final initialRemoteLoadCount = repository.remoteLoadCount;
+    repository.remoteError = const NetworkUnavailableException('offline');
+
+    signal.emit();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(repository.remoteLoadCount, initialRemoteLoadCount + 1);
+    expect(find.text('Loading…'), findsNothing);
+    expect(find.text('Cached event title'), findsOneWidget);
+    await signal.dispose();
   });
 }

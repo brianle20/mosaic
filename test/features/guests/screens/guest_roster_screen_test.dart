@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/offline/network_reachability.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import '../../../helpers/repository_fakes.dart';
@@ -26,6 +29,8 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   final List<EventGuestRecord> _cachedGuests;
   final Completer<void>? _listGuestsGate;
   final Map<String, List<GuestCoverEntryRecord>> _coverEntries;
+  int remoteLoadCount = 0;
+  Object? remoteError;
   final statusUpdates = <String, EventTournamentStatus>{};
   final uncheckedGuestIds = <String>[];
   final removedGuestIds = <String>[];
@@ -115,7 +120,12 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
 
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async {
+    remoteLoadCount += 1;
     await _listGuestsGate?.future;
+    final remoteError = this.remoteError;
+    if (remoteError != null) {
+      throw remoteError;
+    }
     return _guests;
   }
 
@@ -261,6 +271,24 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
     final index = _guests.indexWhere((entry) => entry.id == guest.id);
     _guests[index] = guest;
   }
+}
+
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  int _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  Future<void> dispose() => _controller.close();
 }
 
 EventGuestRecord _guest({
@@ -1744,5 +1772,44 @@ void main() {
       ),
     );
     expect(amountField.controller.text, '20.00');
+  });
+
+  testWidgets('revalidates cached guests silently after recovery',
+      (tester) async {
+    final repository = _FakeGuestRepository([
+      _guest(
+        id: 'gst_01',
+        name: 'Cached guest',
+        attendanceStatus: AttendanceStatus.expected,
+        coverStatus: CoverStatus.unpaid,
+      ),
+    ]);
+    final signal = _FakeOfflineRecoverySignal();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OfflineRecoveryScope(
+          signal: signal,
+          child: GuestRosterScreen(
+            eventId: 'evt_01',
+            eventTitle: 'Friday Night Mahjong',
+            eventCoverChargeCents: 1500,
+            guestRepository: repository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final initialRemoteLoadCount = repository.remoteLoadCount;
+    repository.remoteError = const NetworkUnavailableException('offline');
+
+    signal.emit();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(repository.remoteLoadCount, initialRemoteLoadCount + 1);
+    expect(find.text('Loading…'), findsNothing);
+    expect(find.text('Cached guest'), findsOneWidget);
+    await signal.dispose();
   });
 }

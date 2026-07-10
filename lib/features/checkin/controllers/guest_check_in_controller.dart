@@ -15,21 +15,51 @@ class GuestCheckInController extends ChangeNotifier {
   String? actionError;
   GuestDetailRecord? detail;
 
-  Future<void> load(String guestId) async {
-    isLoading = true;
+  Future<void> load({
+    required String eventId,
+    required String guestId,
+    bool silent = false,
+  }) async {
+    if (!silent) {
+      isLoading = true;
+    }
     error = null;
-    notifyListeners();
+    if (!silent) {
+      notifyListeners();
+    }
+
+    final cachedGuests = await _guestRepository.readCachedGuests(eventId);
+    EventGuestRecord? cachedGuest;
+    for (final guest in cachedGuests) {
+      if (guest.id == guestId) {
+        cachedGuest = guest;
+        break;
+      }
+    }
+    final cachedCoverEntries =
+        await _guestRepository.readCachedGuestCoverEntries(guestId);
+    if (cachedGuest != null) {
+      detail = GuestDetailRecord(
+        guest: cachedGuest,
+        coverEntries: cachedCoverEntries,
+      );
+      notifyListeners();
+    }
 
     try {
-      detail = await _guestRepository.getGuestDetail(guestId);
+      detail = await _guestRepository.getGuestDetail(guestId) ?? detail;
       if (detail == null) {
         error = 'Guest not found.';
       }
     } catch (exception) {
-      error = exception.toString();
+      if (detail == null) {
+        error = exception.toString();
+      }
     }
 
-    isLoading = false;
+    if (!silent) {
+      isLoading = false;
+    }
     notifyListeners();
   }
 

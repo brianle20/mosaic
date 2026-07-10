@@ -3,6 +3,7 @@ import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
 import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
@@ -604,7 +605,10 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
   Widget build(BuildContext context) {
     final event = _controller.event;
     if (event != null) {
-      return _buildLiveConsole(context, event);
+      return ReconnectRefreshListener(
+        onRefresh: () => _controller.load(widget.args.eventId, silent: true),
+        child: _buildLiveConsole(context, event),
+      );
     }
 
     final lifecycleStatus = event?.lifecycleStatus;
@@ -624,169 +628,172 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   event?.currentScoringPhase ??
                   EventScoringPhase.tournament,
             );
-    return Scaffold(
-      appBar: AppBar(title: Text(event?.title ?? 'Event Dashboard')),
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error,
-        onRetry: () => _controller.load(widget.args.eventId),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              event?.title ?? 'Unknown Event',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Event Phase',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 8),
-            StatusChip(
-              label: _eventPhaseLabel(event),
-              tone: _eventPhaseTone(lifecycleStatus),
-            ),
-            const SizedBox(height: 8),
-            Text('Guests: ${_controller.guestCount}'),
-            const SizedBox(height: 4),
-            Text(_formatPrizePool(_controller.prizePoolCents)),
-            if (_controller.lifecycleError case final lifecycleError?)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Card(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(_formatLifecycleError(lifecycleError)),
-                  ),
-                ),
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(widget.args.eventId, silent: true),
+      child: Scaffold(
+        appBar: AppBar(title: Text(event?.title ?? 'Event Dashboard')),
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error,
+          onRetry: () => _controller.load(widget.args.eventId),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                event?.title ?? 'Unknown Event',
+                style: Theme.of(context).textTheme.headlineMedium,
               ),
-            if (_controller.tableScanError case final tableScanError?)
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Card(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(tableScanError),
-                  ),
-                ),
+              const SizedBox(height: 12),
+              Text(
+                'Event Phase',
+                style: Theme.of(context).textTheme.titleSmall,
               ),
-            const SizedBox(height: 20),
-            Text(
-              'Actions',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                if (showLiveActions)
-                  FilledButton(
-                    onPressed: _openGuests,
-                    child: const Text('Guests'),
-                  ),
-                if (showLiveActions)
-                  FilledButton(
-                    onPressed: _openTables,
-                    child: const Text('Tables'),
-                  ),
-                if (showTableScanAction)
-                  FilledButton(
-                    onPressed: _isTableScanInProgress ? null : _scanTable,
-                    child: Text(
-                      _isTableScanInProgress ? 'Scanning...' : 'Scan Table',
+              const SizedBox(height: 8),
+              StatusChip(
+                label: _eventPhaseLabel(event),
+                tone: _eventPhaseTone(lifecycleStatus),
+              ),
+              const SizedBox(height: 8),
+              Text('Guests: ${_controller.guestCount}'),
+              const SizedBox(height: 4),
+              Text(_formatPrizePool(_controller.prizePoolCents)),
+              if (_controller.lifecycleError case final lifecycleError?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(_formatLifecycleError(lifecycleError)),
                     ),
                   ),
-                FilledButton(
-                  onPressed: _openLeaderboard,
-                  child: const Text('Leaderboard'),
                 ),
-                FilledButton(
-                  onPressed: _openActivity,
-                  child: const Text('Activity'),
-                ),
-                if (_controller.canManageEvent)
-                  FilledButton(
-                    onPressed: _openPrizes,
-                    child: const Text('Prizes'),
-                  ),
-                if (showLiveActions)
-                  OutlinedButton(
-                    onPressed: _openGuests,
-                    child: const Text('Add Guest'),
-                  ),
-                if (_controller.canManageEvent &&
-                    lifecycleStatus == EventLifecycleStatus.draft)
-                  FilledButton(
-                    onPressed: _controller.isSubmittingLifecycle
-                        ? null
-                        : () => _controller.startEvent(),
-                    child: const Text('Open Check-In'),
-                  ),
-                if (_controller.canManageEvent &&
-                    lifecycleStatus == EventLifecycleStatus.active)
-                  FilledButton(
-                    onPressed: _controller.isSubmittingLifecycle
-                        ? null
-                        : () => _controller.completeEvent(),
-                    child: const Text('Complete Event'),
-                  ),
-                if (_controller.canManageEvent &&
-                    lifecycleStatus == EventLifecycleStatus.completed)
-                  FilledButton(
-                    onPressed: _controller.isSubmittingLifecycle
-                        ? null
-                        : () => _controller.finalizeEvent(),
-                    child: const Text('Finalize Event'),
-                  ),
-                if (_controller.canManageEvent &&
-                    lifecycleStatus == EventLifecycleStatus.draft)
-                  OutlinedButton(
-                    onPressed: _controller.isSubmittingLifecycle
-                        ? null
-                        : _confirmDeleteEvent,
-                    child: const Text('Delete Event'),
-                  ),
-                if (_controller.canManageEvent &&
-                    lifecycleStatus == EventLifecycleStatus.active)
-                  OutlinedButton(
-                    onPressed: _controller.isSubmittingLifecycle
-                        ? null
-                        : _confirmRevertToDraft,
-                    child: const Text('Revert to Draft'),
-                  ),
-                if (_controller.canManageEvent &&
-                    (lifecycleStatus == EventLifecycleStatus.active ||
-                        lifecycleStatus == EventLifecycleStatus.completed))
-                  OutlinedButton(
-                    onPressed: _controller.isSubmittingLifecycle
-                        ? null
-                        : _confirmCancelEvent,
-                    child: const Text('Cancel Event'),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (lifecycleStatus == EventLifecycleStatus.finalized)
-                      const Text('Final Event State'),
-                    Text(
-                      _formatLifecycleMessage(lifecycleStatus),
+              if (_controller.tableScanError case final tableScanError?)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Card(
+                    color: Theme.of(context).colorScheme.errorContainer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(tableScanError),
                     ),
-                  ],
+                  ),
+                ),
+              const SizedBox(height: 20),
+              Text(
+                'Actions',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  if (showLiveActions)
+                    FilledButton(
+                      onPressed: _openGuests,
+                      child: const Text('Guests'),
+                    ),
+                  if (showLiveActions)
+                    FilledButton(
+                      onPressed: _openTables,
+                      child: const Text('Tables'),
+                    ),
+                  if (showTableScanAction)
+                    FilledButton(
+                      onPressed: _isTableScanInProgress ? null : _scanTable,
+                      child: Text(
+                        _isTableScanInProgress ? 'Scanning...' : 'Scan Table',
+                      ),
+                    ),
+                  FilledButton(
+                    onPressed: _openLeaderboard,
+                    child: const Text('Leaderboard'),
+                  ),
+                  FilledButton(
+                    onPressed: _openActivity,
+                    child: const Text('Activity'),
+                  ),
+                  if (_controller.canManageEvent)
+                    FilledButton(
+                      onPressed: _openPrizes,
+                      child: const Text('Prizes'),
+                    ),
+                  if (showLiveActions)
+                    OutlinedButton(
+                      onPressed: _openGuests,
+                      child: const Text('Add Guest'),
+                    ),
+                  if (_controller.canManageEvent &&
+                      lifecycleStatus == EventLifecycleStatus.draft)
+                    FilledButton(
+                      onPressed: _controller.isSubmittingLifecycle
+                          ? null
+                          : () => _controller.startEvent(),
+                      child: const Text('Open Check-In'),
+                    ),
+                  if (_controller.canManageEvent &&
+                      lifecycleStatus == EventLifecycleStatus.active)
+                    FilledButton(
+                      onPressed: _controller.isSubmittingLifecycle
+                          ? null
+                          : () => _controller.completeEvent(),
+                      child: const Text('Complete Event'),
+                    ),
+                  if (_controller.canManageEvent &&
+                      lifecycleStatus == EventLifecycleStatus.completed)
+                    FilledButton(
+                      onPressed: _controller.isSubmittingLifecycle
+                          ? null
+                          : () => _controller.finalizeEvent(),
+                      child: const Text('Finalize Event'),
+                    ),
+                  if (_controller.canManageEvent &&
+                      lifecycleStatus == EventLifecycleStatus.draft)
+                    OutlinedButton(
+                      onPressed: _controller.isSubmittingLifecycle
+                          ? null
+                          : _confirmDeleteEvent,
+                      child: const Text('Delete Event'),
+                    ),
+                  if (_controller.canManageEvent &&
+                      lifecycleStatus == EventLifecycleStatus.active)
+                    OutlinedButton(
+                      onPressed: _controller.isSubmittingLifecycle
+                          ? null
+                          : _confirmRevertToDraft,
+                      child: const Text('Revert to Draft'),
+                    ),
+                  if (_controller.canManageEvent &&
+                      (lifecycleStatus == EventLifecycleStatus.active ||
+                          lifecycleStatus == EventLifecycleStatus.completed))
+                    OutlinedButton(
+                      onPressed: _controller.isSubmittingLifecycle
+                          ? null
+                          : _confirmCancelEvent,
+                      child: const Text('Cancel Event'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (lifecycleStatus == EventLifecycleStatus.finalized)
+                        const Text('Final Event State'),
+                      Text(
+                        _formatLifecycleMessage(lifecycleStatus),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

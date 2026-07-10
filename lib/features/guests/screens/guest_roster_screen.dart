@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
 import 'package:mosaic/features/checkin/screens/add_cover_entry_screen.dart';
@@ -381,86 +382,89 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
         _searchController.text.isNotEmpty ||
         _searchFocusNode.hasFocus;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Guests')),
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error,
-        onRetry: () => _controller.load(widget.eventId),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (widget.canManageGuests) ...[
-              FilledButton.icon(
-                style: _topActionButtonStyle(),
-                onPressed: _openAddGuest,
-                icon: const Icon(Icons.person_add),
-                label: const Text('Add New Guest'),
-              ),
-              const SizedBox(height: 6),
-              FilledButton.icon(
-                style: _topActionButtonStyle(),
-                onPressed: _openBulkSavedGuests,
-                icon: const Icon(Icons.group_add),
-                label: const Text('Add From Saved Guests'),
-              ),
-              const SizedBox(height: 6),
-            ],
-            if (widget.canManageTournamentStatus &&
-                checkedInConsideredGuestIds.isNotEmpty) ...[
-              FilledButton.icon(
-                style: _topActionButtonStyle(),
-                onPressed: isBulkQualifying
-                    ? null
-                    : () => _qualifyCheckedInConsidered(
-                          checkedInConsideredGuestIds,
-                        ),
-                icon: const Icon(Icons.emoji_events_outlined),
-                label: const Text('Qualify Checked-In Considered'),
-              ),
-              const SizedBox(height: 6),
-            ],
-            const SizedBox(height: 12),
-            Text(widget.eventTitle,
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            if (shouldShowGuestControls) ...[
-              _buildSearchField(),
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(widget.eventId, silent: true),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Guests')),
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error,
+          onRetry: () => _controller.load(widget.eventId),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (widget.canManageGuests) ...[
+                FilledButton.icon(
+                  style: _topActionButtonStyle(),
+                  onPressed: _openAddGuest,
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('Add New Guest'),
+                ),
+                const SizedBox(height: 6),
+                FilledButton.icon(
+                  style: _topActionButtonStyle(),
+                  onPressed: _openBulkSavedGuests,
+                  icon: const Icon(Icons.group_add),
+                  label: const Text('Add From Saved Guests'),
+                ),
+                const SizedBox(height: 6),
+              ],
+              if (widget.canManageTournamentStatus &&
+                  checkedInConsideredGuestIds.isNotEmpty) ...[
+                FilledButton.icon(
+                  style: _topActionButtonStyle(),
+                  onPressed: isBulkQualifying
+                      ? null
+                      : () => _qualifyCheckedInConsidered(
+                            checkedInConsideredGuestIds,
+                          ),
+                  icon: const Icon(Icons.emoji_events_outlined),
+                  label: const Text('Qualify Checked-In Considered'),
+                ),
+                const SizedBox(height: 6),
+              ],
               const SizedBox(height: 12),
-              _buildCheckInFilter(),
-              const SizedBox(height: 8),
-              _buildTournamentFilter(),
+              Text(widget.eventTitle,
+                  style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
-              ..._buildGuestSection(
-                context,
-                title: 'Pending',
-                guests: notCheckedInGuests,
-              ),
-              ..._buildGuestSection(
-                context,
-                title: 'Checked In',
-                guests: checkedInGuests,
-              ),
-              if (filteredGuests.isEmpty)
+              if (shouldShowGuestControls) ...[
+                _buildSearchField(),
+                const SizedBox(height: 12),
+                _buildCheckInFilter(),
+                const SizedBox(height: 8),
+                _buildTournamentFilter(),
+                const SizedBox(height: 12),
+                ..._buildGuestSection(
+                  context,
+                  title: 'Pending',
+                  guests: notCheckedInGuests,
+                ),
+                ..._buildGuestSection(
+                  context,
+                  title: 'Checked In',
+                  guests: checkedInGuests,
+                ),
+                if (filteredGuests.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 24),
+                    child: EmptyStateCard(
+                      icon: Icons.search_off,
+                      title: 'No matching guests',
+                      message: 'Try a different search or filter.',
+                    ),
+                  ),
+              ],
+              if (_controller.guests.isEmpty && !shouldShowGuestControls)
                 const Padding(
                   padding: EdgeInsets.only(top: 24),
                   child: EmptyStateCard(
-                    icon: Icons.search_off,
-                    title: 'No matching guests',
-                    message: 'Try a different search or filter.',
+                    icon: Icons.people_outline,
+                    title: 'No guests yet',
+                    message: 'Add guests to start check-in and live seating.',
                   ),
                 ),
             ],
-            if (_controller.guests.isEmpty && !shouldShowGuestControls)
-              const Padding(
-                padding: EdgeInsets.only(top: 24),
-                child: EmptyStateCard(
-                  icon: Icons.people_outline,
-                  title: 'No guests yet',
-                  message: 'Add guests to start check-in and live seating.',
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );

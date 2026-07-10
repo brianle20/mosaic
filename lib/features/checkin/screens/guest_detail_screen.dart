@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/guest_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/controllers/guest_check_in_controller.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
@@ -39,7 +40,7 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
     _controller =
         GuestCheckInController(guestRepository: widget.guestRepository)
           ..addListener(_handleUpdate)
-          ..load(widget.guestId);
+          ..load(eventId: widget.eventId, guestId: widget.guestId);
   }
 
   @override
@@ -174,7 +175,7 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
       return;
     }
 
-    await _controller.load(widget.guestId);
+    await _controller.load(eventId: widget.eventId, guestId: widget.guestId);
   }
 
   @override
@@ -182,153 +183,164 @@ class _GuestDetailScreenState extends State<GuestDetailScreen> {
     final detail = _controller.detail;
     final guest = detail?.guest;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(guest?.displayName ?? 'Guest'),
-        actions: [
-          if (guest != null && widget.canManageGuests)
-            TextButton(
-              onPressed:
-                  _controller.isSubmitting ? null : () => _openEditGuest(guest),
-              child: const Text('Edit'),
-            ),
-        ],
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(
+        eventId: widget.eventId,
+        guestId: widget.guestId,
+        silent: true,
       ),
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error,
-        onRetry: () => _controller.load(widget.guestId),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text(
-              guest?.displayName ?? 'Unknown Guest',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Attendance Status',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 8),
-            StatusChip(
-              label: guest == null
-                  ? 'Expected'
-                  : _attendanceLabel(guest.attendanceStatus),
-              tone: guest?.isCheckedIn == true
-                  ? StatusChipTone.success
-                  : StatusChipTone.neutral,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Cover Status',
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 8),
-            StatusChip(
-              label: guest == null
-                  ? 'Unpaid'
-                  : _coverStatusLabel(guest.coverStatus),
-              tone: guest == null
-                  ? StatusChipTone.neutral
-                  : _coverStatusTone(guest.coverStatus),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Cover Ledger',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                if (widget.canManageCover)
-                  TextButton(
-                    onPressed:
-                        _controller.isSubmitting ? null : _openAddCoverEntry,
-                    child: const Text('Add Cover Entry'),
-                  ),
-              ],
-            ),
-            if (detail != null && detail.coverEntries.isEmpty)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('No cover entries recorded yet.'),
-                ),
-              ),
-            if (detail != null && detail.coverEntries.isNotEmpty)
-              ...detail.coverEntries.map(
-                (entry) => Card(
-                  child: ListTile(
-                    title: Text(_coverEntrySummary(entry)),
-                    subtitle: entry.note == null ? null : Text(entry.note!),
-                    trailing: widget.canManageCover
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                tooltip: 'Edit cover entry',
-                                onPressed: _controller.isSubmitting
-                                    ? null
-                                    : () => _openEditCoverEntry(entry),
-                                icon: const Icon(Icons.edit),
-                              ),
-                              IconButton(
-                                tooltip: 'Delete cover entry',
-                                onPressed: _controller.isSubmitting
-                                    ? null
-                                    : () => _confirmDeleteCoverEntry(entry),
-                                icon: const Icon(Icons.delete_outline),
-                              ),
-                            ],
-                          )
-                        : null,
-                  ),
-                ),
-              ),
-            const SizedBox(height: 24),
-            if (guest != null && !guest.isCoverSettledForCheckIn)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Mark this guest paid or comped before check-in.',
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Update the cover status, then return here to continue check-in.',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            if (guest != null &&
-                guest.isCoverSettledForCheckIn &&
-                !guest.isCheckedIn &&
-                widget.canCheckIn &&
-                guest.tournamentStatus != EventTournamentStatus.withdrawn)
-              FilledButton(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(guest?.displayName ?? 'Guest'),
+          actions: [
+            if (guest != null && widget.canManageGuests)
+              TextButton(
                 onPressed: _controller.isSubmitting
                     ? null
-                    : () => _controller.checkIn(
-                          guestId: widget.guestId,
-                        ),
-                child: Text(
-                  _controller.isSubmitting
-                      ? 'Saving...'
-                      : _checkInLabel(guest.tournamentStatus),
-                ),
+                    : () => _openEditGuest(guest),
+                child: const Text('Edit'),
               ),
-            if (_controller.actionError != null) ...[
-              const SizedBox(height: 12),
-              Text(_controller.actionError!),
-            ],
           ],
+        ),
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error,
+          onRetry: () => _controller.load(
+            eventId: widget.eventId,
+            guestId: widget.guestId,
+          ),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Text(
+                guest?.displayName ?? 'Unknown Guest',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Attendance Status',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              StatusChip(
+                label: guest == null
+                    ? 'Expected'
+                    : _attendanceLabel(guest.attendanceStatus),
+                tone: guest?.isCheckedIn == true
+                    ? StatusChipTone.success
+                    : StatusChipTone.neutral,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Cover Status',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 8),
+              StatusChip(
+                label: guest == null
+                    ? 'Unpaid'
+                    : _coverStatusLabel(guest.coverStatus),
+                tone: guest == null
+                    ? StatusChipTone.neutral
+                    : _coverStatusTone(guest.coverStatus),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Cover Ledger',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  if (widget.canManageCover)
+                    TextButton(
+                      onPressed:
+                          _controller.isSubmitting ? null : _openAddCoverEntry,
+                      child: const Text('Add Cover Entry'),
+                    ),
+                ],
+              ),
+              if (detail != null && detail.coverEntries.isEmpty)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('No cover entries recorded yet.'),
+                  ),
+                ),
+              if (detail != null && detail.coverEntries.isNotEmpty)
+                ...detail.coverEntries.map(
+                  (entry) => Card(
+                    child: ListTile(
+                      title: Text(_coverEntrySummary(entry)),
+                      subtitle: entry.note == null ? null : Text(entry.note!),
+                      trailing: widget.canManageCover
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Edit cover entry',
+                                  onPressed: _controller.isSubmitting
+                                      ? null
+                                      : () => _openEditCoverEntry(entry),
+                                  icon: const Icon(Icons.edit),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete cover entry',
+                                  onPressed: _controller.isSubmitting
+                                      ? null
+                                      : () => _confirmDeleteCoverEntry(entry),
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ],
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 24),
+              if (guest != null && !guest.isCoverSettledForCheckIn)
+                const Card(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Mark this guest paid or comped before check-in.',
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Update the cover status, then return here to continue check-in.',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (guest != null &&
+                  guest.isCoverSettledForCheckIn &&
+                  !guest.isCheckedIn &&
+                  widget.canCheckIn &&
+                  guest.tournamentStatus != EventTournamentStatus.withdrawn)
+                FilledButton(
+                  onPressed: _controller.isSubmitting
+                      ? null
+                      : () => _controller.checkIn(
+                            guestId: widget.guestId,
+                          ),
+                  child: Text(
+                    _controller.isSubmitting
+                        ? 'Saving...'
+                        : _checkInLabel(guest.tournamentStatus),
+                  ),
+                ),
+              if (_controller.actionError != null) ...[
+                const SizedBox(height: 12),
+                Text(_controller.actionError!),
+              ],
+            ],
+          ),
         ),
       ),
     );

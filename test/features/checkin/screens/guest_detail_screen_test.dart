@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/offline/network_reachability.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/screens/guest_detail_screen.dart';
@@ -8,10 +13,18 @@ class _FakeGuestRepository implements GuestRepository {
   _FakeGuestRepository(
     this.detail, {
     this.returnEmptyCoverEntriesOnCheckIn = false,
-  });
+    List<EventGuestRecord>? cachedGuests,
+    List<GuestCoverEntryRecord>? cachedCoverEntries,
+    this.detailError,
+  })  : _cachedGuests = List<EventGuestRecord>.from(cachedGuests ?? const []),
+        _cachedCoverEntries =
+            List<GuestCoverEntryRecord>.from(cachedCoverEntries ?? const []);
 
   GuestDetailRecord detail;
   final bool returnEmptyCoverEntriesOnCheckIn;
+  final List<EventGuestRecord> _cachedGuests;
+  final List<GuestCoverEntryRecord> _cachedCoverEntries;
+  Object? detailError;
   String? lastAssignedUid;
   String? lastReplacedUid;
   EventTournamentStatus? lastUpdatedTournamentStatus;
@@ -80,6 +93,10 @@ class _FakeGuestRepository implements GuestRepository {
   @override
   Future<GuestDetailRecord?> getGuestDetail(String guestId) async {
     detailLoadCount += 1;
+    final detailError = this.detailError;
+    if (detailError != null) {
+      throw detailError;
+    }
     return detail;
   }
 
@@ -99,13 +116,15 @@ class _FakeGuestRepository implements GuestRepository {
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
-      const [];
+      List<EventGuestRecord>.from(_cachedGuests);
 
   @override
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
     String guestId,
   ) async {
-    return detail.coverEntries;
+    return _cachedCoverEntries.isEmpty
+        ? detail.coverEntries
+        : List<GuestCoverEntryRecord>.from(_cachedCoverEntries);
   }
 
   @override
@@ -234,6 +253,24 @@ class _FakeGuestRepository implements GuestRepository {
     );
     return updatedGuest;
   }
+}
+
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  int _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  Future<void> dispose() => _controller.close();
 }
 
 void _expectNoPlayerTagUi() {
@@ -893,5 +930,63 @@ void main() {
       ),
     );
     expect(amountField.controller.text, '15.00');
+  });
+
+  testWidgets('guest detail renders cached guest and cover entries offline',
+      (tester) async {
+    final guest = EventGuestRecord.fromJson(const {
+      'id': 'gst_01',
+      'event_id': 'evt_01',
+      'display_name': 'Ava Chen',
+      'normalized_name': 'ava chen',
+      'attendance_status': 'expected',
+      'cover_status': 'unpaid',
+      'cover_amount_cents': 2000,
+      'is_comped': false,
+      'has_scored_play': false,
+    });
+    final coverEntry = GuestCoverEntryRecord(
+      id: 'cov_01',
+      eventId: 'evt_01',
+      eventGuestId: 'gst_01',
+      amountCents: 2000,
+      method: CoverEntryMethod.cash,
+      recordedByUserId: 'usr_01',
+      transactionOn: DateTime(2026, 4, 24),
+    );
+    final repository = _FakeGuestRepository(
+      GuestDetailRecord(guest: guest, coverEntries: [coverEntry]),
+      cachedGuests: [guest],
+      cachedCoverEntries: [coverEntry],
+      detailError: const NetworkUnavailableException('offline'),
+    );
+    final signal = _FakeOfflineRecoverySignal();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OfflineRecoveryScope(
+          signal: signal,
+          child: GuestDetailScreen(
+            guestId: 'gst_01',
+            eventId: 'evt_01',
+            guestRepository: repository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ava Chen'), findsWidgets);
+    expect(find.textContaining(r'$20.00'), findsOneWidget);
+    expect(find.text('Something needs attention'), findsNothing);
+
+    final initialRemoteLoadCount = repository.detailLoadCount;
+    signal.emit();
+    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(repository.detailLoadCount, initialRemoteLoadCount + 1);
+    expect(find.text('Loading…'), findsNothing);
+    expect(find.text('Ava Chen'), findsWidgets);
+    await signal.dispose();
   });
 }

@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/offline/network_reachability.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
@@ -47,6 +50,8 @@ class _EventRepository extends ThrowingEventRepository {
   });
 
   EventRecord event;
+  int remoteLoadCount = 0;
+  Object? remoteError;
   final Future<EventRecord> Function(String eventId)? onComplete;
   final Future<EventRecord> Function(String eventId)? onFinalize;
   final Future<EventRecord> Function(String eventId)? onStart;
@@ -162,8 +167,14 @@ class _EventRepository extends ThrowingEventRepository {
   }
 
   @override
-  Future<EventRecord?> getEvent(String eventId) async =>
-      event.id == eventId ? event : null;
+  Future<EventRecord?> getEvent(String eventId) async {
+    remoteLoadCount += 1;
+    final remoteError = this.remoteError;
+    if (remoteError != null) {
+      throw remoteError;
+    }
+    return event.id == eventId ? event : null;
+  }
 
   @override
   Future<List<EventRecord>> listEvents() async => [event];
@@ -244,6 +255,24 @@ class _GuestRepository extends ThrowingGuestRepository {
   Future<EventGuestRecord> updateGuest(UpdateGuestInput input) {
     throw UnimplementedError();
   }
+}
+
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  int _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  Future<void> dispose() => _controller.close();
 }
 
 class _LeaderboardRepository extends ThrowingLeaderboardRepository {
@@ -1830,6 +1859,51 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('revalidates cached dashboard silently after recovery',
+      (tester) async {
+    final event = EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Cached event title',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'draft',
+      'checkin_open': false,
+      'scoring_open': false,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+    });
+    final repository = _EventRepository(event);
+    final signal = _FakeOfflineRecoverySignal();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OfflineRecoveryScope(
+          signal: signal,
+          child: EventDashboardScreen(
+            args: const EventDashboardArgs(eventId: 'evt_01'),
+            eventRepository: repository,
+            guestRepository: const _GuestRepository(),
+            leaderboardRepository: const _LeaderboardRepository(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final initialRemoteLoadCount = repository.remoteLoadCount;
+    repository.remoteError = const NetworkUnavailableException('offline');
+
+    signal.emit();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(repository.remoteLoadCount, initialRemoteLoadCount + 1);
+    expect(find.text('Loading…'), findsNothing);
+    expect(find.text('Cached event title'), findsOneWidget);
+    await signal.dispose();
+  });
+
   testWidgets(
       'scan table opens active sessions read-only when scoring is paused',
       (tester) async {
@@ -2384,8 +2458,7 @@ void main() {
     expect(_SeatingRepository.generatedTournamentRoundCount, 1);
     expect(openedSeatingSettings?.name, AppRouter.seatingAssignmentsRoute);
     expect(
-      (openedSeatingSettings?.arguments as SeatingAssignmentsArgs?)
-          ?.eventTitle,
+      (openedSeatingSettings?.arguments as SeatingAssignmentsArgs?)?.eventTitle,
       activeCheckinOnlyEvent.title,
     );
     expect(

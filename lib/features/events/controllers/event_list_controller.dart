@@ -32,10 +32,14 @@ class EventListController extends ChangeNotifier {
     return _isOwnedByCurrentUser(eventId) ? MosaicAccessRole.owner : null;
   }
 
-  Future<void> load() async {
-    isLoading = true;
+  Future<void> load({bool silent = false}) async {
+    if (!silent) {
+      isLoading = true;
+    }
     error = null;
-    _notifyIfActive();
+    if (!silent) {
+      _notifyIfActive();
+    }
 
     final cachedEvents = await _eventRepository.readCachedEvents();
     if (_isDisposed) {
@@ -43,7 +47,9 @@ class EventListController extends ChangeNotifier {
     }
     if (cachedEvents.isNotEmpty) {
       events = _latestCreatedFirst(_filterAccessible(cachedEvents));
-      isLoading = false;
+      if (!silent) {
+        isLoading = false;
+      }
       _notifyIfActive();
     }
 
@@ -61,7 +67,9 @@ class EventListController extends ChangeNotifier {
     if (_isDisposed) {
       return;
     }
-    isLoading = false;
+    if (!silent) {
+      isLoading = false;
+    }
     _notifyIfActive();
   }
 

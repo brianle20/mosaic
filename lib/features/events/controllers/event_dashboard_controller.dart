@@ -117,7 +117,7 @@ class EventDashboardController extends ChangeNotifier {
   bool get isSuddenDeathCompleted =>
       bonusRoundState?.suddenDeathStatus == 'completed';
 
-  Future<void> load(String eventId) async {
+  Future<void> load(String eventId, {bool silent = false}) async {
     final requestToken = _beginStateRequest();
     final cachedEvent = (await _eventRepository.readCachedEvents())
         .where((record) => record.id == eventId)
@@ -140,25 +140,43 @@ class EventDashboardController extends ChangeNotifier {
       return;
     }
 
-    isLoading = true;
+    if (!silent) {
+      isLoading = true;
+    }
     error = null;
     lifecycleError = null;
     tableScanError = null;
-    event = cachedEvent;
+    if (!silent || cachedEvent != null) {
+      event = cachedEvent;
+    }
     bonusRoundState = null;
-    _updateGuestSummaries(cachedGuests);
-    tableCount = cachedTables?.length ?? 0;
-    leaderLabel = _formatLeader(cachedLeaderboard);
-    _bonusLedgerEntries = cachedLedger ?? const [];
-    _leaderboardEntries = cachedLeaderboard ?? const [];
+    if (!silent || cachedGuests.isNotEmpty) {
+      _updateGuestSummaries(cachedGuests);
+    }
+    if (!silent || cachedTables != null && cachedTables.isNotEmpty) {
+      tableCount = cachedTables?.length ?? 0;
+    }
+    if (!silent || cachedLeaderboard != null && cachedLeaderboard.isNotEmpty) {
+      leaderLabel = _formatLeader(cachedLeaderboard);
+      _leaderboardEntries = cachedLeaderboard ?? const [];
+    }
+    if (!silent || cachedLedger != null && cachedLedger.isNotEmpty) {
+      _bonusLedgerEntries = cachedLedger ?? const [];
+    }
     _rebuildBonusRoundResults();
-    tournamentRoundSummary = cachedFinalsRoundSummary.hasCurrentRound
-        ? TournamentRoundSummary.empty()
-        : cachedEvent?.currentScoringPhase == EventScoringPhase.tournament
-            ? cachedTournamentRoundSummary
-            : TournamentRoundSummary.empty();
-    finalsRoundSummary = cachedFinalsRoundSummary;
-    prizePoolCents = _totalPrizeCents(cachedPrizePlan);
+    if (!silent ||
+        cachedTournamentRoundSummary.hasCurrentRound ||
+        cachedFinalsRoundSummary.hasCurrentRound) {
+      tournamentRoundSummary = cachedFinalsRoundSummary.hasCurrentRound
+          ? TournamentRoundSummary.empty()
+          : event?.currentScoringPhase == EventScoringPhase.tournament
+              ? cachedTournamentRoundSummary
+              : TournamentRoundSummary.empty();
+      finalsRoundSummary = cachedFinalsRoundSummary;
+    }
+    if (!silent || cachedPrizePlan != null) {
+      prizePoolCents = _totalPrizeCents(cachedPrizePlan);
+    }
     notifyListeners();
 
     try {
@@ -253,7 +271,9 @@ class EventDashboardController extends ChangeNotifier {
     if (!_isCurrentStateRequest(requestToken)) {
       return;
     }
-    isLoading = false;
+    if (!silent) {
+      isLoading = false;
+    }
     notifyListeners();
   }
 

@@ -18,15 +18,21 @@ class GuestRosterController extends ChangeNotifier {
 
   bool get isQualifyingCheckedInConsidered => _isQualifyingCheckedInConsidered;
 
-  Future<void> load(String eventId) async {
-    isLoading = true;
+  Future<void> load(String eventId, {bool silent = false}) async {
+    if (!silent) {
+      isLoading = true;
+    }
     error = null;
-    notifyListeners();
+    if (!silent) {
+      notifyListeners();
+    }
 
     final cachedGuests = await _guestRepository.readCachedGuests(eventId);
     if (cachedGuests.isNotEmpty) {
       guests = cachedGuests;
-      isLoading = false;
+      if (!silent) {
+        isLoading = false;
+      }
       notifyListeners();
     }
 
@@ -38,7 +44,9 @@ class GuestRosterController extends ChangeNotifier {
       }
     }
 
-    isLoading = false;
+    if (!silent) {
+      isLoading = false;
+    }
     notifyListeners();
   }
 

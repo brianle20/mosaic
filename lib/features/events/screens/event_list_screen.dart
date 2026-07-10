@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -226,45 +227,48 @@ class _EventListScreenState extends State<EventListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SoftHostScaffold(
-      title: 'Events',
-      actions: [
-        if (widget.onSignOut != null)
-          GlassCircleButton(
-            visualKey: const ValueKey('eventsSignOutAction'),
-            icon: Icons.logout,
-            tooltip: 'Sign out',
-            onPressed: _signOut,
-          ),
-      ],
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error,
-        onRetry: _controller.load,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            if (_controller.canCreateEvents) ...[
-              HeroActionButton(
-                key: const ValueKey('eventsCreateHeroAction'),
-                onPressed: _openCreateEvent,
-                icon: Icons.add,
-                label: 'Create Event',
-              ),
-              const SizedBox(height: 16),
-            ],
-            for (final event in _controller.events) _buildEventCard(event),
-            if (_controller.events.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 24),
-                child: EmptyStateCard(
-                  icon: Icons.event_note,
-                  title: 'No events yet',
-                  message:
-                      'Create your first event to start check-in, seating, scoring, and prizes.',
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(silent: true),
+      child: SoftHostScaffold(
+        title: 'Events',
+        actions: [
+          if (widget.onSignOut != null)
+            GlassCircleButton(
+              visualKey: const ValueKey('eventsSignOutAction'),
+              icon: Icons.logout,
+              tooltip: 'Sign out',
+              onPressed: _signOut,
+            ),
+        ],
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error,
+          onRetry: _controller.load,
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              if (_controller.canCreateEvents) ...[
+                HeroActionButton(
+                  key: const ValueKey('eventsCreateHeroAction'),
+                  onPressed: _openCreateEvent,
+                  icon: Icons.add,
+                  label: 'Create Event',
                 ),
-              ),
-          ],
+                const SizedBox(height: 16),
+              ],
+              for (final event in _controller.events) _buildEventCard(event),
+              if (_controller.events.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 24),
+                  child: EmptyStateCard(
+                    icon: Icons.event_note,
+                    title: 'No events yet',
+                    message:
+                        'Create your first event to start check-in, seating, scoring, and prizes.',
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
