@@ -1,6 +1,8 @@
 import 'package:mosaic/data/offline/offline_models.dart';
 
 abstract interface class OfflineStore {
+  Stream<OfflineStoreChange> get changes;
+
   Future<void> insertMutation(OfflineMutationRecord mutation);
 
   Future<void> insertPhotoUpload(OfflinePhotoUploadRecord upload);
@@ -11,6 +13,12 @@ abstract interface class OfflineStore {
   );
 
   Future<OfflineMutationRecord?> readMutation(String id);
+
+  Future<OfflinePhotoUploadRecord?> readPhotoUpload(String id);
+
+  Future<OfflinePhotoUploadRecord?> readPhotoUploadForMutation(
+    String mutationId,
+  );
 
   Future<List<OfflineMutationRecord>> readPendingMutations();
 
@@ -44,12 +52,19 @@ abstract interface class OfflineStore {
 
   Future<void> markPhotoUploadBlocked(String id, String error);
 
+  Future<void> markPhotoUploadBlockedForMutation(
+    String mutationId,
+    String error,
+  );
+
   Future<void> attachRemoteHandResultToPhotoUpload(
     String mutationId,
     String remoteHandResultId,
   );
 
   Future<void> resetPhotoUploadsUploadingToPending();
+
+  Future<void> resetPhotoUploadToPending(String id);
 
   Future<void> resetSyncingToPending();
 

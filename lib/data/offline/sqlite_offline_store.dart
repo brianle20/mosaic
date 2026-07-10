@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -12,10 +13,16 @@ class SqliteOfflineStore implements OfflineStore {
   SqliteOfflineStore._(this._backend);
 
   final _OfflineStoreBackend _backend;
+  final StreamController<OfflineStoreChange> _changes =
+      StreamController<OfflineStoreChange>.broadcast(sync: true);
+  Future<void> _writeTail = Future.value();
 
   static const _schemaVersion = 2;
   static const _mutationsTable = 'offline_mutations';
   static const _photoUploadsTable = 'offline_photo_uploads';
+
+  @override
+  Stream<OfflineStoreChange> get changes => _changes.stream;
 
   static Future<SqliteOfflineStore> open() async {
     final directory = await getApplicationDocumentsDirectory();
@@ -144,12 +151,18 @@ class SqliteOfflineStore implements OfflineStore {
 
   @override
   Future<void> insertMutation(OfflineMutationRecord mutation) {
-    return _backend.insert(_mutationsTable, _toRow(mutation));
+    return _enqueueWrite(() async {
+      await _backend.insert(_mutationsTable, _toRow(mutation));
+      _emit(mutation.sessionId, {OfflineStoreChangeKind.mutation});
+    });
   }
 
   @override
   Future<void> insertPhotoUpload(OfflinePhotoUploadRecord upload) {
-    return _backend.insert(_photoUploadsTable, _photoUploadToRow(upload));
+    return _enqueueWrite(() async {
+      await _backend.insert(_photoUploadsTable, _photoUploadToRow(upload));
+      _emit(upload.sessionId, {OfflineStoreChangeKind.photoUpload});
+    });
   }
 
   @override
@@ -157,10 +170,16 @@ class SqliteOfflineStore implements OfflineStore {
     OfflineMutationRecord mutation,
     OfflinePhotoUploadRecord upload,
   ) {
-    return _backend.insertAll([
-      _OfflineStoreInsert(_mutationsTable, _toRow(mutation)),
-      _OfflineStoreInsert(_photoUploadsTable, _photoUploadToRow(upload)),
-    ]);
+    return _enqueueWrite(() async {
+      await _backend.insertAll([
+        _OfflineStoreInsert(_mutationsTable, _toRow(mutation)),
+        _OfflineStoreInsert(_photoUploadsTable, _photoUploadToRow(upload)),
+      ]);
+      _emit(mutation.sessionId, {
+        OfflineStoreChangeKind.mutation,
+        OfflineStoreChangeKind.photoUpload,
+      });
+    });
   }
 
   @override
@@ -172,6 +191,30 @@ class SqliteOfflineStore implements OfflineStore {
       limit: 1,
     );
     return rows.isEmpty ? null : _fromRow(rows.single);
+  }
+
+  @override
+  Future<OfflinePhotoUploadRecord?> readPhotoUpload(String id) async {
+    final rows = await _backend.query(
+      _photoUploadsTable,
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : _photoUploadFromRow(rows.single);
+  }
+
+  @override
+  Future<OfflinePhotoUploadRecord?> readPhotoUploadForMutation(
+    String mutationId,
+  ) async {
+    final rows = await _backend.query(
+      _photoUploadsTable,
+      where: 'mutation_id = ?',
+      whereArgs: [mutationId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : _photoUploadFromRow(rows.single);
   }
 
   @override
@@ -229,209 +272,381 @@ class SqliteOfflineStore implements OfflineStore {
   }
 
   @override
-  Future<void> markSyncing(String id, {required DateTime attemptedAt}) async {
-    final existing = await readMutation(id);
-    await _backend.update(
-      _mutationsTable,
-      {
-        'status': offlineMutationStatusToJson(OfflineMutationStatus.syncing),
-        'attempt_count': (existing?.attemptCount ?? 0) + 1,
-        'last_attempted_at': attemptedAt.toUtc().toIso8601String(),
-        'updated_at': attemptedAt.toUtc().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+  Future<void> markSyncing(String id, {required DateTime attemptedAt}) {
+    return _enqueueWrite(() async {
+      final existing = await readMutation(id);
+      await _backend.update(
+        _mutationsTable,
+        {
+          'status': offlineMutationStatusToJson(OfflineMutationStatus.syncing),
+          'attempt_count': (existing?.attemptCount ?? 0) + 1,
+          'last_attempted_at': attemptedAt.toUtc().toIso8601String(),
+          'updated_at': attemptedAt.toUtc().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      await _emitMutationForId(id);
+    });
   }
 
   @override
-  Future<void> markSynced(String id) async {
-    await _backend.update(
-      _mutationsTable,
-      {
-        'status': offlineMutationStatusToJson(OfflineMutationStatus.synced),
-        'last_error': null,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+  Future<void> markSynced(String id) {
+    return _enqueueWrite(() async {
+      await _backend.update(
+        _mutationsTable,
+        {
+          'status': offlineMutationStatusToJson(OfflineMutationStatus.synced),
+          'last_error': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      await _emitMutationForId(id);
+    });
   }
 
   @override
-  Future<void> markFailed(String id, String error) async {
-    await _backend.update(
-      _mutationsTable,
-      {
-        'status': offlineMutationStatusToJson(OfflineMutationStatus.failed),
-        'last_error': error,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+  Future<void> markFailed(String id, String error) {
+    return _enqueueWrite(() async {
+      await _backend.update(
+        _mutationsTable,
+        {
+          'status': offlineMutationStatusToJson(OfflineMutationStatus.failed),
+          'last_error': error,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      await _emitMutationForId(id);
+    });
   }
 
   @override
-  Future<void> markSessionBlocked(String sessionId, String error) async {
-    await _backend.update(
-      _mutationsTable,
-      {
-        'status': offlineMutationStatusToJson(OfflineMutationStatus.blocked),
-        'last_error': error,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'session_id = ? and status in (?, ?, ?)',
-      whereArgs: [
+  Future<void> markSessionBlocked(String sessionId, String error) {
+    return _enqueueWrite(() async {
+      final whereArgs = [
         sessionId,
         offlineMutationStatusToJson(OfflineMutationStatus.pending),
         offlineMutationStatusToJson(OfflineMutationStatus.failed),
         offlineMutationStatusToJson(OfflineMutationStatus.syncing),
-      ],
-    );
+      ];
+      final rows = await _backend.query(
+        _mutationsTable,
+        where: 'session_id = ? and status in (?, ?, ?)',
+        whereArgs: whereArgs,
+      );
+      await _backend.update(
+        _mutationsTable,
+        {
+          'status': offlineMutationStatusToJson(OfflineMutationStatus.blocked),
+          'last_error': error,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'session_id = ? and status in (?, ?, ?)',
+        whereArgs: whereArgs,
+      );
+      _emitAffectedSessions(rows, OfflineStoreChangeKind.mutation);
+    });
   }
 
   @override
   Future<void> markPhotoUploadUploading(
     String id, {
     required DateTime attemptedAt,
-  }) async {
-    final rows = await _backend.query(
-      _photoUploadsTable,
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    final existing = rows.isEmpty ? null : _photoUploadFromRow(rows.single);
-    await _backend.update(
-      _photoUploadsTable,
-      {
-        'status':
-            offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.uploading),
-        'attempt_count': (existing?.attemptCount ?? 0) + 1,
-        'last_attempted_at': attemptedAt.toUtc().toIso8601String(),
-        'updated_at': attemptedAt.toUtc().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+  }) {
+    return _enqueueWrite(() async {
+      final rows = await _backend.query(
+        _photoUploadsTable,
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+      final existing = rows.isEmpty ? null : _photoUploadFromRow(rows.single);
+      await _backend.update(
+        _photoUploadsTable,
+        {
+          'status': offlinePhotoUploadStatusToJson(
+            OfflinePhotoUploadStatus.uploading,
+          ),
+          'attempt_count': (existing?.attemptCount ?? 0) + 1,
+          'last_attempted_at': attemptedAt.toUtc().toIso8601String(),
+          'updated_at': attemptedAt.toUtc().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      await _emitPhotoUploadForId(id);
+    });
   }
 
   @override
   Future<void> markPhotoUploadUploaded(
     String id, {
     required String storagePath,
-  }) async {
-    await _backend.update(
-      _photoUploadsTable,
-      {
-        'status':
-            offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.uploaded),
-        'storage_path': storagePath,
-        'last_error': null,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+  }) {
+    return _enqueueWrite(() async {
+      await _backend.update(
+        _photoUploadsTable,
+        {
+          'status': offlinePhotoUploadStatusToJson(
+            OfflinePhotoUploadStatus.uploaded,
+          ),
+          'storage_path': storagePath,
+          'last_error': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      await _emitPhotoUploadForId(id);
+    });
   }
 
   @override
-  Future<void> markPhotoUploadFailed(String id, String error) async {
-    await _backend.update(
-      _photoUploadsTable,
-      {
-        'status':
-            offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.failed),
-        'last_error': error,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+  Future<void> markPhotoUploadFailed(String id, String error) {
+    return _enqueueWrite(() async {
+      await _backend.update(
+        _photoUploadsTable,
+        {
+          'status':
+              offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.failed),
+          'last_error': error,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      await _emitPhotoUploadForId(id);
+    });
   }
 
   @override
-  Future<void> markPhotoUploadBlocked(String id, String error) async {
-    await _backend.update(
-      _photoUploadsTable,
-      {
-        'status':
-            offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.blocked),
-        'last_error': error,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+  Future<void> markPhotoUploadBlocked(String id, String error) {
+    return _enqueueWrite(() async {
+      await _backend.update(
+        _photoUploadsTable,
+        {
+          'status':
+              offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.blocked),
+          'last_error': error,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      await _emitPhotoUploadForId(id);
+    });
+  }
+
+  @override
+  Future<void> markPhotoUploadBlockedForMutation(
+    String mutationId,
+    String error,
+  ) {
+    return _enqueueWrite(() async {
+      await _backend.update(
+        _photoUploadsTable,
+        {
+          'status': offlinePhotoUploadStatusToJson(
+            OfflinePhotoUploadStatus.blocked,
+          ),
+          'last_error': error,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'mutation_id = ?',
+        whereArgs: [mutationId],
+      );
+      await _emitPhotoUploadForMutation(mutationId);
+    });
   }
 
   @override
   Future<void> attachRemoteHandResultToPhotoUpload(
     String mutationId,
     String remoteHandResultId,
-  ) async {
-    await _backend.update(
-      _photoUploadsTable,
-      {
-        'remote_hand_result_id': remoteHandResultId,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'mutation_id = ?',
-      whereArgs: [mutationId],
-    );
+  ) {
+    return _enqueueWrite(() async {
+      await _backend.update(
+        _photoUploadsTable,
+        {
+          'remote_hand_result_id': remoteHandResultId,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'mutation_id = ?',
+        whereArgs: [mutationId],
+      );
+      await _emitPhotoUploadForMutation(mutationId);
+    });
   }
 
   @override
-  Future<void> resetPhotoUploadsUploadingToPending() async {
-    await _backend.update(
-      _photoUploadsTable,
-      {
-        'status':
-            offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.pending),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'status = ?',
-      whereArgs: [
+  Future<void> resetPhotoUploadsUploadingToPending() {
+    return _enqueueWrite(() async {
+      final whereArgs = [
         offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.uploading),
-      ],
-    );
+      ];
+      final rows = await _backend.query(
+        _photoUploadsTable,
+        where: 'status = ?',
+        whereArgs: whereArgs,
+      );
+      await _backend.update(
+        _photoUploadsTable,
+        {
+          'status':
+              offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.pending),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'status = ?',
+        whereArgs: whereArgs,
+      );
+      _emitAffectedSessions(rows, OfflineStoreChangeKind.photoUpload);
+    });
   }
 
   @override
-  Future<void> resetSyncingToPending() async {
-    await _backend.update(
-      _mutationsTable,
-      {
-        'status': offlineMutationStatusToJson(OfflineMutationStatus.pending),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'status = ?',
-      whereArgs: [offlineMutationStatusToJson(OfflineMutationStatus.syncing)],
-    );
+  Future<void> resetPhotoUploadToPending(String id) {
+    return _enqueueWrite(() async {
+      final existing = await readPhotoUpload(id);
+      if (existing == null ||
+          (existing.status != OfflinePhotoUploadStatus.blocked &&
+              existing.status != OfflinePhotoUploadStatus.failed)) {
+        return;
+      }
+      await _backend.update(
+        _photoUploadsTable,
+        {
+          'status':
+              offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.pending),
+          'last_error': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'id = ? and status in (?, ?)',
+        whereArgs: [
+          id,
+          offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.blocked),
+          offlinePhotoUploadStatusToJson(OfflinePhotoUploadStatus.failed),
+        ],
+      );
+      await _emitPhotoUploadForId(id);
+    });
+  }
+
+  @override
+  Future<void> resetSyncingToPending() {
+    return _enqueueWrite(() async {
+      final whereArgs = [
+        offlineMutationStatusToJson(OfflineMutationStatus.syncing),
+      ];
+      final rows = await _backend.query(
+        _mutationsTable,
+        where: 'status = ?',
+        whereArgs: whereArgs,
+      );
+      await _backend.update(
+        _mutationsTable,
+        {
+          'status': offlineMutationStatusToJson(OfflineMutationStatus.pending),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'status = ?',
+        whereArgs: whereArgs,
+      );
+      _emitAffectedSessions(rows, OfflineStoreChangeKind.mutation);
+    });
   }
 
   @override
   Future<void> resetBlockedMutationsToPending({
     required String lastErrorContains,
-  }) async {
-    await _backend.update(
-      _mutationsTable,
-      {
-        'status': offlineMutationStatusToJson(OfflineMutationStatus.pending),
-        'last_error': null,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where: 'status = ? and last_error like ?',
-      whereArgs: [
+  }) {
+    return _enqueueWrite(() async {
+      final whereArgs = [
         offlineMutationStatusToJson(OfflineMutationStatus.blocked),
         '%$lastErrorContains%',
-      ],
-    );
+      ];
+      final rows = await _backend.query(
+        _mutationsTable,
+        where: 'status = ? and last_error like ?',
+        whereArgs: whereArgs,
+      );
+      await _backend.update(
+        _mutationsTable,
+        {
+          'status': offlineMutationStatusToJson(OfflineMutationStatus.pending),
+          'last_error': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where: 'status = ? and last_error like ?',
+        whereArgs: whereArgs,
+      );
+      _emitAffectedSessions(rows, OfflineStoreChangeKind.mutation);
+    });
   }
 
   @override
-  Future<void> close() => _backend.close();
+  Future<void> close() async {
+    await _writeTail;
+    await _changes.close();
+    await _backend.close();
+  }
+
+  Future<T> _enqueueWrite<T>(Future<T> Function() operation) {
+    final completer = Completer<T>();
+    _writeTail = _writeTail.then((_) async {
+      try {
+        completer.complete(await operation());
+      } catch (error, stackTrace) {
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future;
+  }
+
+  void _emit(
+    String sessionId,
+    Set<OfflineStoreChangeKind> kinds,
+  ) {
+    if (!_changes.isClosed) {
+      _changes.add(OfflineStoreChange(sessionId: sessionId, kinds: kinds));
+    }
+  }
+
+  void _emitAffectedSessions(
+    List<Map<String, Object?>> rows,
+    OfflineStoreChangeKind kind,
+  ) {
+    final sessionIds = <String>{
+      for (final row in rows) row['session_id']! as String,
+    };
+    for (final sessionId in sessionIds) {
+      _emit(sessionId, {kind});
+    }
+  }
+
+  Future<void> _emitMutationForId(String id) async {
+    final mutation = await readMutation(id);
+    if (mutation != null) {
+      _emit(mutation.sessionId, {OfflineStoreChangeKind.mutation});
+    }
+  }
+
+  Future<void> _emitPhotoUploadForId(String id) async {
+    final upload = await readPhotoUpload(id);
+    if (upload != null) {
+      _emit(upload.sessionId, {OfflineStoreChangeKind.photoUpload});
+    }
+  }
+
+  Future<void> _emitPhotoUploadForMutation(String mutationId) async {
+    final upload = await readPhotoUploadForMutation(mutationId);
+    if (upload != null) {
+      _emit(upload.sessionId, {OfflineStoreChangeKind.photoUpload});
+    }
+  }
 
   Map<String, Object?> _toRow(OfflineMutationRecord mutation) {
     return {
@@ -706,14 +921,15 @@ class _MemoryOfflineStoreBackend implements _OfflineStoreBackend {
     return switch (where) {
       null => true,
       'id = ?' => row['id'] == whereArgs[0],
+      'id = ? and status in (?, ?)' => row['id'] == whereArgs[0] &&
+          (row['status'] == whereArgs[1] || row['status'] == whereArgs[2]),
       'mutation_id = ?' => row['mutation_id'] == whereArgs[0],
       'session_id = ?' => row['session_id'] == whereArgs[0],
       'status in (?, ?)' =>
         row['status'] == whereArgs[0] || row['status'] == whereArgs[1],
       'status = ?' => row['status'] == whereArgs[0],
-      'status = ? and last_error like ?' =>
-        row['status'] == whereArgs[0] &&
-            _like(row['last_error'] as String?, whereArgs[1]! as String),
+      'status = ? and last_error like ?' => row['status'] == whereArgs[0] &&
+          _like(row['last_error'] as String?, whereArgs[1]! as String),
       'session_id = ? and status in (?, ?, ?)' =>
         row['session_id'] == whereArgs[0] &&
             (row['status'] == whereArgs[1] ||

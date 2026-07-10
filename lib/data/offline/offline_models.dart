@@ -6,6 +6,19 @@ enum OfflineMutationStatus { pending, syncing, synced, failed, blocked }
 
 enum OfflinePhotoUploadStatus { pending, uploading, uploaded, failed, blocked }
 
+enum OfflineStoreChangeKind { mutation, photoUpload }
+
+@immutable
+class OfflineStoreChange {
+  OfflineStoreChange({
+    required this.sessionId,
+    required Set<OfflineStoreChangeKind> kinds,
+  }) : kinds = Set.unmodifiable(kinds);
+
+  final String sessionId;
+  final Set<OfflineStoreChangeKind> kinds;
+}
+
 String offlineMutationKindToJson(OfflineMutationKind kind) {
   return switch (kind) {
     OfflineMutationKind.recordHand => 'record_hand',

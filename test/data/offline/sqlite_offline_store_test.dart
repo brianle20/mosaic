@@ -72,6 +72,231 @@ void main() {
       expect(pending.map((upload) => upload.id), ['photo_01', 'photo_02']);
     });
 
+    test('mutation and photo transaction emits one committed session change',
+        () async {
+      final changes = <OfflineStoreChange>[];
+      final subscription = store.changes.listen(changes.add);
+
+      await store.insertMutationWithPhotoUpload(
+        _mutation(id: 'mut_01'),
+        _photoUpload(id: 'photo_01', mutationId: 'mut_01'),
+      );
+
+      expect(changes, hasLength(1));
+      expect(changes.single.sessionId, 'ses_01');
+      expect(
+        changes.single.kinds,
+        {OfflineStoreChangeKind.mutation, OfflineStoreChangeKind.photoUpload},
+      );
+      await subscription.cancel();
+    });
+
+    test('failed mutation and photo transaction emits no session change',
+        () async {
+      await store.insertPhotoUpload(_photoUpload(id: 'photo_01'));
+      final changes = <OfflineStoreChange>[];
+      final subscription = store.changes.listen(changes.add);
+
+      await expectLater(
+        store.insertMutationWithPhotoUpload(
+          _mutation(id: 'mut_01'),
+          _photoUpload(id: 'photo_01', mutationId: 'mut_01'),
+        ),
+        throwsA(anything),
+      );
+
+      expect(changes, isEmpty);
+      expect(await store.readMutation('mut_01'), isNull);
+      await subscription.cancel();
+    });
+
+    test('photo reset and mutation-link failure publish photo changes',
+        () async {
+      await store.insertPhotoUpload(_photoUpload(id: 'photo_01'));
+      final changes = <OfflineStoreChange>[];
+      final subscription = store.changes.listen(changes.add);
+
+      await store.markPhotoUploadBlockedForMutation(
+        'mut_01',
+        'Winning hand saved, but its photo could not be linked.',
+      );
+      expect((await store.readPhotoUpload('photo_01'))!.status,
+          OfflinePhotoUploadStatus.blocked);
+
+      await store.resetPhotoUploadToPending('photo_01');
+      expect((await store.readPhotoUploadForMutation('mut_01'))!.status,
+          OfflinePhotoUploadStatus.pending);
+      expect(changes, hasLength(2));
+      await subscription.cancel();
+    });
+
+    test('photo reset only changes failed or blocked uploads', () async {
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'photo_failed',
+          mutationId: 'mut_failed',
+          status: OfflinePhotoUploadStatus.failed,
+          lastError: 'socket closed',
+        ),
+      );
+      await store.insertPhotoUpload(
+        _photoUpload(id: 'photo_pending', mutationId: 'mut_pending'),
+      );
+      final changes = <OfflineStoreChange>[];
+      final subscription = store.changes.listen(changes.add);
+
+      await store.resetPhotoUploadToPending('photo_failed');
+      await store.resetPhotoUploadToPending('photo_pending');
+
+      final failed = await store.readPhotoUpload('photo_failed');
+      expect(failed!.status, OfflinePhotoUploadStatus.pending);
+      expect(failed.lastError, isNull);
+      expect(changes, hasLength(1));
+      expect(changes.single.kinds, {OfflineStoreChangeKind.photoUpload});
+      await subscription.cancel();
+    });
+
+    test('bulk photo recovery emits once per unique affected session',
+        () async {
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'photo_01',
+          mutationId: 'mut_01',
+          status: OfflinePhotoUploadStatus.uploading,
+        ),
+      );
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'photo_02',
+          mutationId: 'mut_02',
+          status: OfflinePhotoUploadStatus.uploading,
+        ),
+      );
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'photo_other',
+          mutationId: 'mut_other',
+          sessionId: 'ses_02',
+          status: OfflinePhotoUploadStatus.uploading,
+        ),
+      );
+      final changes = <OfflineStoreChange>[];
+      final subscription = store.changes.listen(changes.add);
+
+      await store.resetPhotoUploadsUploadingToPending();
+      await store.resetPhotoUploadsUploadingToPending();
+
+      expect(changes, hasLength(2));
+      expect(changes.map((change) => change.sessionId).toSet(), {
+        'ses_01',
+        'ses_02',
+      });
+      expect(
+        changes.every(
+          (change) =>
+              change.kinds.length == 1 &&
+              change.kinds.contains(OfflineStoreChangeKind.photoUpload),
+        ),
+        isTrue,
+      );
+      await subscription.cancel();
+    });
+
+    test('concurrent writes publish changes in committed order', () async {
+      await store.insertPhotoUpload(
+        _photoUpload(status: OfflinePhotoUploadStatus.uploading),
+      );
+      final changes = <OfflineStoreChange>[];
+      final observedStatuses = <Future<OfflinePhotoUploadStatus>>[];
+      final subscription = store.changes.listen((change) {
+        changes.add(change);
+        observedStatuses.add(
+          store.readPhotoUpload('photo_01').then((upload) => upload!.status),
+        );
+      });
+
+      final recovery = store.resetPhotoUploadsUploadingToPending();
+      final upload = store.markPhotoUploadUploaded(
+        'photo_01',
+        storagePath: 'events/evt_01/hands/photo_01.jpg',
+      );
+      await Future.wait([recovery, upload]);
+
+      expect(
+        (await store.readPhotoUpload('photo_01'))!.status,
+        OfflinePhotoUploadStatus.uploaded,
+      );
+      expect(changes, hasLength(2));
+      expect(await Future.wait(observedStatuses), [
+        OfflinePhotoUploadStatus.pending,
+        OfflinePhotoUploadStatus.uploaded,
+      ]);
+      await subscription.cancel();
+    });
+
+    test('bulk mutation recovery emits once per unique affected session',
+        () async {
+      await store.insertMutation(
+        _mutation(id: 'mut_sync_01', status: OfflineMutationStatus.syncing),
+      );
+      await store.insertMutation(
+        _mutation(id: 'mut_sync_02', status: OfflineMutationStatus.syncing),
+      );
+      await store.insertMutation(
+        _mutation(
+          id: 'mut_sync_other',
+          sessionId: 'ses_02',
+          status: OfflineMutationStatus.syncing,
+        ),
+      );
+      await store.insertMutation(
+        _mutation(
+          id: 'mut_blocked_01',
+          status: OfflineMutationStatus.blocked,
+          lastError: 'App restarted during sync.',
+        ),
+      );
+      final changes = <OfflineStoreChange>[];
+      final subscription = store.changes.listen(changes.add);
+
+      await store.resetSyncingToPending();
+      await store.resetSyncingToPending();
+      await store.resetBlockedMutationsToPending(
+        lastErrorContains: 'restarted during sync',
+      );
+      await store.resetBlockedMutationsToPending(
+        lastErrorContains: 'restarted during sync',
+      );
+
+      expect(changes, hasLength(3));
+      expect(
+        changes.map((change) => change.sessionId),
+        containsAll(<String>['ses_01', 'ses_02']),
+      );
+      expect(
+        changes.every(
+          (change) =>
+              change.kinds.length == 1 &&
+              change.kinds.contains(OfflineStoreChangeKind.mutation),
+        ),
+        isTrue,
+      );
+      await subscription.cancel();
+    });
+
+    test('store close closes the change stream', () async {
+      var isDone = false;
+      final subscription = store.changes.listen(
+        (_) {},
+        onDone: () => isDone = true,
+      );
+
+      await store.close();
+
+      expect(isDone, isTrue);
+      await subscription.cancel();
+    });
+
     test('updates photo upload status and remote attachment metadata',
         () async {
       final attemptedAt = DateTime.utc(2026, 6, 18, 20, 30);
@@ -320,8 +545,22 @@ void main() {
       expect(mutation, isNotNull);
       expect(mutation!.payload['target_result_type'], 'washout');
 
+      final changes = <OfflineStoreChange>[];
+      final subscription = upgraded.changes.listen(changes.add);
+      addTearDown(subscription.cancel);
       await upgraded.insertPhotoUpload(_photoUpload(id: 'photo_01'));
       expect((await upgraded.readPendingPhotoUploads()).single.id, 'photo_01');
+      expect(changes, hasLength(1));
+
+      await expectLater(
+        upgraded.insertMutationWithPhotoUpload(
+          _mutation(id: 'mut_rollback'),
+          _photoUpload(id: 'photo_01', mutationId: 'mut_rollback'),
+        ),
+        throwsA(anything),
+      );
+      expect(await upgraded.readMutation('mut_rollback'), isNull);
+      expect(changes, hasLength(1));
     });
   });
 }
@@ -331,6 +570,7 @@ OfflineMutationRecord _mutation({
   String sessionId = 'ses_01',
   DateTime? createdAt,
   OfflineMutationStatus status = OfflineMutationStatus.pending,
+  String? lastError,
 }) {
   final timestamp = createdAt ?? DateTime.utc(2026, 6, 18, 20);
   return OfflineMutationRecord(
@@ -351,6 +591,7 @@ OfflineMutationRecord _mutation({
     createdAt: timestamp,
     updatedAt: timestamp,
     status: status,
+    lastError: lastError,
   );
 }
 
@@ -360,6 +601,7 @@ OfflinePhotoUploadRecord _photoUpload({
   String sessionId = 'ses_01',
   DateTime? createdAt,
   OfflinePhotoUploadStatus status = OfflinePhotoUploadStatus.pending,
+  String? lastError,
 }) {
   final timestamp = createdAt ?? DateTime.utc(2026, 6, 18, 20);
   return OfflinePhotoUploadRecord(
@@ -373,5 +615,6 @@ OfflinePhotoUploadRecord _photoUpload({
     createdAt: timestamp,
     updatedAt: timestamp,
     status: status,
+    lastError: lastError,
   );
 }
