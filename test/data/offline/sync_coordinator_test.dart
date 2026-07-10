@@ -11,8 +11,10 @@ import 'package:mosaic/data/offline/offline_session_projector.dart';
 import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/sqlite_offline_store.dart';
 import 'package:mosaic/data/offline/sync_coordinator.dart';
+import 'package:mosaic/data/offline/sync_retry_scheduler.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
+import 'package:mosaic/services/media/hand_photo_storage.dart';
 import 'package:supabase/supabase.dart';
 
 void main() {
@@ -23,21 +25,123 @@ void main() {
     late _FakeReachability reachability;
     late _FakeSessionRepository repository;
     late SyncCoordinator coordinator;
+    late _FakeSyncRetryScheduler scheduler;
 
     setUp(() async {
       store = await SqliteOfflineStore.inMemory();
       reachability = _FakeReachability(reachable: true);
       repository = _FakeSessionRepository();
+      scheduler = _FakeSyncRetryScheduler();
       coordinator = SyncCoordinator(
         store: store,
         reachability: reachability,
         sessionRepository: repository,
+        retryScheduler: scheduler,
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
         now: () => DateTime.utc(2026, 6, 18, 20, 30),
       );
     });
 
     tearDown(() async {
+      await coordinator.dispose();
+      await reachability.close();
       await store.close();
+    });
+
+    test('reconnect drains work and emits one settled generation', () async {
+      reachability.reachable = false;
+      await store.insertMutation(_mutation(id: 'mut_01'));
+      await coordinator.initialize();
+      expect(repository.recordedInputs, isEmpty);
+
+      reachability.reachable = true;
+      reachability.emitReachable();
+      await pumpEventQueue();
+
+      expect(repository.recordedInputs.single.clientMutationId, 'mut_01');
+      expect(coordinator.generation, 1);
+    });
+
+    test('retryable failures schedule 1 2 5 10 30 second delays', () async {
+      repository.errors.addAll(List<Object>.filled(
+        6,
+        const NetworkUnavailableException('socket closed'),
+      ));
+      await store.insertMutation(_mutation(id: 'mut_01'));
+
+      await coordinator.syncNow();
+      expect(scheduler.scheduledDelay, const Duration(seconds: 1));
+      await scheduler.fire();
+      expect(scheduler.scheduledDelay, const Duration(seconds: 2));
+      await scheduler.fire();
+      expect(scheduler.scheduledDelay, const Duration(seconds: 5));
+      await scheduler.fire();
+      expect(scheduler.scheduledDelay, const Duration(seconds: 10));
+      await scheduler.fire();
+      expect(scheduler.scheduledDelay, const Duration(seconds: 30));
+      await scheduler.fire();
+      expect(scheduler.scheduledDelay, const Duration(seconds: 30));
+    });
+
+    test('background cancels retry and resume requests recovery', () async {
+      await store.insertMutation(_mutation(id: 'mut_01'));
+      reachability.reachable = false;
+      await coordinator.syncNow();
+      expect(scheduler.hasScheduledCallback, isTrue);
+
+      coordinator.setForeground(false);
+      expect(scheduler.hasScheduledCallback, isFalse);
+
+      reachability.reachable = true;
+      coordinator.setForeground(true);
+      await pumpEventQueue();
+      expect(repository.recordedInputs.single.clientMutationId, 'mut_01');
+    });
+
+    test('confirmed upload marks uploaded before deleting local file',
+        () async {
+      final storage = _FakeHandPhotoStorage(existing: {'/local/photo.jpg'});
+      final evidence = _FakeHandEvidenceRepository();
+      coordinator = SyncCoordinator(
+        store: store,
+        reachability: reachability,
+        sessionRepository: repository,
+        handEvidenceRepository: evidence,
+        retryScheduler: scheduler,
+        photoStorage: storage,
+        now: () => DateTime.utc(2026, 6, 18, 20, 30),
+      );
+      await store.insertMutation(_mutation(id: 'mut_01'));
+      repository.detail = _detailWithHand(
+        id: 'hand_01',
+        clientMutationId: 'mut_01',
+      );
+      await store.insertPhotoUpload(_photoUpload(
+        mutationId: 'mut_01',
+        remoteHandResultId: 'hand_01',
+        localPath: '/local/photo.jpg',
+      ));
+
+      await coordinator.syncNow();
+
+      expect((await store.readPhotoUpload('photo_upload_01'))!.status,
+          OfflinePhotoUploadStatus.uploaded);
+      expect(storage.deletedPaths, ['/local/photo.jpg']);
+    });
+
+    test('missing remote hand id blocks photo instead of retrying forever',
+        () async {
+      repository.detail = _detail();
+      await store.insertMutation(_mutation(id: 'mut_01'));
+      await store.insertPhotoUpload(_photoUpload(mutationId: 'mut_01'));
+
+      await coordinator.syncNow();
+
+      expect((await store.readMutation('mut_01'))!.status,
+          OfflineMutationStatus.synced);
+      expect((await store.readPhotoUpload('photo_upload_01'))!.status,
+          OfflinePhotoUploadStatus.blocked);
+      expect(scheduler.hasScheduledCallback, isFalse);
     });
 
     test('syncNow does nothing when unreachable', () async {
@@ -188,6 +292,7 @@ void main() {
         sessionRepository: repository,
         handEvidenceRepository: evidence,
         now: () => DateTime.utc(2026, 6, 18, 20, 30),
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
       );
       repository.detail = _detailWithHand(
         id: 'remote_hand_01',
@@ -217,6 +322,7 @@ void main() {
         reachability: reachability,
         sessionRepository: repository,
         handEvidenceRepository: evidence,
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
       );
       await store.insertPhotoUpload(_photoUpload(mutationId: 'mut_01'));
 
@@ -235,6 +341,7 @@ void main() {
         reachability: reachability,
         sessionRepository: repository,
         handEvidenceRepository: evidence,
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
       );
       await store.insertPhotoUpload(
         _photoUpload(
@@ -270,6 +377,7 @@ void main() {
         reachability: reachability,
         sessionRepository: repository,
         handEvidenceRepository: evidence,
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
       );
       await store.insertPhotoUpload(
         _photoUpload(
@@ -479,6 +587,7 @@ void main() {
         reachability: reachability,
         sessionRepository: repository,
         handEvidenceRepository: evidence,
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
         now: () => DateTime.utc(2026, 6, 18, 20, 30),
       );
       await store.insertPhotoUpload(
@@ -550,18 +659,83 @@ void main() {
 }
 
 class _FakeReachability implements NetworkReachability {
-  _FakeReachability({required this.reachable});
+  _FakeReachability({required this.reachable})
+      : _reachableEvents = StreamController<void>.broadcast(sync: true);
 
   bool reachable;
+  final StreamController<void> _reachableEvents;
 
   @override
-  Stream<void> get onReachable => const Stream.empty();
+  Stream<void> get onReachable => _reachableEvents.stream;
+
+  void emitReachable() => _reachableEvents.add(null);
+
+  Future<void> close() => _reachableEvents.close();
 
   @override
   Future<bool> isReachable() async => reachable;
 
   @override
   bool isNetworkException(Object error) => error is NetworkUnavailableException;
+}
+
+class _FakeSyncRetryScheduler implements SyncRetryScheduler {
+  Duration? scheduledDelay;
+  void Function()? _callback;
+
+  bool get hasScheduledCallback => _callback != null;
+
+  @override
+  void schedule(Duration delay, void Function() callback) {
+    scheduledDelay = delay;
+    _callback = callback;
+  }
+
+  @override
+  void cancel() {
+    scheduledDelay = null;
+    _callback = null;
+  }
+
+  Future<void> fire() async {
+    final callback = _callback;
+    scheduledDelay = null;
+    _callback = null;
+    callback?.call();
+    await pumpEventQueue();
+  }
+}
+
+Future<void> pumpEventQueue({int times = 3}) async {
+  for (var index = 0; index < times; index += 1) {
+    await Future<void>.delayed(Duration.zero);
+  }
+}
+
+class _FakeHandPhotoStorage implements HandPhotoStorage {
+  _FakeHandPhotoStorage({required Set<String> existing})
+      : _existing = {...existing};
+
+  final Set<String> _existing;
+  final List<String> deletedPaths = [];
+
+  @override
+  Future<bool> exists(String path) async => _existing.contains(path);
+
+  @override
+  Future<void> delete(String path) async {
+    deletedPaths.add(path);
+    _existing.remove(path);
+  }
+
+  @override
+  Future<String> persist({
+    required String sourcePath,
+    required String photoId,
+  }) async {
+    _existing.add(sourcePath);
+    return sourcePath;
+  }
 }
 
 class _FakeSessionRepository implements SessionRepository {
@@ -763,6 +937,7 @@ OfflinePhotoUploadRecord _photoUpload({
   String id = 'photo_upload_01',
   required String mutationId,
   String? remoteHandResultId,
+  String localPath = '/local/photo.jpg',
   DateTime? createdAt,
   OfflinePhotoUploadStatus status = OfflinePhotoUploadStatus.pending,
 }) {
@@ -773,7 +948,7 @@ OfflinePhotoUploadRecord _photoUpload({
     eventId: 'evt_01',
     sessionId: 'ses_01',
     clientPhotoId: 'photo_client_01',
-    localPath: '/local/photo.jpg',
+    localPath: localPath,
     capturedAt: DateTime.utc(2026, 6, 25, 18),
     status: status,
     remoteHandResultId: remoteHandResultId,
