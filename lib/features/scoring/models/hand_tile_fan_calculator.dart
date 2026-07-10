@@ -5,7 +5,7 @@ import 'package:mosaic/features/scoring/models/hand_tile_grouping.dart';
 import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 import 'package:mosaic/features/scoring/models/mahjong_tile.dart';
 
-const String handTileCalculationVersion = 'hk_tile_review_v2';
+const String handTileCalculationVersion = 'hk_tile_review_v3';
 
 const Set<String> _dragonTileIds = {
   'red',
@@ -269,6 +269,16 @@ List<_AppliedFanRule> _appliedTileRules({
     );
   }
 
+  if (_isAllQuadruplets(grouping)) {
+    rules.add(
+      const _AppliedFanRule(
+        id: 'allQuadruplets',
+        label: 'All Quadruplets',
+        fanValue: 13,
+      ),
+    );
+  }
+
   final flushRule = _flushRule(draft.coreTileIds);
   if (flushRule != null) {
     rules.add(flushRule);
@@ -396,6 +406,10 @@ List<_AppliedFanRule> _applyRuleReplacements(List<_AppliedFanRule> rules) {
   if (ruleIds.contains('mixedTerminals') ||
       ruleIds.contains('allTerminals') ||
       ruleIds.contains('allHonours')) {
+    idsToRemove.add('allTriplets');
+  }
+
+  if (ruleIds.contains('allQuadruplets')) {
     idsToRemove.add('allTriplets');
   }
 
@@ -649,21 +663,43 @@ bool _canFormAllSequencesFromCounts(List<String> coreTileIds) {
 }
 
 bool _canFormAllTripletsFromCounts(List<String> coreTileIds) {
+  if (coreTileIds.length < 14 || coreTileIds.length > 18) {
+    return false;
+  }
+
   final counts = _tileCounts(coreTileIds);
   var pairCount = 0;
-  var tripletCount = 0;
+  var meldCount = 0;
+  var quadCount = 0;
 
   for (final count in counts.values) {
     if (count == 2) {
       pairCount += 1;
     } else if (count == 3) {
-      tripletCount += 1;
+      meldCount += 1;
+    } else if (count == 4) {
+      meldCount += 1;
+      quadCount += 1;
     } else if (count != 0) {
       return false;
     }
   }
 
-  return pairCount == 1 && tripletCount == 4;
+  return pairCount == 1 &&
+      meldCount == 4 &&
+      quadCount == coreTileIds.length - 14;
+}
+
+bool _isAllQuadruplets(HandTileGroupingResult grouping) {
+  final melds = grouping.groups
+      .where((group) => group.type == HandTileGroupType.meld)
+      .toList(growable: false);
+  return melds.length == 4 &&
+      melds.every(
+        (group) =>
+            group.tileIds.length == 4 &&
+            group.tileIds.every((tileId) => tileId == group.tileIds.first),
+      );
 }
 
 bool _isSevenPairs(List<String> coreTileIds) {
@@ -743,10 +779,15 @@ bool _isJewelHandFromCounts({
   required String suit,
   required String dragonTileId,
 }) {
+  if (coreTileIds.length < 14 || coreTileIds.length > 18) {
+    return false;
+  }
+
   final counts = _tileCounts(coreTileIds);
   var pairCount = 0;
-  var tripletCount = 0;
-  var hasDragonTriplet = false;
+  var meldCount = 0;
+  var quadCount = 0;
+  var hasDragonMeld = false;
 
   for (final entry in counts.entries) {
     final count = entry.value;
@@ -765,19 +806,25 @@ bool _isJewelHandFromCounts({
       }
 
       pairCount += 1;
-    } else if (count == 3) {
+    } else if (count == 3 || count == 4) {
       if (!matchesJewelTile) {
         return false;
       }
 
-      tripletCount += 1;
-      hasDragonTriplet = hasDragonTriplet || tileId == dragonTileId;
+      meldCount += 1;
+      if (count == 4) {
+        quadCount += 1;
+      }
+      hasDragonMeld = hasDragonMeld || tileId == dragonTileId;
     } else {
       return false;
     }
   }
 
-  return pairCount == 1 && tripletCount == 4 && hasDragonTriplet;
+  return pairCount == 1 &&
+      meldCount == 4 &&
+      quadCount == coreTileIds.length - 14 &&
+      hasDragonMeld;
 }
 
 int _calculatedFanCount(List<HandTileFanBreakdownItem> breakdown) {
@@ -801,10 +848,6 @@ HandTileReviewStatus _reviewStatusFor({
   required int declaredFanCount,
   required bool winBonusesKnown,
 }) {
-  if (!winBonusesKnown && calculatedFanCount != declaredFanCount) {
-    return HandTileReviewStatus.unreviewed;
-  }
-
   if (calculatedFanCount == declaredFanCount) {
     return HandTileReviewStatus.matched;
   }
@@ -813,13 +856,17 @@ HandTileReviewStatus _reviewStatusFor({
     return HandTileReviewStatus.underDeclared;
   }
 
+  if (!winBonusesKnown) {
+    return HandTileReviewStatus.unreviewed;
+  }
+
   return HandTileReviewStatus.flagged;
 }
 
 bool _hasTriplet(HandTileGroupingResult grouping, String tileId) {
   return grouping.groups.any(
     (group) =>
-        _isTripletMeld(group) &&
+        _isIdenticalValueMeld(group) &&
         group.tileIds.every((groupTileId) => groupTileId == tileId),
   );
 }
@@ -886,9 +933,9 @@ String? _firstCountedCoreTileId(Map<String, int> counts) {
   return null;
 }
 
-bool _isTripletMeld(HandTileGroup group) {
+bool _isIdenticalValueMeld(HandTileGroup group) {
   return group.type == HandTileGroupType.meld &&
-      group.tileIds.length == 3 &&
+      (group.tileIds.length == 3 || group.tileIds.length == 4) &&
       group.tileIds.every((tileId) => tileId == group.tileIds.first);
 }
 

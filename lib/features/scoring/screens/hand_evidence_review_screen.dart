@@ -364,6 +364,19 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
     _notifyEditorChanged();
   }
 
+  void _clearWinningTile() {
+    if (_isSaving) {
+      return;
+    }
+
+    setState(() {
+      _tileDraft = _tileDraft.clearWinningTile();
+      _hasSavedCurrentDraft = false;
+      _saveError = null;
+    });
+    _notifyEditorChanged();
+  }
+
   void _setPhotoRotationQuarterTurns(int quarterTurns) {
     if (_isSaving) {
       return;
@@ -550,11 +563,13 @@ class _HandEvidenceReviewScreenState extends State<HandEvidenceReviewScreen> {
         final photoImage =
             _photoUri == null ? null : NetworkImage(_photoUri.toString());
         final keyboard = TileKeyboard(
+          key: ValueKey('tileKeyboard.${record.handResultId}'),
           draft: _tileDraft,
           onAddTile: _addTile,
           onRemoveTile: _removeTile,
           onClear: _clearTiles,
           onSetWinningTile: _setWinningTile,
+          onClearWinningTile: _clearWinningTile,
         );
         final currentReview = _currentReviewFor(record);
         final topContent = [
@@ -882,7 +897,7 @@ class _HandEvidenceQueuePanel extends StatelessWidget {
 
 enum _HandEvidenceStatusFilter {
   missingTiles('No tiles'),
-  flagged('Flagged'),
+  flagged('Review'),
   done('Done'),
   all('All');
 
@@ -1343,10 +1358,12 @@ Map<String, EventHandLedgerEntry> _ledgerEntriesByHandIdFrom(
 
 String? _reviewStatusBadge(HandTileReviewStatus? status) {
   return switch (status) {
+    HandTileReviewStatus.unreviewed => 'Unreviewed',
+    HandTileReviewStatus.flagged => 'Over',
     HandTileReviewStatus.matched => 'Matched',
     HandTileReviewStatus.underDeclared => 'Under',
     HandTileReviewStatus.resolved => 'Resolved',
-    _ => null,
+    null => null,
   };
 }
 

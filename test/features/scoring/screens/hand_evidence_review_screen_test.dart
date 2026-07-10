@@ -122,7 +122,8 @@ void main() {
     expect(find.textContaining('Taken'), findsNothing);
     expect(find.text('Needs tiles'), findsNothing);
     expect(find.text('No tiles'), findsOneWidget);
-    expect(find.text('Flagged'), findsOneWidget);
+    expect(find.text('Review'), findsOneWidget);
+    expect(find.text('Flagged'), findsNothing);
     expect(find.text('Done'), findsOneWidget);
     expect(find.text('All'), findsOneWidget);
     expect(find.text('Needs review'), findsNothing);
@@ -209,7 +210,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('No tiles'), findsOneWidget);
-    expect(find.text('Flagged'), findsOneWidget);
+    expect(find.text('Review'), findsOneWidget);
+    expect(find.text('Flagged'), findsNothing);
     expect(find.text('Done'), findsOneWidget);
     expect(find.text('All'), findsOneWidget);
     expect(find.text("No Tile Ava's winning hand"), findsOneWidget);
@@ -217,12 +219,14 @@ void main() {
     expect(find.text("Flagged Cam's winning hand"), findsNothing);
     expect(find.text("Under Eli's winning hand"), findsNothing);
 
-    await _tapStatusTab(tester, 'Flagged');
+    await _tapStatusTab(tester, 'Review');
     await tester.pumpAndSettle();
 
     expect(find.text("Unreviewed Ben's winning hand"), findsOneWidget);
     expect(find.text("No Tile Ava's winning hand"), findsNothing);
     expect(find.text("Flagged Cam's winning hand"), findsOneWidget);
+    expect(find.text('Unreviewed'), findsOneWidget);
+    expect(find.text('Over'), findsOneWidget);
     expect(find.text("Under Eli's winning hand"), findsNothing);
 
     await _tapStatusTab(tester, 'Done');
@@ -698,6 +702,70 @@ void main() {
     expect(_lastFilledButton(tester).onPressed, isNotNull);
   });
 
+  testWidgets('saves a 15-tile hand with one kong', (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          declaredFanCount: 1,
+          seatWindTileId: 'west',
+          roundWindTileId: 'north',
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+    await _enterTileFixture(tester, [
+      'East',
+      'East',
+      'East',
+      'East',
+      '1M',
+      '2M',
+      '3M',
+      '1D',
+      '2D',
+      '3D',
+      '1B',
+      '2B',
+      '3B',
+      'South',
+      'South',
+    ]);
+
+    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNotNull);
+    await tester.tap(find.text('Save Tiles'));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedTilesJson?['tiles'], hasLength(15));
+    final groups = repository.savedTilesJson?['groups'] as List<dynamic>;
+    expect(
+      groups.where((group) {
+        if (group is! Map<String, dynamic>) {
+          return false;
+        }
+        final tiles = group['tiles'];
+        return tiles is List<dynamic> && tiles.length == 4;
+      }),
+      hasLength(1),
+    );
+    expect(repository.savedCalculationVersion, handTileCalculationVersion);
+  });
+
   testWidgets('shows special hands as saveable without invalid grouping',
       (tester) async {
     await tester.pumpWidget(
@@ -1081,17 +1149,19 @@ void main() {
     expect(_lastFilledButton(tester).onPressed, isNotNull);
     final staleSave = _lastFilledButton(tester).onPressed;
 
-    await tester.tap(
-      find.byKey(TileKeyboard.selectedTileKey('plum_1', 14)),
-    );
+    final plumTile = find.byKey(TileKeyboard.selectedTileKey('plum_1', 14));
+    await tester.ensureVisible(plumTile);
+    await tester.pumpAndSettle();
+    await tester.tap(plumTile);
     await tester.pumpAndSettle();
 
     expect(find.text('No Changes'), findsOneWidget);
     expect(_lastFilledButton(tester).onPressed, isNull);
 
-    await tester.tap(
-      find.byKey(TileKeyboard.selectedTileKey('man_1', 0)),
-    );
+    final manTile = find.byKey(TileKeyboard.selectedTileKey('man_1', 0));
+    await tester.ensureVisible(manTile);
+    await tester.pumpAndSettle();
+    await tester.tap(manTile);
     await tester.pumpAndSettle();
     await _tapTile(tester, '1M');
 
@@ -1101,6 +1171,192 @@ void main() {
     staleSave?.call();
     await tester.pumpAndSettle();
     expect(repository.savedTilesJson, isNull);
+  });
+
+  testWidgets('setting then clearing winning tile restores no changes',
+      (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          tileEntry: _tileEntry(
+            handResultId: 'hand_01',
+            reviewStatus: HandTileReviewStatus.unreviewed,
+            tilesJson: _validSavedHandTilesJson,
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _showAllHands(tester);
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TileKeyboard.setWinningTileModeKey));
+    await tester.pump();
+    await tester.tap(find.byKey(TileKeyboard.selectedTileKey('man_1', 0)));
+    await tester.pumpAndSettle();
+    expect(find.text('Save Tiles'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNotNull);
+    final staleSave = _lastFilledButton(tester).onPressed;
+
+    await tester.tap(find.byKey(TileKeyboard.clearWinningTileKey));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unknown'), findsOneWidget);
+    expect(find.text('No Changes'), findsOneWidget);
+    expect(_lastFilledButton(tester).onPressed, isNull);
+
+    staleSave?.call();
+    await tester.pumpAndSettle();
+    expect(repository.savedTilesJson, isNull);
+  });
+
+  testWidgets('setting winning tile persists known tile id', (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          tileEntry: _tileEntry(
+            handResultId: 'hand_01',
+            reviewStatus: HandTileReviewStatus.unreviewed,
+            tilesJson: _validSavedHandTilesJson,
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _showAllHands(tester);
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TileKeyboard.setWinningTileModeKey));
+    await tester.pump();
+    await tester.tap(find.byKey(TileKeyboard.selectedTileKey('man_1', 0)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save Tiles'));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedTilesJson?['winningTileKnown'], isTrue);
+    expect(repository.savedTilesJson?['winningTile'], 'man_1');
+  });
+
+  testWidgets('clearing winning tile persists unknown without tile id',
+      (tester) async {
+    final repository = _FakeMosaicProfileRepository(
+      records: [
+        _reviewRecord(
+          id: 'photo_01',
+          handResultId: 'hand_01',
+          clientPhotoId: 'client_photo_01',
+          capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+          tileEntry: _tileEntry(
+            handResultId: 'hand_01',
+            reviewStatus: HandTileReviewStatus.unreviewed,
+            tilesJson: _validSavedHandTilesJsonWithWinningTile,
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _showAllHands(tester);
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TileKeyboard.clearWinningTileKey));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save Tiles'));
+    await tester.pumpAndSettle();
+
+    expect(repository.savedTilesJson?['winningTileKnown'], isFalse);
+    expect(repository.savedTilesJson?.containsKey('winningTile'), isFalse);
+    expect(repository.savedTilesJson?.containsKey('winningTileId'), isFalse);
+  });
+
+  testWidgets('switching hands exits winning tile mode', (tester) async {
+    tester.view.physicalSize = const Size(1200, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEvidenceReviewScreen(
+          eventId: 'evt_01',
+          mosaicProfileRepository: _FakeMosaicProfileRepository(
+            records: [
+              _reviewRecord(
+                id: 'photo_01',
+                handResultId: 'hand_01',
+                clientPhotoId: 'client_photo_01',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 30),
+                tileEntry: _tileEntry(
+                  handResultId: 'hand_01',
+                  reviewStatus: HandTileReviewStatus.unreviewed,
+                  tilesJson: _validSavedHandTilesJson,
+                ),
+              ),
+              _reviewRecord(
+                id: 'photo_02',
+                handResultId: 'hand_02',
+                clientPhotoId: 'client_photo_02',
+                capturedAt: DateTime.utc(2026, 6, 25, 18, 45),
+                tileEntry: _tileEntry(
+                  handResultId: 'hand_02',
+                  reviewStatus: HandTileReviewStatus.unreviewed,
+                  tilesJson: _validSavedHandTilesJson,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _showAllHands(tester);
+    await tester.tap(find.text('Photo 1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(TileKeyboard.setWinningTileModeKey));
+    await tester.pump();
+    expect(find.text('Tap the winning tile below'), findsOneWidget);
+
+    await tester.tap(find.text('Photo 2'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tap the winning tile below'), findsNothing);
+    expect(find.byKey(TileKeyboard.setWinningTileModeKey), findsOneWidget);
   });
 
   testWidgets('shows saved confirmation after successful tile save',
@@ -1777,7 +2033,7 @@ void main() {
     expect(find.text('Under'), findsOneWidget);
   });
 
-  testWidgets('saves historical unknown win bonus mismatch as unreviewed',
+  testWidgets('saves historical unknown win bonus overage as under declared',
       (tester) async {
     final repository = _FakeMosaicProfileRepository(
       records: [
@@ -1810,7 +2066,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.savedCalculatedFanCount, 3);
-    expect(repository.savedReviewStatus, HandTileReviewStatus.unreviewed);
+    expect(repository.savedReviewStatus, HandTileReviewStatus.underDeclared);
   });
 
   testWidgets('uses review row wind context when saving calculated fan',
@@ -2233,6 +2489,31 @@ const _validSavedHandTilesJson = {
   ],
   'flowers': <String>[],
   'winningTileKnown': false,
+  'photoRotationQuarterTurns': 0,
+  'groups': <Object>[],
+};
+
+const _validSavedHandTilesJsonWithWinningTile = {
+  'schemaVersion': 1,
+  'tiles': [
+    'man_1',
+    'man_2',
+    'man_3',
+    'dot_4',
+    'dot_5',
+    'dot_6',
+    'bamboo_1',
+    'bamboo_2',
+    'bamboo_3',
+    'east',
+    'east',
+    'east',
+    'south',
+    'south',
+  ],
+  'flowers': <String>[],
+  'winningTile': 'man_3',
+  'winningTileKnown': true,
   'photoRotationQuarterTurns': 0,
   'groups': <Object>[],
 };

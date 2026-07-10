@@ -58,6 +58,112 @@ void main() {
     expect(result.grouping.isValid, isFalse);
   });
 
+  test('one-kong hand is complete and saveable', () {
+    final result = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'east',
+          'east',
+          'east',
+          'east',
+          'man_1',
+          'man_2',
+          'man_3',
+          'dot_1',
+          'dot_2',
+          'dot_3',
+          'bamboo_1',
+          'bamboo_2',
+          'bamboo_3',
+          'south',
+          'south',
+        ],
+      ),
+      declaredFanCount: 1,
+      seatWindTileId: 'west',
+      roundWindTileId: 'north',
+      isSelfDraw: false,
+    );
+
+    expect(result.grouping.isValid, isTrue);
+    expect(result.isComplete, isTrue);
+    expect(result.canSave, isTrue);
+    expect(result.calculatedFanCount, 1);
+    expect(result.reviewStatus, HandTileReviewStatus.matched);
+  });
+
+  test('wind and dragon kongs count as value melds', () {
+    final result = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'east',
+          'east',
+          'east',
+          'east',
+          'red',
+          'red',
+          'red',
+          'red',
+          'man_1',
+          'man_2',
+          'man_3',
+          'dot_1',
+          'dot_2',
+          'dot_3',
+          'south',
+          'south',
+        ],
+      ),
+      declaredFanCount: 3,
+      seatWindTileId: 'east',
+      roundWindTileId: 'west',
+      isSelfDraw: false,
+    );
+
+    expect(result.canSave, isTrue);
+    expect(_fanValueFor(result, 'Seat Wind'), 1);
+    expect(_fanValueFor(result, 'Red Dragon'), 1);
+    expect(result.calculatedFanCount, 3);
+    expect(result.reviewStatus, HandTileReviewStatus.matched);
+  });
+
+  test('four kongs score all quadruplets instead of all triplets', () {
+    final result = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'man_2',
+          'man_2',
+          'man_2',
+          'man_2',
+          'dot_3',
+          'dot_3',
+          'dot_3',
+          'dot_3',
+          'bamboo_4',
+          'bamboo_4',
+          'bamboo_4',
+          'bamboo_4',
+          'east',
+          'east',
+          'east',
+          'east',
+          'red',
+          'red',
+        ],
+      ),
+      declaredFanCount: 13,
+      seatWindTileId: 'south',
+      roundWindTileId: 'west',
+      isSelfDraw: false,
+    );
+
+    expect(result.canSave, isTrue);
+    expect(_fanValueFor(result, 'All Quadruplets'), 13);
+    expect(_tileRuleLabelsFor(result), isNot(contains('All Triplets')));
+    expect(result.calculatedFanCount, 13);
+    expect(result.reviewStatus, HandTileReviewStatus.matched);
+  });
+
   test('seven pairs can save and scores special shape plus no flowers', () {
     final result = calculateHandTileFanReview(
       draft: HandTileEntryDraft(
@@ -662,6 +768,37 @@ void main() {
     expect(_tileRuleLabelsFor(result), isNot(contains('White Dragon')));
   });
 
+  test('dragon kong participates in big three dragons', () {
+    final result = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'red',
+          'red',
+          'red',
+          'red',
+          'green',
+          'green',
+          'green',
+          'white',
+          'white',
+          'white',
+          'man_1',
+          'man_2',
+          'man_3',
+          'south',
+          'south',
+        ],
+      ),
+      declaredFanCount: 12,
+      seatWindTileId: 'east',
+      roundWindTileId: 'north',
+      isSelfDraw: false,
+    );
+
+    expect(_fanValueFor(result, 'Big Three Dragons'), 8);
+    expect(result.calculatedFanCount, 12);
+  });
+
   test('jade hand scores jewel fan and replaces lower tile rows', () {
     final draft = HandTileEntryDraft(
       coreTileIds: const [
@@ -794,6 +931,88 @@ void main() {
     expect(_tileRuleLabelsFor(ruby), isNot(contains('Red Dragon')));
   });
 
+  test('jade pearl and ruby hands allow a kong meld', () {
+    final jade = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'bamboo_2',
+          'bamboo_2',
+          'bamboo_2',
+          'bamboo_2',
+          'bamboo_3',
+          'bamboo_3',
+          'bamboo_3',
+          'bamboo_4',
+          'bamboo_4',
+          'bamboo_4',
+          'green',
+          'green',
+          'green',
+          'bamboo_8',
+          'bamboo_8',
+        ],
+      ),
+      declaredFanCount: 13,
+      seatWindTileId: 'east',
+      roundWindTileId: 'south',
+      isSelfDraw: false,
+    );
+    final pearl = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'dot_2',
+          'dot_2',
+          'dot_2',
+          'dot_2',
+          'dot_3',
+          'dot_3',
+          'dot_3',
+          'dot_4',
+          'dot_4',
+          'dot_4',
+          'white',
+          'white',
+          'white',
+          'dot_8',
+          'dot_8',
+        ],
+      ),
+      declaredFanCount: 13,
+      seatWindTileId: 'east',
+      roundWindTileId: 'south',
+      isSelfDraw: false,
+    );
+    final ruby = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'man_2',
+          'man_2',
+          'man_2',
+          'man_2',
+          'man_3',
+          'man_3',
+          'man_3',
+          'man_4',
+          'man_4',
+          'man_4',
+          'red',
+          'red',
+          'red',
+          'man_8',
+          'man_8',
+        ],
+      ),
+      declaredFanCount: 13,
+      seatWindTileId: 'east',
+      roundWindTileId: 'south',
+      isSelfDraw: false,
+    );
+
+    expect(_fanValueFor(jade, 'Jade'), 13);
+    expect(_fanValueFor(pearl, 'Pearl'), 13);
+    expect(_fanValueFor(ruby, 'Ruby'), 13);
+  });
+
   test('ambiguous all-triplets counts include all triplets tile rule', () {
     final draft = HandTileEntryDraft(
       coreTileIds: const [
@@ -863,6 +1082,193 @@ void main() {
     expect(_tileRuleLabelsFor(result), isNot(contains('Red Dragon')));
     expect(_tileRuleLabelsFor(result), isNot(contains('Green Dragon')));
     expect(_tileRuleLabelsFor(result), isNot(contains('White Dragon')));
+  });
+
+  test('all honours scores ten fan and replaces all triplets', () {
+    final result = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'east',
+          'east',
+          'east',
+          'south',
+          'south',
+          'south',
+          'red',
+          'red',
+          'red',
+          'green',
+          'green',
+          'green',
+          'white',
+          'white',
+        ],
+      ),
+      declaredFanCount: 13,
+      seatWindTileId: 'west',
+      roundWindTileId: 'north',
+      isSelfDraw: false,
+    );
+
+    expect(_fanValueFor(result, 'All Honours'), 10);
+    expect(_tileRuleLabelsFor(result), isNot(contains('All Triplets')));
+  });
+
+  test('all terminals scores thirteen fan and replaces all triplets', () {
+    final result = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'man_1',
+          'man_1',
+          'man_1',
+          'man_9',
+          'man_9',
+          'man_9',
+          'dot_1',
+          'dot_1',
+          'dot_1',
+          'dot_9',
+          'dot_9',
+          'dot_9',
+          'bamboo_1',
+          'bamboo_1',
+        ],
+      ),
+      declaredFanCount: 13,
+      seatWindTileId: 'east',
+      roundWindTileId: 'south',
+      isSelfDraw: false,
+    );
+
+    expect(_fanValueFor(result, 'All Terminals'), 13);
+    expect(_tileRuleLabelsFor(result), isNot(contains('All Triplets')));
+  });
+
+  test('mixed terminals scores four fan and replaces all triplets', () {
+    final result = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'east',
+          'east',
+          'east',
+          'man_1',
+          'man_1',
+          'man_1',
+          'dot_9',
+          'dot_9',
+          'dot_9',
+          'bamboo_1',
+          'bamboo_1',
+          'bamboo_1',
+          'red',
+          'red',
+        ],
+      ),
+      declaredFanCount: 5,
+      seatWindTileId: 'south',
+      roundWindTileId: 'west',
+      isSelfDraw: false,
+    );
+
+    expect(_fanValueFor(result, 'Mixed Terminals'), 4);
+    expect(_tileRuleLabelsFor(result), isNot(contains('All Triplets')));
+    expect(result.calculatedFanCount, 5);
+  });
+
+  test('small four winds replaces individual wind rows', () {
+    final result = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'east',
+          'east',
+          'east',
+          'south',
+          'south',
+          'south',
+          'west',
+          'west',
+          'west',
+          'north',
+          'north',
+          'man_1',
+          'man_2',
+          'man_3',
+        ],
+      ),
+      declaredFanCount: 10,
+      seatWindTileId: 'east',
+      roundWindTileId: 'south',
+      isSelfDraw: false,
+    );
+
+    expect(_fanValueFor(result, 'Small Four Winds'), 6);
+    expect(_tileRuleLabelsFor(result), isNot(contains('Seat Wind')));
+    expect(_tileRuleLabelsFor(result), isNot(contains('Round Wind')));
+    expect(result.calculatedFanCount, 10);
+  });
+
+  test('big four winds replaces small and individual wind rows', () {
+    final result = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'east',
+          'east',
+          'east',
+          'south',
+          'south',
+          'south',
+          'west',
+          'west',
+          'west',
+          'north',
+          'north',
+          'north',
+          'red',
+          'red',
+        ],
+      ),
+      declaredFanCount: 13,
+      seatWindTileId: 'east',
+      roundWindTileId: 'south',
+      isSelfDraw: false,
+    );
+
+    expect(_fanValueFor(result, 'Big Four Winds'), 13);
+    expect(_tileRuleLabelsFor(result), isNot(contains('Small Four Winds')));
+    expect(_tileRuleLabelsFor(result), isNot(contains('Seat Wind')));
+    expect(_tileRuleLabelsFor(result), isNot(contains('Round Wind')));
+    expect(result.calculatedFanCount, 13);
+  });
+
+  test('wind kong participates in big four winds', () {
+    final result = calculateHandTileFanReview(
+      draft: HandTileEntryDraft(
+        coreTileIds: const [
+          'east',
+          'east',
+          'east',
+          'east',
+          'south',
+          'south',
+          'south',
+          'west',
+          'west',
+          'west',
+          'north',
+          'north',
+          'north',
+          'red',
+          'red',
+        ],
+      ),
+      declaredFanCount: 13,
+      seatWindTileId: 'east',
+      roundWindTileId: 'south',
+      isSelfDraw: false,
+    );
+
+    expect(_fanValueFor(result, 'Big Four Winds'), 13);
+    expect(result.calculatedFanCount, 13);
   });
 
   test('adds known win bonus fan to calculated fan', () {
@@ -973,7 +1379,8 @@ void main() {
     expect(result.reviewStatus, HandTileReviewStatus.unreviewed);
   });
 
-  test('unknown historical win bonuses keep mismatches unreviewed', () {
+  test('unknown historical win bonuses still detect provable under-declaration',
+      () {
     final draft = HandTileEntryDraft(
       coreTileIds: const [
         'east',
@@ -1004,11 +1411,11 @@ void main() {
     );
 
     expect(result.calculatedFanCount, greaterThan(3));
-    expect(result.reviewStatus, HandTileReviewStatus.unreviewed);
+    expect(result.reviewStatus, HandTileReviewStatus.underDeclared);
   });
 
   test('exposes calculation version constant', () {
-    expect(handTileCalculationVersion, 'hk_tile_review_v2');
+    expect(handTileCalculationVersion, 'hk_tile_review_v3');
   });
 }
 

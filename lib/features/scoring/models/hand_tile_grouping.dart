@@ -50,7 +50,7 @@ HandTileGroupingResult groupStandardWinningHand(List<String> coreTileIds) {
     for (final tileId in coreTileIds) MahjongTile.byId(tileId),
   ];
 
-  if (tiles.length != 14) {
+  if (tiles.length < 14 || tiles.length > 18) {
     return HandTileGroupingResult.invalid();
   }
 
@@ -71,7 +71,10 @@ HandTileGroupingResult groupStandardWinningHand(List<String> coreTileIds) {
     counts[tile.id] = nextCount;
   }
 
-  final groups = _findStandardGroups(counts);
+  final groups = _findStandardGroups(
+    counts,
+    requiredQuadCount: tiles.length - 14,
+  );
   if (groups == null) {
     return HandTileGroupingResult.invalid();
   }
@@ -82,14 +85,21 @@ HandTileGroupingResult groupStandardWinningHand(List<String> coreTileIds) {
   );
 }
 
-List<HandTileGroup>? _findStandardGroups(Map<String, int> counts) {
+List<HandTileGroup>? _findStandardGroups(
+  Map<String, int> counts, {
+  required int requiredQuadCount,
+}) {
   for (final tile in allMahjongTiles.where((tile) => tile.isCore)) {
     if ((counts[tile.id] ?? 0) < 2) {
       continue;
     }
 
     counts[tile.id] = (counts[tile.id] ?? 0) - 2;
-    final melds = _findMeldGroups(counts);
+    final melds = _findMeldGroups(
+      counts,
+      meldsRemaining: 4,
+      quadsRemaining: requiredQuadCount,
+    );
     counts[tile.id] = (counts[tile.id] ?? 0) + 2;
 
     if (melds != null) {
@@ -106,14 +116,27 @@ List<HandTileGroup>? _findStandardGroups(Map<String, int> counts) {
   return null;
 }
 
-List<HandTileGroup>? _findMeldGroups(Map<String, int> counts) {
+List<HandTileGroup>? _findMeldGroups(
+  Map<String, int> counts, {
+  required int meldsRemaining,
+  required int quadsRemaining,
+}) {
   final remainingTileCount = counts.values.fold<int>(
     0,
     (total, count) => total + count,
   );
 
-  if (remainingTileCount == 0) {
+  final requiredTileCount = meldsRemaining * 3 + quadsRemaining;
+  if (remainingTileCount != requiredTileCount) {
+    return null;
+  }
+
+  if (remainingTileCount == 0 && meldsRemaining == 0 && quadsRemaining == 0) {
     return [];
+  }
+
+  if (meldsRemaining == 0) {
+    return null;
   }
 
   final tileId = _firstTileIdWithCount(counts);
@@ -121,9 +144,30 @@ List<HandTileGroup>? _findMeldGroups(Map<String, int> counts) {
     return [];
   }
 
+  if (quadsRemaining > 0 && (counts[tileId] ?? 0) >= 4) {
+    final quad = [tileId, tileId, tileId, tileId];
+    final result = _tryMeld(
+      counts,
+      quad,
+      meldsRemaining: meldsRemaining - 1,
+      quadsRemaining: quadsRemaining - 1,
+    );
+    if (result != null) {
+      return [
+        HandTileGroup(type: HandTileGroupType.meld, tileIds: quad),
+        ...result,
+      ];
+    }
+  }
+
   if ((counts[tileId] ?? 0) >= 3) {
     final triplet = [tileId, tileId, tileId];
-    final result = _tryMeld(counts, triplet);
+    final result = _tryMeld(
+      counts,
+      triplet,
+      meldsRemaining: meldsRemaining - 1,
+      quadsRemaining: quadsRemaining,
+    );
     if (result != null) {
       return [
         HandTileGroup(type: HandTileGroupType.meld, tileIds: triplet),
@@ -134,7 +178,12 @@ List<HandTileGroup>? _findMeldGroups(Map<String, int> counts) {
 
   final sequence = _sequenceStartingAt(tileId, counts);
   if (sequence != null) {
-    final result = _tryMeld(counts, sequence);
+    final result = _tryMeld(
+      counts,
+      sequence,
+      meldsRemaining: meldsRemaining - 1,
+      quadsRemaining: quadsRemaining,
+    );
     if (result != null) {
       return [
         HandTileGroup(type: HandTileGroupType.meld, tileIds: sequence),
@@ -146,12 +195,21 @@ List<HandTileGroup>? _findMeldGroups(Map<String, int> counts) {
   return null;
 }
 
-List<HandTileGroup>? _tryMeld(Map<String, int> counts, List<String> tileIds) {
+List<HandTileGroup>? _tryMeld(
+  Map<String, int> counts,
+  List<String> tileIds, {
+  required int meldsRemaining,
+  required int quadsRemaining,
+}) {
   for (final tileId in tileIds) {
     counts[tileId] = (counts[tileId] ?? 0) - 1;
   }
 
-  final result = _findMeldGroups(counts);
+  final result = _findMeldGroups(
+    counts,
+    meldsRemaining: meldsRemaining,
+    quadsRemaining: quadsRemaining,
+  );
 
   for (final tileId in tileIds) {
     counts[tileId] = (counts[tileId] ?? 0) + 1;

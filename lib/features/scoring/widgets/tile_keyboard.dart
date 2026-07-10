@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/features/scoring/models/hand_tile_entry_draft.dart';
 import 'package:mosaic/features/scoring/models/mahjong_tile.dart';
 
-class TileKeyboard extends StatelessWidget {
+class TileKeyboard extends StatefulWidget {
   const TileKeyboard({
     super.key,
     required this.draft,
@@ -10,12 +10,18 @@ class TileKeyboard extends StatelessWidget {
     required this.onRemoveTile,
     required this.onClear,
     required this.onSetWinningTile,
+    required this.onClearWinningTile,
   });
 
   static const selectedTrayScrollerKey =
       Key('tileKeyboardSelectedTrayScroller');
   static const selectedTrayKey = Key('tileKeyboardSelectedTray');
   static const tileListKey = Key('tileKeyboardTileList');
+  static const setWinningTileModeKey = Key('tileKeyboardSetWinningTileMode');
+  static const cancelWinningTileModeKey =
+      Key('tileKeyboardCancelWinningTileMode');
+  static const clearWinningTileKey = Key('tileKeyboardClearWinningTile');
+  static const changeWinningTileKey = Key('tileKeyboardChangeWinningTile');
   static Key selectedTileKey(String tileId, int index) =>
       ValueKey('tileKeyboardSelectedTile.$index.$tileId');
 
@@ -24,6 +30,179 @@ class TileKeyboard extends StatelessWidget {
   final ValueChanged<String> onRemoveTile;
   final VoidCallback onClear;
   final ValueChanged<String> onSetWinningTile;
+  final VoidCallback onClearWinningTile;
+
+  @override
+  State<TileKeyboard> createState() => _TileKeyboardState();
+}
+
+class _TileKeyboardState extends State<TileKeyboard> {
+  bool _choosingWinningTile = false;
+  String? _winningTileOccurrenceTileId;
+  int? _winningTileOccurrence;
+  String? _pendingWinningTileOccurrenceTileId;
+  int? _pendingWinningTileOccurrence;
+  bool _pendingClearWinningTile = false;
+  String? _pendingRemovalTileId;
+  int? _pendingRemovalCount;
+  int _nextPendingRequestGeneration = 0;
+  int? _pendingRequestGeneration;
+
+  int get _effectiveWinningTileOccurrence =>
+      _winningTileOccurrenceTileId == widget.draft.winningTileId
+          ? _winningTileOccurrence ?? 0
+          : 0;
+
+  int _startPendingRequest() {
+    final generation = ++_nextPendingRequestGeneration;
+    _pendingRequestGeneration = generation;
+    return generation;
+  }
+
+  void _schedulePendingRequestExpiration(int generation) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _pendingRequestGeneration != generation) {
+        return;
+      }
+      _clearPendingRequest();
+    });
+  }
+
+  void _clearPendingRequest() {
+    _pendingWinningTileOccurrenceTileId = null;
+    _pendingWinningTileOccurrence = null;
+    _pendingClearWinningTile = false;
+    _pendingRemovalTileId = null;
+    _pendingRemovalCount = null;
+    _pendingRequestGeneration = null;
+  }
+
+  void _enterWinningTileMode() {
+    if (widget.draft.selectedCount == 0) {
+      return;
+    }
+    setState(() {
+      _choosingWinningTile = true;
+    });
+  }
+
+  void _cancelWinningTileMode() {
+    setState(() {
+      _choosingWinningTile = false;
+    });
+  }
+
+  void _setWinningTile(String tileId, int occurrence) {
+    widget.onSetWinningTile(tileId);
+    if (!mounted) {
+      return;
+    }
+    final generation = _startPendingRequest();
+    setState(() {
+      _choosingWinningTile = false;
+      _pendingWinningTileOccurrenceTileId = tileId;
+      _pendingWinningTileOccurrence = occurrence;
+      _pendingClearWinningTile = false;
+    });
+    _schedulePendingRequestExpiration(generation);
+  }
+
+  void _removeTile(String tileId) {
+    final matchingCount = _matchingTileCount(widget.draft, tileId);
+    widget.onRemoveTile(tileId);
+    if (!mounted) {
+      return;
+    }
+    final generation = _startPendingRequest();
+    setState(() {
+      _pendingRemovalTileId = tileId;
+      _pendingRemovalCount = matchingCount;
+    });
+    _schedulePendingRequestExpiration(generation);
+  }
+
+  void _clearWinningTile() {
+    widget.onClearWinningTile();
+    if (!mounted) {
+      return;
+    }
+    final generation = _startPendingRequest();
+    setState(() {
+      _choosingWinningTile = false;
+      _pendingWinningTileOccurrenceTileId = null;
+      _pendingWinningTileOccurrence = null;
+      _pendingClearWinningTile = true;
+    });
+    _schedulePendingRequestExpiration(generation);
+  }
+
+  @override
+  void didUpdateWidget(covariant TileKeyboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final draftChanged = !identical(oldWidget.draft, widget.draft);
+    if (draftChanged) {
+      final pendingWinningTileId = _pendingWinningTileOccurrenceTileId;
+      if (pendingWinningTileId != null) {
+        if (widget.draft.winningTileKnown &&
+            widget.draft.winningTileId == pendingWinningTileId) {
+          _winningTileOccurrenceTileId = pendingWinningTileId;
+          _winningTileOccurrence = _pendingWinningTileOccurrence;
+        }
+      }
+
+      if (_pendingClearWinningTile) {
+        if (!widget.draft.winningTileKnown ||
+            widget.draft.winningTileId == null) {
+          _winningTileOccurrenceTileId = null;
+          _winningTileOccurrence = null;
+        }
+      }
+
+      final pendingRemovalTileId = _pendingRemovalTileId;
+      final pendingRemovalCount = _pendingRemovalCount;
+      if (pendingRemovalTileId != null && pendingRemovalCount != null) {
+        final matchingCount =
+            _matchingTileCount(widget.draft, pendingRemovalTileId);
+        if (matchingCount < pendingRemovalCount &&
+            _winningTileOccurrenceTileId == pendingRemovalTileId) {
+          final occurrence = _winningTileOccurrence;
+          if (occurrence != null && occurrence > 0) {
+            _winningTileOccurrence = occurrence - 1;
+          }
+        }
+      }
+      _clearPendingRequest();
+    }
+    if (widget.draft.selectedCount == 0) {
+      _choosingWinningTile = false;
+    }
+    final winningTileId = widget.draft.winningTileId;
+    if (!widget.draft.winningTileKnown || winningTileId == null) {
+      _winningTileOccurrenceTileId = null;
+      _winningTileOccurrence = null;
+      return;
+    }
+    if (_winningTileOccurrenceTileId != winningTileId) {
+      _winningTileOccurrenceTileId = null;
+      _winningTileOccurrence = null;
+      return;
+    }
+    final matchingCount = _matchingTileCount(widget.draft, winningTileId);
+    final occurrence = _winningTileOccurrence;
+    if (matchingCount == 0) {
+      _winningTileOccurrenceTileId = null;
+      _winningTileOccurrence = null;
+    } else if (occurrence != null && occurrence >= matchingCount) {
+      _winningTileOccurrence = matchingCount - 1;
+    }
+  }
+
+  int _matchingTileCount(HandTileEntryDraft draft, String tileId) {
+    return [
+      ...draft.coreTileIds,
+      ...draft.flowerTileIds,
+    ].where((selectedTileId) => selectedTileId == tileId).length;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,33 +210,33 @@ class TileKeyboard extends StatelessWidget {
       _TileSection(
         title: 'Characters',
         tiles: manTiles,
-        draft: draft,
-        onAddTile: onAddTile,
+        draft: widget.draft,
+        onAddTile: widget.onAddTile,
       ),
       _TileSection(
         title: 'Dots',
         tiles: dotTiles,
-        draft: draft,
-        onAddTile: onAddTile,
+        draft: widget.draft,
+        onAddTile: widget.onAddTile,
       ),
       _TileSection(
         title: 'Bamboo',
         tiles: bambooTiles,
-        draft: draft,
-        onAddTile: onAddTile,
+        draft: widget.draft,
+        onAddTile: widget.onAddTile,
       ),
       _TileSection(
         title: 'Honors',
         tiles: honorTiles,
-        draft: draft,
-        onAddTile: onAddTile,
+        draft: widget.draft,
+        onAddTile: widget.onAddTile,
         layout: _TileSectionLayout.honorRows,
       ),
       _TileSection(
         title: 'Flowers / Seasons',
         tiles: flowerSeasonTiles,
-        draft: draft,
-        onAddTile: onAddTile,
+        draft: widget.draft,
+        onAddTile: widget.onAddTile,
         layout: _TileSectionLayout.bonusGrid,
       ),
     ];
@@ -76,14 +255,20 @@ class TileKeyboard extends StatelessWidget {
         return Column(
           children: [
             _SelectedTileTray(
-              draft: draft,
+              draft: widget.draft,
               height: trayHeight,
-              onClear: onClear,
-              onRemoveTile: onRemoveTile,
+              choosingWinningTile: _choosingWinningTile,
+              onClear: widget.onClear,
+              onRemoveTile: _removeTile,
+              onEnterWinningTileMode: _enterWinningTileMode,
+              onCancelWinningTileMode: _cancelWinningTileMode,
+              onSetWinningTile: _setWinningTile,
+              onClearWinningTile: _clearWinningTile,
+              winningTileOccurrence: _effectiveWinningTileOccurrence,
             ),
             Expanded(
               child: SingleChildScrollView(
-                key: tileListKey,
+                key: TileKeyboard.tileListKey,
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -102,17 +287,109 @@ class _SelectedTileTray extends StatelessWidget {
   const _SelectedTileTray({
     required this.draft,
     required this.height,
+    required this.choosingWinningTile,
     required this.onClear,
     required this.onRemoveTile,
+    required this.onEnterWinningTileMode,
+    required this.onCancelWinningTileMode,
+    required this.onSetWinningTile,
+    required this.onClearWinningTile,
+    required this.winningTileOccurrence,
   });
 
   final HandTileEntryDraft draft;
   final double height;
+  final bool choosingWinningTile;
   final VoidCallback onClear;
   final ValueChanged<String> onRemoveTile;
+  final VoidCallback onEnterWinningTileMode;
+  final VoidCallback onCancelWinningTileMode;
+  final void Function(String tileId, int occurrence) onSetWinningTile;
+  final VoidCallback onClearWinningTile;
+  final int winningTileOccurrence;
 
-  static const defaultHeight = 124.0;
+  static const defaultHeight = 156.0;
   static const _tileSize = Size(40, 25);
+
+  Widget _buildWinningTileRow(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
+    if (choosingWinningTile) {
+      return SizedBox(
+        height: 28,
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Tap the winning tile below',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            TextButton(
+              key: TileKeyboard.cancelWinningTileModeKey,
+              onPressed: onCancelWinningTileMode,
+              style: _trayActionStyle(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final winningTileId = draft.winningTileId;
+    final winningTileLabel = draft.winningTileKnown && winningTileId != null
+        ? _selectedTileLabel(MahjongTile.byId(winningTileId))
+        : 'Unknown';
+
+    return SizedBox(
+      height: 28,
+      child: Row(
+        children: [
+          Text(
+            'Winning tile',
+            style: textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              winningTileLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: textTheme.labelMedium,
+            ),
+          ),
+          if (draft.winningTileKnown) ...[
+            TextButton(
+              key: TileKeyboard.clearWinningTileKey,
+              onPressed: onClearWinningTile,
+              style: _trayActionStyle(context),
+              child: const Text('Unknown'),
+            ),
+            TextButton(
+              key: TileKeyboard.changeWinningTileKey,
+              onPressed:
+                  draft.selectedCount == 0 ? null : onEnterWinningTileMode,
+              style: _trayActionStyle(context),
+              child: const Text('Change'),
+            ),
+          ] else
+            TextButton(
+              key: TileKeyboard.setWinningTileModeKey,
+              onPressed:
+                  draft.selectedCount == 0 ? null : onEnterWinningTileMode,
+              style: _trayActionStyle(context),
+              child: const Text('Set'),
+            ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -120,8 +397,13 @@ class _SelectedTileTray extends StatelessWidget {
       ...draft.coreTileIds,
       ...draft.flowerTileIds,
     ];
-
     final colorScheme = Theme.of(context).colorScheme;
+    final compact = height < defaultHeight;
+    final content = _buildContent(
+      context,
+      selectedTileIds,
+      scrollSelectedTiles: !compact,
+    );
 
     return SizedBox(
       key: TileKeyboard.selectedTrayKey,
@@ -134,70 +416,112 @@ class _SelectedTileTray extends StatelessWidget {
             bottom: BorderSide(color: colorScheme.outlineVariant),
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                height: 22,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Selected (${draft.selectedCount})',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: onClear,
-                      style: TextButton.styleFrom(
-                        minimumSize: const Size(44, 22),
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        textStyle: Theme.of(context).textTheme.labelLarge,
-                      ),
-                      child: const Text('Clear'),
-                    ),
-                  ],
+        child: compact
+            ? SingleChildScrollView(
+                key: TileKeyboard.selectedTrayScrollerKey,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: defaultHeight),
+                  child: content,
                 ),
-              ),
-              const SizedBox(height: 2),
-              Expanded(
-                child: selectedTileIds.isEmpty
-                    ? Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'No tiles selected',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      )
-                    : ClipRect(
-                        child: Wrap(
-                          spacing: 4,
-                          runSpacing: 3,
-                          children: [
-                            for (final indexedTile in selectedTileIds.indexed)
-                              _SelectedTileButton(
-                                key: TileKeyboard.selectedTileKey(
-                                  indexedTile.$2,
-                                  indexedTile.$1,
-                                ),
-                                tileId: indexedTile.$2,
-                                selected: draft.winningTileKnown &&
-                                    draft.winningTileId == indexedTile.$2,
-                                size: _tileSize,
-                                onPressed: () => onRemoveTile(indexedTile.$2),
-                              ),
-                          ],
-                        ),
-                      ),
-              ),
+              )
+            : content,
+      ),
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context,
+    List<String> selectedTileIds, {
+    required bool scrollSelectedTiles,
+  }) {
+    final selectedTiles = selectedTileIds.isEmpty
+        ? Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'No tiles selected',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          )
+        : Wrap(
+            spacing: 4,
+            runSpacing: 3,
+            children: [
+              ...selectedTileIds.indexed.map((indexedTile) {
+                final index = indexedTile.$1;
+                final tileId = indexedTile.$2;
+                final occurrence = selectedTileIds
+                    .take(index)
+                    .where((selectedTileId) => selectedTileId == tileId)
+                    .length;
+                return _SelectedTileButton(
+                  key: TileKeyboard.selectedTileKey(
+                    tileId,
+                    index,
+                  ),
+                  tileId: tileId,
+                  selected: draft.winningTileKnown &&
+                      draft.winningTileId == tileId &&
+                      winningTileOccurrence == occurrence,
+                  choosing: choosingWinningTile,
+                  size: _tileSize,
+                  onPressed: () {
+                    if (choosingWinningTile) {
+                      onSetWinningTile(tileId, occurrence);
+                      return;
+                    }
+                    onRemoveTile(tileId);
+                  },
+                );
+              }),
             ],
+          );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Column(
+        mainAxisSize: scrollSelectedTiles ? MainAxisSize.max : MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 22,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Selected (${draft.selectedCount})',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onClear,
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(44, 22),
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    textStyle: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  child: const Text('Clear'),
+                ),
+              ],
+            ),
           ),
-        ),
+          const SizedBox(height: 2),
+          _buildWinningTileRow(context),
+          const SizedBox(height: 4),
+          if (scrollSelectedTiles)
+            Expanded(
+              child: selectedTileIds.isEmpty
+                  ? selectedTiles
+                  : SingleChildScrollView(
+                      primary: false,
+                      child: selectedTiles,
+                    ),
+            )
+          else
+            selectedTiles,
+        ],
       ),
     );
   }
@@ -208,12 +532,14 @@ class _SelectedTileButton extends StatelessWidget {
     super.key,
     required this.tileId,
     required this.selected,
+    required this.choosing,
     required this.size,
     required this.onPressed,
   });
 
   final String tileId;
   final bool selected;
+  final bool choosing;
   final Size size;
   final VoidCallback onPressed;
 
@@ -235,6 +561,9 @@ class _SelectedTileButton extends StatelessWidget {
           side: WidgetStateProperty.resolveWith((states) {
             if (selected || states.contains(WidgetState.selected)) {
               return BorderSide(color: colorScheme.primary, width: 2);
+            }
+            if (choosing) {
+              return BorderSide(color: colorScheme.primary, width: 1.5);
             }
             return BorderSide(color: colorScheme.outlineVariant);
           }),
@@ -274,6 +603,15 @@ String _selectedTileLabel(MahjongTile tile) {
     'winter_4' => 'Win4',
     _ => tile.label,
   };
+}
+
+ButtonStyle _trayActionStyle(BuildContext context) {
+  return TextButton.styleFrom(
+    minimumSize: const Size(44, 24),
+    padding: const EdgeInsets.symmetric(horizontal: 6),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    textStyle: Theme.of(context).textTheme.labelMedium,
+  );
 }
 
 enum _TileSectionLayout {

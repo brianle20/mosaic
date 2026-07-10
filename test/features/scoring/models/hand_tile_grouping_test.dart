@@ -27,6 +27,93 @@ void main() {
         hasLength(1));
   });
 
+  test('groups a 15-tile hand with one kong', () {
+    final result = groupStandardWinningHand([
+      'east',
+      'east',
+      'east',
+      'east',
+      'man_1',
+      'man_2',
+      'man_3',
+      'dot_1',
+      'dot_2',
+      'dot_3',
+      'bamboo_1',
+      'bamboo_2',
+      'bamboo_3',
+      'south',
+      'south',
+    ]);
+
+    expect(result.isValid, isTrue);
+    expect(
+      result.groups.where((group) => group.type == HandTileGroupType.meld),
+      hasLength(4),
+    );
+    expect(
+      result.groups.where((group) => group.tileIds.length == 4).single.toJson(),
+      {
+        'type': 'meld',
+        'tiles': ['east', 'east', 'east', 'east'],
+      },
+    );
+  });
+
+  test('groups an 18-tile hand with four kongs', () {
+    final result = groupStandardWinningHand([
+      'east',
+      'east',
+      'east',
+      'east',
+      'south',
+      'south',
+      'south',
+      'south',
+      'west',
+      'west',
+      'west',
+      'west',
+      'north',
+      'north',
+      'north',
+      'north',
+      'red',
+      'red',
+    ]);
+
+    expect(result.isValid, isTrue);
+    expect(result.groups.where((group) => group.tileIds.length == 4),
+        hasLength(4));
+    expect(
+      result.groups.where((group) => group.type == HandTileGroupType.pair),
+      hasLength(1),
+    );
+  });
+
+  test('rejects a 15-tile hand without a kong', () {
+    final result = groupStandardWinningHand([
+      'man_1',
+      'man_2',
+      'man_3',
+      'man_4',
+      'man_5',
+      'man_6',
+      'dot_1',
+      'dot_2',
+      'dot_3',
+      'bamboo_1',
+      'bamboo_2',
+      'bamboo_3',
+      'south',
+      'south',
+      'east',
+    ]);
+
+    expect(result.isValid, isFalse);
+    expect(result.groups, isEmpty);
+  });
+
   test('returns invalid result for incomplete hand', () {
     final result = groupStandardWinningHand(['east', 'east', 'east']);
 
