@@ -11,6 +11,53 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 import 'package:mosaic/features/scoring/screens/hand_entry_screen.dart';
 import 'package:mosaic/services/media/hand_photo_service.dart';
+import 'package:mosaic/services/media/hand_photo_storage.dart';
+
+CapturedHandPhoto _photo(String clientPhotoId, String localPath) {
+  return CapturedHandPhoto(
+    clientPhotoId: clientPhotoId,
+    localPath: localPath,
+    capturedAt: DateTime.utc(2026, 6, 25, 18),
+  );
+}
+
+class _SequencedHandPhotoService implements HandPhotoService {
+  _SequencedHandPhotoService(this.photos);
+
+  final List<CapturedHandPhoto?> photos;
+  int _nextPhoto = 0;
+
+  @override
+  Future<CapturedHandPhoto?> captureWinningHandPhoto() async {
+    return photos[_nextPhoto++];
+  }
+}
+
+class _FakeHandPhotoStorage implements HandPhotoStorage {
+  _FakeHandPhotoStorage({Set<String>? existing})
+      : existingPaths = {...?existing};
+
+  final Set<String> existingPaths;
+  final List<String> deletedPaths = [];
+
+  @override
+  Future<void> delete(String path) async {
+    deletedPaths.add(path);
+    existingPaths.remove(path);
+  }
+
+  @override
+  Future<bool> exists(String path) async => existingPaths.contains(path);
+
+  @override
+  Future<String> persist({
+    required String sourcePath,
+    required String photoId,
+  }) async {
+    existingPaths.add(sourcePath);
+    return sourcePath;
+  }
+}
 
 class _FakeHandPhotoService implements HandPhotoService {
   _FakeHandPhotoService({CapturedHandPhoto? photo})
@@ -333,6 +380,46 @@ void main() {
     'gst_west': 'Carol Ng',
     'gst_north': 'Dee Wu',
   };
+
+  Future<void> pumpHandEntry(
+    WidgetTester tester, {
+    required _RecordingSessionRepository repository,
+    required HandPhotoService handPhotoService,
+    required HandPhotoStorage handPhotoStorage,
+  }) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => HandEntryScreen(
+                    sessionDetail: buildDetail(),
+                    guestNamesById: seatNames,
+                    sessionRepository: repository,
+                    handPhotoService: handPhotoService,
+                    handPhotoStorage: handPhotoStorage,
+                  ),
+                ),
+              );
+            },
+            child: const Text('Open hand entry'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open hand entry'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> completeValidWinAndSave(WidgetTester tester) async {
+    await tapVisible(
+      tester,
+      find.widgetWithText(OutlinedButton, 'East\nAlice Wong'),
+    );
+    await tapVisible(tester, find.text('Save Hand'));
+  }
 
   Map<String, dynamic> existingWinHandJson() {
     return {
@@ -839,6 +926,50 @@ void main() {
     );
     expect(summary.data, 'Select a winner.');
     expect(repository.recordedInput, isNull);
+  });
+
+  testWidgets('retake deletes superseded photo and submit transfers ownership',
+      (tester) async {
+    final service = _SequencedHandPhotoService([
+      _photo('photo_01', '/local/one.jpg'),
+      _photo('photo_02', '/local/two.jpg'),
+    ]);
+    final storage = _FakeHandPhotoStorage(existing: {
+      '/local/one.jpg',
+      '/local/two.jpg',
+    });
+    final repository = _RecordingSessionRepository();
+    await pumpHandEntry(
+      tester,
+      repository: repository,
+      handPhotoService: service,
+      handPhotoStorage: storage,
+    );
+
+    await tapVisible(tester, find.text('Capture winning hand photo'));
+    await tapVisible(tester, find.text('Retake winning hand photo'));
+    expect(storage.deletedPaths, ['/local/one.jpg']);
+
+    await completeValidWinAndSave(tester);
+    expect(repository.recordedInput!.photoLocalPath, '/local/two.jpg');
+    expect(storage.deletedPaths, ['/local/one.jpg']);
+  });
+
+  testWidgets('leaving an unsubmitted draft deletes its captured photo',
+      (tester) async {
+    final storage = _FakeHandPhotoStorage(existing: {'/local/one.jpg'});
+    await pumpHandEntry(
+      tester,
+      repository: _RecordingSessionRepository(),
+      handPhotoService: _SequencedHandPhotoService([
+        _photo('photo_01', '/local/one.jpg'),
+      ]),
+      handPhotoStorage: storage,
+    );
+    await tapVisible(tester, find.text('Capture winning hand photo'));
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(storage.deletedPaths, ['/local/one.jpg']);
   });
 
   testWidgets(
@@ -1545,6 +1676,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Winning hand photo uploaded'), findsOneWidget);
-    expect(find.text('photo_client_01'), findsOneWidget);
+    expect(find.text('photo_client_01'), findsNothing);
   });
 }

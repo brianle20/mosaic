@@ -10,6 +10,7 @@ import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
 import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 import 'package:mosaic/services/media/hand_photo_service.dart';
+import 'package:mosaic/services/media/hand_photo_storage.dart';
 
 enum _PlayerScanTarget { winner, discarder, penaltyCaller }
 
@@ -24,6 +25,7 @@ class HandEntryScreen extends StatefulWidget {
     required this.guestNamesById,
     required this.sessionRepository,
     this.handPhotoService,
+    this.handPhotoStorage,
     this.initialHand,
   });
 
@@ -31,6 +33,7 @@ class HandEntryScreen extends StatefulWidget {
   final Map<String, String> guestNamesById;
   final SessionRepository sessionRepository;
   final HandPhotoService? handPhotoService;
+  final HandPhotoStorage? handPhotoStorage;
   final HandResultRecord? initialHand;
 
   @override
@@ -49,8 +52,10 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   bool _isCapturingPhoto = false;
   bool _showValidationSummary = false;
   bool _winBonusesExpanded = false;
+  bool _photoOwnershipTransferred = false;
   CapturedHandPhoto? _capturedPhoto;
   late final HandPhotoService _handPhotoService;
+  late final HandPhotoStorage _handPhotoStorage;
   late int _fanCount;
   late List<HandWinBonus>? _winBonuses;
 
@@ -58,8 +63,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   void initState() {
     super.initState();
     _sessionDetail = widget.sessionDetail;
-    _handPhotoService =
-        widget.handPhotoService ?? ImagePickerHandPhotoService();
+    _handPhotoStorage = widget.handPhotoStorage ?? LocalHandPhotoStorage();
+    _handPhotoService = widget.handPhotoService ??
+        ImagePickerHandPhotoService(storage: _handPhotoStorage);
     _controller =
         HandEntryController(sessionRepository: widget.sessionRepository)
           ..addListener(_handleUpdate);
@@ -89,6 +95,10 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
 
   @override
   void dispose() {
+    final photo = _capturedPhoto;
+    if (photo != null && !_photoOwnershipTransferred) {
+      unawaited(_handPhotoStorage.delete(photo.localPath));
+    }
     _controller
       ..removeListener(_handleUpdate)
       ..dispose();
@@ -231,6 +241,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     });
 
     try {
+      final previousPhoto = _capturedPhoto;
       final captured = await _handPhotoService.captureWinningHandPhoto();
       if (!mounted || captured == null) {
         return;
@@ -239,6 +250,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       setState(() {
         _capturedPhoto = captured;
       });
+      if (previousPhoto != null) {
+        await _handPhotoStorage.delete(previousPhoto.localPath);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -279,6 +293,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       return;
     }
 
+    if (widget.initialHand == null) {
+      _photoOwnershipTransferred = true;
+    }
     Navigator.of(context).pop(detail);
   }
 
@@ -920,11 +937,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                                 color: Theme.of(context).colorScheme.primary,
                                 fontWeight: FontWeight.w700,
                               ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.initialHand!.photoClientId!,
-                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ] else if (_capturedPhoto != null) ...[
                         const SizedBox(height: 6),

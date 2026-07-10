@@ -1,9 +1,6 @@
-import 'dart:io';
-
 import 'package:image_picker/image_picker.dart';
 import 'package:meta/meta.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:mosaic/services/media/hand_photo_storage.dart';
 import 'package:uuid/uuid.dart';
 
 @immutable
@@ -26,13 +23,16 @@ abstract interface class HandPhotoService {
 class ImagePickerHandPhotoService implements HandPhotoService {
   ImagePickerHandPhotoService({
     ImagePicker? picker,
+    HandPhotoStorage? storage,
     String Function()? newPhotoId,
     DateTime Function()? now,
   })  : _picker = picker ?? ImagePicker(),
+        _storage = storage ?? LocalHandPhotoStorage(),
         _newPhotoId = newPhotoId ?? const Uuid().v4,
         _now = now ?? DateTime.now;
 
   final ImagePicker _picker;
+  final HandPhotoStorage _storage;
   final String Function() _newPhotoId;
   final DateTime Function() _now;
 
@@ -48,11 +48,10 @@ class ImagePickerHandPhotoService implements HandPhotoService {
 
     final clientPhotoId = _newPhotoId();
     final capturedAt = _now().toUtc();
-    final directory = await getApplicationDocumentsDirectory();
-    final photoDirectory = Directory(p.join(directory.path, 'hand_photos'));
-    await photoDirectory.create(recursive: true);
-    final targetPath = p.join(photoDirectory.path, '$clientPhotoId.jpg');
-    await File(picked.path).copy(targetPath);
+    final targetPath = await _storage.persist(
+      sourcePath: picked.path,
+      photoId: clientPhotoId,
+    );
 
     return CapturedHandPhoto(
       clientPhotoId: clientPhotoId,
