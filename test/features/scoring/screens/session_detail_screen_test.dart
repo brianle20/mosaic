@@ -214,6 +214,13 @@ class _FakeSessionRepository
       syncSnapshot;
 
   @override
+  Stream<void> watchSessionSyncChanges(String sessionId) =>
+      const Stream.empty();
+
+  @override
+  Future<void> retryBlockedPhotoUploads(String sessionId) async {}
+
+  @override
   Future<SessionDetailRecord> pauseSession(String sessionId) async {
     detail = SessionDetailRecord.fromJson({
       ...detail.toJson(),

@@ -10,6 +10,7 @@ import 'package:mosaic/data/offline/offline_session_projector.dart';
 import 'package:mosaic/data/offline/offline_store.dart';
 import 'package:mosaic/data/offline/session_sync_status.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/services/media/hand_photo_storage.dart';
 import 'package:uuid/uuid.dart';
 
 class OfflineSessionRepository
@@ -22,17 +23,20 @@ class OfflineSessionRepository
     required this.store,
     required this.reachability,
     this.projector = const OfflineSessionProjector(),
+    HandPhotoStorage? handPhotoStorage,
     String Function()? newMutationId,
     DateTime Function()? now,
     Future<void> Function()? onMutationQueued,
   })  : _newMutationId = newMutationId ?? const Uuid().v4,
         _now = now ?? DateTime.now,
+        _handPhotoStorage = handPhotoStorage ?? LocalHandPhotoStorage(),
         _onMutationQueued = onMutationQueued;
 
   final SessionRepository inner;
   final OfflineStore store;
   final NetworkReachability reachability;
   final OfflineSessionProjector projector;
+  final HandPhotoStorage _handPhotoStorage;
   final String Function() _newMutationId;
   final DateTime Function() _now;
   final Future<void> Function()? _onMutationQueued;
@@ -40,7 +44,51 @@ class OfflineSessionRepository
   @override
   Future<SessionSyncSnapshot> readSessionSyncSnapshot(String sessionId) async {
     final mutations = await store.readMutationsForSession(sessionId);
-    return _snapshotFromMutations(sessionId, mutations);
+    final uploads = await store.readPhotoUploadsForSession(sessionId);
+    return _snapshotFromMutations(sessionId, mutations, uploads);
+  }
+
+  @override
+  Stream<void> watchSessionSyncChanges(String sessionId) {
+    return store.changes
+        .where((change) => change.sessionId == sessionId)
+        .map<void>((_) {});
+  }
+
+  @override
+  Future<void> retryBlockedPhotoUploads(String sessionId) async {
+    final uploads = await store.readPhotoUploadsForSession(sessionId);
+    var resetAny = false;
+    var missingAny = false;
+
+    for (final upload in uploads) {
+      if (upload.status != OfflinePhotoUploadStatus.blocked) {
+        continue;
+      }
+
+      var exists = false;
+      try {
+        exists = await _handPhotoStorage.exists(upload.localPath);
+      } catch (_) {
+        exists = false;
+      }
+
+      if (exists) {
+        await store.resetPhotoUploadToPending(upload.id);
+        resetAny = true;
+      } else {
+        missingAny = true;
+      }
+    }
+
+    if (resetAny) {
+      _scheduleSync();
+    }
+    if (missingAny) {
+      throw StateError(
+        'A saved winning hand photo is no longer available on this device.',
+      );
+    }
   }
 
   @override
@@ -318,10 +366,14 @@ class OfflineSessionRepository
   SessionSyncSnapshot _snapshotFromMutations(
     String sessionId,
     List<OfflineMutationRecord> mutations,
+    List<OfflinePhotoUploadRecord> uploads,
   ) {
     final pendingHandIds = <String>{};
     final blockedHandIds = <String>{};
+    final pendingPhotoClientIds = <String>{};
+    final blockedPhotoClientIds = <String>{};
     String? blockedReason;
+    String? photoBlockedReason;
 
     for (final mutation in mutations) {
       switch (mutation.status) {
@@ -337,13 +389,33 @@ class OfflineSessionRepository
       }
     }
 
+    for (final upload in uploads) {
+      switch (upload.status) {
+        case OfflinePhotoUploadStatus.pending:
+        case OfflinePhotoUploadStatus.uploading:
+        case OfflinePhotoUploadStatus.failed:
+          if (upload.remoteHandResultId != null) {
+            pendingPhotoClientIds.add(upload.clientPhotoId);
+          }
+        case OfflinePhotoUploadStatus.blocked:
+          blockedPhotoClientIds.add(upload.clientPhotoId);
+          photoBlockedReason ??= upload.lastError;
+        case OfflinePhotoUploadStatus.uploaded:
+          break;
+      }
+    }
+
     return SessionSyncSnapshot(
       sessionId: sessionId,
       pendingHandIds: pendingHandIds,
       blockedHandIds: blockedHandIds,
+      pendingPhotoClientIds: pendingPhotoClientIds,
+      blockedPhotoClientIds: blockedPhotoClientIds,
       pendingCount: pendingHandIds.length,
+      pendingPhotoCount: pendingPhotoClientIds.length,
       isBlocked: blockedHandIds.isNotEmpty,
       blockedReason: blockedReason,
+      photoBlockedReason: photoBlockedReason,
     );
   }
 

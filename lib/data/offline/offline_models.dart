@@ -179,18 +179,30 @@ class SessionSyncSnapshot {
     required this.sessionId,
     Set<String> pendingHandIds = const {},
     Set<String> blockedHandIds = const {},
+    Set<String> pendingPhotoClientIds = const {},
+    Set<String> blockedPhotoClientIds = const {},
     this.pendingCount = 0,
+    this.pendingPhotoCount = 0,
     this.isBlocked = false,
     this.blockedReason,
+    this.photoBlockedReason,
   })  : pendingHandIds = Set.unmodifiable(pendingHandIds),
-        blockedHandIds = Set.unmodifiable(blockedHandIds);
+        blockedHandIds = Set.unmodifiable(blockedHandIds),
+        pendingPhotoClientIds = Set.unmodifiable(pendingPhotoClientIds),
+        blockedPhotoClientIds = Set.unmodifiable(blockedPhotoClientIds);
 
   final String sessionId;
   final Set<String> pendingHandIds;
   final Set<String> blockedHandIds;
+  final Set<String> pendingPhotoClientIds;
+  final Set<String> blockedPhotoClientIds;
   final int pendingCount;
+  final int pendingPhotoCount;
   final bool isBlocked;
   final String? blockedReason;
+  final String? photoBlockedReason;
+
+  bool get hasBlockedPhotoUploads => blockedPhotoClientIds.isNotEmpty;
 }
 
 class OfflineUnsupportedOperationException implements Exception {

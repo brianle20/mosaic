@@ -12,6 +12,7 @@ import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/sqlite_offline_store.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/hand_win_bonus.dart';
+import 'package:mosaic/services/media/hand_photo_storage.dart';
 import 'package:supabase/supabase.dart';
 
 void main() {
@@ -700,6 +701,76 @@ void main() {
       expect(snapshot.isBlocked, isTrue);
       expect(snapshot.blockedReason, 'Current last hand has changed.');
     });
+
+    test('snapshot separates hand and upload state', () async {
+      await store.insertMutation(_mutation(id: 'mut_pending'));
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'photo_pending',
+          mutationId: 'mut_synced',
+          remoteHandResultId: 'hand_01',
+          status: OfflinePhotoUploadStatus.failed,
+        ),
+      );
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'photo_blocked',
+          mutationId: 'mut_blocked',
+          status: OfflinePhotoUploadStatus.blocked,
+          lastError: 'storage rejected upload',
+        ),
+      );
+
+      final repository = OfflineSessionRepository(
+        inner: _FakeSessionRepository(cachedDetail: _detail()),
+        store: store,
+        reachability: const _FakeReachability(false),
+        projector: const OfflineSessionProjector(),
+      );
+      final snapshot = await repository.readSessionSyncSnapshot('ses_01');
+
+      expect(snapshot.pendingHandIds, {'pending:mut_pending'});
+      expect(snapshot.pendingPhotoClientIds, {'photo_pending'});
+      expect(snapshot.blockedPhotoClientIds, {'photo_blocked'});
+      expect(snapshot.pendingCount, 1);
+      expect(snapshot.pendingPhotoCount, 1);
+      expect(snapshot.isBlocked, isFalse);
+      expect(snapshot.hasBlockedPhotoUploads, isTrue);
+    });
+
+    test('retry resets only blocked uploads whose local file exists', () async {
+      final storage = _FakeHandPhotoStorage(existing: {'/local/good.jpg'});
+      final repository = OfflineSessionRepository(
+        inner: _FakeSessionRepository(cachedDetail: _detail()),
+        store: store,
+        reachability: const _FakeReachability(false),
+        projector: const OfflineSessionProjector(),
+        handPhotoStorage: storage,
+      );
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'good',
+          localPath: '/local/good.jpg',
+          status: OfflinePhotoUploadStatus.blocked,
+        ),
+      );
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'missing',
+          localPath: '/local/missing.jpg',
+          status: OfflinePhotoUploadStatus.blocked,
+        ),
+      );
+
+      await expectLater(
+        repository.retryBlockedPhotoUploads('ses_01'),
+        throwsA(isA<StateError>()),
+      );
+      expect((await store.readPhotoUpload('good'))!.status,
+          OfflinePhotoUploadStatus.pending);
+      expect((await store.readPhotoUpload('missing'))!.status,
+          OfflinePhotoUploadStatus.blocked);
+    });
   });
 
   group('DefaultNetworkReachability', () {
@@ -902,6 +973,51 @@ OfflineMutationRecord _mutation({
     status: status,
     lastError: lastError,
   );
+}
+
+OfflinePhotoUploadRecord _photoUpload({
+  required String id,
+  String mutationId = 'mut_01',
+  String localPath = '/local/photo.jpg',
+  String? remoteHandResultId,
+  OfflinePhotoUploadStatus status = OfflinePhotoUploadStatus.pending,
+  String? lastError,
+}) {
+  final timestamp = DateTime.utc(2026, 6, 18, 20);
+  return OfflinePhotoUploadRecord(
+    id: id,
+    mutationId: mutationId,
+    eventId: 'evt_01',
+    sessionId: 'ses_01',
+    clientPhotoId: id,
+    localPath: localPath,
+    capturedAt: timestamp,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    remoteHandResultId: remoteHandResultId,
+    status: status,
+    lastError: lastError,
+  );
+}
+
+class _FakeHandPhotoStorage implements HandPhotoStorage {
+  _FakeHandPhotoStorage({required Set<String> existing})
+      : existing = {...existing};
+
+  final Set<String> existing;
+
+  @override
+  Future<bool> exists(String path) async => existing.contains(path);
+
+  @override
+  Future<void> delete(String path) async {}
+
+  @override
+  Future<String> persist({
+    required String sourcePath,
+    required String photoId,
+  }) async =>
+      sourcePath;
 }
 
 SessionDetailRecord _detail({
