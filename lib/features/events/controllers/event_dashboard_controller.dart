@@ -267,7 +267,7 @@ class EventDashboardController extends ChangeNotifier {
     if (!_isCurrentStateRequest(requestToken)) {
       return;
     }
-    if (!silent || prizeResult.succeeded) {
+    if (prizeResult.succeeded) {
       prizePoolCents = _totalPrizeCents(prizeResult.value);
     }
 

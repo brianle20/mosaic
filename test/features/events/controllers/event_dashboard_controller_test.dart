@@ -852,6 +852,31 @@ void main() {
     expect(controller.isLoading, isFalse);
   });
 
+  test('normal refresh preserves prize pool when remote plan load fails',
+      () async {
+    final prizeRepository = _FakePrizeRepository(
+      cachedPlan: _prizePlan(fixedAmountCents: 5000),
+      remotePlan: _prizePlan(fixedAmountCents: 5000),
+    );
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(
+        cachedEvents: [_dashboardEvent()],
+      ),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      prizeRepository: prizeRepository,
+    );
+
+    await controller.load('evt_01');
+    expect(controller.prizePoolCents, 5000);
+
+    prizeRepository.remoteError = Exception('prize plan fetch failed');
+    await controller.load('evt_01');
+
+    expect(controller.prizePoolCents, 5000);
+    expect(controller.error, isNull);
+    expect(controller.isLoading, isFalse);
+  });
+
   test('dashboard guest counts exclude withdrawn guests', () async {
     final event = EventRecord.fromJson(const {
       'id': 'evt_01',
