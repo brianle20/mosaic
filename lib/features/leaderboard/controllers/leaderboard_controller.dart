@@ -293,17 +293,27 @@ class LeaderboardController extends ChangeNotifier {
 
     try {
       entries = await leaderboardRepository.loadLeaderboard(eventId);
+      var optionalReadFailed = false;
       final loadedBonusLedger = await _loadBonusLedger(eventId);
       if (loadedBonusLedger.succeeded) {
         bonusLedgerEntries = loadedBonusLedger.value!;
+      } else {
+        optionalReadFailed = true;
       }
       final loadedFinalsAssignments = await _loadFinalsAssignments(eventId);
       if (loadedFinalsAssignments.succeeded) {
         finalsAssignments = loadedFinalsAssignments.value!;
+      } else {
+        optionalReadFailed = true;
       }
       final loadedBonusRoundState = await _loadBonusRoundState(eventId);
       if (loadedBonusRoundState.succeeded) {
         bonusRoundState = loadedBonusRoundState.value;
+      } else {
+        optionalReadFailed = true;
+      }
+      if (optionalReadFailed && !_hasVisibleContent) {
+        error = 'Unable to refresh leaderboard details.';
       }
       bonusRoundResults = buildBonusRoundResultsSummary(
         ledgerEntries: bonusLedgerEntries,

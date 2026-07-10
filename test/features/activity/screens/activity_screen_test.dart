@@ -20,6 +20,8 @@ class _FakeActivityRepository implements ActivityRepository {
   EventActivityCategory lastLoadedCategory = EventActivityCategory.all;
   int loadCount = 0;
   final failCategories = <EventActivityCategory>{};
+  final loadGates =
+      <EventActivityCategory, Completer<List<EventActivityEntry>>>{};
 
   @override
   Future<List<EventActivityEntry>> loadActivity(
@@ -30,6 +32,10 @@ class _FakeActivityRepository implements ActivityRepository {
     loadCount += 1;
     if (failCategories.contains(category)) {
       throw Exception('temporary activity failure');
+    }
+    final gate = loadGates[category];
+    if (gate != null) {
+      return gate.future;
     }
     return remoteEntriesByCategory?[category] ??
         entriesByCategory[category] ??
@@ -84,6 +90,51 @@ EventActivityEntry _entry({
 }
 
 void main() {
+  testWidgets('stale category load cannot repopulate the new category',
+      (tester) async {
+    final allGate = Completer<List<EventActivityEntry>>();
+    final paymentsGate = Completer<List<EventActivityEntry>>();
+    final repository = _FakeActivityRepository({
+      EventActivityCategory.all: [
+        _entry(
+          id: 'act_01',
+          category: EventActivityCategory.event,
+          summary: 'Started event',
+        ),
+      ],
+    });
+    final signal = _FakeOfflineRecoverySignal();
+    addTearDown(signal.dispose);
+
+    await tester.pumpWidget(
+      OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          home: ActivityScreen(
+            eventId: 'evt_01',
+            activityRepository: repository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    repository.loadGates[EventActivityCategory.all] = allGate;
+    repository.loadGates[EventActivityCategory.payments] = paymentsGate;
+    signal.emit();
+    await tester.pump();
+
+    await tester.tap(find.text('Payments'));
+    await tester.pump();
+    allGate.complete(const []);
+    await tester.pump();
+
+    expect(find.text('Started event'), findsNothing);
+
+    paymentsGate.complete(const []);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('category failure clears prior-category activity rows',
       (tester) async {
     final repository = _FakeActivityRepository({

@@ -12,8 +12,11 @@ class ActivityController extends ChangeNotifier {
   String? error;
   EventActivityCategory selectedCategory = EventActivityCategory.all;
   List<EventActivityEntry> entries = const [];
+  int _requestGeneration = 0;
 
   Future<void> load(String eventId, {bool silent = false}) async {
+    final requestGeneration = ++_requestGeneration;
+    final category = selectedCategory;
     final shouldShowLoading = !silent;
     final previousEntries = entries;
     if (shouldShowLoading) {
@@ -22,17 +25,26 @@ class ActivityController extends ChangeNotifier {
     error = null;
     final cachedEntries = await _activityRepository.readCachedActivity(
       eventId,
-      selectedCategory,
+      category,
     );
+    if (!_isCurrentRequest(requestGeneration, category)) {
+      return;
+    }
     if (cachedEntries.isNotEmpty || entries.isEmpty) {
       entries = cachedEntries;
     }
     notifyListeners();
 
     try {
-      entries =
-          await _activityRepository.loadActivity(eventId, selectedCategory);
+      final loadedEntries =
+          await _activityRepository.loadActivity(eventId, category);
+      if (_isCurrentRequest(requestGeneration, category)) {
+        entries = loadedEntries;
+      }
     } catch (exception) {
+      if (!_isCurrentRequest(requestGeneration, category)) {
+        return;
+      }
       if (previousEntries.isNotEmpty) {
         entries = previousEntries;
       }
@@ -41,10 +53,12 @@ class ActivityController extends ChangeNotifier {
       }
     }
 
-    if (shouldShowLoading) {
+    if (shouldShowLoading && _isCurrentRequest(requestGeneration, category)) {
       isLoading = false;
     }
-    notifyListeners();
+    if (_isCurrentRequest(requestGeneration, category)) {
+      notifyListeners();
+    }
   }
 
   Future<void> selectCategory(
@@ -59,5 +73,13 @@ class ActivityController extends ChangeNotifier {
     error = null;
     notifyListeners();
     await load(eventId);
+  }
+
+  bool _isCurrentRequest(
+    int requestGeneration,
+    EventActivityCategory category,
+  ) {
+    return requestGeneration == _requestGeneration &&
+        category == selectedCategory;
   }
 }

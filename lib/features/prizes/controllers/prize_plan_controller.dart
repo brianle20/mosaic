@@ -194,6 +194,7 @@ class PrizePlanController extends ChangeNotifier {
     }
     isSubmitting = true;
     error = null;
+    _requestGeneration += 1;
     final editGeneration = _draftEditGeneration;
     notifyListeners();
 
@@ -234,6 +235,7 @@ class PrizePlanController extends ChangeNotifier {
 
     isSubmitting = true;
     error = null;
+    _requestGeneration += 1;
     final editGeneration = _draftEditGeneration;
     notifyListeners();
 

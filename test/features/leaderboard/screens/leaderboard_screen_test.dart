@@ -345,6 +345,27 @@ void main() {
     expect(controller.error, isNull);
   });
 
+  test('optional leaderboard failures surface an error without visible content',
+      () async {
+    final leaderboardRepository = _RecordingLeaderboardRepository(
+      entries: const [],
+    );
+    final ledgerRepository = _LedgerSessionRepository(rows: const [])
+      ..failAfterFirstLoad = true;
+    final seatingRepository = _SeatingRepository(assignments: const [])
+      ..failAfterFirstLoad = true;
+    final controller = LeaderboardController(
+      leaderboardRepository: leaderboardRepository,
+      sessionRepository: ledgerRepository,
+      seatingRepository: seatingRepository,
+    );
+    await controller.load('evt_01');
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.entries, isEmpty);
+    expect(controller.error, contains('Unable to refresh leaderboard details'));
+  });
+
   testWidgets(
       'reconnect silently refreshes leaderboard without loading flicker',
       (tester) async {

@@ -335,6 +335,31 @@ void main() {
     expect(controller.draft.note, 'Changed while locking');
   });
 
+  test('save invalidates an older in-flight plan load', () async {
+    final loadedPlan = _plan(fixedAmountCents: 10000);
+    final remotePlan = _plan(fixedAmountCents: 20000);
+    final loadGate = Completer<PrizePlanDetail?>();
+    final repository = _RecordingPrizeRepository(
+      cachedPlan: loadedPlan,
+      loadedPlan: loadedPlan,
+      remotePlan: remotePlan,
+      loadPlanGate: loadGate,
+      upsertedPlan: loadedPlan,
+    );
+    final controller = PrizePlanController(
+      eventId: 'evt_01',
+      prizeRepository: repository,
+    );
+    final loadFuture = controller.load();
+    await Future<void>.delayed(Duration.zero);
+    await controller.preview();
+    loadGate.complete(remotePlan);
+    await loadFuture;
+
+    expect(controller.draft.tiers.first.fixedAmountCents, 10000);
+    expect(controller.hasUnsavedChanges, isFalse);
+  });
+
   testWidgets('renders derived total and fixed prize controls', (tester) async {
     final repository = _RecordingPrizeRepository();
 
