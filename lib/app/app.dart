@@ -7,6 +7,7 @@ import 'package:mosaic/core/theme/app_theme.dart';
 import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/staff_models.dart';
 import 'package:mosaic/data/offline/network_reachability.dart';
+import 'package:mosaic/data/offline/offline_recovery_lifecycle.dart';
 import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/sqlite_offline_store.dart';
 import 'package:mosaic/data/offline/sync_coordinator.dart';
@@ -178,19 +179,22 @@ class _MosaicAppState extends State<MosaicApp> {
           );
         }
 
-        return _AppWithRepositories(
-          authRepository: snapshot.data!.authRepository,
-          eventRepository: snapshot.data!.eventRepository,
-          guestRepository: snapshot.data!.guestRepository,
-          tableRepository: snapshot.data!.tableRepository,
-          sessionRepository: snapshot.data!.sessionRepository,
-          leaderboardRepository: snapshot.data!.leaderboardRepository,
-          activityRepository: snapshot.data!.activityRepository,
-          prizeRepository: snapshot.data!.prizeRepository,
-          seatingRepository: snapshot.data!.seatingRepository,
-          mosaicProfileRepository: snapshot.data!.mosaicProfileRepository,
-          staffRepository: snapshot.data!.staffRepository,
-          nfcService: snapshot.data!.nfcService,
+        return OfflineRecoveryLifecycleListener(
+          lifecycle: snapshot.data!.syncCoordinator,
+          child: _AppWithRepositories(
+            authRepository: snapshot.data!.authRepository,
+            eventRepository: snapshot.data!.eventRepository,
+            guestRepository: snapshot.data!.guestRepository,
+            tableRepository: snapshot.data!.tableRepository,
+            sessionRepository: snapshot.data!.sessionRepository,
+            leaderboardRepository: snapshot.data!.leaderboardRepository,
+            activityRepository: snapshot.data!.activityRepository,
+            prizeRepository: snapshot.data!.prizeRepository,
+            seatingRepository: snapshot.data!.seatingRepository,
+            mosaicProfileRepository: snapshot.data!.mosaicProfileRepository,
+            staffRepository: snapshot.data!.staffRepository,
+            nfcService: snapshot.data!.nfcService,
+          ),
         );
       },
     );
@@ -261,6 +265,7 @@ class _MosaicAppState extends State<MosaicApp> {
       mosaicProfileRepository: SupabaseMosaicProfileRepository(client: client),
       staffRepository: SupabaseStaffRepository(client: client),
       nfcService: createDefaultNfcService(),
+      syncCoordinator: syncCoordinator,
       offlineStore: offlineStore,
     );
 
@@ -289,6 +294,7 @@ class _LoadedRepositories {
     required this.mosaicProfileRepository,
     required this.staffRepository,
     required this.nfcService,
+    required this.syncCoordinator,
     required this.offlineStore,
   });
 
@@ -304,9 +310,11 @@ class _LoadedRepositories {
   final MosaicProfileRepository mosaicProfileRepository;
   final StaffRepository staffRepository;
   final NfcService nfcService;
+  final SyncCoordinator syncCoordinator;
   final SqliteOfflineStore? offlineStore;
 
   Future<void> dispose() async {
+    await syncCoordinator.dispose();
     await offlineStore?.close();
   }
 }

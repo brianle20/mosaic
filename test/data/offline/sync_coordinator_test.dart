@@ -168,6 +168,122 @@ void main() {
       );
     });
 
+    test('dispose waits for initialization before store teardown', () async {
+      final resetGate = Completer<void>();
+      final blockingStore = _CloseTrackingBlockingOfflineStore(
+        store,
+        resetGate,
+      );
+      coordinator = SyncCoordinator(
+        store: blockingStore,
+        reachability: reachability,
+        sessionRepository: repository,
+        retryScheduler: scheduler,
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
+      );
+
+      final initializing = coordinator.initialize();
+      await pumpEventQueue(times: 10);
+
+      var storeTeardownCompleted = false;
+      final firstDispose = coordinator.dispose();
+      final disposing = () async {
+        await firstDispose;
+        await blockingStore.close();
+        storeTeardownCompleted = true;
+      }();
+      await pumpEventQueue(times: 10);
+
+      expect(storeTeardownCompleted, isFalse);
+      expect(blockingStore.closeCalled, isFalse);
+      expect(identical(firstDispose, coordinator.dispose()), isTrue);
+
+      resetGate.complete();
+      await initializing;
+      await disposing;
+
+      expect(storeTeardownCompleted, isTrue);
+      expect(blockingStore.closeCalled, isTrue);
+    });
+
+    test('dispose waits for active sync before store teardown', () async {
+      final resetGate = Completer<void>()..complete();
+      final blockingStore = _CloseTrackingBlockingOfflineStore(
+        store,
+        resetGate,
+      );
+      coordinator = SyncCoordinator(
+        store: blockingStore,
+        reachability: reachability,
+        sessionRepository: repository,
+        retryScheduler: scheduler,
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
+      );
+      await blockingStore.insertMutation(_mutation(id: 'mut_01'));
+
+      final resultGate = Completer<SessionDetailRecord>();
+      repository.nextResultCompleter = resultGate;
+      final syncing = coordinator.syncNow();
+      await pumpEventQueue(times: 10);
+
+      var storeTeardownCompleted = false;
+      final disposing = () async {
+        await coordinator.dispose();
+        await blockingStore.close();
+        storeTeardownCompleted = true;
+      }();
+      await pumpEventQueue(times: 10);
+
+      expect(storeTeardownCompleted, isFalse);
+      expect(blockingStore.closeCalled, isFalse);
+
+      resultGate.complete(_detail());
+      await syncing;
+      await disposing;
+
+      expect(storeTeardownCompleted, isTrue);
+      expect(blockingStore.closeCalled, isTrue);
+    });
+
+    test('dispose waits for store change callback before store teardown',
+        () async {
+      final resetGate = Completer<void>()..complete();
+      final blockingStore = _CloseTrackingBlockingOfflineStore(
+        store,
+        resetGate,
+      );
+      coordinator = SyncCoordinator(
+        store: blockingStore,
+        reachability: reachability,
+        sessionRepository: repository,
+        retryScheduler: scheduler,
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
+      );
+      await coordinator.initialize();
+
+      final pendingReadGate = Completer<void>();
+      blockingStore.pendingReadGate = pendingReadGate;
+      await blockingStore.insertMutation(_mutation(id: 'mut_01'));
+      await pumpEventQueue(times: 10);
+
+      var storeTeardownCompleted = false;
+      final disposing = () async {
+        await coordinator.dispose();
+        await blockingStore.close();
+        storeTeardownCompleted = true;
+      }();
+      await pumpEventQueue(times: 10);
+
+      expect(storeTeardownCompleted, isFalse);
+      expect(blockingStore.closeCalled, isFalse);
+
+      pendingReadGate.complete();
+      await disposing;
+
+      expect(storeTeardownCompleted, isTrue);
+      expect(blockingStore.closeCalled, isTrue);
+    });
+
     test('concurrent initialize callers await one startup recovery', () async {
       await store.insertMutation(_mutation(id: 'mut_01'));
       final reachabilityCheck = Completer<bool>();
@@ -1055,6 +1171,20 @@ class _BlockingOfflineStore implements OfflineStore {
   Future<void> close() async {
     await _insertedChanges.close();
     await _delegate.close();
+  }
+}
+
+class _CloseTrackingBlockingOfflineStore extends _BlockingOfflineStore {
+  _CloseTrackingBlockingOfflineStore(
+    super.delegate,
+    super.resetGate,
+  );
+
+  var closeCalled = false;
+
+  @override
+  Future<void> close() async {
+    closeCalled = true;
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/offline/network_reachability.dart';
 import 'package:mosaic/data/offline/offline_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_lifecycle.dart';
 import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/offline_store.dart';
@@ -36,7 +37,8 @@ class _PhotoSyncResult {
   final bool retryableWorkRemains;
 }
 
-class SyncCoordinator implements OfflineRecoverySignal {
+class SyncCoordinator
+    implements OfflineRecoverySignal, OfflineRecoveryLifecycle {
   SyncCoordinator({
     required OfflineStore store,
     required NetworkReachability reachability,
@@ -73,10 +75,13 @@ class SyncCoordinator implements OfflineRecoverySignal {
 
   StreamSubscription<void>? _reachabilitySubscription;
   StreamSubscription<OfflineStoreChange>? _storeSubscription;
+  final Set<Future<void>> _storeChangeFutures = {};
   var _isSyncing = false;
   var _syncRequested = false;
   var _isForeground = true;
   Future<void>? _initializeFuture;
+  Future<void>? _activeSyncFuture;
+  Future<void>? _disposeFuture;
   var _lifecycleReady = false;
   var _resumeRequested = false;
   var _isDisposed = false;
@@ -123,7 +128,16 @@ class SyncCoordinator implements OfflineRecoverySignal {
       unawaited(syncNow(trigger: OfflineRecoveryTrigger.reachable));
     });
     _storeSubscription = _store.changes.listen((_) {
-      unawaited(_handleStoreChange());
+      final handling = _handleStoreChange();
+      _storeChangeFutures.add(handling);
+      unawaited(
+        handling.then<void>(
+          (_) => _storeChangeFutures.remove(handling),
+          onError: (Object error, StackTrace stackTrace) {
+            _storeChangeFutures.remove(handling);
+          },
+        ),
+      );
     });
 
     await _store.resetSyncingToPending();
@@ -167,6 +181,7 @@ class SyncCoordinator implements OfflineRecoverySignal {
     }
   }
 
+  @override
   void setForeground(bool foreground) {
     if (_isDisposed || _isForeground == foreground) {
       return;
@@ -184,19 +199,85 @@ class SyncCoordinator implements OfflineRecoverySignal {
     unawaited(syncNow(trigger: OfflineRecoveryTrigger.resumed));
   }
 
-  Future<void> dispose() async {
-    if (_isDisposed) {
-      return;
+  Future<void> dispose() {
+    final existing = _disposeFuture;
+    if (existing != null) {
+      return existing;
     }
+    if (_isDisposed) {
+      return Future<void>.value();
+    }
+
     _isDisposed = true;
+    final disposal = _disposeInternal();
+    _disposeFuture = disposal;
+    return disposal;
+  }
+
+  Future<void> _disposeInternal() async {
     _retryScheduler.cancel();
     await _reachabilitySubscription?.cancel();
     await _storeSubscription?.cancel();
+
+    final initializeFuture = _initializeFuture;
+    if (initializeFuture != null) {
+      try {
+        await initializeFuture;
+      } on Object {
+        // Disposal must still release the store after a failed startup pass.
+      }
+    }
+
+    final activeSyncFuture = _activeSyncFuture;
+    if (activeSyncFuture != null &&
+        !identical(activeSyncFuture, initializeFuture)) {
+      try {
+        await activeSyncFuture;
+      } on Object {
+        // Disposal must still close streams after a failed sync pass.
+      }
+    }
+
+    final storeChangeFutures = List<Future<void>>.of(_storeChangeFutures);
+    for (final storeChangeFuture in storeChangeFutures) {
+      try {
+        await storeChangeFuture;
+      } on Object {
+        // Disposal must still close streams after a failed store callback.
+      }
+    }
+
     await _generationController.close();
   }
 
   Future<void> syncNow({
     OfflineRecoveryTrigger trigger = OfflineRecoveryTrigger.manual,
+  }) async {
+    if (_isDisposed) {
+      return Future<void>.value();
+    }
+    if (_isSyncing) {
+      _syncRequested = true;
+      return Future<void>.value();
+    }
+
+    final operation = _syncNowInternal(trigger: trigger);
+    _activeSyncFuture = operation;
+    try {
+      await operation;
+    } finally {
+      _clearActiveSync(operation);
+    }
+  }
+
+  void _clearActiveSync(Future<void> operation) {
+    if (identical(_activeSyncFuture, operation)) {
+      _activeSyncFuture = null;
+    }
+  }
+
+  Future<void> _syncNowInternal({
+    required OfflineRecoveryTrigger trigger,
   }) async {
     if (_isDisposed) {
       return;
