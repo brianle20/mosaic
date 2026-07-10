@@ -297,6 +297,25 @@ void main() {
       await subscription.cancel();
     });
 
+    test('write racing close is rejected before backend mutation', () async {
+      final changes = <OfflineStoreChange>[];
+      final subscription = store.changes.listen(changes.add);
+
+      final admittedWrite = store.insertMutation(
+        _mutation(id: 'mut_admitted'),
+      );
+      final closing = store.close();
+      final lateWrite = store.insertMutation(_mutation(id: 'mut_late'));
+
+      await expectLater(lateWrite, throwsA(isA<StateError>()));
+      await admittedWrite;
+      await closing;
+      expect(changes, hasLength(1));
+      expect(changes.single.sessionId, 'ses_01');
+      expect(changes.single.kinds, {OfflineStoreChangeKind.mutation});
+      await subscription.cancel();
+    });
+
     test('updates photo upload status and remote attachment metadata',
         () async {
       final attemptedAt = DateTime.utc(2026, 6, 18, 20, 30);

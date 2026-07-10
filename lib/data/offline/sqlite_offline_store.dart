@@ -16,6 +16,8 @@ class SqliteOfflineStore implements OfflineStore {
   final StreamController<OfflineStoreChange> _changes =
       StreamController<OfflineStoreChange>.broadcast(sync: true);
   Future<void> _writeTail = Future.value();
+  Future<void>? _closeFuture;
+  var _isClosing = false;
 
   static const _schemaVersion = 2;
   static const _mutationsTable = 'offline_mutations';
@@ -588,13 +590,27 @@ class SqliteOfflineStore implements OfflineStore {
   }
 
   @override
-  Future<void> close() async {
+  Future<void> close() {
+    final existing = _closeFuture;
+    if (existing != null) {
+      return existing;
+    }
+    _isClosing = true;
+    final closing = _close();
+    _closeFuture = closing;
+    return closing;
+  }
+
+  Future<void> _close() async {
     await _writeTail;
     await _changes.close();
     await _backend.close();
   }
 
   Future<T> _enqueueWrite<T>(Future<T> Function() operation) {
+    if (_isClosing) {
+      return Future<T>.error(StateError('Offline store is closed.'));
+    }
     final completer = Completer<T>();
     _writeTail = _writeTail.then((_) async {
       try {
