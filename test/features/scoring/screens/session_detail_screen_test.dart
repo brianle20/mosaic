@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/event_models.dart';
@@ -163,10 +165,14 @@ class _FakeSessionRepository
   _FakeSessionRepository({
     required this.detail,
     SessionSyncSnapshot? syncSnapshot,
+    this.cachedDetail,
+    this.remoteDetailGate,
   }) : syncSnapshot =
             syncSnapshot ?? SessionSyncSnapshot(sessionId: detail.session.id);
 
   SessionDetailRecord detail;
+  final SessionDetailRecord? cachedDetail;
+  final Completer<SessionDetailRecord>? remoteDetailGate;
   SessionSyncSnapshot syncSnapshot;
   SessionDetailRecord? recordHandDetail;
   String? endedReason;
@@ -206,8 +212,13 @@ class _FakeSessionRepository
       const [];
 
   @override
-  Future<SessionDetailRecord> loadSessionDetail(String sessionId) async =>
-      detail;
+  Future<SessionDetailRecord> loadSessionDetail(String sessionId) async {
+    final gate = remoteDetailGate;
+    if (gate != null) {
+      return gate.future;
+    }
+    return detail;
+  }
 
   @override
   Future<SessionSyncSnapshot> readSessionSyncSnapshot(String sessionId) async =>
@@ -259,7 +270,7 @@ class _FakeSessionRepository
   @override
   Future<SessionDetailRecord?> readCachedSessionDetail(
           String sessionId) async =>
-      null;
+      cachedDetail;
 
   @override
   Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
@@ -404,6 +415,34 @@ SessionDetailRecord _buildDetail(
 }
 
 void main() {
+  testWidgets('keeps cached session visible while remote detail is pending',
+      (tester) async {
+    final cachedDetail = _buildDetail(SessionStatus.active);
+    final remoteDetailGate = Completer<SessionDetailRecord>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: _FakeGuestRepository(),
+          sessionRepository: _FakeSessionRepository(
+            detail: cachedDetail,
+            cachedDetail: cachedDetail,
+            remoteDetailGate: remoteDetailGate,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Table 1'), findsOneWidget);
+    expect(find.text('Loading…'), findsNothing);
+
+    remoteDetailGate.complete(cachedDetail);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('active session renders live console context and actions',
       (tester) async {
     final sessionRepository = _FakeSessionRepository(
