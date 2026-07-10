@@ -8,6 +8,7 @@ import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/prizes/controllers/prize_plan_controller.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 
 class _RecordingPrizeRepository implements PrizeRepository {
@@ -15,14 +16,18 @@ class _RecordingPrizeRepository implements PrizeRepository {
     this.loadedPlan,
     this.cachedPlan,
     this.remotePlan,
+    this.loadPlanGate,
     this.upsertedPlan,
     this.previewRows = const [],
     this.lockedAwards = const [],
   });
 
   final PrizePlanDetail? loadedPlan;
-  final PrizePlanDetail? cachedPlan;
-  final PrizePlanDetail? remotePlan;
+  PrizePlanDetail? cachedPlan;
+  PrizePlanDetail? remotePlan;
+  final Completer<PrizePlanDetail?>? loadPlanGate;
+  bool failLoad = false;
+  bool cacheMiss = false;
   final PrizePlanDetail? upsertedPlan;
   final List<PrizeAwardPreviewRow> previewRows;
   final List<PrizeAwardRecord> lockedAwards;
@@ -40,6 +45,13 @@ class _RecordingPrizeRepository implements PrizeRepository {
     required String eventId,
   }) async {
     loadPlanCount += 1;
+    if (failLoad) {
+      throw Exception('temporary prize plan failure');
+    }
+    final gate = loadPlanGate;
+    if (gate != null) {
+      return gate.future;
+    }
     return remotePlan ?? loadedPlan;
   }
 
@@ -61,7 +73,7 @@ class _RecordingPrizeRepository implements PrizeRepository {
 
   @override
   Future<PrizePlanDetail?> readCachedPrizePlan(String eventId) async =>
-      cachedPlan ?? loadedPlan;
+      cacheMiss ? null : cachedPlan ?? loadedPlan;
 
   @override
   Future<List<PrizeAwardPreviewRow>> readCachedPrizePreview(
@@ -153,6 +165,91 @@ void main() {
       '150.00',
     );
     expect(repository.loadPlanCount, 1);
+  });
+
+  testWidgets('remote plan load does not overwrite edits made while pending',
+      (tester) async {
+    final gate = Completer<PrizePlanDetail?>();
+    final repository = _RecordingPrizeRepository(
+      cachedPlan: _plan(fixedAmountCents: 10000),
+      remotePlan: _plan(fixedAmountCents: 20000),
+      loadPlanGate: gate,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PrizePlanScreen(
+          eventId: 'evt_01',
+          prizeRepository: repository,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final amountField = find.byKey(const Key('tier-0-amount'));
+    await tester.enterText(amountField, '15000');
+    await tester.pump();
+
+    gate.complete(repository.remotePlan);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextFormField>(amountField).controller!.text,
+      '150.00',
+    );
+  });
+
+  test('silent plan failure keeps usable draft without an error', () async {
+    final repository = _RecordingPrizeRepository(
+      loadedPlan: _plan(fixedAmountCents: 10000),
+    );
+    final controller = PrizePlanController(
+      eventId: 'evt_01',
+      prizeRepository: repository,
+    );
+    await controller.load();
+
+    repository.cacheMiss = true;
+    repository.failLoad = true;
+    await controller.load(silent: true);
+
+    expect(controller.draft.tiers.first.fixedAmountCents, 10000);
+    expect(controller.error, isNull);
+  });
+
+  test('draft edits invalidate preview and cannot lock stale payouts',
+      () async {
+    final loadedPlan = _plan(fixedAmountCents: 10000);
+    final repository = _RecordingPrizeRepository(
+      loadedPlan: loadedPlan,
+      upsertedPlan: loadedPlan,
+      previewRows: const [
+        PrizeAwardPreviewRow(
+          eventGuestId: 'gst_01',
+          displayName: 'Alice Wong',
+          rankStart: 1,
+          rankEnd: 1,
+          displayRank: '1',
+          awardAmountCents: 10000,
+        ),
+      ],
+    );
+    final controller = PrizePlanController(
+      eventId: 'evt_01',
+      prizeRepository: repository,
+    );
+    await controller.load();
+    await controller.preview();
+    expect(controller.hasPreviewedPayouts, isTrue);
+
+    controller.setNote('Updated note');
+    expect(controller.previewRows, isEmpty);
+    expect(controller.hasPreviewedPayouts, isFalse);
+    expect(controller.hasUnsavedChanges, isTrue);
+
+    await controller.lockAwards();
+    expect(repository.lockCount, 0);
+    expect(controller.error, contains('Preview'));
   });
 
   testWidgets('renders derived total and fixed prize controls', (tester) async {

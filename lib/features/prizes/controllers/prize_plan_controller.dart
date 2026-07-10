@@ -23,16 +23,30 @@ class PrizePlanController extends ChangeNotifier {
   List<PrizeAwardRecord> lockedAwards = const [];
   bool hasPreviewedPayouts = false;
   bool hasUnsavedChanges = false;
+  int _requestGeneration = 0;
+  int _draftEditGeneration = 0;
+  bool _hasLoadedPlan = false;
 
   Future<void> load({bool silent = false}) async {
+    final requestGeneration = ++_requestGeneration;
+    final draftEditGeneration = _draftEditGeneration;
     final cachedPlan = await prizeRepository.readCachedPrizePlan(eventId);
-    if (cachedPlan != null && !hasUnsavedChanges) {
+    final preservePreview = silent && hasPreviewedPayouts;
+    List<PrizeAwardRecord>? cachedAwards;
+    if (cachedPlan?.plan.status == PrizePlanStatus.locked) {
+      cachedAwards = await prizeRepository.readCachedPrizeAwards(eventId);
+    }
+    if (_canApplyLoad(requestGeneration, draftEditGeneration) &&
+        cachedPlan != null) {
       draft = PrizePlanDraft.fromDetail(cachedPlan);
-      previewRows = const [];
-      hasPreviewedPayouts = false;
-      lockedAwards = cachedPlan.plan.status == PrizePlanStatus.locked
-          ? await prizeRepository.readCachedPrizeAwards(eventId)
-          : const [];
+      if (!preservePreview) {
+        previewRows = const [];
+        hasPreviewedPayouts = false;
+      }
+      if (!silent || cachedPlan.plan.status == PrizePlanStatus.locked) {
+        lockedAwards = cachedAwards ?? const [];
+      }
+      _hasLoadedPlan = true;
     }
 
     final shouldShowLoading = !silent;
@@ -47,18 +61,27 @@ class PrizePlanController extends ChangeNotifier {
         eventId: eventId,
       );
       if (loaded != null) {
-        draft = PrizePlanDraft.fromDetail(loaded);
+        List<PrizeAwardRecord>? loadedAwards;
         if (loaded.plan.status == PrizePlanStatus.locked) {
-          lockedAwards = await prizeRepository.loadPrizeAwards(eventId);
-        } else {
-          lockedAwards = const [];
+          loadedAwards = await prizeRepository.loadPrizeAwards(eventId);
         }
-      } else {
+        if (_canApplyLoad(requestGeneration, draftEditGeneration)) {
+          draft = PrizePlanDraft.fromDetail(loaded);
+          lockedAwards = loadedAwards ?? const [];
+          _hasLoadedPlan = true;
+          hasUnsavedChanges = false;
+        }
+      } else if (_canApplyLoad(requestGeneration, draftEditGeneration)) {
         lockedAwards = const [];
+        _hasLoadedPlan = false;
+        hasUnsavedChanges = false;
       }
-      hasUnsavedChanges = false;
     } catch (err) {
-      if (cachedPlan == null) {
+      if (cachedPlan == null &&
+          !hasUnsavedChanges &&
+          !_hasLoadedPlan &&
+          previewRows.isEmpty &&
+          lockedAwards.isEmpty) {
         error = err.toString();
       }
     } finally {
@@ -71,12 +94,9 @@ class PrizePlanController extends ChangeNotifier {
 
   void setMode(PrizePlanMode mode) {
     draft = draft.copyWith(mode: mode);
+    _markDraftChanged();
     hasUnsavedChanges = true;
     error = null;
-    if (mode == PrizePlanMode.none) {
-      previewRows = const [];
-      hasPreviewedPayouts = false;
-    }
     notifyListeners();
   }
 
@@ -104,16 +124,18 @@ class PrizePlanController extends ChangeNotifier {
       mode: PrizePlanMode.fixed,
       tiers: tiers,
     );
+    _markDraftChanged();
     hasUnsavedChanges = true;
     error = null;
-    previewRows = const [];
-    hasPreviewedPayouts = false;
     notifyListeners();
   }
 
   void setNote(String? value) {
     draft = draft.copyWith(note: value);
+    _markDraftChanged();
     hasUnsavedChanges = true;
+    previewRows = const [];
+    hasPreviewedPayouts = false;
     notifyListeners();
   }
 
@@ -134,7 +156,10 @@ class PrizePlanController extends ChangeNotifier {
         ),
       ],
     );
+    _markDraftChanged();
     hasUnsavedChanges = true;
+    previewRows = const [];
+    hasPreviewedPayouts = false;
     notifyListeners();
   }
 
@@ -154,6 +179,7 @@ class PrizePlanController extends ChangeNotifier {
       fixedAmountCents: fixedAmountCents ?? current.fixedAmountCents,
     );
     draft = draft.copyWith(tiers: tiers);
+    _markDraftChanged();
     hasUnsavedChanges = true;
     previewRows = const [];
     hasPreviewedPayouts = false;
@@ -166,22 +192,28 @@ class PrizePlanController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-
     isSubmitting = true;
     error = null;
+    final editGeneration = _draftEditGeneration;
     notifyListeners();
 
     try {
       final saved = await prizeRepository.upsertPrizePlan(
         draft.toUpsertInput(eventId: eventId),
       );
+      final loadedPreview = await prizeRepository.loadPrizePreview(eventId);
+      if (editGeneration != _draftEditGeneration) {
+        return;
+      }
       draft = PrizePlanDraft.fromDetail(saved);
-      previewRows = await prizeRepository.loadPrizePreview(eventId);
+      previewRows = loadedPreview;
       hasPreviewedPayouts = true;
       hasUnsavedChanges = false;
     } catch (err) {
-      error = err.toString();
-      hasPreviewedPayouts = false;
+      if (editGeneration == _draftEditGeneration) {
+        error = err.toString();
+        hasPreviewedPayouts = false;
+      }
     } finally {
       isSubmitting = false;
       notifyListeners();
@@ -194,13 +226,23 @@ class PrizePlanController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (!hasPreviewedPayouts) {
+      error = 'Preview payouts before locking awards.';
+      notifyListeners();
+      return;
+    }
 
     isSubmitting = true;
     error = null;
+    final editGeneration = _draftEditGeneration;
     notifyListeners();
 
     try {
-      lockedAwards = await prizeRepository.lockPrizeAwards(eventId);
+      final loadedAwards = await prizeRepository.lockPrizeAwards(eventId);
+      if (editGeneration != _draftEditGeneration) {
+        return;
+      }
+      lockedAwards = loadedAwards;
       hasUnsavedChanges = false;
     } catch (err) {
       error = err.toString();
@@ -215,6 +257,18 @@ class PrizePlanController extends ChangeNotifier {
       return;
     }
     await load(silent: true);
+  }
+
+  void _markDraftChanged() {
+    _draftEditGeneration += 1;
+    previewRows = const [];
+    hasPreviewedPayouts = false;
+  }
+
+  bool _canApplyLoad(int requestGeneration, int draftEditGeneration) {
+    return requestGeneration == _requestGeneration &&
+        draftEditGeneration == _draftEditGeneration &&
+        !hasUnsavedChanges;
   }
 
   String _validationError() {

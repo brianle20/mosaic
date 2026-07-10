@@ -148,13 +148,25 @@ class SessionDetailController extends ChangeNotifier {
       unawaited(oldSubscription.cancel());
     }
 
+    _isRefreshingSync = false;
     final generation = ++_requestGeneration;
+    final remoteGuestsFuture = _capture(
+      () => guestRepository.listGuests(eventId),
+    );
     await _loadRemoteDetail(
       eventId: eventId,
       sessionId: sessionId,
       generation: generation,
       showLoading: false,
     );
+
+    if (_isCurrentRequest(generation)) {
+      final remoteGuests = await remoteGuestsFuture;
+      if (remoteGuests.error == null && remoteGuests.value != null) {
+        guestNamesById = _guestNamesById(remoteGuests.value!);
+        notifyListeners();
+      }
+    }
 
     if (_isCurrentRequest(generation)) {
       final provider = sessionRepository is SessionSyncStatusProvider
@@ -191,9 +203,7 @@ class SessionDetailController extends ChangeNotifier {
         detailRefreshGeneration == _detailRefreshGeneration) {
       detail = remoteDetail.value;
       error = null;
-      if (showLoading) {
-        isLoading = false;
-      }
+      isLoading = false;
       notifyListeners();
       return;
     }
@@ -201,7 +211,7 @@ class SessionDetailController extends ChangeNotifier {
     if (detail == null && remoteDetail.error != null) {
       error = remoteDetail.error.toString();
     }
-    if (showLoading) {
+    if (showLoading || detail == null) {
       isLoading = false;
       notifyListeners();
     }

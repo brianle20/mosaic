@@ -19,6 +19,7 @@ class _FakeActivityRepository implements ActivityRepository {
       remoteEntriesByCategory;
   EventActivityCategory lastLoadedCategory = EventActivityCategory.all;
   int loadCount = 0;
+  final failCategories = <EventActivityCategory>{};
 
   @override
   Future<List<EventActivityEntry>> loadActivity(
@@ -27,6 +28,9 @@ class _FakeActivityRepository implements ActivityRepository {
   ) async {
     lastLoadedCategory = category;
     loadCount += 1;
+    if (failCategories.contains(category)) {
+      throw Exception('temporary activity failure');
+    }
     return remoteEntriesByCategory?[category] ??
         entriesByCategory[category] ??
         const [];
@@ -80,6 +84,36 @@ EventActivityEntry _entry({
 }
 
 void main() {
+  testWidgets('category failure clears prior-category activity rows',
+      (tester) async {
+    final repository = _FakeActivityRepository({
+      EventActivityCategory.all: [
+        _entry(
+          id: 'act_01',
+          category: EventActivityCategory.event,
+          summary: 'Started event',
+        ),
+      ],
+    });
+    repository.failCategories.add(EventActivityCategory.payments);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ActivityScreen(
+          eventId: 'evt_01',
+          activityRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Payments'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Started event'), findsNothing);
+    expect(find.textContaining('temporary activity failure'), findsOneWidget);
+  });
+
   testWidgets('reconnect silently refreshes activity without loading flicker',
       (tester) async {
     final cachedEntry = _entry(

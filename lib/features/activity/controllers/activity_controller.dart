@@ -51,7 +51,13 @@ class ActivityController extends ChangeNotifier {
     String eventId,
     EventActivityCategory category,
   ) async {
+    if (selectedCategory == category) {
+      return;
+    }
     selectedCategory = category;
+    entries = const [];
+    error = null;
+    notifyListeners();
     await load(eventId);
   }
 }

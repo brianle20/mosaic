@@ -293,9 +293,18 @@ class LeaderboardController extends ChangeNotifier {
 
     try {
       entries = await leaderboardRepository.loadLeaderboard(eventId);
-      bonusLedgerEntries = await _loadBonusLedger(eventId);
-      finalsAssignments = await _loadFinalsAssignments(eventId);
-      bonusRoundState = await _loadBonusRoundState(eventId);
+      final loadedBonusLedger = await _loadBonusLedger(eventId);
+      if (loadedBonusLedger.succeeded) {
+        bonusLedgerEntries = loadedBonusLedger.value!;
+      }
+      final loadedFinalsAssignments = await _loadFinalsAssignments(eventId);
+      if (loadedFinalsAssignments.succeeded) {
+        finalsAssignments = loadedFinalsAssignments.value!;
+      }
+      final loadedBonusRoundState = await _loadBonusRoundState(eventId);
+      if (loadedBonusRoundState.succeeded) {
+        bonusRoundState = loadedBonusRoundState.value;
+      }
       bonusRoundResults = buildBonusRoundResultsSummary(
         ledgerEntries: bonusLedgerEntries,
         leaderboardEntries: entries,
@@ -316,7 +325,7 @@ class LeaderboardController extends ChangeNotifier {
         leaderboardEntries: entries,
         bonusRoundState: bonusRoundState,
       );
-      if (entries.isEmpty) {
+      if (!_hasVisibleContent) {
         error = err.toString();
       }
     } finally {
@@ -326,6 +335,12 @@ class LeaderboardController extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  bool get _hasVisibleContent =>
+      entries.isNotEmpty ||
+      bonusLedgerEntries.isNotEmpty ||
+      finalsAssignments.isNotEmpty ||
+      bonusRoundState != null;
 
   Future<List<EventHandLedgerEntry>> _readCachedBonusLedger(
     String eventId,
@@ -338,16 +353,20 @@ class LeaderboardController extends ChangeNotifier {
     return repository.readCachedEventHandLedger(eventId);
   }
 
-  Future<List<EventHandLedgerEntry>> _loadBonusLedger(String eventId) async {
+  Future<_OptionalLoadResult<List<EventHandLedgerEntry>>> _loadBonusLedger(
+    String eventId,
+  ) async {
     final repository = sessionRepository;
     if (repository == null) {
-      return const [];
+      return const _OptionalLoadResult.success([]);
     }
 
     try {
-      return await repository.loadEventHandLedger(eventId);
+      return _OptionalLoadResult.success(
+        await repository.loadEventHandLedger(eventId),
+      );
     } catch (_) {
-      return const [];
+      return const _OptionalLoadResult.failure();
     }
   }
 
@@ -362,33 +381,51 @@ class LeaderboardController extends ChangeNotifier {
     return repository.readCachedAssignments(eventId);
   }
 
-  Future<List<SeatingAssignmentRecord>> _loadFinalsAssignments(
+  Future<_OptionalLoadResult<List<SeatingAssignmentRecord>>>
+      _loadFinalsAssignments(
     String eventId,
   ) async {
     final repository = seatingRepository;
     if (repository == null) {
-      return const [];
+      return const _OptionalLoadResult.success([]);
     }
 
     try {
-      return await repository.loadAssignments(eventId);
+      return _OptionalLoadResult.success(
+        await repository.loadAssignments(eventId),
+      );
     } catch (_) {
-      return const [];
+      return const _OptionalLoadResult.failure();
     }
   }
 
-  Future<BonusRoundState?> _loadBonusRoundState(String eventId) async {
+  Future<_OptionalLoadResult<BonusRoundState?>> _loadBonusRoundState(
+    String eventId,
+  ) async {
     final repository = seatingRepository;
     if (repository == null) {
-      return null;
+      return const _OptionalLoadResult.success(null);
     }
 
     try {
-      return await repository.loadBonusRoundState(eventId);
+      return _OptionalLoadResult.success(
+        await repository.loadBonusRoundState(eventId),
+      );
     } catch (_) {
-      return null;
+      return const _OptionalLoadResult.failure();
     }
   }
+}
+
+class _OptionalLoadResult<T> {
+  const _OptionalLoadResult.success(this.value) : succeeded = true;
+
+  const _OptionalLoadResult.failure()
+      : value = null,
+        succeeded = false;
+
+  final T? value;
+  final bool succeeded;
 }
 
 @immutable

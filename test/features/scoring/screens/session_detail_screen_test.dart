@@ -13,9 +13,13 @@ import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/offline/session_sync_status.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/scoring/controllers/session_detail_controller.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
 
 class _FakeGuestRepository implements GuestRepository {
+  Completer<List<EventGuestRecord>>? listGuestsGate;
+  List<EventGuestRecord>? remoteGuestsOverride;
+
   @override
   Future<List<GuestCoverEntryRecord>> loadGuestCoverEntries(
     String guestId,
@@ -52,7 +56,15 @@ class _FakeGuestRepository implements GuestRepository {
   Future<GuestDetailRecord?> getGuestDetail(String guestId) async => null;
 
   @override
-  Future<List<EventGuestRecord>> listGuests(String eventId) async => const [
+  Future<List<EventGuestRecord>> listGuests(String eventId) async {
+    final gate = listGuestsGate;
+    if (gate != null) {
+      return gate.future;
+    }
+    return remoteGuestsOverride ?? _defaultGuests();
+  }
+
+  List<EventGuestRecord> _defaultGuests() => const [
         {
           'id': 'gst_east',
           'event_id': 'evt_01',
@@ -101,7 +113,7 @@ class _FakeGuestRepository implements GuestRepository {
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
-      listGuests(eventId);
+      _defaultGuests();
 
   @override
   Future<List<GuestProfileRecord>> listGuestProfiles() async => const [];
@@ -174,9 +186,11 @@ class _FakeSessionRepository
 
   SessionDetailRecord detail;
   final SessionDetailRecord? cachedDetail;
-  final Completer<SessionDetailRecord>? remoteDetailGate;
+  Completer<SessionDetailRecord>? remoteDetailGate;
   SessionSyncSnapshot syncSnapshot;
+  StreamController<void>? syncChangesController;
   SessionDetailRecord? recordHandDetail;
+  bool remoteFail = false;
   String? endedReason;
   int retryBlockedPhotoUploadsCount = 0;
   int loadSessionDetailCount = 0;
@@ -218,6 +232,9 @@ class _FakeSessionRepository
   @override
   Future<SessionDetailRecord> loadSessionDetail(String sessionId) async {
     loadSessionDetailCount += 1;
+    if (remoteFail) {
+      throw Exception('temporary session detail failure');
+    }
     final gate = remoteDetailGate;
     if (gate != null) {
       return gate.future;
@@ -231,7 +248,7 @@ class _FakeSessionRepository
 
   @override
   Stream<void> watchSessionSyncChanges(String sessionId) =>
-      const Stream.empty();
+      syncChangesController?.stream ?? const Stream.empty();
 
   @override
   Future<void> retryBlockedPhotoUploads(String sessionId) async {
@@ -439,6 +456,20 @@ SessionDetailRecord _buildDetail(
   });
 }
 
+EventGuestRecord _guestRecord(String id, String name) {
+  return EventGuestRecord.fromJson({
+    'id': id,
+    'event_id': 'evt_01',
+    'display_name': name,
+    'normalized_name': name.toLowerCase(),
+    'attendance_status': 'checked_in',
+    'cover_status': 'paid',
+    'cover_amount_cents': 2000,
+    'is_comped': false,
+    'has_scored_play': true,
+  });
+}
+
 SessionDetailRecord _detailWithPhoto({required String clientPhotoId}) {
   return _buildDetail(
     SessionStatus.active,
@@ -467,9 +498,102 @@ SessionDetailRecord _detailWithPhoto({required String clientPhotoId}) {
 }
 
 void main() {
+  testWidgets('clears initial loading when detail arrives before guests',
+      (tester) async {
+    final guestRepository = _FakeGuestRepository()
+      ..listGuestsGate = Completer<List<EventGuestRecord>>();
+    final detail = _buildDetail(SessionStatus.active);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionDetailScreen(
+          eventId: 'evt_01',
+          sessionId: 'ses_01',
+          guestRepository: guestRepository,
+          sessionRepository: _FakeSessionRepository(detail: detail),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Table 1'), findsOneWidget);
+    expect(find.text('Loading…'), findsNothing);
+
+    guestRepository.listGuestsGate!.complete(guestRepository._defaultGuests());
+    await tester.pumpAndSettle();
+  });
+
+  test('refresh reports an error when no detail is available', () async {
+    final detail = _buildDetail(SessionStatus.active);
+    final repository = _FakeSessionRepository(detail: detail);
+    final controller = SessionDetailController(
+      guestRepository: _FakeGuestRepository(),
+      sessionRepository: repository,
+    );
+    await controller.load(eventId: 'evt_01', sessionId: 'ses_01');
+
+    controller.detail = null;
+    repository.remoteFail = true;
+    var notificationCount = 0;
+    controller.addListener(() => notificationCount += 1);
+    await controller.refreshAfterRecovery();
+
+    expect(controller.error, contains('temporary session detail failure'));
+    expect(notificationCount, greaterThan(0));
+    controller.dispose();
+  });
+
+  test('recovery resets an in-flight sync refresh guard', () async {
+    final detail = _buildDetail(SessionStatus.active);
+    final syncChanges = StreamController<void>.broadcast();
+    final repository = _FakeSessionRepository(
+      detail: detail,
+      syncSnapshot: SessionSyncSnapshot(
+        sessionId: 'ses_01',
+        pendingHandIds: const {'hand_01'},
+      ),
+    )..syncChangesController = syncChanges;
+    addTearDown(syncChanges.close);
+    final controller = SessionDetailController(
+      guestRepository: _FakeGuestRepository(),
+      sessionRepository: repository,
+    );
+    await controller.load(eventId: 'evt_01', sessionId: 'ses_01');
+
+    final firstRefreshGate = Completer<SessionDetailRecord>();
+    repository.remoteDetailGate = firstRefreshGate;
+    repository.syncSnapshot = SessionSyncSnapshot(sessionId: 'ses_01');
+    syncChanges.add(null);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+
+    final recoveryFuture = controller.refreshAfterRecovery();
+    await Future<void>.delayed(Duration.zero);
+    firstRefreshGate.complete(detail);
+    await recoveryFuture;
+
+    final secondRefreshGate = Completer<SessionDetailRecord>();
+    repository.remoteDetailGate = secondRefreshGate;
+    repository.syncSnapshot = SessionSyncSnapshot(
+      sessionId: 'ses_01',
+      pendingHandIds: const {'hand_01'},
+    );
+    syncChanges.add(null);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    repository.syncSnapshot = SessionSyncSnapshot(sessionId: 'ses_01');
+    syncChanges.add(null);
+    await Future<void>.delayed(const Duration(milliseconds: 1));
+    expect(repository.loadSessionDetailCount, 4);
+
+    secondRefreshGate.complete(detail);
+    await Future<void>.delayed(Duration.zero);
+    controller.dispose();
+  });
+
   testWidgets('reconnect silently refreshes session detail without queued rows',
       (tester) async {
     final cachedDetail = _buildDetail(SessionStatus.active, hasHands: false);
+    final guestRepository = _FakeGuestRepository();
     final repository = _FakeSessionRepository(
       detail: cachedDetail,
       cachedDetail: cachedDetail,
@@ -484,7 +608,7 @@ void main() {
           home: SessionDetailScreen(
             eventId: 'evt_01',
             sessionId: 'ses_01',
-            guestRepository: _FakeGuestRepository(),
+            guestRepository: guestRepository,
             sessionRepository: repository,
           ),
         ),
@@ -493,11 +617,18 @@ void main() {
     await tester.pumpAndSettle();
 
     repository.detail = _buildDetail(SessionStatus.active);
+    guestRepository.remoteGuestsOverride = [
+      _guestRecord('gst_east', 'Alice Updated'),
+      _guestRecord('gst_south', 'Bob Lee'),
+      _guestRecord('gst_west', 'Carol Ng'),
+      _guestRecord('gst_north', 'Dee Wu'),
+    ];
     signal.emit();
     await tester.pumpAndSettle();
 
     expect(repository.loadSessionDetailCount, 2);
     expect(find.text('Hand 1'), findsWidgets);
+    expect(find.text('Alice Updated'), findsOneWidget);
     expect(find.text('Loading…'), findsNothing);
   });
 

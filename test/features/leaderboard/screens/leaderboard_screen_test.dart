@@ -13,6 +13,7 @@ import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/features/leaderboard/controllers/leaderboard_controller.dart';
 import 'package:mosaic/features/leaderboard/screens/leaderboard_screen.dart';
 
 class _RecordingLeaderboardRepository implements LeaderboardRepository {
@@ -25,12 +26,16 @@ class _RecordingLeaderboardRepository implements LeaderboardRepository {
   List<LeaderboardEntry> entries;
   final bool failFirstLoad;
   final List<LeaderboardEntry> cachedEntries;
+  bool failAfterFirstLoad = false;
   int loadCount = 0;
 
   @override
   Future<List<LeaderboardEntry>> loadLeaderboard(String eventId) async {
     loadCount += 1;
     if (failFirstLoad && loadCount == 1) {
+      throw Exception('temporary leaderboard failure');
+    }
+    if (failAfterFirstLoad && loadCount > 1) {
       throw Exception('temporary leaderboard failure');
     }
 
@@ -61,14 +66,24 @@ class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
 }
 
 class _LedgerSessionRepository implements SessionRepository {
-  const _LedgerSessionRepository({required this.rows});
+  _LedgerSessionRepository({required this.rows});
 
   final List<EventHandLedgerEntry> rows;
+  bool failAfterFirstLoad = false;
+  int loadCount = 0;
 
   @override
   Future<List<EventHandLedgerEntry>> loadEventHandLedger(
           String eventId) async =>
-      rows;
+      _loadRows();
+
+  Future<List<EventHandLedgerEntry>> _loadRows() async {
+    loadCount += 1;
+    if (failAfterFirstLoad && loadCount > 1) {
+      throw Exception('temporary ledger failure');
+    }
+    return rows;
+  }
 
   @override
   Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
@@ -158,17 +173,25 @@ class _LedgerSessionRepository implements SessionRepository {
 }
 
 class _SeatingRepository implements SeatingRepository {
-  const _SeatingRepository({
+  _SeatingRepository({
     required this.assignments,
     this.bonusRoundState,
   });
 
   final List<SeatingAssignmentRecord> assignments;
   final BonusRoundState? bonusRoundState;
+  bool failAfterFirstLoad = false;
+  int assignmentsLoadCount = 0;
+  int stateLoadCount = 0;
 
   @override
-  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
-      assignments;
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async {
+    assignmentsLoadCount += 1;
+    if (failAfterFirstLoad && assignmentsLoadCount > 1) {
+      throw Exception('temporary assignments failure');
+    }
+    return assignments;
+  }
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
@@ -211,6 +234,10 @@ class _SeatingRepository implements SeatingRepository {
 
   @override
   Future<BonusRoundState?> loadBonusRoundState(String eventId) {
+    stateLoadCount += 1;
+    if (failAfterFirstLoad && stateLoadCount > 1) {
+      throw Exception('temporary bonus state failure');
+    }
     return Future.value(bonusRoundState);
   }
 
@@ -239,6 +266,85 @@ class _SeatingRepository implements SeatingRepository {
 }
 
 void main() {
+  test('silent refresh preserves optional leaderboard reads when they fail',
+      () async {
+    final leaderboardRepository = _RecordingLeaderboardRepository(
+      entries: const [
+        LeaderboardEntry(
+          eventGuestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          totalPoints: 24,
+          handsPlayed: 4,
+          handsWon: 2,
+          selfDrawWins: 1,
+          discardWins: 1,
+          rank: 1,
+        ),
+      ],
+    );
+    final ledgerRepository = _LedgerSessionRepository(
+      rows: [_championsHandEntry()],
+    );
+    final seatingRepository = _SeatingRepository(
+      assignments: [
+        _bonusAssignment(
+          id: 'assignment_01',
+          guestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          seatIndex: 0,
+        ),
+      ],
+      bonusRoundState: const BonusRoundState(
+        championResolutionMethod: 'score',
+        suddenDeathStatus: null,
+        tiedTopPlayers: [],
+      ),
+    );
+    final controller = LeaderboardController(
+      leaderboardRepository: leaderboardRepository,
+      sessionRepository: ledgerRepository,
+      seatingRepository: seatingRepository,
+    );
+    await controller.load('evt_01');
+
+    ledgerRepository.failAfterFirstLoad = true;
+    seatingRepository.failAfterFirstLoad = true;
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.bonusLedgerEntries, hasLength(1));
+    expect(controller.finalsAssignments, hasLength(1));
+    expect(controller.bonusRoundState, isNotNull);
+  });
+
+  test('primary leaderboard failure does not hide visible finals content',
+      () async {
+    final leaderboardRepository = _RecordingLeaderboardRepository(
+      entries: const [],
+    );
+    final seatingRepository = _SeatingRepository(
+      assignments: [
+        _bonusAssignment(
+          id: 'assignment_01',
+          guestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          seatIndex: 0,
+        ),
+      ],
+    );
+    final controller = LeaderboardController(
+      leaderboardRepository: leaderboardRepository,
+      seatingRepository: seatingRepository,
+    );
+    await controller.load('evt_01');
+
+    leaderboardRepository.failAfterFirstLoad = true;
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.entries, isEmpty);
+    expect(controller.finalsAssignments, hasLength(1));
+    expect(controller.error, isNull);
+  });
+
   testWidgets(
       'reconnect silently refreshes leaderboard without loading flicker',
       (tester) async {
@@ -647,7 +753,7 @@ void main() {
         home: LeaderboardScreen(
           eventId: 'evt_01',
           leaderboardRepository: repository,
-          seatingRepository: const _SeatingRepository(
+          seatingRepository: _SeatingRepository(
             assignments: [],
             bonusRoundState: BonusRoundState(
               championResolutionMethod: 'sudden_death',
@@ -703,7 +809,7 @@ void main() {
         home: LeaderboardScreen(
           eventId: 'evt_01',
           leaderboardRepository: repository,
-          seatingRepository: const _SeatingRepository(
+          seatingRepository: _SeatingRepository(
             assignments: [],
             bonusRoundState: BonusRoundState(
               championResolutionMethod: 'sudden_death',
