@@ -1,26 +1,35 @@
 // ignore_for_file: unused_element_parameter
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/prize_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/prizes/screens/prize_plan_screen.dart';
 
 class _RecordingPrizeRepository implements PrizeRepository {
   _RecordingPrizeRepository({
     this.loadedPlan,
+    this.cachedPlan,
+    this.remotePlan,
     this.upsertedPlan,
     this.previewRows = const [],
     this.lockedAwards = const [],
   });
 
   final PrizePlanDetail? loadedPlan;
+  final PrizePlanDetail? cachedPlan;
+  final PrizePlanDetail? remotePlan;
   final PrizePlanDetail? upsertedPlan;
   final List<PrizeAwardPreviewRow> previewRows;
   final List<PrizeAwardRecord> lockedAwards;
   UpsertPrizePlanInput? capturedInput;
   int previewCount = 0;
   int lockCount = 0;
+  int loadPlanCount = 0;
 
   @override
   Future<List<PrizeAwardRecord>> loadPrizeAwards(String eventId) async =>
@@ -29,8 +38,10 @@ class _RecordingPrizeRepository implements PrizeRepository {
   @override
   Future<PrizePlanDetail?> loadPrizePlan({
     required String eventId,
-  }) async =>
-      loadedPlan;
+  }) async {
+    loadPlanCount += 1;
+    return remotePlan ?? loadedPlan;
+  }
 
   @override
   Future<List<PrizeAwardPreviewRow>> loadPrizePreview(String eventId) async {
@@ -50,7 +61,7 @@ class _RecordingPrizeRepository implements PrizeRepository {
 
   @override
   Future<PrizePlanDetail?> readCachedPrizePlan(String eventId) async =>
-      loadedPlan;
+      cachedPlan ?? loadedPlan;
 
   @override
   Future<List<PrizeAwardPreviewRow>> readCachedPrizePreview(
@@ -65,7 +76,85 @@ class _RecordingPrizeRepository implements PrizeRepository {
   }
 }
 
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  var _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  void dispose() => _controller.close();
+}
+
+PrizePlanDetail _plan({required int fixedAmountCents}) {
+  return PrizePlanDetail(
+    plan: PrizePlanRecord.fromJson(
+      const {
+        'id': 'pp_01',
+        'event_id': 'evt_01',
+        'mode': 'fixed',
+        'status': 'draft',
+        'reserve_fixed_cents': 0,
+        'reserve_percentage_bps': 0,
+        'row_version': 1,
+      },
+    ),
+    tiers: [
+      PrizeTierRecord(
+        id: 'tier_01',
+        prizePlanId: 'pp_01',
+        place: 1,
+        label: '1st',
+        fixedAmountCents: fixedAmountCents,
+      ),
+    ],
+  );
+}
+
 void main() {
+  testWidgets('recovery does not overwrite unsaved prize edits',
+      (tester) async {
+    final signal = _FakeOfflineRecoverySignal();
+    final repository = _RecordingPrizeRepository(
+      cachedPlan: _plan(fixedAmountCents: 10000),
+      remotePlan: _plan(fixedAmountCents: 20000),
+    );
+    addTearDown(signal.dispose);
+
+    await tester.pumpWidget(
+      OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          home: PrizePlanScreen(
+            eventId: 'evt_01',
+            prizeRepository: repository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final amountField = find.byKey(const Key('tier-0-amount'));
+    await tester.enterText(amountField, '15000');
+    await tester.pump();
+    signal.emit();
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<TextFormField>(amountField).controller!.text,
+      '150.00',
+    );
+    expect(repository.loadPlanCount, 1);
+  });
+
   testWidgets('renders derived total and fixed prize controls', (tester) async {
     final repository = _RecordingPrizeRepository();
 

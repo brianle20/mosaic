@@ -6,10 +6,40 @@ import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/screens/event_hand_ledger_screen.dart';
 
 void main() {
+  testWidgets('reconnect silently refreshes ledger while keeping rows visible',
+      (tester) async {
+    final repository = _FakeSessionRepository(rows: [_entry()]);
+    final signal = _FakeOfflineRecoverySignal();
+    addTearDown(signal.dispose);
+
+    await tester.pumpWidget(
+      OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          home: EventHandLedgerScreen(
+            eventId: 'evt_01',
+            sessionRepository: repository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    repository.rows = [_entry(bonusRoundId: 'bonus_01')];
+    signal.emit();
+    await tester.pumpAndSettle();
+
+    expect(repository.loadLedgerCount, 2);
+    expect(find.text('Bonus round'), findsOneWidget);
+    expect(find.text('Loading…'), findsNothing);
+  });
+
   testWidgets('renders compact newest-first ledger rows without wind labels',
       (tester) async {
     await tester.pumpWidget(
@@ -226,7 +256,7 @@ class _FakeSessionRepository implements SessionRepository {
     this.loadSessionDetailCompleter,
   });
 
-  final List<EventHandLedgerEntry> rows;
+  List<EventHandLedgerEntry> rows;
   final SessionDetailRecord? sessionDetail;
   final Completer<SessionDetailRecord>? loadSessionDetailCompleter;
   int loadLedgerCount = 0;
@@ -339,6 +369,24 @@ class _FakeSessionRepository implements SessionRepository {
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
     throw UnimplementedError();
   }
+}
+
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  var _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  void dispose() => _controller.close();
 }
 
 class _RecordingNavigatorObserver extends NavigatorObserver {

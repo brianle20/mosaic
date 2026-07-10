@@ -80,7 +80,7 @@ class SessionDetailController extends ChangeNotifier {
         : _capture(() => provider.readSessionSyncSnapshot(sessionId));
 
     final cachedDetail = await cachedDetailFuture;
-    if (!_isCurrentRequest(generation)) {
+    if (!_isCurrentRequest(generation) || _eventId != eventId) {
       return;
     }
     final cachedGuests = await cachedGuestsFuture;
@@ -108,26 +108,20 @@ class SessionDetailController extends ChangeNotifier {
 
     _subscribeToSyncChanges(provider, sessionId, generation);
 
-    final detailRefreshGeneration = ++_detailRefreshGeneration;
-    final remoteDetailFuture = _capture(
-      () => sessionRepository.loadSessionDetail(sessionId),
+    final remoteDetailFuture = _loadRemoteDetail(
+      eventId: eventId,
+      sessionId: sessionId,
+      generation: generation,
+      showLoading: false,
     );
     final remoteGuestsFuture = _capture(
       () => guestRepository.listGuests(eventId),
     );
 
-    final remoteDetail = await remoteDetailFuture;
+    await remoteDetailFuture;
     if (!_isCurrentRequest(generation)) {
       return;
     }
-    if (remoteDetail.error == null &&
-        remoteDetail.value != null &&
-        detailRefreshGeneration == _detailRefreshGeneration) {
-      detail = remoteDetail.value;
-      isLoading = false;
-      notifyListeners();
-    }
-
     final remoteGuests = await remoteGuestsFuture;
     if (!_isCurrentRequest(generation)) {
       return;
@@ -137,11 +131,80 @@ class SessionDetailController extends ChangeNotifier {
       notifyListeners();
     }
 
-    if (detail == null) {
-      error = remoteDetail.error?.toString();
-    }
     isLoading = false;
     notifyListeners();
+  }
+
+  Future<void> refreshAfterRecovery() async {
+    final eventId = _eventId;
+    final sessionId = _sessionId;
+    if (eventId == null || sessionId == null || _isDisposed) {
+      return;
+    }
+
+    final oldSubscription = _syncSubscription;
+    _syncSubscription = null;
+    if (oldSubscription != null) {
+      unawaited(oldSubscription.cancel());
+    }
+
+    final generation = ++_requestGeneration;
+    await _loadRemoteDetail(
+      eventId: eventId,
+      sessionId: sessionId,
+      generation: generation,
+      showLoading: false,
+    );
+
+    if (_isCurrentRequest(generation)) {
+      final provider = sessionRepository is SessionSyncStatusProvider
+          ? sessionRepository as SessionSyncStatusProvider
+          : null;
+      _subscribeToSyncChanges(provider, sessionId, generation);
+    }
+  }
+
+  Future<void> _loadRemoteDetail({
+    required String eventId,
+    required String sessionId,
+    required int generation,
+    required bool showLoading,
+  }) async {
+    if (!_isCurrentRequest(generation) || _eventId != eventId) {
+      return;
+    }
+    final detailRefreshGeneration = ++_detailRefreshGeneration;
+    if (showLoading) {
+      isLoading = true;
+      notifyListeners();
+    }
+
+    final remoteDetail = await _capture(
+      () => sessionRepository.loadSessionDetail(sessionId),
+    );
+    if (!_isCurrentRequest(generation)) {
+      return;
+    }
+
+    if (remoteDetail.error == null &&
+        remoteDetail.value != null &&
+        detailRefreshGeneration == _detailRefreshGeneration) {
+      detail = remoteDetail.value;
+      error = null;
+      if (showLoading) {
+        isLoading = false;
+      }
+      notifyListeners();
+      return;
+    }
+
+    if (detail == null && remoteDetail.error != null) {
+      error = remoteDetail.error.toString();
+    }
+    if (showLoading) {
+      isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> retryBlockedPhotoUploads() async {

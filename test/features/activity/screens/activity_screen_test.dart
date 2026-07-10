@@ -1,14 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/activity_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/activity/screens/activity_screen.dart';
 
 class _FakeActivityRepository implements ActivityRepository {
-  _FakeActivityRepository(this.entriesByCategory);
+  _FakeActivityRepository(
+    this.entriesByCategory, {
+    this.remoteEntriesByCategory,
+  });
 
   final Map<EventActivityCategory, List<EventActivityEntry>> entriesByCategory;
+  final Map<EventActivityCategory, List<EventActivityEntry>>?
+      remoteEntriesByCategory;
   EventActivityCategory lastLoadedCategory = EventActivityCategory.all;
+  int loadCount = 0;
 
   @override
   Future<List<EventActivityEntry>> loadActivity(
@@ -16,7 +26,10 @@ class _FakeActivityRepository implements ActivityRepository {
     EventActivityCategory category,
   ) async {
     lastLoadedCategory = category;
-    return entriesByCategory[category] ?? const [];
+    loadCount += 1;
+    return remoteEntriesByCategory?[category] ??
+        entriesByCategory[category] ??
+        const [];
   }
 
   @override
@@ -26,6 +39,24 @@ class _FakeActivityRepository implements ActivityRepository {
   ) async {
     return entriesByCategory[category] ?? const [];
   }
+}
+
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  var _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  void dispose() => _controller.close();
 }
 
 EventActivityEntry _entry({
@@ -49,6 +80,50 @@ EventActivityEntry _entry({
 }
 
 void main() {
+  testWidgets('reconnect silently refreshes activity without loading flicker',
+      (tester) async {
+    final cachedEntry = _entry(
+      id: 'act_01',
+      category: EventActivityCategory.event,
+      summary: 'Started event',
+    );
+    final remoteEntry = _entry(
+      id: 'act_02',
+      category: EventActivityCategory.event,
+      summary: 'Completed event',
+    );
+    final repository = _FakeActivityRepository(
+      {
+        EventActivityCategory.all: [cachedEntry],
+      },
+      remoteEntriesByCategory: {
+        EventActivityCategory.all: [remoteEntry],
+      },
+    );
+    final signal = _FakeOfflineRecoverySignal();
+    addTearDown(signal.dispose);
+
+    await tester.pumpWidget(
+      OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          home: ActivityScreen(
+            eventId: 'evt_01',
+            activityRepository: repository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    signal.emit();
+    await tester.pumpAndSettle();
+
+    expect(repository.loadCount, 2);
+    expect(find.text('Completed event'), findsOneWidget);
+    expect(find.text('Loading…'), findsNothing);
+  });
+
   testWidgets('renders newest-first activity entries and reason text', (
     tester,
   ) async {

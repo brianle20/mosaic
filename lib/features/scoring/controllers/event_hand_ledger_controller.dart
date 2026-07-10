@@ -27,13 +27,20 @@ class EventHandLedgerController extends ChangeNotifier {
   String? correctionError;
   List<EventHandLedgerRowViewModel> rows = const [];
 
-  Future<void> load(String eventId) async {
-    isLoading = true;
+  Future<void> load(String eventId, {bool silent = false}) async {
+    final shouldShowLoading = !silent;
+    final previousRows = rows;
+    if (shouldShowLoading) {
+      isLoading = true;
+    }
     error = null;
     correctionError = null;
-    rows = buildEventHandLedgerViewModels(
+    final cachedRows = buildEventHandLedgerViewModels(
       await sessionRepository.readCachedEventHandLedger(eventId),
     );
+    if (cachedRows.isNotEmpty || rows.isEmpty) {
+      rows = cachedRows;
+    }
     notifyListeners();
 
     try {
@@ -41,11 +48,16 @@ class EventHandLedgerController extends ChangeNotifier {
         await sessionRepository.loadEventHandLedger(eventId),
       );
     } catch (err) {
+      if (previousRows.isNotEmpty) {
+        rows = previousRows;
+      }
       if (rows.isEmpty) {
         error = err.toString();
       }
     } finally {
-      isLoading = false;
+      if (shouldShowLoading) {
+        isLoading = false;
+      }
       notifyListeners();
     }
   }

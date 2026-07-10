@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/data/models/prize_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/features/prizes/controllers/prize_plan_controller.dart';
@@ -98,137 +99,141 @@ class _PrizePlanScreenState extends State<PrizePlanScreen> {
   Widget build(BuildContext context) {
     final draft = _controller.draft;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Prize Plan')),
-      body: ListView(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Total Prizes',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _formatMoneyDisplay(draft.totalPrizeCents),
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 12),
-          const Text('Preview awards before locking the official payout list.'),
-          if (_controller.previewRows.isEmpty &&
-              _controller.lockedAwards.isEmpty) ...[
-            const SizedBox(height: 8),
+    return ReconnectRefreshListener(
+      onRefresh: _controller.refreshAfterRecovery,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Prize Plan')),
+        body: ListView(
+          controller: _scrollController,
+          padding: const EdgeInsets.all(16),
+          children: [
             Text(
-              'Enter prize amounts when you are ready to preview payouts.',
-            ),
-          ],
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  'Paid Places',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Remove paid place',
-                onPressed: draft.tiers.length > 1
-                    ? () => _controller.setPaidPlaces(draft.tiers.length - 1)
-                    : null,
-                icon: const Icon(Icons.remove),
-              ),
-              SizedBox(
-                width: 28,
-                child: Center(child: Text(draft.tiers.length.toString())),
-              ),
-              IconButton(
-                tooltip: 'Add paid place',
-                onPressed: () => _controller.setPaidPlaces(
-                  draft.tiers.length + 1,
-                ),
-                icon: const Icon(Icons.add),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          for (var index = 0; index < draft.tiers.length; index++)
-            _TierEditor(
-              key: ValueKey('tier-$index'),
-              tierIndex: index,
-              tier: draft.tiers[index],
-              error: draft.tierErrors[draft.tiers[index].place],
-              onChanged: ({int? fixedAmountCents}) {
-                _controller.updateTier(
-                  index,
-                  fixedAmountCents: fixedAmountCents,
-                );
-              },
-            ),
-          const SizedBox(height: 8),
-          TextFormField(
-            initialValue: draft.note ?? '',
-            decoration: const InputDecoration(labelText: 'Note'),
-            onChanged: _controller.setNote,
-          ),
-          if (_controller.error != null) ...[
-            const SizedBox(height: 8),
-            Text(_controller.error!),
-          ],
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: _controller.isSubmitting ? null : _previewPayouts,
-            child: const Text('Save & Preview Payouts'),
-          ),
-          const SizedBox(height: 12),
-          if (_controller.hasPreviewedPayouts &&
-              _controller.previewRows.isEmpty) ...[
-            EmptyStateCard(
-              key: _previewResultKey,
-              icon: Icons.leaderboard,
-              title: 'No scored players yet',
-              message: 'Add scores before previewing payouts.',
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (_controller.previewRows.isNotEmpty) ...[
-            Text(
-              key: _previewResultKey,
-              'Lock awards only when this preview matches the standings you want to pay out.',
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Preview Payouts',
+              'Total Prizes',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            for (final row in _controller.previewRows)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(row.displayName),
-                subtitle: Text(row.displayRank),
-                trailing: Text(_formatMoneyDisplay(row.awardAmountCents)),
-              ),
+            Text(
+              _formatMoneyDisplay(draft.totalPrizeCents),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 12),
+            const Text(
+                'Preview awards before locking the official payout list.'),
+            if (_controller.previewRows.isEmpty &&
+                _controller.lockedAwards.isEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Enter prize amounts when you are ready to preview payouts.',
+              ),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Paid Places',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Remove paid place',
+                  onPressed: draft.tiers.length > 1
+                      ? () => _controller.setPaidPlaces(draft.tiers.length - 1)
+                      : null,
+                  icon: const Icon(Icons.remove),
+                ),
+                SizedBox(
+                  width: 28,
+                  child: Center(child: Text(draft.tiers.length.toString())),
+                ),
+                IconButton(
+                  tooltip: 'Add paid place',
+                  onPressed: () => _controller.setPaidPlaces(
+                    draft.tiers.length + 1,
+                  ),
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (var index = 0; index < draft.tiers.length; index++)
+              _TierEditor(
+                key: ValueKey('tier-$index'),
+                tierIndex: index,
+                tier: draft.tiers[index],
+                error: draft.tierErrors[draft.tiers[index].place],
+                onChanged: ({int? fixedAmountCents}) {
+                  _controller.updateTier(
+                    index,
+                    fixedAmountCents: fixedAmountCents,
+                  );
+                },
+              ),
+            const SizedBox(height: 8),
+            TextFormField(
+              initialValue: draft.note ?? '',
+              decoration: const InputDecoration(labelText: 'Note'),
+              onChanged: _controller.setNote,
+            ),
+            if (_controller.error != null) ...[
+              const SizedBox(height: 8),
+              Text(_controller.error!),
+            ],
+            const SizedBox(height: 16),
             FilledButton(
-              onPressed:
-                  _controller.isSubmitting ? null : _controller.lockAwards,
-              child: const Text('Lock Prize Awards'),
+              onPressed: _controller.isSubmitting ? null : _previewPayouts,
+              child: const Text('Save & Preview Payouts'),
             ),
+            const SizedBox(height: 12),
+            if (_controller.hasPreviewedPayouts &&
+                _controller.previewRows.isEmpty) ...[
+              EmptyStateCard(
+                key: _previewResultKey,
+                icon: Icons.leaderboard,
+                title: 'No scored players yet',
+                message: 'Add scores before previewing payouts.',
+              ),
+              const SizedBox(height: 12),
+            ],
+            if (_controller.previewRows.isNotEmpty) ...[
+              Text(
+                key: _previewResultKey,
+                'Lock awards only when this preview matches the standings you want to pay out.',
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Preview Payouts',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              for (final row in _controller.previewRows)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(row.displayName),
+                  subtitle: Text(row.displayRank),
+                  trailing: Text(_formatMoneyDisplay(row.awardAmountCents)),
+                ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed:
+                    _controller.isSubmitting ? null : _controller.lockAwards,
+                child: const Text('Lock Prize Awards'),
+              ),
+            ],
+            if (_controller.lockedAwards.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const StatusChip(
+                label: 'Locked Awards Available',
+                tone: StatusChipTone.success,
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                onPressed: _openLockedAwards,
+                child: const Text('View Locked Awards'),
+              ),
+            ],
           ],
-          if (_controller.lockedAwards.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            const StatusChip(
-              label: 'Locked Awards Available',
-              tone: StatusChipTone.success,
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: _openLockedAwards,
-              child: const Text('View Locked Awards'),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

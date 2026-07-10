@@ -15,20 +15,32 @@ class PrizeAwardsController extends ChangeNotifier {
   String? error;
   List<PrizeAwardRecord> awards = const [];
 
-  Future<void> load() async {
-    awards = await prizeRepository.readCachedPrizeAwards(eventId);
-    isLoading = true;
+  Future<void> load({bool silent = false}) async {
+    final shouldShowLoading = !silent;
+    final previousAwards = awards;
+    final cachedAwards = await prizeRepository.readCachedPrizeAwards(eventId);
+    if (cachedAwards.isNotEmpty || awards.isEmpty) {
+      awards = cachedAwards;
+    }
+    if (shouldShowLoading) {
+      isLoading = true;
+    }
     error = null;
     notifyListeners();
 
     try {
       awards = await prizeRepository.loadPrizeAwards(eventId);
     } catch (err) {
+      if (previousAwards.isNotEmpty) {
+        awards = previousAwards;
+      }
       if (awards.isEmpty) {
         error = err.toString();
       }
     } finally {
-      isLoading = false;
+      if (shouldShowLoading) {
+        isLoading = false;
+      }
       notifyListeners();
     }
   }

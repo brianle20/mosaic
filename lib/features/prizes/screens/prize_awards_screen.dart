@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/features/events/models/event_form_formatters.dart';
 import 'package:mosaic/features/prizes/controllers/prize_awards_controller.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
@@ -51,56 +52,59 @@ class _PrizeAwardsScreenState extends State<PrizeAwardsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Prize Awards')),
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error,
-        onRetry: _controller.load,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const Text(
-              'Official Prize Awards',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Use this locked list as the official prize result for the event.',
-            ),
-            const SizedBox(height: 16),
-            if (_controller.awards.isEmpty) ...[
-              const EmptyStateCard(
-                icon: Icons.checklist_rtl,
-                title: 'No locked awards yet',
-                message:
-                    'Preview and lock prize awards before using the payout checklist.',
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(silent: true),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Prize Awards')),
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error,
+          onRetry: _controller.load,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              const Text(
+                'Official Prize Awards',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Use this locked list as the official prize result for the event.',
               ),
               const SizedBox(height: 16),
-            ],
-            for (final award in _controller.awards)
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          award.displayName ??
-                              widget.guestNamesById[award.eventGuestId] ??
-                              award.eventGuestId,
+              if (_controller.awards.isEmpty) ...[
+                const EmptyStateCard(
+                  icon: Icons.checklist_rtl,
+                  title: 'No locked awards yet',
+                  message:
+                      'Preview and lock prize awards before using the payout checklist.',
+                ),
+                const SizedBox(height: 16),
+              ],
+              for (final award in _controller.awards)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            award.displayName ??
+                                widget.guestNamesById[award.eventGuestId] ??
+                                award.eventGuestId,
+                          ),
+                          subtitle: Text(award.displayRank),
+                          trailing:
+                              Text(_formatMoneyDisplay(award.awardAmountCents)),
                         ),
-                        subtitle: Text(award.displayRank),
-                        trailing:
-                            Text(_formatMoneyDisplay(award.awardAmountCents)),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

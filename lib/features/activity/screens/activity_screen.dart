@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/activity_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/activity/controllers/activity_controller.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
@@ -48,72 +49,75 @@ class _ActivityScreenState extends State<ActivityScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Activity')),
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error,
-        onRetry: () => _controller.load(widget.eventId),
-        child: Column(
-          children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: EventActivityCategory.values
-                    .map(
-                      (category) => Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(_labelForCategory(category)),
-                          selected: _controller.selectedCategory == category,
-                          onSelected: (_) => _controller.selectCategory(
-                              widget.eventId, category),
-                        ),
-                      ),
-                    )
-                    .toList(growable: false),
-              ),
-            ),
-            Expanded(
-              child: _controller.entries.isEmpty
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: EmptyStateCard(
-                          icon: Icons.history,
-                          title: 'No activity yet',
-                          message:
-                              'Event actions, payments, sessions, and prize updates will appear here.',
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      itemCount: _controller.entries.length,
-                      itemBuilder: (context, index) {
-                        final entry = _controller.entries[index];
-                        return Card(
-                          child: ListTile(
-                            title: Text(entry.summaryText),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(_timestampFormat(entry.createdAt)),
-                                if (entry.reason case final reason?)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(reason),
-                                  ),
-                              ],
-                            ),
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(widget.eventId, silent: true),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Activity')),
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error,
+          onRetry: () => _controller.load(widget.eventId),
+          child: Column(
+            children: [
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: EventActivityCategory.values
+                      .map(
+                        (category) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(_labelForCategory(category)),
+                            selected: _controller.selectedCategory == category,
+                            onSelected: (_) => _controller.selectCategory(
+                                widget.eventId, category),
                           ),
-                        );
-                      },
-                    ),
-            ),
-          ],
+                        ),
+                      )
+                      .toList(growable: false),
+                ),
+              ),
+              Expanded(
+                child: _controller.entries.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: EmptyStateCard(
+                            icon: Icons.history,
+                            title: 'No activity yet',
+                            message:
+                                'Event actions, payments, sessions, and prize updates will appear here.',
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        itemCount: _controller.entries.length,
+                        itemBuilder: (context, index) {
+                          final entry = _controller.entries[index];
+                          return Card(
+                            child: ListTile(
+                              title: Text(entry.summaryText),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_timestampFormat(entry.createdAt)),
+                                  if (entry.reason case final reason?)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(reason),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );

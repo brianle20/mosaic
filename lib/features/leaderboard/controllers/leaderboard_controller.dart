@@ -262,12 +262,28 @@ class LeaderboardController extends ChangeNotifier {
     return rankedRows;
   }
 
-  Future<void> load(String eventId) async {
-    isLoading = true;
+  Future<void> load(String eventId, {bool silent = false}) async {
+    final shouldShowLoading = !silent;
+    final previousEntries = entries;
+    final previousBonusLedgerEntries = bonusLedgerEntries;
+    final previousFinalsAssignments = finalsAssignments;
+    if (shouldShowLoading) {
+      isLoading = true;
+    }
     error = null;
-    entries = await leaderboardRepository.readCachedLeaderboard(eventId);
-    bonusLedgerEntries = await _readCachedBonusLedger(eventId);
-    finalsAssignments = await _readCachedFinalsAssignments(eventId);
+    final cachedEntries =
+        await leaderboardRepository.readCachedLeaderboard(eventId);
+    if (cachedEntries.isNotEmpty || entries.isEmpty) {
+      entries = cachedEntries;
+    }
+    final cachedBonusLedger = await _readCachedBonusLedger(eventId);
+    if (cachedBonusLedger.isNotEmpty || bonusLedgerEntries.isEmpty) {
+      bonusLedgerEntries = cachedBonusLedger;
+    }
+    final cachedFinalsAssignments = await _readCachedFinalsAssignments(eventId);
+    if (cachedFinalsAssignments.isNotEmpty || finalsAssignments.isEmpty) {
+      finalsAssignments = cachedFinalsAssignments;
+    }
     bonusRoundResults = buildBonusRoundResultsSummary(
       ledgerEntries: bonusLedgerEntries,
       leaderboardEntries: entries,
@@ -286,11 +302,27 @@ class LeaderboardController extends ChangeNotifier {
         bonusRoundState: bonusRoundState,
       );
     } catch (err) {
+      if (previousEntries.isNotEmpty) {
+        entries = previousEntries;
+      }
+      if (previousBonusLedgerEntries.isNotEmpty) {
+        bonusLedgerEntries = previousBonusLedgerEntries;
+      }
+      if (previousFinalsAssignments.isNotEmpty) {
+        finalsAssignments = previousFinalsAssignments;
+      }
+      bonusRoundResults = buildBonusRoundResultsSummary(
+        ledgerEntries: bonusLedgerEntries,
+        leaderboardEntries: entries,
+        bonusRoundState: bonusRoundState,
+      );
       if (entries.isEmpty) {
         error = err.toString();
       }
     } finally {
-      isLoading = false;
+      if (shouldShowLoading) {
+        isLoading = false;
+      }
       notifyListeners();
     }
   }

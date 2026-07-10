@@ -22,10 +22,11 @@ class PrizePlanController extends ChangeNotifier {
   List<PrizeAwardPreviewRow> previewRows = const [];
   List<PrizeAwardRecord> lockedAwards = const [];
   bool hasPreviewedPayouts = false;
+  bool hasUnsavedChanges = false;
 
-  Future<void> load() async {
+  Future<void> load({bool silent = false}) async {
     final cachedPlan = await prizeRepository.readCachedPrizePlan(eventId);
-    if (cachedPlan != null) {
+    if (cachedPlan != null && !hasUnsavedChanges) {
       draft = PrizePlanDraft.fromDetail(cachedPlan);
       previewRows = const [];
       hasPreviewedPayouts = false;
@@ -34,7 +35,10 @@ class PrizePlanController extends ChangeNotifier {
           : const [];
     }
 
-    isLoading = true;
+    final shouldShowLoading = !silent;
+    if (shouldShowLoading) {
+      isLoading = true;
+    }
     error = null;
     notifyListeners();
 
@@ -52,18 +56,22 @@ class PrizePlanController extends ChangeNotifier {
       } else {
         lockedAwards = const [];
       }
+      hasUnsavedChanges = false;
     } catch (err) {
       if (cachedPlan == null) {
         error = err.toString();
       }
     } finally {
-      isLoading = false;
+      if (shouldShowLoading) {
+        isLoading = false;
+      }
       notifyListeners();
     }
   }
 
   void setMode(PrizePlanMode mode) {
     draft = draft.copyWith(mode: mode);
+    hasUnsavedChanges = true;
     error = null;
     if (mode == PrizePlanMode.none) {
       previewRows = const [];
@@ -96,6 +104,7 @@ class PrizePlanController extends ChangeNotifier {
       mode: PrizePlanMode.fixed,
       tiers: tiers,
     );
+    hasUnsavedChanges = true;
     error = null;
     previewRows = const [];
     hasPreviewedPayouts = false;
@@ -104,6 +113,7 @@ class PrizePlanController extends ChangeNotifier {
 
   void setNote(String? value) {
     draft = draft.copyWith(note: value);
+    hasUnsavedChanges = true;
     notifyListeners();
   }
 
@@ -124,6 +134,7 @@ class PrizePlanController extends ChangeNotifier {
         ),
       ],
     );
+    hasUnsavedChanges = true;
     notifyListeners();
   }
 
@@ -143,6 +154,7 @@ class PrizePlanController extends ChangeNotifier {
       fixedAmountCents: fixedAmountCents ?? current.fixedAmountCents,
     );
     draft = draft.copyWith(tiers: tiers);
+    hasUnsavedChanges = true;
     previewRows = const [];
     hasPreviewedPayouts = false;
     notifyListeners();
@@ -166,6 +178,7 @@ class PrizePlanController extends ChangeNotifier {
       draft = PrizePlanDraft.fromDetail(saved);
       previewRows = await prizeRepository.loadPrizePreview(eventId);
       hasPreviewedPayouts = true;
+      hasUnsavedChanges = false;
     } catch (err) {
       error = err.toString();
       hasPreviewedPayouts = false;
@@ -188,12 +201,20 @@ class PrizePlanController extends ChangeNotifier {
 
     try {
       lockedAwards = await prizeRepository.lockPrizeAwards(eventId);
+      hasUnsavedChanges = false;
     } catch (err) {
       error = err.toString();
     } finally {
       isSubmitting = false;
       notifyListeners();
     }
+  }
+
+  Future<void> refreshAfterRecovery() async {
+    if (isSubmitting || hasUnsavedChanges) {
+      return;
+    }
+    await load(silent: true);
   }
 
   String _validationError() {

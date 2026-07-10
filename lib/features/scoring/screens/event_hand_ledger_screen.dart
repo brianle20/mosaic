@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/event_hand_ledger_controller.dart';
 import 'package:mosaic/features/scoring/models/event_hand_ledger_view_models.dart';
@@ -82,55 +83,58 @@ class _EventHandLedgerScreenState extends State<EventHandLedgerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Hand Ledger')),
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error,
-        onRetry: () => _controller.load(widget.eventId),
-        child: Column(
-          children: [
-            if (_controller.correctionError != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Text(
-                  _controller.correctionError!,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-              ),
-            Expanded(
-              child: _controller.rows.isEmpty
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: EmptyStateCard(
-                          icon: Icons.receipt_long,
-                          title: 'No hands recorded yet.',
-                          message:
-                              'Recorded hands across all tables will appear here.',
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(widget.eventId, silent: true),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Hand Ledger')),
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error,
+          onRetry: () => _controller.load(widget.eventId),
+          child: Column(
+            children: [
+              if (_controller.correctionError != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Text(
+                    _controller.correctionError!,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                          fontWeight: FontWeight.w700,
                         ),
+                  ),
+                ),
+              Expanded(
+                child: _controller.rows.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: EmptyStateCard(
+                            icon: Icons.receipt_long,
+                            title: 'No hands recorded yet.',
+                            message:
+                                'Recorded hands across all tables will appear here.',
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _controller.rows.length,
+                        itemBuilder: (context, index) {
+                          final row = _controller.rows[index];
+                          return _LedgerRow(
+                            row: row,
+                            onTap: widget.canCorrectHands &&
+                                    row.isHandRow &&
+                                    !_controller.isLoadingCorrection
+                                ? () => _openCorrection(row)
+                                : null,
+                          );
+                        },
                       ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _controller.rows.length,
-                      itemBuilder: (context, index) {
-                        final row = _controller.rows[index];
-                        return _LedgerRow(
-                          row: row,
-                          onTap: widget.canCorrectHands &&
-                                  row.isHandRow &&
-                                  !_controller.isLoadingCorrection
-                              ? () => _openCorrection(row)
-                              : null,
-                        );
-                      },
-                    ),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );

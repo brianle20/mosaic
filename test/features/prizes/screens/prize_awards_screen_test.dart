@@ -1,21 +1,29 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/prize_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/prizes/screens/prize_awards_screen.dart';
 
 class _AwardsRepository implements PrizeRepository {
-  _AwardsRepository(this.awards);
+  _AwardsRepository(this.awards, {this.cachedAwards});
 
   List<PrizeAwardRecord> awards;
+  final List<PrizeAwardRecord>? cachedAwards;
+  int loadCount = 0;
 
   @override
-  Future<List<PrizeAwardRecord>> loadPrizeAwards(String eventId) async =>
-      awards;
+  Future<List<PrizeAwardRecord>> loadPrizeAwards(String eventId) async {
+    loadCount += 1;
+    return awards;
+  }
 
   @override
   Future<List<PrizeAwardRecord>> readCachedPrizeAwards(String eventId) async =>
-      awards;
+      cachedAwards ?? awards;
 
   @override
   Future<PrizePlanDetail?> loadPrizePlan({
@@ -49,7 +57,78 @@ class _AwardsRepository implements PrizeRepository {
   }
 }
 
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  var _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  void dispose() => _controller.close();
+}
+
 void main() {
+  testWidgets(
+      'reconnect silently refreshes prize awards without loading flicker',
+      (tester) async {
+    final initialAward = const PrizeAwardRecord(
+      id: 'award_01',
+      eventId: 'evt_01',
+      eventGuestId: 'gst_01',
+      displayName: 'Alice Wong',
+      rankStart: 1,
+      rankEnd: 1,
+      displayRank: '1',
+      awardAmountCents: 15000,
+    );
+    final refreshedAward = const PrizeAwardRecord(
+      id: 'award_01',
+      eventId: 'evt_01',
+      eventGuestId: 'gst_01',
+      displayName: 'Alice Chen',
+      rankStart: 1,
+      rankEnd: 1,
+      displayRank: '1',
+      awardAmountCents: 20000,
+    );
+    final repository = _AwardsRepository(
+      [initialAward],
+      cachedAwards: [initialAward],
+    );
+    final signal = _FakeOfflineRecoverySignal();
+    addTearDown(signal.dispose);
+
+    await tester.pumpWidget(
+      OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          home: PrizeAwardsScreen(
+            eventId: 'evt_01',
+            guestNamesById: const {},
+            prizeRepository: repository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    repository.awards = [refreshedAward];
+    signal.emit();
+    await tester.pumpAndSettle();
+
+    expect(repository.loadCount, 2);
+    expect(find.text('Alice Chen'), findsOneWidget);
+    expect(find.text('Loading…'), findsNothing);
+  });
+
   testWidgets('renders an intentional empty state when no locked awards exist',
       (tester) async {
     final repository = _AwardsRepository(const []);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
@@ -8,6 +10,8 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/leaderboard/screens/leaderboard_screen.dart';
 
@@ -15,10 +19,12 @@ class _RecordingLeaderboardRepository implements LeaderboardRepository {
   _RecordingLeaderboardRepository({
     required this.entries,
     this.failFirstLoad = false,
+    this.cachedEntries = const [],
   });
 
-  final List<LeaderboardEntry> entries;
+  List<LeaderboardEntry> entries;
   final bool failFirstLoad;
+  final List<LeaderboardEntry> cachedEntries;
   int loadCount = 0;
 
   @override
@@ -33,7 +39,25 @@ class _RecordingLeaderboardRepository implements LeaderboardRepository {
 
   @override
   Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId) async =>
-      const [];
+      cachedEntries;
+}
+
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  var _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  void dispose() => _controller.close();
 }
 
 class _LedgerSessionRepository implements SessionRepository {
@@ -215,6 +239,58 @@ class _SeatingRepository implements SeatingRepository {
 }
 
 void main() {
+  testWidgets(
+      'reconnect silently refreshes leaderboard without loading flicker',
+      (tester) async {
+    const initialEntry = LeaderboardEntry(
+      eventGuestId: 'gst_alice',
+      displayName: 'Alice Wong',
+      totalPoints: 16,
+      handsPlayed: 3,
+      handsWon: 1,
+      selfDrawWins: 0,
+      discardWins: 1,
+      rank: 1,
+    );
+    const refreshedEntry = LeaderboardEntry(
+      eventGuestId: 'gst_bob',
+      displayName: 'Bob Lee',
+      totalPoints: 24,
+      handsPlayed: 4,
+      handsWon: 2,
+      selfDrawWins: 1,
+      discardWins: 1,
+      rank: 1,
+    );
+    final repository = _RecordingLeaderboardRepository(
+      entries: [initialEntry],
+      cachedEntries: [initialEntry],
+    );
+    final signal = _FakeOfflineRecoverySignal();
+    addTearDown(signal.dispose);
+
+    await tester.pumpWidget(
+      OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          home: LeaderboardScreen(
+            eventId: 'evt_01',
+            leaderboardRepository: repository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    repository.entries = [refreshedEntry];
+    signal.emit();
+    await tester.pumpAndSettle();
+
+    expect(repository.loadCount, 2);
+    expect(find.text('Bob Lee'), findsOneWidget);
+    expect(find.text('Loading…'), findsNothing);
+  });
+
   testWidgets('renders an intentional empty state when no scored results exist',
       (tester) async {
     final repository = _RecordingLeaderboardRepository(entries: const []);

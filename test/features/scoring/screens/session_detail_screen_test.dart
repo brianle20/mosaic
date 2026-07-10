@@ -9,6 +9,8 @@ import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/offline/offline_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/offline/session_sync_status.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/screens/session_detail_screen.dart';
@@ -177,6 +179,7 @@ class _FakeSessionRepository
   SessionDetailRecord? recordHandDetail;
   String? endedReason;
   int retryBlockedPhotoUploadsCount = 0;
+  int loadSessionDetailCount = 0;
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -214,6 +217,7 @@ class _FakeSessionRepository
 
   @override
   Future<SessionDetailRecord> loadSessionDetail(String sessionId) async {
+    loadSessionDetailCount += 1;
     final gate = remoteDetailGate;
     if (gate != null) {
       return gate.future;
@@ -311,6 +315,24 @@ class _FakeSessionRepository
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input) {
     throw UnimplementedError();
   }
+}
+
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  var _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  void dispose() => _controller.close();
 }
 
 SessionDetailRecord _buildDetail(
@@ -445,6 +467,40 @@ SessionDetailRecord _detailWithPhoto({required String clientPhotoId}) {
 }
 
 void main() {
+  testWidgets('reconnect silently refreshes session detail without queued rows',
+      (tester) async {
+    final cachedDetail = _buildDetail(SessionStatus.active, hasHands: false);
+    final repository = _FakeSessionRepository(
+      detail: cachedDetail,
+      cachedDetail: cachedDetail,
+    );
+    final signal = _FakeOfflineRecoverySignal();
+    addTearDown(signal.dispose);
+
+    await tester.pumpWidget(
+      OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          home: SessionDetailScreen(
+            eventId: 'evt_01',
+            sessionId: 'ses_01',
+            guestRepository: _FakeGuestRepository(),
+            sessionRepository: repository,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    repository.detail = _buildDetail(SessionStatus.active);
+    signal.emit();
+    await tester.pumpAndSettle();
+
+    expect(repository.loadSessionDetailCount, 2);
+    expect(find.text('Hand 1'), findsWidgets);
+    expect(find.text('Loading…'), findsNothing);
+  });
+
   testWidgets('keeps cached session visible while remote detail is pending',
       (tester) async {
     final cachedDetail = _buildDetail(SessionStatus.active);

@@ -13,23 +13,37 @@ class ActivityController extends ChangeNotifier {
   EventActivityCategory selectedCategory = EventActivityCategory.all;
   List<EventActivityEntry> entries = const [];
 
-  Future<void> load(String eventId) async {
-    isLoading = true;
+  Future<void> load(String eventId, {bool silent = false}) async {
+    final shouldShowLoading = !silent;
+    final previousEntries = entries;
+    if (shouldShowLoading) {
+      isLoading = true;
+    }
     error = null;
-    entries = await _activityRepository.readCachedActivity(
+    final cachedEntries = await _activityRepository.readCachedActivity(
       eventId,
       selectedCategory,
     );
+    if (cachedEntries.isNotEmpty || entries.isEmpty) {
+      entries = cachedEntries;
+    }
     notifyListeners();
 
     try {
       entries =
           await _activityRepository.loadActivity(eventId, selectedCategory);
     } catch (exception) {
-      error = exception.toString();
+      if (previousEntries.isNotEmpty) {
+        entries = previousEntries;
+      }
+      if (entries.isEmpty) {
+        error = exception.toString();
+      }
     }
 
-    isLoading = false;
+    if (shouldShowLoading) {
+      isLoading = false;
+    }
     notifyListeners();
   }
 

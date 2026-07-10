@@ -5,6 +5,7 @@ import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/session_detail_controller.dart';
 import 'package:mosaic/features/scoring/models/session_detail_view_models.dart';
@@ -177,81 +178,85 @@ class _SessionDetailScreenState extends State<SessionDetailScreen> {
         );
     final canControlRoundTimer = viewModel?.showRoundTimer ?? false;
 
-    return Scaffold(
-      appBar: AppBar(title: Text(viewModel?.title ?? 'Table Session')),
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error,
-        onRetry: () => _controller.load(
-          eventId: widget.eventId,
-          sessionId: widget.sessionId,
-        ),
-        child: detail == null
-            ? const SizedBox.shrink()
-            : ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (_controller.actionError case final actionError?)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: InlineErrorBanner(message: actionError),
-                    ),
-                  if (viewModel!.blockedSyncMessage case final message?)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: InlineErrorBanner(message: message),
-                    ),
-                  if (viewModel.blockedPhotoUploadMessage != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: _PhotoUploadWarningSurface(
-                        onRetry: _controller.retryBlockedPhotoUploads,
+    return ReconnectRefreshListener(
+      onRefresh: _controller.refreshAfterRecovery,
+      child: Scaffold(
+        appBar: AppBar(title: Text(viewModel?.title ?? 'Table Session')),
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error,
+          onRetry: () => _controller.load(
+            eventId: widget.eventId,
+            sessionId: widget.sessionId,
+          ),
+          child: detail == null
+              ? const SizedBox.shrink()
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    if (_controller.actionError case final actionError?)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: InlineErrorBanner(message: actionError),
                       ),
+                    if (viewModel!.blockedSyncMessage case final message?)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: InlineErrorBanner(message: message),
+                      ),
+                    if (viewModel.blockedPhotoUploadMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _PhotoUploadWarningSurface(
+                          onRetry: _controller.retryBlockedPhotoUploads,
+                        ),
+                      ),
+                    _SessionHeader(
+                      viewModel: viewModel,
+                      status: detail.session.status,
                     ),
-                  _SessionHeader(
-                    viewModel: viewModel,
-                    status: detail.session.status,
-                  ),
-                  const SizedBox(height: 12),
-                  _SessionSummarySurface(
-                    viewModel: viewModel,
-                    status: detail.session.status,
-                    endReason: detail.session.endReason,
-                    handEntryMessage: canRecordHand
-                        ? null
-                        : isSyncBlocked
-                            ? 'Hand entry is unavailable until offline sync is reviewed.'
-                            : _handEntryStatusMessage(
-                                detail.session.status,
-                                scoringOpen: widget.scoringOpen,
-                              ),
-                    isSubmitting: _controller.isSubmittingOperation,
-                    onRecordHand: canRecordHand ? () => _openHandEntry() : null,
-                    onPause: canControlRoundTimer &&
-                            detail.session.status == SessionStatus.active
-                        ? _controller.pauseSession
-                        : null,
-                    onResume: canControlRoundTimer &&
-                            detail.session.status == SessionStatus.paused
-                        ? _controller.resumeSession
-                        : null,
-                    onEnd: detail.session.status == SessionStatus.active ||
-                            detail.session.status == SessionStatus.paused
-                        ? _showEndSessionDialog
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                  _SeatGrid(seats: viewModel.seats),
-                  const SizedBox(height: 16),
-                  _HandHistory(
-                    detail: detail,
-                    viewModel: viewModel,
-                    canRecordHand: canRecordHand,
-                    onRecordHand: () => _openHandEntry(),
-                    onOpenHand: (hand) => _openHandEntry(hand: hand),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 12),
+                    _SessionSummarySurface(
+                      viewModel: viewModel,
+                      status: detail.session.status,
+                      endReason: detail.session.endReason,
+                      handEntryMessage: canRecordHand
+                          ? null
+                          : isSyncBlocked
+                              ? 'Hand entry is unavailable until offline sync is reviewed.'
+                              : _handEntryStatusMessage(
+                                  detail.session.status,
+                                  scoringOpen: widget.scoringOpen,
+                                ),
+                      isSubmitting: _controller.isSubmittingOperation,
+                      onRecordHand:
+                          canRecordHand ? () => _openHandEntry() : null,
+                      onPause: canControlRoundTimer &&
+                              detail.session.status == SessionStatus.active
+                          ? _controller.pauseSession
+                          : null,
+                      onResume: canControlRoundTimer &&
+                              detail.session.status == SessionStatus.paused
+                          ? _controller.resumeSession
+                          : null,
+                      onEnd: detail.session.status == SessionStatus.active ||
+                              detail.session.status == SessionStatus.paused
+                          ? _showEndSessionDialog
+                          : null,
+                    ),
+                    const SizedBox(height: 16),
+                    _SeatGrid(seats: viewModel.seats),
+                    const SizedBox(height: 16),
+                    _HandHistory(
+                      detail: detail,
+                      viewModel: viewModel,
+                      canRecordHand: canRecordHand,
+                      onRecordHand: () => _openHandEntry(),
+                      onOpenHand: (hand) => _openHandEntry(hand: hand),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }

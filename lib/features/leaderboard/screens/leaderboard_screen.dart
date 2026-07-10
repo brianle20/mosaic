@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/models/bonus_round_results_summary.dart';
 import 'package:mosaic/features/leaderboard/controllers/leaderboard_controller.dart';
@@ -63,44 +64,48 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Leaderboard')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: SizedBox(
-              width: double.infinity,
-              child: SegmentedButton<_LeaderboardTab>(
-                selected: {_selectedTab},
-                showSelectedIcon: false,
-                onSelectionChanged: (selection) => _selectTab(selection.single),
-                segments: const [
-                  ButtonSegment(
-                    value: _LeaderboardTab.tournament,
-                    label: Text('Tournament'),
-                  ),
-                  ButtonSegment(
-                    value: _LeaderboardTab.finals,
-                    label: Text('Finals'),
-                  ),
-                ],
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(widget.eventId, silent: true),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Leaderboard')),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<_LeaderboardTab>(
+                  selected: {_selectedTab},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (selection) =>
+                      _selectTab(selection.single),
+                  segments: const [
+                    ButtonSegment(
+                      value: _LeaderboardTab.tournament,
+                      label: Text('Tournament'),
+                    ),
+                    ButtonSegment(
+                      value: _LeaderboardTab.finals,
+                      label: Text('Finals'),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: switch (_selectedTab) {
-              _LeaderboardTab.tournament => _TournamentLeaderboardBody(
-                  controller: _controller,
-                  onRetry: () => _controller.load(widget.eventId),
-                ),
-              _LeaderboardTab.finals => _FinalsLeaderboardBody(
-                  controller: _controller,
-                  onRetry: () => _controller.load(widget.eventId),
-                ),
-            },
-          ),
-        ],
+            Expanded(
+              child: switch (_selectedTab) {
+                _LeaderboardTab.tournament => _TournamentLeaderboardBody(
+                    controller: _controller,
+                    onRetry: () => _controller.load(widget.eventId),
+                  ),
+                _LeaderboardTab.finals => _FinalsLeaderboardBody(
+                    controller: _controller,
+                    onRetry: () => _controller.load(widget.eventId),
+                  ),
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
