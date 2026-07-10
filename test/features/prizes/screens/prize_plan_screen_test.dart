@@ -17,6 +17,9 @@ class _RecordingPrizeRepository implements PrizeRepository {
     this.cachedPlan,
     this.remotePlan,
     this.loadPlanGate,
+    this.upsertGate,
+    this.previewGate,
+    this.lockGate,
     this.upsertedPlan,
     this.previewRows = const [],
     this.lockedAwards = const [],
@@ -26,6 +29,9 @@ class _RecordingPrizeRepository implements PrizeRepository {
   PrizePlanDetail? cachedPlan;
   PrizePlanDetail? remotePlan;
   final Completer<PrizePlanDetail?>? loadPlanGate;
+  final Completer<PrizePlanDetail>? upsertGate;
+  final Completer<List<PrizeAwardPreviewRow>>? previewGate;
+  final Completer<List<PrizeAwardRecord>>? lockGate;
   bool failLoad = false;
   bool cacheMiss = false;
   final PrizePlanDetail? upsertedPlan;
@@ -58,12 +64,20 @@ class _RecordingPrizeRepository implements PrizeRepository {
   @override
   Future<List<PrizeAwardPreviewRow>> loadPrizePreview(String eventId) async {
     previewCount += 1;
+    final gate = previewGate;
+    if (gate != null) {
+      return gate.future;
+    }
     return previewRows;
   }
 
   @override
   Future<List<PrizeAwardRecord>> lockPrizeAwards(String eventId) async {
     lockCount += 1;
+    final gate = lockGate;
+    if (gate != null) {
+      return gate.future;
+    }
     return lockedAwards;
   }
 
@@ -84,6 +98,10 @@ class _RecordingPrizeRepository implements PrizeRepository {
   @override
   Future<PrizePlanDetail> upsertPrizePlan(UpsertPrizePlanInput input) async {
     capturedInput = input;
+    final gate = upsertGate;
+    if (gate != null) {
+      return gate.future;
+    }
     return upsertedPlan ?? loadedPlan!;
   }
 }
@@ -250,6 +268,71 @@ void main() {
     await controller.lockAwards();
     expect(repository.lockCount, 0);
     expect(controller.error, contains('Preview'));
+  });
+
+  test('preview completion does not clear edits made while submitting',
+      () async {
+    final loadedPlan = _plan(fixedAmountCents: 10000);
+    final upsertGate = Completer<PrizePlanDetail>();
+    final previewGate = Completer<List<PrizeAwardPreviewRow>>();
+    final repository = _RecordingPrizeRepository(
+      loadedPlan: loadedPlan,
+      upsertedPlan: loadedPlan,
+      upsertGate: upsertGate,
+      previewGate: previewGate,
+    );
+    final controller = PrizePlanController(
+      eventId: 'evt_01',
+      prizeRepository: repository,
+    );
+    await controller.load();
+
+    final previewFuture = controller.preview();
+    await Future<void>.delayed(Duration.zero);
+    controller.setNote('Changed while saving');
+    upsertGate.complete(loadedPlan);
+    await Future<void>.delayed(Duration.zero);
+    previewGate.complete(const []);
+    await previewFuture;
+
+    expect(controller.hasUnsavedChanges, isTrue);
+    expect(controller.draft.note, 'Changed while saving');
+    expect(controller.hasPreviewedPayouts, isFalse);
+  });
+
+  test('lock completion does not clear edits made while submitting', () async {
+    final loadedPlan = _plan(fixedAmountCents: 10000);
+    final lockGate = Completer<List<PrizeAwardRecord>>();
+    final repository = _RecordingPrizeRepository(
+      loadedPlan: loadedPlan,
+      upsertedPlan: loadedPlan,
+      previewRows: const [
+        PrizeAwardPreviewRow(
+          eventGuestId: 'gst_01',
+          displayName: 'Alice Wong',
+          rankStart: 1,
+          rankEnd: 1,
+          displayRank: '1',
+          awardAmountCents: 10000,
+        ),
+      ],
+      lockGate: lockGate,
+    );
+    final controller = PrizePlanController(
+      eventId: 'evt_01',
+      prizeRepository: repository,
+    );
+    await controller.load();
+    await controller.preview();
+
+    final lockFuture = controller.lockAwards();
+    await Future<void>.delayed(Duration.zero);
+    controller.setNote('Changed while locking');
+    lockGate.complete(const []);
+    await lockFuture;
+
+    expect(controller.hasUnsavedChanges, isTrue);
+    expect(controller.draft.note, 'Changed while locking');
   });
 
   testWidgets('renders derived total and fixed prize controls', (tester) async {
