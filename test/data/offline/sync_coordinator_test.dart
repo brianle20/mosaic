@@ -555,6 +555,9 @@ class _FakeReachability implements NetworkReachability {
   bool reachable;
 
   @override
+  Stream<void> get onReachable => const Stream.empty();
+
+  @override
   Future<bool> isReachable() async => reachable;
 
   @override
