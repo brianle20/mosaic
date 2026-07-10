@@ -360,6 +360,77 @@ void main() {
     expect(controller.hasUnsavedChanges, isFalse);
   });
 
+  test('silent remote plan changes invalidate an older preview', () async {
+    final planA = _plan(fixedAmountCents: 10000);
+    final planB = _plan(fixedAmountCents: 20000);
+    final repository = _RecordingPrizeRepository(
+      loadedPlan: planA,
+      cachedPlan: planA,
+      remotePlan: planA,
+      upsertedPlan: planA,
+      previewRows: const [
+        PrizeAwardPreviewRow(
+          eventGuestId: 'gst_01',
+          displayName: 'Alice Wong',
+          rankStart: 1,
+          rankEnd: 1,
+          displayRank: '1',
+          awardAmountCents: 10000,
+        ),
+      ],
+    );
+    final controller = PrizePlanController(
+      eventId: 'evt_01',
+      prizeRepository: repository,
+    );
+    await controller.load();
+    await controller.preview();
+    expect(controller.hasPreviewedPayouts, isTrue);
+
+    repository.remotePlan = planB;
+    await controller.load(silent: true);
+
+    expect(controller.draft.tiers.first.fixedAmountCents, 20000);
+    expect(controller.previewRows, isEmpty);
+    expect(controller.hasPreviewedPayouts, isFalse);
+    await controller.lockAwards();
+    expect(repository.lockCount, 0);
+  });
+
+  test('silent plan failure preserves a usable preview', () async {
+    final plan = _plan(fixedAmountCents: 10000);
+    final repository = _RecordingPrizeRepository(
+      loadedPlan: plan,
+      cachedPlan: plan,
+      remotePlan: plan,
+      upsertedPlan: plan,
+      previewRows: const [
+        PrizeAwardPreviewRow(
+          eventGuestId: 'gst_01',
+          displayName: 'Alice Wong',
+          rankStart: 1,
+          rankEnd: 1,
+          displayRank: '1',
+          awardAmountCents: 10000,
+        ),
+      ],
+    );
+    final controller = PrizePlanController(
+      eventId: 'evt_01',
+      prizeRepository: repository,
+    );
+    await controller.load();
+    await controller.preview();
+
+    repository.cacheMiss = true;
+    repository.failLoad = true;
+    await controller.load(silent: true);
+
+    expect(controller.previewRows, hasLength(1));
+    expect(controller.hasPreviewedPayouts, isTrue);
+    expect(controller.error, isNull);
+  });
+
   testWidgets('renders derived total and fixed prize controls', (tester) async {
     final repository = _RecordingPrizeRepository();
 

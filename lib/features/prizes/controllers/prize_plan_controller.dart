@@ -26,6 +26,7 @@ class PrizePlanController extends ChangeNotifier {
   int _requestGeneration = 0;
   int _draftEditGeneration = 0;
   bool _hasLoadedPlan = false;
+  String? _previewedPlanFingerprint;
 
   Future<void> load({bool silent = false}) async {
     final requestGeneration = ++_requestGeneration;
@@ -42,6 +43,7 @@ class PrizePlanController extends ChangeNotifier {
       if (!preservePreview) {
         previewRows = const [];
         hasPreviewedPayouts = false;
+        _previewedPlanFingerprint = null;
       }
       if (!silent || cachedPlan.plan.status == PrizePlanStatus.locked) {
         lockedAwards = cachedAwards ?? const [];
@@ -66,7 +68,16 @@ class PrizePlanController extends ChangeNotifier {
           loadedAwards = await prizeRepository.loadPrizeAwards(eventId);
         }
         if (_canApplyLoad(requestGeneration, draftEditGeneration)) {
-          draft = PrizePlanDraft.fromDetail(loaded);
+          final loadedDraft = PrizePlanDraft.fromDetail(loaded);
+          final previewMatches = !preservePreview ||
+              _previewedPlanFingerprint == null ||
+              _previewedPlanFingerprint == _draftFingerprint(loadedDraft);
+          draft = loadedDraft;
+          if (!previewMatches) {
+            previewRows = const [];
+            hasPreviewedPayouts = false;
+            _previewedPlanFingerprint = null;
+          }
           lockedAwards = loadedAwards ?? const [];
           _hasLoadedPlan = true;
           hasUnsavedChanges = false;
@@ -75,9 +86,13 @@ class PrizePlanController extends ChangeNotifier {
         lockedAwards = const [];
         _hasLoadedPlan = false;
         hasUnsavedChanges = false;
+        previewRows = const [];
+        hasPreviewedPayouts = false;
+        _previewedPlanFingerprint = null;
       }
     } catch (err) {
-      if (cachedPlan == null &&
+      if (requestGeneration == _requestGeneration &&
+          cachedPlan == null &&
           !hasUnsavedChanges &&
           !_hasLoadedPlan &&
           previewRows.isEmpty &&
@@ -85,6 +100,9 @@ class PrizePlanController extends ChangeNotifier {
         error = err.toString();
       }
     } finally {
+      if (requestGeneration != _requestGeneration) {
+        return;
+      }
       if (shouldShowLoading) {
         isLoading = false;
       }
@@ -210,6 +228,7 @@ class PrizePlanController extends ChangeNotifier {
       previewRows = loadedPreview;
       hasPreviewedPayouts = true;
       hasUnsavedChanges = false;
+      _previewedPlanFingerprint = _draftFingerprint(draft);
     } catch (err) {
       if (editGeneration == _draftEditGeneration) {
         error = err.toString();
@@ -265,12 +284,23 @@ class PrizePlanController extends ChangeNotifier {
     _draftEditGeneration += 1;
     previewRows = const [];
     hasPreviewedPayouts = false;
+    _previewedPlanFingerprint = null;
   }
 
   bool _canApplyLoad(int requestGeneration, int draftEditGeneration) {
     return requestGeneration == _requestGeneration &&
         draftEditGeneration == _draftEditGeneration &&
         !hasUnsavedChanges;
+  }
+
+  String _draftFingerprint(PrizePlanDraft value) {
+    final tiers = value.tiers
+        .map(
+          (tier) =>
+              '${tier.place}:${tier.percentageBps}:${tier.fixedAmountCents}',
+        )
+        .join(',');
+    return '${value.mode.name}|${value.note}|$tiers';
   }
 
   String _validationError() {

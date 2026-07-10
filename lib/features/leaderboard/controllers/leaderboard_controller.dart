@@ -348,9 +348,8 @@ class LeaderboardController extends ChangeNotifier {
 
   bool get _hasVisibleContent =>
       entries.isNotEmpty ||
-      bonusLedgerEntries.isNotEmpty ||
       finalsAssignments.isNotEmpty ||
-      bonusRoundState != null;
+      bonusRoundResults.hasResults;
 
   Future<List<EventHandLedgerEntry>> _readCachedBonusLedger(
     String eventId,
