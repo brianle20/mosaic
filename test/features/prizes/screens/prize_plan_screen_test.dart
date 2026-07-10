@@ -15,6 +15,7 @@ class _RecordingPrizeRepository implements PrizeRepository {
   _RecordingPrizeRepository({
     this.loadedPlan,
     this.cachedPlan,
+    this.cachedPlanGate,
     this.remotePlan,
     this.loadPlanGate,
     this.upsertGate,
@@ -27,6 +28,7 @@ class _RecordingPrizeRepository implements PrizeRepository {
 
   final PrizePlanDetail? loadedPlan;
   PrizePlanDetail? cachedPlan;
+  final Completer<PrizePlanDetail?>? cachedPlanGate;
   PrizePlanDetail? remotePlan;
   final Completer<PrizePlanDetail?>? loadPlanGate;
   final Completer<PrizePlanDetail>? upsertGate;
@@ -86,8 +88,13 @@ class _RecordingPrizeRepository implements PrizeRepository {
       const [];
 
   @override
-  Future<PrizePlanDetail?> readCachedPrizePlan(String eventId) async =>
-      cacheMiss ? null : cachedPlan ?? loadedPlan;
+  Future<PrizePlanDetail?> readCachedPrizePlan(String eventId) async {
+    final gate = cachedPlanGate;
+    if (gate != null) {
+      return gate.future;
+    }
+    return cacheMiss ? null : cachedPlan ?? loadedPlan;
+  }
 
   @override
   Future<List<PrizeAwardPreviewRow>> readCachedPrizePreview(
@@ -358,6 +365,35 @@ void main() {
 
     expect(controller.draft.tiers.first.fixedAmountCents, 10000);
     expect(controller.hasUnsavedChanges, isFalse);
+  });
+
+  test('newer preview prevents a stale load from starting remote work',
+      () async {
+    final plan = _plan(fixedAmountCents: 10000);
+    final cachedPlanGate = Completer<PrizePlanDetail?>();
+    final repository = _RecordingPrizeRepository(
+      cachedPlan: plan,
+      loadedPlan: plan,
+      remotePlan: plan,
+      cachedPlanGate: cachedPlanGate,
+      upsertedPlan: plan,
+    );
+    final controller = PrizePlanController(
+      eventId: 'evt_01',
+      prizeRepository: repository,
+    );
+    controller.setPaidPlaces(1);
+    controller.updateTier(0, fixedAmountCents: 10000);
+
+    final loadFuture = controller.load();
+    await Future<void>.delayed(Duration.zero);
+    await controller.preview();
+
+    cachedPlanGate.complete(plan);
+    await loadFuture;
+
+    expect(repository.loadPlanCount, 0);
+    expect(controller.draft.tiers.first.fixedAmountCents, 10000);
   });
 
   test('silent remote plan changes invalidate an older preview', () async {

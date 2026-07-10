@@ -51,6 +51,10 @@ class PrizePlanController extends ChangeNotifier {
       _hasLoadedPlan = true;
     }
 
+    if (requestGeneration != _requestGeneration) {
+      return;
+    }
+
     final shouldShowLoading = !silent;
     if (shouldShowLoading) {
       isLoading = true;

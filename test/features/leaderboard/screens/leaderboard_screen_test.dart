@@ -366,6 +366,36 @@ void main() {
     expect(controller.error, contains('Unable to refresh leaderboard details'));
   });
 
+  test('non-renderable optional leaderboard state does not hide a refresh error',
+      () async {
+    final leaderboardRepository = _RecordingLeaderboardRepository(
+      entries: const [],
+    );
+    final seatingRepository = _SeatingRepository(
+      assignments: [
+        _bonusAssignment(
+          id: 'assignment_inactive',
+          guestId: 'gst_alice',
+          displayName: 'Alice Wong',
+          seatIndex: 0,
+          status: 'inactive',
+        ),
+      ],
+    );
+    final controller = LeaderboardController(
+      leaderboardRepository: leaderboardRepository,
+      seatingRepository: seatingRepository,
+    );
+    await controller.load('evt_01');
+
+    seatingRepository.failAfterFirstLoad = true;
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.entries, isEmpty);
+    expect(controller.finalsTables, isEmpty);
+    expect(controller.error, contains('Unable to refresh leaderboard details'));
+  });
+
   testWidgets(
       'reconnect silently refreshes leaderboard without loading flicker',
       (tester) async {
@@ -1114,6 +1144,7 @@ SeatingAssignmentRecord _bonusAssignment({
   required String displayName,
   required int seatIndex,
   BonusTableRole bonusTableRole = BonusTableRole.tableOfChampions,
+  String status = 'active',
 }) {
   return SeatingAssignmentRecord(
     id: id,
@@ -1124,7 +1155,7 @@ SeatingAssignmentRecord _bonusAssignment({
     displayName: displayName,
     seatIndex: seatIndex,
     assignmentRound: 1,
-    status: 'active',
+    status: status,
     assignmentType: SeatingAssignmentType.bonus,
     bonusRoundId: 'bonus_01',
     bonusTableRole: bonusTableRole,
