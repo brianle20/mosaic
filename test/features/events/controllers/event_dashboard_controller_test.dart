@@ -23,6 +23,7 @@ class _FakeEventRepository extends ThrowingEventRepository {
 
   final List<EventRecord> cachedEvents;
   final Future<EventRecord?> Function(String eventId)? eventLoader;
+  Object? remoteError;
   EventRecord Function(String eventId)? cancelHandler;
   EventRecord Function(String eventId)? revertToDraftHandler;
   EventRecord Function(String eventId)? copyForTestingHandler;
@@ -83,6 +84,10 @@ class _FakeEventRepository extends ThrowingEventRepository {
 
   @override
   Future<EventRecord?> getEvent(String eventId) async {
+    final remoteError = this.remoteError;
+    if (remoteError != null) {
+      throw remoteError;
+    }
     final loader = eventLoader;
     if (loader != null) {
       return loader(eventId);
@@ -133,6 +138,7 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
 
   final List<EventGuestRecord> cachedGuests;
   final Future<List<EventGuestRecord>> Function(String eventId)? guestLoader;
+  Object? remoteError;
 
   @override
   Future<GuestDetailRecord> checkInGuest(String guestId) {
@@ -157,6 +163,10 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
 
   @override
   Future<List<EventGuestRecord>> listGuests(String eventId) async {
+    final remoteError = this.remoteError;
+    if (remoteError != null) {
+      throw remoteError;
+    }
     final loader = guestLoader;
     if (loader != null) {
       return loader(eventId);
@@ -210,17 +220,26 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
 }
 
 class _FakeLeaderboardRepository extends ThrowingLeaderboardRepository {
-  const _FakeLeaderboardRepository({
+  _FakeLeaderboardRepository({
     required this.cachedEntries,
     required this.remoteEntries,
   });
 
   final List<LeaderboardEntry> cachedEntries;
   final List<LeaderboardEntry> remoteEntries;
+  Object? remoteError;
 
   @override
   Future<List<LeaderboardEntry>> loadLeaderboard(String eventId) async =>
-      remoteEntries;
+      _loadRemoteLeaderboard();
+
+  Future<List<LeaderboardEntry>> _loadRemoteLeaderboard() async {
+    final remoteError = this.remoteError;
+    if (remoteError != null) {
+      throw remoteError;
+    }
+    return remoteEntries;
+  }
 
   @override
   Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId) async =>
@@ -231,16 +250,38 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   _FakeSessionRepository(this.sessions);
 
   final List<TableSessionRecord> sessions;
+  final List<EventHandLedgerEntry> cachedLedger = [];
+  final List<EventHandLedgerEntry> remoteLedger = [];
+  Object? ledgerError;
+  Object? sessionsError;
+
+  @override
+  Future<List<EventHandLedgerEntry>> loadEventHandLedger(String eventId) async {
+    final ledgerError = this.ledgerError;
+    if (ledgerError != null) {
+      throw ledgerError;
+    }
+    return remoteLedger;
+  }
 
   @override
   Future<List<EventHandLedgerEntry>> readCachedEventHandLedger(
     String eventId,
   ) async =>
-      const [];
+      cachedLedger;
 
   @override
-  Future<List<TableSessionRecord>> listSessions(String eventId) async =>
-      sessions;
+  Future<List<TableSessionRecord>> listSessions(String eventId) async {
+    final sessionsError = this.sessionsError;
+    if (sessionsError != null) {
+      throw sessionsError;
+    }
+    return sessions;
+  }
+
+  @override
+  Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
+      const [];
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -252,12 +293,19 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 }
 
 class _FakeTableRepository extends ThrowingTableRepository {
-  const _FakeTableRepository(this.tables);
+  _FakeTableRepository(this.tables);
 
   final List<EventTableRecord> tables;
+  Object? remoteError;
 
   @override
-  Future<List<EventTableRecord>> listTables(String eventId) async => tables;
+  Future<List<EventTableRecord>> listTables(String eventId) async {
+    final remoteError = this.remoteError;
+    if (remoteError != null) {
+      throw remoteError;
+    }
+    return tables;
+  }
 
   @override
   Future<List<EventTableRecord>> readCachedTables(String eventId) async =>
@@ -280,6 +328,9 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   final TournamentRoundSummary? cachedRoundSummary;
   final BonusRoundState? bonusRoundState;
   final List<SeatingAssignmentRecord> assignments;
+  Object? roundError;
+  Object? bonusStateError;
+  Object? assignmentsError;
 
   @override
   Future<List<SeatingAssignmentRecord>> generateTournamentRound(
@@ -296,6 +347,10 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   Future<TournamentRoundSummary> loadTournamentRoundSummary(
     String eventId,
   ) async {
+    final roundError = this.roundError;
+    if (roundError != null) {
+      throw roundError;
+    }
     final handler = onLoadRoundSummary;
     if (handler != null) {
       return handler(eventId);
@@ -310,12 +365,22 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
       cachedRoundSummary;
 
   @override
-  Future<BonusRoundState?> loadBonusRoundState(String eventId) async =>
-      bonusRoundState;
+  Future<BonusRoundState?> loadBonusRoundState(String eventId) async {
+    final bonusStateError = this.bonusStateError;
+    if (bonusStateError != null) {
+      throw bonusStateError;
+    }
+    return bonusRoundState;
+  }
 
   @override
-  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
-      assignments;
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async {
+    final assignmentsError = this.assignmentsError;
+    if (assignmentsError != null) {
+      throw assignmentsError;
+    }
+    return assignments;
+  }
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
@@ -341,6 +406,53 @@ TournamentRoundSummary _roundSummary(int roundNumber) {
     notStartedTableCount: 0,
     currentRoundTables: const [],
     otherTables: const [],
+  );
+}
+
+EventRecord _dashboardEvent({String title = 'Current Event'}) {
+  return EventRecord.fromJson({
+    'id': 'evt_01',
+    'owner_user_id': 'usr_01',
+    'title': title,
+    'timezone': 'America/Los_Angeles',
+    'starts_at': '2026-04-24T19:00:00-07:00',
+    'lifecycle_status': 'active',
+    'checkin_open': true,
+    'scoring_open': false,
+    'cover_charge_cents': 2000,
+    'default_ruleset_id': 'HK_STANDARD',
+    'prevailing_wind': 'east',
+    'current_scoring_phase': 'tournament',
+  });
+}
+
+EventHandLedgerEntry _championAwardLedgerEntry({
+  String displayName = 'Current Champion',
+}) {
+  return EventHandLedgerEntry.fromJson({
+    'event_id': 'evt_01',
+    'ledger_row_type': 'adjustment',
+    'adjustment_id': 'adj_current',
+    'entered_at': '2026-04-24T20:00:00-07:00',
+    'adjustment_type': 'finals_champion_award',
+    'adjustment_amount_points': 20,
+    'adjustment_event_guest_id': 'gst_01',
+    'adjustment_display_name': displayName,
+    'status': 'recorded',
+    'cells': const [],
+  });
+}
+
+LeaderboardEntry _championLeaderboardEntry() {
+  return const LeaderboardEntry(
+    eventGuestId: 'gst_01',
+    displayName: 'Current Champion',
+    totalPoints: 120,
+    handsPlayed: 4,
+    handsWon: 2,
+    selfDrawWins: 1,
+    discardWins: 1,
+    rank: 1,
   );
 }
 
@@ -525,6 +637,129 @@ void main() {
     expect(controller.error, isNull);
   });
 
+  test('silent refresh preserves populated dashboard values on partial failure',
+      () async {
+    final eventRepository = _FakeEventRepository(
+      cachedEvents: [_dashboardEvent()],
+      eventLoader: (_) async => _dashboardEvent(),
+    );
+    final guestRepository = _FakeGuestRepository(
+      cachedGuests: [
+        _eventGuest(
+          id: 'gst_01',
+          displayName: 'Current Champion',
+          attendanceStatus: 'checked_in',
+          tournamentStatus: 'qualified',
+        ),
+      ],
+    );
+    final leaderboardRepository = _FakeLeaderboardRepository(
+      cachedEntries: [_championLeaderboardEntry()],
+      remoteEntries: [_championLeaderboardEntry()],
+    );
+    final sessionRepository = _FakeSessionRepository(const []);
+    sessionRepository.remoteLedger.add(_championAwardLedgerEntry());
+    var roundRemoteFails = false;
+    final currentRound = _roundSummary(7);
+    final seatingRepository = _FakeSeatingRepository(
+      cachedRoundSummary: _roundSummary(1),
+      onLoadRoundSummary: (_) async {
+        if (roundRemoteFails) {
+          throw Exception('round fetch failed');
+        }
+        return currentRound;
+      },
+      bonusRoundState: const BonusRoundState(
+        bonusRoundId: 'bonus_current',
+        eventId: 'evt_01',
+        status: 'completed',
+        championEventGuestId: 'gst_01',
+      ),
+    );
+    final tableRepository = _FakeTableRepository([]);
+    final controller = EventDashboardController(
+      eventRepository: eventRepository,
+      guestRepository: guestRepository,
+      leaderboardRepository: leaderboardRepository,
+      tableRepository: tableRepository,
+      sessionRepository: sessionRepository,
+      seatingRepository: seatingRepository,
+    );
+
+    await controller.load('evt_01');
+    final currentFinals = _roundSummary(8);
+    controller.finalsRoundSummary = currentFinals;
+    sessionRepository.cachedLedger.add(
+      _championAwardLedgerEntry(displayName: 'Stale Champion'),
+    );
+    expect(controller.bonusRoundResults.finalChampion?.displayName,
+        'Current Champion');
+
+    eventRepository.cachedEvents.clear();
+    eventRepository.remoteError = Exception('event fetch failed');
+    guestRepository.cachedGuests.clear();
+    guestRepository.remoteError = Exception('guest fetch failed');
+    tableRepository.tables.clear();
+    tableRepository.remoteError = Exception('table fetch failed');
+    leaderboardRepository.cachedEntries.clear();
+    leaderboardRepository.remoteError = Exception('leaderboard fetch failed');
+    sessionRepository.remoteLedger.clear();
+    sessionRepository.ledgerError = Exception('ledger fetch failed');
+    sessionRepository.sessionsError = Exception('sessions fetch failed');
+    seatingRepository.roundError = Exception('round fetch failed');
+    seatingRepository.bonusStateError = Exception('bonus state failed');
+    seatingRepository.assignmentsError = Exception('assignments failed');
+    roundRemoteFails = true;
+
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.tournamentRoundSummary, same(currentRound));
+    expect(controller.finalsRoundSummary, same(currentFinals));
+    expect(controller.bonusRoundState?.bonusRoundId, 'bonus_current');
+    expect(controller.bonusRoundResults.finalChampion?.displayName,
+        'Current Champion');
+    expect(controller.leaderLabel, 'Current Champion');
+    expect(controller.isLoading, isFalse);
+  });
+
+  test('stale normal load cannot restore loading after silent recovery',
+      () async {
+    final initialEventStarted = Completer<void>();
+    final staleEvent = _dashboardEvent(title: 'Stale Event');
+    final recoveryEvent = _dashboardEvent(title: 'Recovered Event');
+    final staleEventResult = Completer<EventRecord?>();
+    var eventCallCount = 0;
+    final eventRepository = _FakeEventRepository(
+      cachedEvents: [staleEvent],
+      eventLoader: (_) {
+        eventCallCount += 1;
+        if (eventCallCount == 1) {
+          initialEventStarted.complete();
+          return staleEventResult.future;
+        }
+        return Future<EventRecord?>.value(recoveryEvent);
+      },
+    );
+    final controller = EventDashboardController(
+      eventRepository: eventRepository,
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+    );
+
+    final initialLoad = controller.load('evt_01');
+    await initialEventStarted.future;
+    expect(controller.isLoading, isTrue);
+
+    await controller.load('evt_01', silent: true);
+    expect(controller.event?.title, 'Recovered Event');
+    expect(controller.isLoading, isFalse);
+
+    staleEventResult.complete(null);
+    await initialLoad;
+
+    expect(controller.event?.title, 'Recovered Event');
+    expect(controller.isLoading, isFalse);
+  });
+
   test('dashboard guest counts exclude withdrawn guests', () async {
     final event = EventRecord.fromJson(const {
       'id': 'evt_01',
@@ -590,7 +825,7 @@ void main() {
     final controller = EventDashboardController(
       eventRepository: _FakeEventRepository(cachedEvents: [event]),
       guestRepository: _FakeGuestRepository(cachedGuests: const []),
-      leaderboardRepository: const _FakeLeaderboardRepository(
+      leaderboardRepository: _FakeLeaderboardRepository(
         cachedEntries: [],
         remoteEntries: [
           LeaderboardEntry(
