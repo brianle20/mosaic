@@ -1034,6 +1034,37 @@ void main() {
   });
 
   testWidgets(
+      'capture completing after switching to draw is deleted and not queued',
+      (tester) async {
+    final service = _DelayedHandPhotoService();
+    final storage = _FakeHandPhotoStorage(existing: {'/local/one.jpg'});
+    final repository = _RecordingSessionRepository();
+    await pumpHandEntry(
+      tester,
+      repository: repository,
+      handPhotoService: service,
+      handPhotoStorage: storage,
+    );
+
+    final captureButton = find.text('Capture winning hand photo');
+    await tester.ensureVisible(captureButton);
+    await tester.pumpAndSettle();
+    await tester.tap(captureButton);
+    await tester.pump();
+    expect(service.captureCount, 1);
+
+    await tapVisible(tester, find.text('Draw'));
+    service.completer.complete(_photo('photo_01', '/local/one.jpg'));
+    await tester.pumpAndSettle();
+    await tapVisible(tester, find.text('Save Hand'));
+
+    expect(repository.recordedInput?.resultType, HandResultType.washout);
+    expect(repository.recordedInput?.photoLocalPath, isNull);
+    expect(repository.recordedInput?.photoClientId, isNull);
+    expect(storage.deletedPaths, ['/local/one.jpg']);
+  });
+
+  testWidgets(
       'expired round can save the final hand and returns completed detail',
       (tester) async {
     final repository = _RecordingSessionRepository()

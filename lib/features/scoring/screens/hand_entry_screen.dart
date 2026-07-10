@@ -246,7 +246,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       if (captured == null) {
         return;
       }
-      if (!mounted) {
+      if (!mounted || _resultType != HandResultType.win) {
         await _handPhotoStorage.delete(captured.localPath);
         return;
       }
@@ -288,16 +288,17 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     setState(() {
       _showValidationSummary = false;
     });
+    final submittedDraft = _draft;
     final detail = await _controller.submit(
       tableSessionId: _sessionDetail.session.id,
-      draft: _draft,
+      draft: submittedDraft,
       existingHand: widget.initialHand,
     );
     if (!mounted || detail == null) {
       return;
     }
 
-    if (widget.initialHand == null) {
+    if (widget.initialHand == null && submittedDraft.photoLocalPath != null) {
       _photoOwnershipTransferred = true;
     }
     Navigator.of(context).pop(detail);
