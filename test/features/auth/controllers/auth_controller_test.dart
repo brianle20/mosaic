@@ -13,6 +13,8 @@ class _FakeAuthRepository implements AuthRepository {
 
   HostAuthUser? current;
   MosaicAccessState access;
+  Future<MosaicAccessState>? nextAccess;
+  var loadAccessCount = 0;
   final StreamController<HostAuthUser?> controller =
       StreamController<HostAuthUser?>.broadcast();
   Object? signInError;
@@ -29,7 +31,12 @@ class _FakeAuthRepository implements AuthRepository {
   HostAuthUser? get currentHost => current;
 
   @override
-  Future<MosaicAccessState> loadCurrentAccess() async => access;
+  Future<MosaicAccessState> loadCurrentAccess() async {
+    loadAccessCount += 1;
+    final pending = nextAccess;
+    nextAccess = null;
+    return pending ?? access;
+  }
 
   @override
   Future<HostAuthUser?> signInWithPassword({
@@ -86,6 +93,14 @@ MosaicAccessState _approvedAccess() {
         role: MosaicAccessRole.owner,
       ),
     ],
+  );
+}
+
+MosaicAccessState _disabledAccess() {
+  return const MosaicAccessState(
+    userId: 'usr_01',
+    isActive: false,
+    events: [],
   );
 }
 
@@ -158,6 +173,45 @@ void main() {
         controller.submitError,
         contains('not approved for any events'),
       );
+    });
+
+    test('recovery refresh replaces cached access with remote access',
+        () async {
+      final repository = _FakeAuthRepository(
+        current: const HostAuthUser(id: 'usr_01', email: 'host@example.test'),
+        access: _approvedAccess(),
+      );
+      final controller = AuthController(authRepository: repository);
+      await controller.bootstrap();
+
+      repository.access = _disabledAccess();
+      await controller.refreshAccessAfterRecovery();
+
+      expect(controller.currentAccess, _disabledAccess());
+      expect(controller.isSignedIn, isFalse);
+      expect(
+        controller.submitError,
+        'Your Mosaic access is disabled. Ask an event owner for help.',
+      );
+      controller.dispose();
+    });
+
+    test('overlapping recovery refreshes make one repository call', () async {
+      final repository = _FakeAuthRepository(
+        current: const HostAuthUser(id: 'usr_01', email: 'host@example.test'),
+      );
+      final controller = AuthController(authRepository: repository);
+      await controller.bootstrap();
+      final completer = Completer<MosaicAccessState>();
+      repository.nextAccess = completer.future;
+
+      final first = controller.refreshAccessAfterRecovery();
+      final second = controller.refreshAccessAfterRecovery();
+      completer.complete(_approvedAccess());
+      await Future.wait([first, second]);
+
+      expect(repository.loadAccessCount, 2);
+      controller.dispose();
     });
 
     test('reports a friendly error when sign in fails', () async {

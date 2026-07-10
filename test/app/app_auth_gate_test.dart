@@ -21,6 +21,7 @@ import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/offline/offline_recovery_lifecycle.dart';
 import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
@@ -74,6 +75,25 @@ class _FakeAuthRepository implements AuthRepository {
   }
 }
 
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final StreamController<int> _controller =
+      StreamController<int>.broadcast(sync: true);
+  int _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  Future<void> dispose() => _controller.close();
+}
+
 MosaicAccessState _approvedAccess() {
   return const MosaicAccessState(
     userId: 'usr_01',
@@ -85,6 +105,14 @@ MosaicAccessState _approvedAccess() {
         role: MosaicAccessRole.owner,
       ),
     ],
+  );
+}
+
+MosaicAccessState _disabledAccess() {
+  return const MosaicAccessState(
+    userId: 'usr_01',
+    isActive: false,
+    events: [],
   );
 }
 
@@ -701,6 +729,49 @@ void main() {
     expect(find.text('Events'), findsOneWidget);
     expect(find.text('Friday Night Mahjong'), findsOneWidget);
     expect(find.text('Mosaic Sign In'), findsNothing);
+  });
+
+  testWidgets('revalidates host access after recovery', (tester) async {
+    final authRepository = _FakeAuthRepository(
+      host: const HostAuthUser(
+        id: 'usr_01',
+        email: 'host@example.test',
+      ),
+    );
+    final recoverySignal = _FakeOfflineRecoverySignal();
+    addTearDown(recoverySignal.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MosaicApp(
+          authRepository: authRepository,
+          eventRepository: _FakeEventRepository(const []),
+          guestRepository: _FakeGuestRepository(),
+          tableRepository: _FakeTableRepository(),
+          sessionRepository: _FakeSessionRepository(),
+          leaderboardRepository: _FakeLeaderboardRepository(),
+          activityRepository: _FakeActivityRepository(),
+          prizeRepository: _FakePrizeRepository(),
+          seatingRepository: _FakeSeatingRepository(),
+          mosaicProfileRepository: const _FakeMosaicProfileRepository(),
+          nfcService: const _FakeNfcService(),
+          recoverySignal: recoverySignal,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Events'), findsOneWidget);
+    authRepository.access = _disabledAccess();
+    recoverySignal.emit();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mosaic Sign In'), findsOneWidget);
+    expect(find.text('Events'), findsNothing);
+    expect(
+      find.text('Your Mosaic access is disabled. Ask an event owner for help.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('returns to host sign in after sign out', (tester) async {

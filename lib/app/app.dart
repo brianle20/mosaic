@@ -581,18 +581,22 @@ class _AuthGateState extends State<_AuthGate> {
 
   @override
   Widget build(BuildContext context) {
+    late final Widget child;
     if (_controller.isBootstrapping) {
-      return _BootstrapLoadingScreen(environment: null);
+      child = _BootstrapLoadingScreen(environment: null);
+    } else if (!_controller.isSignedIn) {
+      child = HostSignInScreen(authController: _controller);
+    } else {
+      child = EventListScreen(
+        eventRepository: widget.eventRepository,
+        accessState: _controller.currentAccess,
+        onSignOut: _controller.signOut,
+      );
     }
 
-    if (!_controller.isSignedIn) {
-      return HostSignInScreen(authController: _controller);
-    }
-
-    return EventListScreen(
-      eventRepository: widget.eventRepository,
-      accessState: _controller.currentAccess,
-      onSignOut: _controller.signOut,
+    return ReconnectRefreshListener(
+      onRefresh: _controller.refreshAccessAfterRecovery,
+      child: child,
     );
   }
 }

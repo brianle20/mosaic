@@ -28,6 +28,7 @@ class AuthController extends ChangeNotifier {
   EmailOtpStep emailOtpStep = EmailOtpStep.enterEmail;
   bool isSendingCode = false;
   bool isVerifyingCode = false;
+  bool _isRefreshingAccess = false;
   String? submitError;
   String? pendingOtpEmail;
   HostAuthUser? currentHost;
@@ -161,6 +162,21 @@ class AuthController extends ChangeNotifier {
     currentHost = null;
     currentAccess = null;
     notifyListeners();
+  }
+
+  Future<void> refreshAccessAfterRecovery() async {
+    if (_isRefreshingAccess || currentHost == null) {
+      return;
+    }
+    _isRefreshingAccess = true;
+    try {
+      await _loadCurrentAccessForSignedInHost();
+      if (!isBootstrapping) {
+        notifyListeners();
+      }
+    } finally {
+      _isRefreshingAccess = false;
+    }
   }
 
   @override
