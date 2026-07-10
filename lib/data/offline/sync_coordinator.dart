@@ -145,16 +145,25 @@ class SyncCoordinator implements OfflineRecoverySignal {
     if (_isDisposed || !_lifecycleReady) {
       return;
     }
-    if (_isSyncing) {
-      final pendingWorkIds = await _readPendingWorkIds();
-      if (pendingWorkIds.difference(_knownPendingWorkIds).isNotEmpty) {
-        _resetRetryBackoff();
-      }
+    final wasSyncing = _isSyncing;
+    if (wasSyncing) {
       _syncRequested = true;
+    }
+    final pendingWorkIds = await _readPendingWorkIds();
+    final hasNewWork =
+        pendingWorkIds.difference(_knownPendingWorkIds).isNotEmpty;
+    if (hasNewWork) {
+      _resetRetryBackoff();
+    }
+    if (wasSyncing) {
+      if (!_isSyncing && hasNewWork && !_isDisposed) {
+        unawaited(syncNow(trigger: OfflineRecoveryTrigger.queuedWork));
+      }
       return;
     }
-    _resetRetryBackoff();
-    unawaited(syncNow(trigger: OfflineRecoveryTrigger.queuedWork));
+    if (hasNewWork) {
+      unawaited(syncNow(trigger: OfflineRecoveryTrigger.queuedWork));
+    }
   }
 
   void setForeground(bool foreground) {

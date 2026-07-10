@@ -96,7 +96,7 @@ void main() {
       await scheduler.fire();
       await scheduler.fire();
       await scheduler.fire();
-      expect(scheduler.scheduledDelay, const Duration(seconds: 30));
+      expect(scheduler.scheduledDelays, contains(const Duration(seconds: 30)));
 
       final reachabilityCheck = Completer<bool>();
       reachability.nextCheckCompleter = reachabilityCheck;
@@ -188,6 +188,50 @@ void main() {
         repository.recordedInputs.map((input) => input.clientMutationId),
         ['mut_01'],
       );
+    });
+
+    test('new queued work drains when pending-id inspection races pass settle',
+        () async {
+      final resetGate = Completer<void>()..complete();
+      final blockingStore = _BlockingOfflineStore(
+        store,
+        resetGate,
+        emitOnlyInsertedChanges: true,
+      );
+      coordinator = SyncCoordinator(
+        store: blockingStore,
+        reachability: reachability,
+        sessionRepository: repository,
+        retryScheduler: scheduler,
+        photoStorage: _FakeHandPhotoStorage(existing: {'/local/photo.jpg'}),
+      );
+      await store.insertMutation(_mutation(id: 'mut_01'));
+      final resultGate = Completer<SessionDetailRecord>();
+      repository.nextResultCompleter = resultGate;
+
+      final initializing = coordinator.initialize();
+      await pumpEventQueue(times: 10);
+      expect(repository.recordedInputs.single.clientMutationId, 'mut_01');
+
+      final pendingReadGate = Completer<void>();
+      blockingStore.pendingReadSkipCount = 1;
+      blockingStore.pendingReadGate = pendingReadGate;
+      await blockingStore.insertMutation(
+        _mutation(
+          id: 'mut_02',
+          createdAt: DateTime.utc(2026, 6, 18, 20, 1),
+        ),
+      );
+      resultGate.complete(_detail());
+      pendingReadGate.complete();
+      await initializing;
+      await pumpEventQueue(times: 20);
+
+      expect(
+        repository.recordedInputs.map((input) => input.clientMutationId),
+        ['mut_01', 'mut_02'],
+      );
+      expect(scheduler.hasScheduledCallback, isFalse);
     });
 
     test('confirmed upload marks uploaded before deleting local file',
@@ -838,21 +882,49 @@ class _FakeHandPhotoStorage implements HandPhotoStorage {
 }
 
 class _BlockingOfflineStore implements OfflineStore {
-  _BlockingOfflineStore(this._delegate, this._resetGate);
+  _BlockingOfflineStore(
+    this._delegate,
+    this._resetGate, {
+    bool emitOnlyInsertedChanges = false,
+  }) : _emitOnlyInsertedChanges = emitOnlyInsertedChanges;
 
   final OfflineStore _delegate;
   final Completer<void> _resetGate;
+  final bool _emitOnlyInsertedChanges;
+  final StreamController<OfflineStoreChange> _insertedChanges =
+      StreamController<OfflineStoreChange>.broadcast(sync: true);
+  int pendingReadSkipCount = 0;
+  Completer<void>? pendingReadGate;
 
   @override
-  Stream<OfflineStoreChange> get changes => _delegate.changes;
+  Stream<OfflineStoreChange> get changes =>
+      _emitOnlyInsertedChanges ? _insertedChanges.stream : _delegate.changes;
 
   @override
-  Future<void> insertMutation(OfflineMutationRecord mutation) =>
-      _delegate.insertMutation(mutation);
+  Future<void> insertMutation(OfflineMutationRecord mutation) async {
+    await _delegate.insertMutation(mutation);
+    if (_emitOnlyInsertedChanges) {
+      _insertedChanges.add(
+        OfflineStoreChange(
+          sessionId: mutation.sessionId,
+          kinds: {OfflineStoreChangeKind.mutation},
+        ),
+      );
+    }
+  }
 
   @override
-  Future<void> insertPhotoUpload(OfflinePhotoUploadRecord upload) =>
-      _delegate.insertPhotoUpload(upload);
+  Future<void> insertPhotoUpload(OfflinePhotoUploadRecord upload) async {
+    await _delegate.insertPhotoUpload(upload);
+    if (_emitOnlyInsertedChanges) {
+      _insertedChanges.add(
+        OfflineStoreChange(
+          sessionId: upload.sessionId,
+          kinds: {OfflineStoreChangeKind.photoUpload},
+        ),
+      );
+    }
+  }
 
   @override
   Future<void> insertMutationWithPhotoUpload(
@@ -876,8 +948,17 @@ class _BlockingOfflineStore implements OfflineStore {
       _delegate.readPhotoUploadForMutation(mutationId);
 
   @override
-  Future<List<OfflineMutationRecord>> readPendingMutations() =>
-      _delegate.readPendingMutations();
+  Future<List<OfflineMutationRecord>> readPendingMutations() async {
+    if (pendingReadSkipCount > 0) {
+      pendingReadSkipCount -= 1;
+      return _delegate.readPendingMutations();
+    }
+    final gate = pendingReadGate;
+    if (gate != null) {
+      await gate.future;
+    }
+    return _delegate.readPendingMutations();
+  }
 
   @override
   Future<List<OfflineMutationRecord>> readMutationsForSession(
@@ -971,7 +1052,10 @@ class _BlockingOfflineStore implements OfflineStore {
       );
 
   @override
-  Future<void> close() => _delegate.close();
+  Future<void> close() async {
+    await _insertedChanges.close();
+    await _delegate.close();
+  }
 }
 
 class _FakeSessionRepository implements SessionRepository {
