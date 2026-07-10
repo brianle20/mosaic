@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -325,87 +326,90 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
         ? filteredCurrentRoundCards.isNotEmpty || filteredOtherCards.isNotEmpty
         : filteredCards.isNotEmpty;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Tables')),
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error,
-        onRetry: () => _controller.load(widget.eventId),
-        child: ListView(
-          key: const ValueKey('tables-overview-list'),
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (!widget.readOnly && widget.canManageTables) ...[
-              FilledButton.icon(
-                onPressed: _openAddTable,
-                icon: const Icon(Icons.table_restaurant),
-                label: const Text('Add Table'),
-              ),
-              const SizedBox(height: 16),
-            ],
-            Text(
-              widget.eventTitle,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            if (widget.readOnly) ...[
-              const SizedBox(height: 12),
-              const InfoPanel(
-                message:
-                    'This event is locked. Tables and tag bindings can no longer be changed.',
-              ),
-            ],
-            if (hasSearchableTables) ...[
-              const SizedBox(height: 12),
-              _buildSearchField(),
-            ],
-            const SizedBox(height: 16),
-            if (_controller.tournamentRoundSummary.hasCurrentRound) ...[
-              _buildCurrentRoundStatusBoard(
-                _controller.tournamentRoundSummary,
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (hasCurrentRoundSections && hasFilteredTables) ...[
-              if (filteredCurrentRoundCards.isNotEmpty) ...[
-                _buildSectionHeader(
-                  _controller.effectiveScoringPhase == EventScoringPhase.bonus
-                      ? 'Finals Tables'
-                      : 'Current Round',
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(widget.eventId, silent: true),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Tables')),
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error,
+          onRetry: () => _controller.load(widget.eventId),
+          child: ListView(
+            key: const ValueKey('tables-overview-list'),
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (!widget.readOnly && widget.canManageTables) ...[
+                FilledButton.icon(
+                  onPressed: _openAddTable,
+                  icon: const Icon(Icons.table_restaurant),
+                  label: const Text('Add Table'),
                 ),
-                const SizedBox(height: 8),
-                for (final cardData in filteredCurrentRoundCards)
-                  _buildCurrentRoundTableCard(cardData),
+                const SizedBox(height: 16),
               ],
-              if (filteredOtherCards.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                _buildSectionHeader('Other Tables'),
-                const SizedBox(height: 8),
-                for (final cardData in filteredOtherCards)
-                  _buildTableCard(cardData),
+              Text(
+                widget.eventTitle,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (widget.readOnly) ...[
+                const SizedBox(height: 12),
+                const InfoPanel(
+                  message:
+                      'This event is locked. Tables and tag bindings can no longer be changed.',
+                ),
               ],
-            ] else if (!hasCurrentRoundSections)
-              for (final cardData in filteredCards) _buildTableCard(cardData),
-            if (hasSearch && hasSearchableTables && !hasFilteredTables)
-              const Padding(
-                padding: EdgeInsets.only(top: 24),
-                child: EmptyStateCard(
-                  icon: Icons.search_off,
-                  title: 'No matching tables',
-                  message: 'Try a different table or player search.',
+              if (hasSearchableTables) ...[
+                const SizedBox(height: 12),
+                _buildSearchField(),
+              ],
+              const SizedBox(height: 16),
+              if (_controller.tournamentRoundSummary.hasCurrentRound) ...[
+                _buildCurrentRoundStatusBoard(
+                  _controller.tournamentRoundSummary,
                 ),
-              ),
-            if (_controller.tables.isEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 24),
-                child: EmptyStateCard(
-                  icon: Icons.table_restaurant,
-                  title: 'No tables yet',
-                  message: widget.readOnly
-                      ? 'No tables were created before this event was locked.'
-                      : 'Add a table before starting live seating.',
+                const SizedBox(height: 16),
+              ],
+              if (hasCurrentRoundSections && hasFilteredTables) ...[
+                if (filteredCurrentRoundCards.isNotEmpty) ...[
+                  _buildSectionHeader(
+                    _controller.effectiveScoringPhase == EventScoringPhase.bonus
+                        ? 'Finals Tables'
+                        : 'Current Round',
+                  ),
+                  const SizedBox(height: 8),
+                  for (final cardData in filteredCurrentRoundCards)
+                    _buildCurrentRoundTableCard(cardData),
+                ],
+                if (filteredOtherCards.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  _buildSectionHeader('Other Tables'),
+                  const SizedBox(height: 8),
+                  for (final cardData in filteredOtherCards)
+                    _buildTableCard(cardData),
+                ],
+              ] else if (!hasCurrentRoundSections)
+                for (final cardData in filteredCards) _buildTableCard(cardData),
+              if (hasSearch && hasSearchableTables && !hasFilteredTables)
+                const Padding(
+                  padding: EdgeInsets.only(top: 24),
+                  child: EmptyStateCard(
+                    icon: Icons.search_off,
+                    title: 'No matching tables',
+                    message: 'Try a different table or player search.',
+                  ),
                 ),
-              ),
-          ],
+              if (_controller.tables.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 24),
+                  child: EmptyStateCard(
+                    icon: Icons.table_restaurant,
+                    title: 'No tables yet',
+                    message: widget.readOnly
+                        ? 'No tables were created before this event was locked.'
+                        : 'Add a table before starting live seating.',
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

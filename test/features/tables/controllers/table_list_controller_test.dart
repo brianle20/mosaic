@@ -21,6 +21,7 @@ class _FakeTableRepository extends ThrowingTableRepository {
 
   final List<EventTableRecord> cachedTables;
   final Future<List<EventTableRecord>> Function(String eventId)? tableLoader;
+  Object? remoteError;
 
   @override
   Future<EventTableRecord> bindTableTag({
@@ -38,16 +39,19 @@ class _FakeTableRepository extends ThrowingTableRepository {
 
   @override
   Future<List<EventTableRecord>> listTables(String eventId) async {
+    if (remoteError != null) {
+      throw remoteError!;
+    }
     final loader = tableLoader;
     if (loader != null) {
       return loader(eventId);
     }
-    return cachedTables;
+    return [...cachedTables];
   }
 
   @override
   Future<List<EventTableRecord>> readCachedTables(String eventId) async =>
-      cachedTables;
+      [...cachedTables];
 
   @override
   Future<EventTableRecord> resolveTableByTag({
@@ -80,6 +84,7 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   final Future<SessionDetailRecord> Function(String sessionId)? detailLoader;
   final Future<List<TableSessionRecord>> Function(String eventId)?
       sessionLoader;
+  Object? remoteError;
   int bulkStartCallCount = 0;
 
   @override
@@ -103,11 +108,14 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 
   @override
   Future<List<TableSessionRecord>> listSessions(String eventId) async {
+    if (remoteError != null) {
+      throw remoteError!;
+    }
     final loader = sessionLoader;
     if (loader != null) {
       return loader(eventId);
     }
-    return cachedSessions;
+    return [...cachedSessions];
   }
 
   @override
@@ -143,7 +151,7 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
-      cachedSessions;
+      [...cachedSessions];
 
   @override
   Future<List<TableSessionRecord>> startCurrentTournamentRoundSessions(
@@ -169,13 +177,19 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   _FakeGuestRepository(this.guests);
 
   final List<EventGuestRecord> guests;
+  Object? remoteError;
 
   @override
-  Future<List<EventGuestRecord>> listGuests(String eventId) async => guests;
+  Future<List<EventGuestRecord>> listGuests(String eventId) async {
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return [...guests];
+  }
 
   @override
   Future<List<EventGuestRecord>> readCachedGuests(String eventId) async =>
-      guests;
+      [...guests];
 
   @override
   Future<List<GuestCoverEntryRecord>> readCachedGuestCoverEntries(
@@ -254,6 +268,7 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   List<SeatingAssignmentRecord> suddenDeathAssignments;
   List<SeatingAssignmentRecord> playInAssignments;
   List<SeatingAssignmentRecord> assignments;
+  Object? remoteError;
   final startedSuddenDeathTables = <String>[];
   final startedPlayInTables = <String>[];
 
@@ -261,11 +276,15 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
     String eventId,
   ) async =>
-      assignments;
+      [...assignments];
 
   @override
-  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
-      assignments;
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async {
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return [...assignments];
+  }
 
   @override
   Future<TournamentRoundSummary?> readCachedTournamentRoundSummary(
@@ -276,12 +295,20 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   @override
   Future<TournamentRoundSummary> loadTournamentRoundSummary(
     String eventId,
-  ) async =>
-      summary ?? TournamentRoundSummary.empty();
+  ) async {
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return summary ?? TournamentRoundSummary.empty();
+  }
 
   @override
-  Future<BonusRoundState?> loadBonusRoundState(String eventId) async =>
-      bonusRoundState;
+  Future<BonusRoundState?> loadBonusRoundState(String eventId) async {
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return bonusRoundState;
+  }
 
   @override
   Future<List<SeatingAssignmentRecord>> startBonusRoundSuddenDeath({
@@ -303,6 +330,263 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
 }
 
 void main() {
+  test('silent recovery preserves populated table state when cache is empty',
+      () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_01',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final session = _session(
+      id: 'ses_01',
+      tableId: table.id,
+      scoringPhase: EventScoringPhase.tournament,
+    );
+    final detail = _detail(session);
+    final summary = _roundSummary(
+      status: TournamentRoundStatus.active,
+      active: 1,
+      currentTables: [
+        const TournamentRoundTableSummary(
+          eventTableId: 'tbl_01',
+          tableLabel: 'Table 1',
+          tableDisplayOrder: 1,
+          status: TournamentRoundTableStatus.active,
+          assignedPlayers: [],
+          activeSessionId: 'ses_01',
+        ),
+      ],
+    );
+    final tableRepository = _FakeTableRepository(cachedTables: [table]);
+    final sessionRepository = _FakeSessionRepository(
+      cachedSessions: [session],
+      cachedDetails: {'ses_01': detail},
+      loadedDetails: {'ses_01': detail},
+    );
+    final guestRepository = _FakeGuestRepository([
+      _guest('guest_01', 'Cached player'),
+    ]);
+    final seatingRepository = _FakeSeatingRepository(summary: summary);
+    final controller = TableListController(
+      tableRepository: tableRepository,
+      sessionRepository: sessionRepository,
+      guestRepository: guestRepository,
+      seatingRepository: seatingRepository,
+    );
+
+    await controller.load('evt_01');
+    expect(controller.tables.single.id, table.id);
+    expect(controller.activeSessionsByTableId.keys.single, table.id);
+    expect(controller.guestNamesById['guest_01'], 'Cached player');
+    expect(controller.tournamentRoundSummary.hasCurrentRound, isTrue);
+    expect(controller.sessionDetailsBySessionId['ses_01'], detail);
+
+    tableRepository.cachedTables.clear();
+    tableRepository.remoteError = StateError('offline');
+    sessionRepository.cachedSessions.clear();
+    sessionRepository.remoteError = StateError('offline');
+    guestRepository.guests.clear();
+    guestRepository.remoteError = StateError('offline');
+    seatingRepository.summary = null;
+    seatingRepository.remoteError = StateError('offline');
+
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.tables.single.id, table.id);
+    expect(controller.activeSessionsByTableId.keys.single, table.id);
+    expect(controller.guestNamesById['guest_01'], 'Cached player');
+    expect(controller.tournamentRoundSummary.hasCurrentRound, isTrue);
+    expect(controller.sessionDetailsBySessionId['ses_01'], detail);
+    expect(controller.error, isNull);
+    expect(controller.isLoading, isFalse);
+  });
+
+  test('silent recovery preserves populated bonus state when cache is empty',
+      () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_sudden',
+      'event_id': 'evt_01',
+      'label': 'Table 9',
+      'display_order': 9,
+      'nfc_tag_id': 'tag_09',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final assignment = _bonusAssignment(
+      table: table,
+      seatIndex: 0,
+      displayName: 'Alice Chen',
+      seedRank: 1,
+      role: BonusTableRole.tableOfChampionsSuddenDeath,
+    );
+    final seatingRepository = _FakeSeatingRepository(
+      bonusRoundState: const BonusRoundState(
+        bonusRoundId: 'bonus_01',
+        eventId: 'evt_01',
+        status: 'active',
+        suddenDeathStatus: 'required',
+        suddenDeathTableId: 'tbl_sudden',
+        tiedTopPlayers: [
+          BonusRoundTiedPlayer(
+            eventGuestId: 'guest_01',
+            displayName: 'Alice Chen',
+            seedRank: 1,
+          ),
+        ],
+      ),
+      assignments: [assignment],
+    );
+    final tableRepository = _FakeTableRepository(cachedTables: [table]);
+    final sessionRepository = _FakeSessionRepository(
+      cachedSessions: <TableSessionRecord>[],
+    );
+    final guestRepository = _FakeGuestRepository(const []);
+    final controller = TableListController(
+      tableRepository: tableRepository,
+      sessionRepository: sessionRepository,
+      guestRepository: guestRepository,
+      seatingRepository: seatingRepository,
+      scoringPhase: EventScoringPhase.bonus,
+    );
+
+    await controller.load('evt_01');
+    expect(controller.isSuddenDeathRequired, isTrue);
+    expect(controller.bonusAssignments, [assignment]);
+
+    tableRepository.cachedTables.clear();
+    tableRepository.remoteError = StateError('offline');
+    sessionRepository.cachedSessions.clear();
+    sessionRepository.remoteError = StateError('offline');
+    seatingRepository.assignments.clear();
+    seatingRepository.summary = null;
+    seatingRepository.remoteError = StateError('offline');
+
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.tables.single.id, table.id);
+    expect(controller.bonusAssignments, [assignment]);
+    expect(controller.isSuddenDeathRequired, isTrue);
+    expect(controller.currentRoundCards.single.table.id, table.id);
+    expect(controller.error, isNull);
+  });
+
+  test('silent recovery clears stale table state after remote empty success',
+      () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_01',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final session = _session(
+      id: 'ses_01',
+      tableId: table.id,
+      scoringPhase: EventScoringPhase.tournament,
+    );
+    final tableRepository = _FakeTableRepository(cachedTables: [table]);
+    final sessionRepository = _FakeSessionRepository(
+      cachedSessions: [session],
+      cachedDetails: {'ses_01': _detail(session)},
+      loadedDetails: {'ses_01': _detail(session)},
+    );
+    final guestRepository = _FakeGuestRepository([
+      _guest('guest_01', 'Player'),
+    ]);
+    final seatingRepository = _FakeSeatingRepository(
+      summary: _roundSummary(
+        status: TournamentRoundStatus.active,
+        active: 1,
+        currentTables: [
+          const TournamentRoundTableSummary(
+            eventTableId: 'tbl_01',
+            tableLabel: 'Table 1',
+            tableDisplayOrder: 1,
+            status: TournamentRoundTableStatus.active,
+            assignedPlayers: [],
+            activeSessionId: 'ses_01',
+          ),
+        ],
+      ),
+    );
+    final controller = TableListController(
+      tableRepository: tableRepository,
+      sessionRepository: sessionRepository,
+      guestRepository: guestRepository,
+      seatingRepository: seatingRepository,
+    );
+
+    await controller.load('evt_01');
+    tableRepository.cachedTables.clear();
+    sessionRepository.cachedSessions.clear();
+    guestRepository.guests.clear();
+    seatingRepository.summary = null;
+
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.tables, isEmpty);
+    expect(controller.activeSessionsByTableId, isEmpty);
+    expect(controller.sessionsByTableId, isEmpty);
+    expect(controller.guestNamesById, isEmpty);
+    expect(controller.sessionDetailsBySessionId, isEmpty);
+    expect(controller.tournamentRoundSummary.hasCurrentRound, isFalse);
+    expect(controller.error, isNull);
+  });
+
+  test('silent recovery clears stale bonus assignments after remote empty',
+      () async {
+    final table = EventTableRecord.fromJson(const {
+      'id': 'tbl_01',
+      'event_id': 'evt_01',
+      'label': 'Table 1',
+      'display_order': 1,
+      'nfc_tag_id': 'tag_01',
+      'default_ruleset_id': 'HK_STANDARD',
+      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+      'default_rotation_policy_config_json': {},
+    });
+    final assignment = _bonusAssignment(
+      table: table,
+      seatIndex: 0,
+      displayName: 'Player',
+      seedRank: 1,
+      role: BonusTableRole.tableOfChampions,
+    );
+    final tableRepository = _FakeTableRepository(cachedTables: [table]);
+    final seatingRepository = _FakeSeatingRepository(
+      assignments: [assignment],
+    );
+    final controller = TableListController(
+      tableRepository: tableRepository,
+      sessionRepository: _FakeSessionRepository(
+        cachedSessions: <TableSessionRecord>[],
+      ),
+      guestRepository: _FakeGuestRepository(const []),
+      seatingRepository: seatingRepository,
+      scoringPhase: EventScoringPhase.bonus,
+    );
+
+    await controller.load('evt_01');
+    expect(controller.bonusAssignments, [assignment]);
+
+    tableRepository.cachedTables.clear();
+    seatingRepository.assignments.clear();
+
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.bonusAssignments, isEmpty);
+    expect(controller.tournamentRoundSummary.hasCurrentRound, isFalse);
+  });
+
   test('loads cached tables and active sessions when remote fetches fail',
       () async {
     final cachedTable = EventTableRecord.fromJson(const {

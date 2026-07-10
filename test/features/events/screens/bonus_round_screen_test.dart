@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -13,6 +17,46 @@ import 'package:mosaic/features/events/screens/bonus_round_screen.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
 void main() {
+  testWidgets('recovery refresh keeps cached finals tables visible',
+      (tester) async {
+    final leaderboardRepository = _LeaderboardRepository(_leaderboard());
+    final tableRepository = _TableRepository(
+      tables: [_table(id: 'tbl_1', label: 'Table 1')],
+      resolvedTablesByUid: const {},
+    );
+    final signal = _FakeOfflineRecoverySignal();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OfflineRecoveryScope(
+          signal: signal,
+          child: BonusRoundScreen(
+            eventId: 'evt_01',
+            leaderboardRepository: leaderboardRepository,
+            tableRepository: tableRepository,
+            sessionRepository: const _SessionRepository(),
+            seatingRepository: _SeatingRepository(),
+            nfcService: _NfcService(const []),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('#1 Player 1'), findsOneWidget);
+    final initialLoadCount = leaderboardRepository.loadCount;
+
+    tableRepository.cachedTablesOverride = const [];
+    leaderboardRepository.remoteError = StateError('offline');
+    signal.emit();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(leaderboardRepository.loadCount, initialLoadCount + 1);
+    expect(find.text('#1 Player 1'), findsOneWidget);
+    expect(find.text('Loading…'), findsNothing);
+    await signal.dispose();
+  });
+
   testWidgets('scans two tables and creates bonus round seating',
       (tester) async {
     final seatingRepository = _SeatingRepository();
@@ -388,13 +432,20 @@ class _NfcService implements NfcService {
 }
 
 class _LeaderboardRepository implements LeaderboardRepository {
-  const _LeaderboardRepository(this.entries);
+  _LeaderboardRepository(this.entries);
 
   final List<LeaderboardEntry> entries;
+  Object? remoteError;
+  int loadCount = 0;
 
   @override
-  Future<List<LeaderboardEntry>> loadLeaderboard(String eventId) async =>
-      entries;
+  Future<List<LeaderboardEntry>> loadLeaderboard(String eventId) async {
+    loadCount += 1;
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return entries;
+  }
 
   @override
   Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId) async =>
@@ -402,13 +453,15 @@ class _LeaderboardRepository implements LeaderboardRepository {
 }
 
 class _TableRepository implements TableRepository {
-  const _TableRepository({
+  _TableRepository({
     required this.tables,
     required this.resolvedTablesByUid,
   });
 
   final List<EventTableRecord> tables;
   final Map<String, EventTableRecord> resolvedTablesByUid;
+  Object? remoteError;
+  List<EventTableRecord>? cachedTablesOverride;
 
   @override
   Future<EventTableRecord> bindTableTag({
@@ -425,11 +478,16 @@ class _TableRepository implements TableRepository {
   }
 
   @override
-  Future<List<EventTableRecord>> listTables(String eventId) async => tables;
+  Future<List<EventTableRecord>> listTables(String eventId) async {
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return tables;
+  }
 
   @override
   Future<List<EventTableRecord>> readCachedTables(String eventId) async =>
-      tables;
+      cachedTablesOverride ?? tables;
 
   @override
   Future<EventTableRecord> resolveTableByTag({
@@ -442,6 +500,24 @@ class _TableRepository implements TableRepository {
   Future<EventTableRecord> updateTable(UpdateEventTableInput input) {
     throw UnimplementedError();
   }
+}
+
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  int _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  Future<void> dispose() => _controller.close();
 }
 
 class _SessionRepository implements SessionRepository {

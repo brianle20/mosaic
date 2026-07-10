@@ -76,35 +76,71 @@ class TableListController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> load(String eventId) async {
+  Future<void> load(String eventId, {bool silent = false}) async {
     final cachedTables = await _tableRepository.readCachedTables(eventId);
     final cachedSessions = await _sessionRepository.readCachedSessions(eventId);
     final cachedGuests = await _guestRepository.readCachedGuests(eventId);
     final cachedRoundSummary = await _readCachedTournamentRoundSummary(eventId);
     final cachedBonusAssignments = await _readCachedBonusAssignments(eventId);
+    final cachedSummaryIsUsable = _hasUsableRoundSummary(cachedRoundSummary);
 
-    isLoading = true;
+    if (!silent) {
+      isLoading = true;
+    }
     error = null;
-    tables = cachedTables;
-    activeSessionsByTableId = _activeSessionsByTable(cachedSessions);
-    sessionsByTableId = _sessionsByTable(cachedSessions);
-    guestNamesById = _guestNamesById(cachedGuests);
-    bonusAssignments = cachedBonusAssignments;
-    bonusRoundState = null;
-    effectiveScoringPhase = _resolveEffectiveScoringPhase(
+    if (!silent || cachedTables.isNotEmpty || tables.isEmpty) {
+      tables = cachedTables;
+    }
+    if (!silent || cachedSessions.isNotEmpty || sessionsByTableId.isEmpty) {
+      activeSessionsByTableId = _activeSessionsByTable(cachedSessions);
+      sessionsByTableId = _sessionsByTable(cachedSessions);
+    }
+    if (!silent || cachedGuests.isNotEmpty || guestNamesById.isEmpty) {
+      guestNamesById = _guestNamesById(cachedGuests);
+    }
+    if (!silent ||
+        cachedBonusAssignments.isNotEmpty ||
+        bonusAssignments.isEmpty) {
+      bonusAssignments = cachedBonusAssignments;
+    }
+    if (!silent) {
+      bonusRoundState = null;
+    }
+    final resolvedScoringPhase = _resolveEffectiveScoringPhase(
       sessions: cachedSessions,
       activeBonusAssignments: cachedBonusAssignments,
     );
-    tournamentRoundSummary = effectiveScoringPhase == EventScoringPhase.bonus
-        ? _buildBonusRoundSummary()
-        : cachedRoundSummary ?? TournamentRoundSummary.empty();
-    sessionDetailsBySessionId =
+    if (!silent ||
+        cachedSessions.isNotEmpty ||
+        cachedBonusAssignments.isNotEmpty ||
+        effectiveScoringPhase == scoringPhase) {
+      effectiveScoringPhase = resolvedScoringPhase;
+    }
+    if (effectiveScoringPhase == EventScoringPhase.bonus) {
+      if (!silent ||
+          cachedBonusAssignments.isNotEmpty ||
+          bonusRoundState == null) {
+        tournamentRoundSummary = _buildBonusRoundSummary();
+      }
+    } else if (!silent ||
+        cachedSummaryIsUsable ||
+        !_hasUsableRoundSummary(tournamentRoundSummary)) {
+      tournamentRoundSummary =
+          cachedRoundSummary ?? TournamentRoundSummary.empty();
+    }
+    final cachedSessionDetails =
         await _readCachedDetails(activeSessionsByTableId.values);
+    if (!silent ||
+        cachedSessionDetails.isNotEmpty ||
+        sessionDetailsBySessionId.isEmpty) {
+      sessionDetailsBySessionId = cachedSessionDetails;
+    }
     _refreshCards();
     notifyListeners();
 
     try {
-      tables = await _tableRepository.listTables(eventId);
+      final loadedTables = await _tableRepository.listTables(eventId);
+      tables = loadedTables;
     } catch (exception) {
       if (tables.isEmpty && activeSessionsByTableId.isEmpty) {
         error = exception.toString();
@@ -130,21 +166,49 @@ class TableListController extends ChangeNotifier {
       }
     }
 
-    bonusAssignments = await _loadBonusAssignments(eventId);
-    effectiveScoringPhase = _resolveEffectiveScoringPhase(
+    final loadedBonusAssignments = await _loadBonusAssignments(eventId);
+    if (!silent ||
+        loadedBonusAssignments.succeeded ||
+        bonusAssignments.isEmpty) {
+      bonusAssignments = loadedBonusAssignments.value;
+    }
+    final resolvedRemoteScoringPhase = _resolveEffectiveScoringPhase(
       sessions: sessionsByTableId.values.expand((sessions) => sessions),
       activeBonusAssignments: bonusAssignments,
     );
+    effectiveScoringPhase = resolvedRemoteScoringPhase;
     if (effectiveScoringPhase == EventScoringPhase.bonus) {
-      bonusRoundState = await _loadBonusRoundState(eventId);
-      tournamentRoundSummary = _buildBonusRoundSummary();
+      BonusRoundState? loadedBonusRoundState;
+      var didLoadBonusRoundState = false;
+      try {
+        loadedBonusRoundState =
+            await _seatingRepository?.loadBonusRoundState(eventId);
+        didLoadBonusRoundState = true;
+      } catch (_) {
+        // Preserve the current bonus state when recovery cannot reach remote.
+      }
+      if (!silent || didLoadBonusRoundState || bonusRoundState == null) {
+        bonusRoundState = loadedBonusRoundState;
+      }
+      if (!silent ||
+          loadedBonusAssignments.succeeded ||
+          bonusRoundState == null) {
+        tournamentRoundSummary = _buildBonusRoundSummary();
+      }
     } else {
       bonusRoundState = null;
-      tournamentRoundSummary = await _loadTournamentRoundSummary(eventId);
+      final loadedSummary = await _loadTournamentRoundSummary(eventId);
+      if (!silent ||
+          loadedSummary.succeeded ||
+          !_hasUsableRoundSummary(tournamentRoundSummary)) {
+        tournamentRoundSummary = loadedSummary.value;
+      }
     }
 
     _refreshCards();
-    isLoading = false;
+    if (!silent) {
+      isLoading = false;
+    }
     notifyListeners();
   }
 
@@ -526,24 +590,31 @@ class TableListController extends ChangeNotifier {
     }
   }
 
-  Future<List<SeatingAssignmentRecord>> _loadBonusAssignments(
+  Future<_RemoteLoadResult<List<SeatingAssignmentRecord>>>
+      _loadBonusAssignments(
     String eventId,
   ) async {
     try {
       final assignments =
           await _seatingRepository?.loadAssignments(eventId) ?? const [];
-      return _activeBonusAssignments(assignments);
+      return _RemoteLoadResult(
+        value: _activeBonusAssignments(assignments),
+        succeeded: true,
+      );
     } catch (_) {
-      return await _readCachedBonusAssignments(eventId);
+      final cached = await _readCachedBonusAssignments(eventId);
+      return _RemoteLoadResult(value: cached, succeeded: false);
     }
   }
 
-  Future<BonusRoundState?> _loadBonusRoundState(String eventId) async {
-    try {
-      return await _seatingRepository?.loadBonusRoundState(eventId);
-    } catch (_) {
-      return null;
+  bool _hasUsableRoundSummary(TournamentRoundSummary? summary) {
+    if (summary == null) {
+      return false;
     }
+    return summary.round != null ||
+        summary.assignedTableCount > 0 ||
+        summary.currentRoundTables.isNotEmpty ||
+        summary.otherTables.isNotEmpty;
   }
 
   List<SeatingAssignmentRecord> _activeBonusAssignments(
@@ -998,15 +1069,21 @@ class TableListController extends ChangeNotifier {
     return null;
   }
 
-  Future<TournamentRoundSummary> _loadTournamentRoundSummary(
+  Future<_RemoteLoadResult<TournamentRoundSummary>> _loadTournamentRoundSummary(
     String eventId,
   ) async {
     try {
-      return await _seatingRepository?.loadTournamentRoundSummary(eventId) ??
-          TournamentRoundSummary.empty();
+      return _RemoteLoadResult(
+        value: await _seatingRepository?.loadTournamentRoundSummary(eventId) ??
+            TournamentRoundSummary.empty(),
+        succeeded: true,
+      );
     } catch (_) {
-      return await _readCachedTournamentRoundSummary(eventId) ??
-          TournamentRoundSummary.empty();
+      final cached = await _readCachedTournamentRoundSummary(eventId);
+      return _RemoteLoadResult(
+        value: cached ?? TournamentRoundSummary.empty(),
+        succeeded: false,
+      );
     }
   }
 
@@ -1251,4 +1328,11 @@ class TableListController extends ChangeNotifier {
       _ => 'Seat',
     };
   }
+}
+
+class _RemoteLoadResult<T> {
+  const _RemoteLoadResult({required this.value, required this.succeeded});
+
+  final T value;
+  final bool succeeded;
 }

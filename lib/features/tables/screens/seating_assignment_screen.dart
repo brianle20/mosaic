@@ -6,6 +6,7 @@ import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/features/tables/controllers/seating_assignment_controller.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
@@ -114,9 +115,7 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
 
   Future<void> _startAllTables() async {
     await _controller.startAllTables(widget.eventId);
-    if (!mounted ||
-        _controller.error != null ||
-        !_controller.hasLiveSessions) {
+    if (!mounted || _controller.error != null || !_controller.hasLiveSessions) {
       return;
     }
 
@@ -147,66 +146,70 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
   Widget build(BuildContext context) {
     final hasAssignments = _controller.assignments.isNotEmpty;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Seating')),
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error != null && !hasAssignments
-            ? _controller.error
-            : null,
-        onRetry: () => _controller.load(widget.eventId),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (_controller.error != null && hasAssignments) ...[
-              InlineErrorBanner(message: _controller.error!),
-              const SizedBox(height: 12),
-            ],
-            if (hasAssignments) ...[
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _copySeatingAssignments,
-                  icon: const Icon(Icons.content_copy),
-                  label: const Text('Copy Seating'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (_controller.canStartAllTables ||
-                  _controller.isSubmitting) ...[
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(widget.eventId, silent: true),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Seating')),
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error != null && !hasAssignments
+              ? _controller.error
+              : null,
+          onRetry: () => _controller.load(widget.eventId),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (_controller.error != null && hasAssignments) ...[
+                InlineErrorBanner(message: _controller.error!),
+                const SizedBox(height: 12),
+              ],
+              if (hasAssignments) ...[
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed:
-                        _controller.isSubmitting ? null : _startAllTables,
-                    icon: const Icon(Icons.play_arrow),
-                    label: Text(
-                      _controller.isSubmitting
-                          ? 'Starting Tables...'
-                          : _controller.startAllTablesLabel,
-                    ),
+                  child: OutlinedButton.icon(
+                    onPressed: _copySeatingAssignments,
+                    icon: const Icon(Icons.content_copy),
+                    label: const Text('Copy Seating'),
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (_controller.canStartAllTables ||
+                    _controller.isSubmitting) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed:
+                          _controller.isSubmitting ? null : _startAllTables,
+                      icon: const Icon(Icons.play_arrow),
+                      label: Text(
+                        _controller.isSubmitting
+                            ? 'Starting Tables...'
+                            : _controller.startAllTablesLabel,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
               ],
-            ],
-            if (!hasAssignments)
-              const EmptyStateCard(
-                icon: Icons.event_seat,
-                title: 'No seating yet',
-                message:
-                    'Round seating appears after starting a tournament round.',
-              )
-            else
-              for (final group in _controller.tableGroups) ...[
-                _TableSeatingCard(group: group),
+              if (!hasAssignments)
+                const EmptyStateCard(
+                  icon: Icons.event_seat,
+                  title: 'No seating yet',
+                  message:
+                      'Round seating appears after starting a tournament round.',
+                )
+              else
+                for (final group in _controller.tableGroups) ...[
+                  _TableSeatingCard(group: group),
+                  const SizedBox(height: 12),
+                ],
+              if (hasAssignments &&
+                  _controller.unassignedGuests.isNotEmpty) ...[
+                _UnassignedGuestsCard(guests: _controller.unassignedGuests),
                 const SizedBox(height: 12),
               ],
-            if (hasAssignments && _controller.unassignedGuests.isNotEmpty) ...[
-              _UnassignedGuestsCard(guests: _controller.unassignedGuests),
-              const SizedBox(height: 12),
             ],
-          ],
+          ),
         ),
       ),
     );

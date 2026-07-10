@@ -83,8 +83,10 @@ class SeatingAssignmentController extends ChangeNotifier {
     ];
   }
 
-  Future<void> load(String eventId) async {
-    isLoading = true;
+  Future<void> load(String eventId, {bool silent = false}) async {
+    if (!silent) {
+      isLoading = true;
+    }
     error = null;
 
     final cachedAssignments = _filterAssignments(
@@ -116,7 +118,9 @@ class SeatingAssignmentController extends ChangeNotifier {
       }
     }
 
-    isLoading = false;
+    if (!silent) {
+      isLoading = false;
+    }
     notifyListeners();
   }
 
@@ -290,8 +294,7 @@ class SeatingAssignmentController extends ChangeNotifier {
     }
 
     final roles = _bonusTableRoles;
-    return roles == null ||
-        (roles.length > 1 && !_hasStandardMixedFinalsRoles);
+    return roles == null || (roles.length > 1 && !_hasStandardMixedFinalsRoles);
   }
 
   bool get _hasStandardMixedFinalsRoles {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/bonus_round_controller.dart';
@@ -185,54 +186,57 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
     final scanningRole = _scanningRole;
     final actionError = _scanError ?? _controller.actionError;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Begin Finals')),
-      body: AsyncBody(
-        isLoading: _controller.isLoading,
-        error: _controller.error,
-        onRetry: () => _controller.load(widget.eventId),
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (_controller.hasLiveSessions) ...[
-              const InfoPanel(message: bonusRoundLiveSessionBlockedMessage),
-              const SizedBox(height: 12),
-            ],
-            if (actionError != null) ...[
-              InlineErrorBanner(message: actionError),
-              const SizedBox(height: 12),
-            ],
-            _BonusRoundTablePanel(
-              title: 'Table of Champions',
-              selectedTable: _controller.championsTable,
-              seatPreviews: _controller.championSeats,
-              scanKey: const ValueKey('scanChampionsTable'),
-              isScanning: scanningRole == BonusRoundTableRole.champions,
-              onScan: () => _scanTable(BonusRoundTableRole.champions),
-              onChoose: () => _chooseTable(BonusRoundTableRole.champions),
-            ),
-            if (_controller.redemptionRequired) ...[
-              const SizedBox(height: 12),
+    return ReconnectRefreshListener(
+      onRefresh: () => _controller.load(widget.eventId, silent: true),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Begin Finals')),
+        body: AsyncBody(
+          isLoading: _controller.isLoading,
+          error: _controller.error,
+          onRetry: () => _controller.load(widget.eventId),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (_controller.hasLiveSessions) ...[
+                const InfoPanel(message: bonusRoundLiveSessionBlockedMessage),
+                const SizedBox(height: 12),
+              ],
+              if (actionError != null) ...[
+                InlineErrorBanner(message: actionError),
+                const SizedBox(height: 12),
+              ],
               _BonusRoundTablePanel(
-                title: 'Table of Redemption',
-                selectedTable: _controller.redemptionTable,
-                seatPreviews: _controller.redemptionSeats,
-                scanKey: const ValueKey('scanRedemptionTable'),
-                isScanning: scanningRole == BonusRoundTableRole.redemption,
-                onScan: () => _scanTable(BonusRoundTableRole.redemption),
-                onChoose: () => _chooseTable(BonusRoundTableRole.redemption),
+                title: 'Table of Champions',
+                selectedTable: _controller.championsTable,
+                seatPreviews: _controller.championSeats,
+                scanKey: const ValueKey('scanChampionsTable'),
+                isScanning: scanningRole == BonusRoundTableRole.champions,
+                onScan: () => _scanTable(BonusRoundTableRole.champions),
+                onChoose: () => _chooseTable(BonusRoundTableRole.champions),
+              ),
+              if (_controller.redemptionRequired) ...[
+                const SizedBox(height: 12),
+                _BonusRoundTablePanel(
+                  title: 'Table of Redemption',
+                  selectedTable: _controller.redemptionTable,
+                  seatPreviews: _controller.redemptionSeats,
+                  scanKey: const ValueKey('scanRedemptionTable'),
+                  isScanning: scanningRole == BonusRoundTableRole.redemption,
+                  onScan: () => _scanTable(BonusRoundTableRole.redemption),
+                  onChoose: () => _chooseTable(BonusRoundTableRole.redemption),
+                ),
+              ],
+              const SizedBox(height: 16),
+              HeroActionButton(
+                label: 'Begin Finals',
+                icon: Icons.emoji_events,
+                enabled: _controller.canCreateBonusRound &&
+                    !_controller.isSubmitting,
+                isBusy: _controller.isSubmitting,
+                onPressed: _beginFinals,
               ),
             ],
-            const SizedBox(height: 16),
-            HeroActionButton(
-              label: 'Begin Finals',
-              icon: Icons.emoji_events,
-              enabled:
-                  _controller.canCreateBonusRound && !_controller.isSubmitting,
-              isBusy: _controller.isSubmitting,
-              onPressed: _beginFinals,
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -20,8 +24,10 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
 
   final List<SeatingAssignmentRecord> loadedAssignments;
   final List<SeatingAssignmentRecord> generatedAssignments;
+  Object? remoteError;
   int generateCallCount = 0;
   int clearCallCount = 0;
+  int loadAssignmentsCallCount = 0;
 
   @override
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId) async {
@@ -55,14 +61,19 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   }
 
   @override
-  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async =>
-      loadedAssignments;
+  Future<List<SeatingAssignmentRecord>> loadAssignments(String eventId) async {
+    loadAssignmentsCallCount += 1;
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return loadedAssignments;
+  }
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
     String eventId,
   ) async =>
-      const [];
+      loadedAssignments;
 }
 
 class _FakeGuestRepository extends ThrowingGuestRepository {
@@ -242,11 +253,64 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   }
 }
 
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  int _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  Future<void> dispose() => _controller.close();
+}
+
 void main() {
   setUp(() {
     _FakeSessionRepository.bulkStartCallCount = 0;
     _FakeSessionRepository.bonusBulkStartCallCount = 0;
     _FakeSessionRepository.lastBonusBulkStartRole = null;
+  });
+
+  testWidgets('recovery refresh keeps cached seating visible', (tester) async {
+    final repository = _FakeSeatingRepository(
+      loadedAssignments: [_assignment(displayName: 'Cached player')],
+    );
+    final signal = _FakeOfflineRecoverySignal();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OfflineRecoveryScope(
+          signal: signal,
+          child: SeatingAssignmentScreen(
+            eventId: 'evt_01',
+            eventTitle: 'Friday Night Mahjong',
+            seatingRepository: repository,
+            guestRepository: _FakeGuestRepository(),
+            sessionRepository: const _FakeSessionRepository(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Cached player'), findsOneWidget);
+    final initialLoadCount = repository.loadAssignmentsCallCount;
+
+    repository.remoteError = StateError('offline');
+    signal.emit();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(repository.loadAssignmentsCallCount, initialLoadCount + 1);
+    expect(find.text('Cached player'), findsOneWidget);
+    expect(find.text('Loading…'), findsNothing);
+    await signal.dispose();
   });
 
   testWidgets('shows empty state without seating mutation actions',

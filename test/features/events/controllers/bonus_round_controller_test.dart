@@ -12,6 +12,86 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/bonus_round_controller.dart';
 
 void main() {
+  setUp(() {
+    _SessionRepository.remoteError = null;
+  });
+
+  test('silent recovery preserves finals state when cache is empty', () async {
+    final table = _table(id: 'tbl_champions', label: 'Table 1');
+    final tableRepository = _TableRepository([table]);
+    final leaderboardRepository = _LeaderboardRepository(_leaderboard());
+    final sessionRepository = _SessionRepository(
+      sessions: <TableSessionRecord>[],
+    );
+    final seatingRepository = _SeatingRepository(
+      tournamentRoundSummary: _tournamentRoundSummary('round_01'),
+    );
+    final controller = BonusRoundController(
+      leaderboardRepository: leaderboardRepository,
+      tableRepository: tableRepository,
+      sessionRepository: sessionRepository,
+      seatingRepository: seatingRepository,
+    );
+
+    await controller.load('evt_01');
+    controller.selectTable(
+      role: BonusRoundTableRole.champions,
+      table: table,
+    );
+    expect(controller.tables, [table]);
+    expect(controller.championSeats, isNotEmpty);
+
+    tableRepository.tables.clear();
+    tableRepository.remoteError = StateError('offline');
+    leaderboardRepository.remoteError = StateError('offline');
+    sessionRepository.sessions.clear();
+    _SessionRepository.remoteError = StateError('offline');
+    seatingRepository.tournamentRoundSummary = null;
+    seatingRepository.remoteError = StateError('offline');
+
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.tables, [table]);
+    expect(controller.championSeats, isNotEmpty);
+    expect(controller.championsTable, table);
+    expect(controller.error, isNull);
+    expect(controller.isLoading, isFalse);
+  });
+
+  test('silent recovery clears stale finals state after remote empty success',
+      () async {
+    final table = _table(id: 'tbl_champions', label: 'Table 1');
+    final tableRepository = _TableRepository([table]);
+    final leaderboardRepository = _LeaderboardRepository(_leaderboard());
+    final sessionRepository = _SessionRepository(
+      sessions: <TableSessionRecord>[],
+    );
+    final seatingRepository = _SeatingRepository(
+      tournamentRoundSummary: _tournamentRoundSummary('round_01'),
+    );
+    final controller = BonusRoundController(
+      leaderboardRepository: leaderboardRepository,
+      tableRepository: tableRepository,
+      sessionRepository: sessionRepository,
+      seatingRepository: seatingRepository,
+    );
+
+    await controller.load('evt_01');
+    expect(controller.tables, [table]);
+    expect(controller.championSeats, isNotEmpty);
+
+    tableRepository.tables.clear();
+    leaderboardRepository.entries.clear();
+    seatingRepository.tournamentRoundSummary = null;
+
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.tables, isEmpty);
+    expect(controller.championSeats, isEmpty);
+    expect(controller.redemptionSeats, isEmpty);
+    expect(controller.error, isNull);
+  });
+
   test('loads champions and redemption seats from the leaderboard', () async {
     final controller = BonusRoundController(
       leaderboardRepository: _LeaderboardRepository(_leaderboard(count: 12)),
@@ -129,7 +209,7 @@ void main() {
       ),
     ];
     final controller = BonusRoundController(
-      leaderboardRepository: const _LeaderboardRepository(tiedEntries),
+      leaderboardRepository: _LeaderboardRepository(tiedEntries),
       tableRepository: _TableRepository([_table(id: 'tbl_1')]),
       sessionRepository: const _SessionRepository(),
       seatingRepository: _SeatingRepository(),
@@ -452,13 +532,18 @@ TournamentRoundSummary _tournamentRoundSummary(String roundId) {
 }
 
 class _LeaderboardRepository implements LeaderboardRepository {
-  const _LeaderboardRepository(this.entries);
+  _LeaderboardRepository(this.entries);
 
   final List<LeaderboardEntry> entries;
+  Object? remoteError;
 
   @override
-  Future<List<LeaderboardEntry>> loadLeaderboard(String eventId) async =>
-      entries;
+  Future<List<LeaderboardEntry>> loadLeaderboard(String eventId) async {
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return entries;
+  }
 
   @override
   Future<List<LeaderboardEntry>> readCachedLeaderboard(String eventId) async =>
@@ -473,6 +558,7 @@ class _TableRepository implements TableRepository {
 
   final List<EventTableRecord> tables;
   final Map<String, EventTableRecord> resolvedTablesByUid;
+  Object? remoteError;
 
   @override
   Future<EventTableRecord> bindTableTag({
@@ -489,11 +575,16 @@ class _TableRepository implements TableRepository {
   }
 
   @override
-  Future<List<EventTableRecord>> listTables(String eventId) async => tables;
+  Future<List<EventTableRecord>> listTables(String eventId) async {
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return [...tables];
+  }
 
   @override
   Future<List<EventTableRecord>> readCachedTables(String eventId) async =>
-      tables;
+      [...tables];
 
   @override
   Future<EventTableRecord> resolveTableByTag({
@@ -512,6 +603,7 @@ class _SessionRepository implements SessionRepository {
   const _SessionRepository({this.sessions = const []});
 
   final List<TableSessionRecord> sessions;
+  static Object? remoteError;
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -537,8 +629,12 @@ class _SessionRepository implements SessionRepository {
   }
 
   @override
-  Future<List<TableSessionRecord>> listSessions(String eventId) async =>
-      sessions;
+  Future<List<TableSessionRecord>> listSessions(String eventId) async {
+    if (_SessionRepository.remoteError != null) {
+      throw _SessionRepository.remoteError!;
+    }
+    return [...sessions];
+  }
 
   @override
   Future<SessionDetailRecord> pauseSession(String sessionId) {
@@ -569,7 +665,7 @@ class _SessionRepository implements SessionRepository {
 
   @override
   Future<List<TableSessionRecord>> readCachedSessions(String eventId) async =>
-      sessions;
+      [...sessions];
 
   @override
   Future<SessionDetailRecord> resumeSession(String sessionId) {
@@ -610,7 +706,8 @@ class _SeatingRepository implements SeatingRepository {
     this.onGenerateBonusRound,
   });
 
-  final TournamentRoundSummary? tournamentRoundSummary;
+  TournamentRoundSummary? tournamentRoundSummary;
+  Object? remoteError;
   final Future<List<SeatingAssignmentRecord>> Function({
     required String eventId,
     required String championsTableId,
@@ -665,8 +762,12 @@ class _SeatingRepository implements SeatingRepository {
   @override
   Future<TournamentRoundSummary> loadTournamentRoundSummary(
     String eventId,
-  ) async =>
-      tournamentRoundSummary ?? TournamentRoundSummary.empty();
+  ) async {
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return tournamentRoundSummary ?? TournamentRoundSummary.empty();
+  }
 
   @override
   Future<BonusRoundState?> loadBonusRoundState(String eventId) async => null;

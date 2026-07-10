@@ -60,14 +60,18 @@ class BonusRoundController extends ChangeNotifier {
         (!redemptionRequired || redemptionTable != null);
   }
 
-  Future<void> load(String eventId) async {
-    isLoading = true;
+  Future<void> load(String eventId, {bool silent = false}) async {
+    if (!silent) {
+      isLoading = true;
+    }
     error = null;
     actionError = null;
     hasCreatedBonusRound = false;
 
     final cachedTables = await _tableRepository.readCachedTables(eventId);
-    tables = cachedTables;
+    if (!silent || cachedTables.isNotEmpty || tables.isEmpty) {
+      tables = cachedTables;
+    }
     notifyListeners();
 
     try {
@@ -85,10 +89,14 @@ class BonusRoundController extends ChangeNotifier {
         tournamentRoundSummary.round?.id,
       );
     } catch (exception) {
-      error = exception.toString();
+      if (tables.isEmpty) {
+        error = exception.toString();
+      }
     }
 
-    isLoading = false;
+    if (!silent) {
+      isLoading = false;
+    }
     notifyListeners();
   }
 

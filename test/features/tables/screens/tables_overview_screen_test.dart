@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/core/routing/app_router.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
@@ -17,6 +21,9 @@ class _FakeTableRepository extends ThrowingTableRepository {
   _FakeTableRepository(this.tables);
 
   final List<EventTableRecord> tables;
+  Object? remoteError;
+  List<EventTableRecord>? cachedTablesOverride;
+  int listTablesCallCount = 0;
 
   @override
   Future<EventTableRecord> bindTableTag({
@@ -33,11 +40,17 @@ class _FakeTableRepository extends ThrowingTableRepository {
   }
 
   @override
-  Future<List<EventTableRecord>> listTables(String eventId) async => tables;
+  Future<List<EventTableRecord>> listTables(String eventId) async {
+    listTablesCallCount += 1;
+    if (remoteError != null) {
+      throw remoteError!;
+    }
+    return tables;
+  }
 
   @override
   Future<List<EventTableRecord>> readCachedTables(String eventId) async =>
-      tables;
+      cachedTablesOverride ?? tables;
 
   @override
   Future<EventTableRecord> resolveTableByTag({
@@ -246,6 +259,24 @@ class _FakeGuestRepository extends ThrowingGuestRepository {
   }
 }
 
+class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
+  final _controller = StreamController<int>.broadcast();
+  int _generation = 0;
+
+  @override
+  int get generation => _generation;
+
+  @override
+  Stream<int> get generations => _controller.stream;
+
+  void emit() {
+    _generation += 1;
+    _controller.add(_generation);
+  }
+
+  Future<void> dispose() => _controller.close();
+}
+
 String _sessionStatusJson(SessionStatus status) {
   return switch (status) {
     SessionStatus.active => 'active',
@@ -344,6 +375,42 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
 }
 
 void main() {
+  testWidgets('recovery refresh keeps cached table cards visible',
+      (tester) async {
+    final tableRepository = _FakeTableRepository([_table('tbl_01', 'Table 1')]);
+    final signal = _FakeOfflineRecoverySignal();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OfflineRecoveryScope(
+          signal: signal,
+          child: TablesOverviewScreen(
+            eventId: 'evt_01',
+            eventTitle: 'Friday Night Mahjong',
+            scoringOpen: false,
+            tableRepository: tableRepository,
+            sessionRepository: _FakeSessionRepository(sessions: const []),
+            guestRepository: _FakeGuestRepository(const []),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Table 1'), findsOneWidget);
+    final initialLoadCount = tableRepository.listTablesCallCount;
+
+    tableRepository.cachedTablesOverride = const [];
+    tableRepository.remoteError = StateError('offline');
+    signal.emit();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(tableRepository.listTablesCallCount, initialLoadCount + 1);
+    expect(find.text('Table 1'), findsOneWidget);
+    expect(find.text('Loading…'), findsNothing);
+    await signal.dispose();
+  });
+
   testWidgets('renders an intentional empty state when no tables exist',
       (tester) async {
     await tester.pumpWidget(
