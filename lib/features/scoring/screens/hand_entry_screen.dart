@@ -101,6 +101,13 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     }
   }
 
+  void _showStatusMessage(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   int get _drawDealerSeatIndex =>
       widget.initialHand?.eastSeatIndexBeforeHand ??
       _sessionDetail.session.currentDealerSeatIndex;
@@ -316,6 +323,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       _choosingFalseWinCaller = false;
       _penaltySeatIndex = null;
     });
+    _showStatusMessage('False win saved.');
   }
 
   Future<void> _voidFalseWinPenalty(FalseWinPenaltyRecord penalty) async {
@@ -642,7 +650,7 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   @override
   Widget build(BuildContext context) {
     final saveBlockingMessage = _saveBlockingMessage;
-    return Scaffold(
+    final scaffold = Scaffold(
       appBar: AppBar(
         title: Text(widget.initialHand == null ? 'Record Hand' : 'Edit Hand'),
       ),
@@ -652,6 +660,14 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_controller.isSubmitting) ...[
+              const Text(
+                'Saving in progress. Please wait.',
+                key: ValueKey('saveInProgressMessage'),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+            ],
             if (saveBlockingMessage != null) ...[
               Text(
                 saveBlockingMessage,
@@ -974,6 +990,10 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
           ),
         ),
       ),
+    );
+    return PopScope(
+      canPop: !_controller.isSubmitting,
+      child: scaffold,
     );
   }
 

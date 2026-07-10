@@ -1351,6 +1351,75 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('shows saving status and cannot leave on iOS while saving',
+      (tester) async {
+    final repository = _RecordingSessionRepository()
+      ..recordFalseWinPenaltyCompleter = Completer<SessionDetailRecord>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: ThemeData(platform: TargetPlatform.iOS),
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => HandEntryScreen(
+                    sessionDetail: buildDetail(currentDealerSeatIndex: 1),
+                    guestNamesById: seatNames,
+                    sessionRepository: repository,
+                  ),
+                ),
+              );
+            },
+            child: const Text('Open hand entry'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open hand entry'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Record False Win'));
+    await tester.pumpAndSettle();
+    final carolButton = find.widgetWithText(
+      OutlinedButton,
+      'South\nCarol Ng',
+    );
+    await tester.ensureVisible(carolButton);
+    await tester.tap(carolButton);
+    await tester.pump();
+
+    expect(find.text('Saving in progress. Please wait.'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Record Hand'), findsOneWidget);
+    expect(find.text('Saving in progress. Please wait.'), findsOneWidget);
+
+    repository.recordFalseWinPenaltyCompleter!.complete(
+      buildDetail(
+        currentDealerSeatIndex: 1,
+        falseWinPenalties: [
+          falseWinPenaltyJson(
+            penaltySeatIndex: 2,
+            status: 'pending',
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Carol Ng'), findsOneWidget);
+    expect(find.text('False win saved.'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Open hand entry'), findsOneWidget);
+  });
+
   testWidgets('editing a legacy draw preserves its dealer waiting state',
       (tester) async {
     final repository = _RecordingSessionRepository();
