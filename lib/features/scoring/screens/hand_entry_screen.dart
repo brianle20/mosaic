@@ -243,7 +243,11 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     try {
       final previousPhoto = _capturedPhoto;
       final captured = await _handPhotoService.captureWinningHandPhoto();
-      if (!mounted || captured == null) {
+      if (captured == null) {
+        return;
+      }
+      if (!mounted) {
+        await _handPhotoStorage.delete(captured.localPath);
         return;
       }
 
@@ -763,6 +767,10 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                         ],
                         selected: {_resultType},
                         onSelectionChanged: (selection) {
+                          final photoToDelete =
+                              selection.first == HandResultType.washout
+                                  ? _capturedPhoto
+                                  : null;
                           setState(() {
                             _resultType = selection.first;
                             if (_resultType == HandResultType.washout) {
@@ -778,6 +786,11 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                             }
                             _choosingFalseWinCaller = false;
                           });
+                          if (photoToDelete != null) {
+                            unawaited(
+                              _handPhotoStorage.delete(photoToDelete.localPath),
+                            );
+                          }
                         },
                       ),
                       if (widget.initialHand == null) ...[

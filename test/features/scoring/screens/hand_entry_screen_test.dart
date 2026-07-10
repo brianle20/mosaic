@@ -33,6 +33,18 @@ class _SequencedHandPhotoService implements HandPhotoService {
   }
 }
 
+class _DelayedHandPhotoService implements HandPhotoService {
+  final Completer<CapturedHandPhoto?> completer =
+      Completer<CapturedHandPhoto?>();
+  int captureCount = 0;
+
+  @override
+  Future<CapturedHandPhoto?> captureWinningHandPhoto() {
+    captureCount += 1;
+    return completer.future;
+  }
+}
+
 class _FakeHandPhotoStorage implements HandPhotoStorage {
   _FakeHandPhotoStorage({Set<String>? existing})
       : existingPaths = {...?existing};
@@ -969,6 +981,55 @@ void main() {
     await tapVisible(tester, find.text('Capture winning hand photo'));
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
+    expect(storage.deletedPaths, ['/local/one.jpg']);
+  });
+
+  testWidgets('switching a captured win to a draw deletes the photo once',
+      (tester) async {
+    final storage = _FakeHandPhotoStorage(existing: {'/local/one.jpg'});
+    final repository = _RecordingSessionRepository();
+    await pumpHandEntry(
+      tester,
+      repository: repository,
+      handPhotoService: _SequencedHandPhotoService([
+        _photo('photo_01', '/local/one.jpg'),
+      ]),
+      handPhotoStorage: storage,
+    );
+
+    await tapVisible(tester, find.text('Capture winning hand photo'));
+    await tapVisible(tester, find.text('Draw'));
+    expect(storage.deletedPaths, ['/local/one.jpg']);
+
+    await tapVisible(tester, find.text('Save Hand'));
+    expect(repository.recordedInput?.resultType, HandResultType.washout);
+    expect(repository.recordedInput?.photoLocalPath, isNull);
+    expect(storage.deletedPaths, ['/local/one.jpg']);
+  });
+
+  testWidgets('capture completing after route disposal deletes returned photo',
+      (tester) async {
+    final service = _DelayedHandPhotoService();
+    final storage = _FakeHandPhotoStorage(existing: {'/local/one.jpg'});
+    await pumpHandEntry(
+      tester,
+      repository: _RecordingSessionRepository(),
+      handPhotoService: service,
+      handPhotoStorage: storage,
+    );
+
+    final captureButton = find.text('Capture winning hand photo');
+    await tester.ensureVisible(captureButton);
+    await tester.pumpAndSettle();
+    await tester.tap(captureButton);
+    await tester.pump();
+    expect(service.captureCount, 1);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    service.completer.complete(_photo('photo_01', '/local/one.jpg'));
+    await tester.pumpAndSettle();
+
     expect(storage.deletedPaths, ['/local/one.jpg']);
   });
 
