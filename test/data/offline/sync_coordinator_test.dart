@@ -137,6 +137,34 @@ void main() {
       expect(repository.recordedInputs.single.clientMutationId, 'mut_01');
     });
 
+    test(
+      'does not hand off reachability recovery while backgrounded',
+      () async {
+        reachability.reachable = false;
+        await store.insertMutation(_mutation(id: 'mut_01'));
+        await coordinator.initialize();
+
+        final offlineCheck = Completer<bool>();
+        reachability.nextCheckCompleter = offlineCheck;
+        final activeSync = coordinator.syncNow();
+        await pumpEventQueue(times: 10);
+
+        reachability.reachable = true;
+        reachability.emitReachable();
+        coordinator.setForeground(false);
+        offlineCheck.complete(false);
+        await activeSync;
+        await pumpEventQueue(times: 10);
+
+        expect(repository.recordedInputs, isEmpty);
+
+        coordinator.setForeground(true);
+        await pumpEventQueue(times: 10);
+
+        expect(repository.recordedInputs, hasLength(1));
+      },
+    );
+
     test('resume during initialization waits for startup recovery', () async {
       await store.insertMutation(_mutation(id: 'mut_01'));
 

@@ -78,6 +78,7 @@ class SyncCoordinator
   final Set<Future<void>> _storeChangeFutures = {};
   var _isSyncing = false;
   var _syncRequested = false;
+  var _reachableWhileSyncing = false;
   var _isForeground = true;
   Future<void>? _initializeFuture;
   Future<void>? _activeSyncFuture;
@@ -125,6 +126,11 @@ class SyncCoordinator
         return;
       }
       _resetRetryBackoff();
+      if (_isSyncing) {
+        _reachableWhileSyncing = true;
+        _syncRequested = true;
+        return;
+      }
       unawaited(syncNow(trigger: OfflineRecoveryTrigger.reachable));
     });
     _storeSubscription = _store.changes.listen((_) {
@@ -293,6 +299,7 @@ class SyncCoordinator
     _isSyncing = true;
     var reachedBackend = false;
     var retryableWorkRemains = false;
+    var reachableWhileSyncing = false;
     try {
       do {
         _syncRequested = false;
@@ -305,13 +312,19 @@ class SyncCoordinator
       } while (_syncRequested && !retryableWorkRemains && !_isDisposed);
     } finally {
       _isSyncing = false;
+      reachableWhileSyncing = _reachableWhileSyncing;
+      _reachableWhileSyncing = false;
     }
 
     if (_isDisposed) {
       return;
     }
     if (retryableWorkRemains) {
-      _scheduleRetry();
+      if (reachableWhileSyncing && _isForeground) {
+        unawaited(syncNow(trigger: OfflineRecoveryTrigger.reachable));
+      } else {
+        _scheduleRetry();
+      }
     } else {
       _retryScheduler.cancel();
     }
