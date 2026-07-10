@@ -767,32 +767,36 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                           ),
                         ],
                         selected: {_resultType},
-                        onSelectionChanged: (selection) {
-                          final photoToDelete =
-                              selection.first == HandResultType.washout
-                                  ? _capturedPhoto
-                                  : null;
-                          setState(() {
-                            _resultType = selection.first;
-                            if (_resultType == HandResultType.washout) {
-                              _winnerSeatIndex = null;
-                              _discarderSeatIndex = null;
-                              _penaltySeatIndex = null;
-                              _winType = null;
-                              _capturedPhoto = null;
-                              _winBonusesExpanded = false;
-                            } else {
-                              _winType ??= HandWinType.selfDraw;
-                              _penaltySeatIndex = null;
-                            }
-                            _choosingFalseWinCaller = false;
-                          });
-                          if (photoToDelete != null) {
-                            unawaited(
-                              _handPhotoStorage.delete(photoToDelete.localPath),
-                            );
-                          }
-                        },
+                        onSelectionChanged: _controller.isSubmitting
+                            ? null
+                            : (selection) {
+                                final photoToDelete =
+                                    selection.first == HandResultType.washout
+                                        ? _capturedPhoto
+                                        : null;
+                                setState(() {
+                                  _resultType = selection.first;
+                                  if (_resultType == HandResultType.washout) {
+                                    _winnerSeatIndex = null;
+                                    _discarderSeatIndex = null;
+                                    _penaltySeatIndex = null;
+                                    _winType = null;
+                                    _capturedPhoto = null;
+                                    _winBonusesExpanded = false;
+                                  } else {
+                                    _winType ??= HandWinType.selfDraw;
+                                    _penaltySeatIndex = null;
+                                  }
+                                  _choosingFalseWinCaller = false;
+                                });
+                                if (photoToDelete != null) {
+                                  unawaited(
+                                    _handPhotoStorage.delete(
+                                      photoToDelete.localPath,
+                                    ),
+                                  );
+                                }
+                              },
                       ),
                       if (widget.initialHand == null) ...[
                         const SizedBox(height: 12),

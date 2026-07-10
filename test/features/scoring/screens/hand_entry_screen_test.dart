@@ -98,6 +98,7 @@ class _RecordingSessionRepository
   VoidFalseWinPenaltyInput? voidedFalseWinPenalty;
   RecordFalseWinPenaltyInput? recordedFalseWinPenalty;
   int recordFalseWinPenaltyCallCount = 0;
+  Completer<SessionDetailRecord>? recordHandCompleter;
   Completer<SessionDetailRecord>? recordFalseWinPenaltyCompleter;
   SessionDetailRecord Function(RecordFalseWinPenaltyInput input)?
       falseWinPenaltyResponseBuilder;
@@ -222,6 +223,10 @@ class _RecordingSessionRepository
   @override
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
     recordedInput = input;
+    final pendingResponse = recordHandCompleter;
+    if (pendingResponse != null) {
+      return pendingResponse.future;
+    }
     return _detailFromStatus(HandResultStatus.recorded);
   }
 
@@ -965,6 +970,40 @@ void main() {
     await completeValidWinAndSave(tester);
     expect(repository.recordedInput!.photoLocalPath, '/local/two.jpg');
     expect(storage.deletedPaths, ['/local/one.jpg']);
+  });
+
+  testWidgets('submitting win keeps queued photo when draw is tapped',
+      (tester) async {
+    final repository = _RecordingSessionRepository()
+      ..recordHandCompleter = Completer<SessionDetailRecord>();
+    final storage = _FakeHandPhotoStorage(existing: {'/local/one.jpg'});
+    await pumpHandEntry(
+      tester,
+      repository: repository,
+      handPhotoService: _SequencedHandPhotoService([
+        _photo('photo_01', '/local/one.jpg'),
+      ]),
+      handPhotoStorage: storage,
+    );
+
+    await tapVisible(tester, find.text('Capture winning hand photo'));
+    await tapVisible(
+      tester,
+      find.widgetWithText(OutlinedButton, 'East\nAlice Wong'),
+    );
+    await tester.tap(find.text('Save Hand'));
+    await tester.pump();
+    expect(repository.recordedInput?.photoLocalPath, '/local/one.jpg');
+    expect(find.text('Saving...'), findsOneWidget);
+
+    await tapVisible(tester, find.text('Draw'));
+    repository.recordHandCompleter!.complete(buildDetail());
+    await tester.pumpAndSettle();
+
+    expect(repository.recordedInput?.photoLocalPath, '/local/one.jpg');
+    expect(storage.deletedPaths, isEmpty);
+    expect(storage.existingPaths, contains('/local/one.jpg'));
+    expect(find.text('Open hand entry'), findsOneWidget);
   });
 
   testWidgets('leaving an unsubmitted draft deletes its captured photo',
