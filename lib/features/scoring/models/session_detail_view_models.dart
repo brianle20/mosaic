@@ -130,7 +130,8 @@ SessionDetailViewModel buildSessionDetailViewModel({
           (seat) => SessionSeatViewModel(
             seatIndex: seat.seatIndex,
             guestId: seat.eventGuestId,
-            guestName: guestNamesById[seat.eventGuestId] ?? seat.eventGuestId,
+            guestName: guestNamesById[seat.eventGuestId] ??
+                'Seat ${seat.seatIndex + 1}',
             seatLabel: _seatLabel(seat.seatIndex, currentEastSeatIndex),
             isCurrentEast: seat.seatIndex == currentEastSeatIndex,
           ),
@@ -470,7 +471,7 @@ String _guestNameForSeat(
   int seatIndex,
 ) {
   final guestId = _guestIdForSeat(detail, seatIndex);
-  return guestNamesById[guestId] ?? guestId;
+  return guestNamesById[guestId] ?? 'Seat ${seatIndex + 1}';
 }
 
 String _guestIdForSeat(SessionDetailRecord detail, int seatIndex) {

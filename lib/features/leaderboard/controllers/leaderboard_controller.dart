@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -70,6 +71,8 @@ class LeaderboardController extends ChangeNotifier {
   BonusRoundState? bonusRoundState;
   List<SeatingAssignmentRecord> finalsAssignments = const [];
   List<EventHandLedgerEntry> bonusLedgerEntries = const [];
+  int _requestGeneration = 0;
+  bool _isDisposed = false;
 
   int get minimumHandsForPrize {
     final scoredHands = entries
@@ -263,6 +266,7 @@ class LeaderboardController extends ChangeNotifier {
   }
 
   Future<void> load(String eventId, {bool silent = false}) async {
+    final generation = ++_requestGeneration;
     final shouldShowLoading = !silent;
     final previousEntries = entries;
     final previousBonusLedgerEntries = bonusLedgerEntries;
@@ -273,14 +277,17 @@ class LeaderboardController extends ChangeNotifier {
     error = null;
     final cachedEntries =
         await leaderboardRepository.readCachedLeaderboard(eventId);
+    if (!_isCurrent(generation)) return;
     if (cachedEntries.isNotEmpty || entries.isEmpty) {
       entries = cachedEntries;
     }
     final cachedBonusLedger = await _readCachedBonusLedger(eventId);
+    if (!_isCurrent(generation)) return;
     if (cachedBonusLedger.isNotEmpty || bonusLedgerEntries.isEmpty) {
       bonusLedgerEntries = cachedBonusLedger;
     }
     final cachedFinalsAssignments = await _readCachedFinalsAssignments(eventId);
+    if (!_isCurrent(generation)) return;
     if (cachedFinalsAssignments.isNotEmpty || finalsAssignments.isEmpty) {
       finalsAssignments = cachedFinalsAssignments;
     }
@@ -289,24 +296,29 @@ class LeaderboardController extends ChangeNotifier {
       leaderboardEntries: entries,
       bonusRoundState: bonusRoundState,
     );
-    notifyListeners();
+    _notifyIfActive();
 
     try {
-      entries = await leaderboardRepository.loadLeaderboard(eventId);
+      final loadedEntries = await leaderboardRepository.loadLeaderboard(eventId);
+      if (!_isCurrent(generation)) return;
+      entries = loadedEntries;
       var optionalReadFailed = false;
       final loadedBonusLedger = await _loadBonusLedger(eventId);
+      if (!_isCurrent(generation)) return;
       if (loadedBonusLedger.succeeded) {
         bonusLedgerEntries = loadedBonusLedger.value!;
       } else {
         optionalReadFailed = true;
       }
       final loadedFinalsAssignments = await _loadFinalsAssignments(eventId);
+      if (!_isCurrent(generation)) return;
       if (loadedFinalsAssignments.succeeded) {
         finalsAssignments = loadedFinalsAssignments.value!;
       } else {
         optionalReadFailed = true;
       }
       final loadedBonusRoundState = await _loadBonusRoundState(eventId);
+      if (!_isCurrent(generation)) return;
       if (loadedBonusRoundState.succeeded) {
         bonusRoundState = loadedBonusRoundState.value;
       } else {
@@ -321,6 +333,7 @@ class LeaderboardController extends ChangeNotifier {
         bonusRoundState: bonusRoundState,
       );
     } catch (err) {
+      if (!_isCurrent(generation)) return;
       if (previousEntries.isNotEmpty) {
         entries = previousEntries;
       }
@@ -336,13 +349,13 @@ class LeaderboardController extends ChangeNotifier {
         bonusRoundState: bonusRoundState,
       );
       if (!_hasVisibleContent) {
-        error = err.toString();
+        error = userFacingError(err, fallback: 'Unable to load leaderboard.');
       }
     } finally {
-      if (shouldShowLoading) {
+      if (_isCurrent(generation)) {
         isLoading = false;
+        _notifyIfActive();
       }
-      notifyListeners();
     }
   }
 
@@ -420,6 +433,20 @@ class LeaderboardController extends ChangeNotifier {
     } catch (_) {
       return const _OptionalLoadResult.failure();
     }
+  }
+
+  bool _isCurrent(int generation) =>
+      !_isDisposed && generation == _requestGeneration;
+
+  void _notifyIfActive() {
+    if (!_isDisposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _requestGeneration += 1;
+    super.dispose();
   }
 }
 

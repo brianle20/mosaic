@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -21,7 +22,8 @@ class SeatingAssignmentController extends ChangeNotifier {
         _guestRepository = guestRepository,
         _sessionRepository = sessionRepository,
         assignments =
-            _filterAssignments(initialAssignments, bonusTableRoleFilter);
+            _filterAssignments(initialAssignments, bonusTableRoleFilter),
+        _initialAssignmentsPending = initialAssignments.isNotEmpty;
 
   final SeatingRepository _seatingRepository;
   final GuestRepository _guestRepository;
@@ -36,6 +38,9 @@ class SeatingAssignmentController extends ChangeNotifier {
   List<SeatingAssignmentRecord> assignments;
   List<EventGuestRecord> eligibleGuests = const [];
   List<EventGuestRecord> unassignedGuests = const [];
+  int _requestGeneration = 0;
+  bool _isDisposed = false;
+  bool _initialAssignmentsPending;
 
   bool get canChangeSeating => !hasLiveSessions;
   bool get canStartAllTables => !hasLiveSessions;
@@ -84,6 +89,7 @@ class SeatingAssignmentController extends ChangeNotifier {
   }
 
   Future<void> load(String eventId, {bool silent = false}) async {
+    final generation = ++_requestGeneration;
     if (!silent) {
       isLoading = true;
     }
@@ -93,19 +99,25 @@ class SeatingAssignmentController extends ChangeNotifier {
       await _seatingRepository.readCachedAssignments(eventId),
       bonusTableRoleFilter,
     );
+    if (!_isCurrent(generation)) return;
     if (assignments.isEmpty) {
       assignments = cachedAssignments;
     }
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final loadedAssignments = _filterAssignments(
         await _seatingRepository.loadAssignments(eventId),
         bonusTableRoleFilter,
       );
+      if (!_isCurrent(generation)) return;
       final loadedEligibleGuests = await _loadEligibleGuests(eventId);
+      if (!_isCurrent(generation)) return;
       final loadedHasLiveSessions = await _loadHasLiveSessions(eventId);
-      if (loadedAssignments.isNotEmpty || assignments.isEmpty) {
+      if (!_isCurrent(generation)) return;
+      if (_initialAssignmentsPending && !silent && loadedAssignments.isEmpty) {
+        _initialAssignmentsPending = false;
+      } else {
         assignments = loadedAssignments;
       }
       eligibleGuests = loadedEligibleGuests;
@@ -113,28 +125,29 @@ class SeatingAssignmentController extends ChangeNotifier {
       _updateUnassignedGuests();
       error = null;
     } catch (exception) {
+      if (!_isCurrent(generation)) return;
       if (assignments.isEmpty) {
-        error = exception.toString();
+        error = userFacingError(exception, fallback: 'Unable to load seating.');
       }
     }
 
-    if (!silent) {
+    if (_isCurrent(generation)) {
       isLoading = false;
+      _notifyIfActive();
     }
-    notifyListeners();
   }
 
   Future<void> generate(String eventId) async {
     await _refreshLiveSessions(eventId);
     if (hasLiveSessions) {
       error = seatingChangeBlockedMessage;
-      notifyListeners();
+      _notifyIfActive();
       return;
     }
 
     isSubmitting = true;
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       assignments = _filterAssignments(
@@ -144,24 +157,24 @@ class SeatingAssignmentController extends ChangeNotifier {
       await _refreshEligibleGuests(eventId);
       error = null;
     } catch (exception) {
-      error = exception.toString();
+      error = userFacingError(exception);
     }
 
     isSubmitting = false;
-    notifyListeners();
+    _notifyIfActive();
   }
 
   Future<void> clear(String eventId) async {
     await _refreshLiveSessions(eventId);
     if (hasLiveSessions) {
       error = seatingChangeBlockedMessage;
-      notifyListeners();
+      _notifyIfActive();
       return;
     }
 
     isSubmitting = true;
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       assignments = _filterAssignments(
@@ -171,11 +184,11 @@ class SeatingAssignmentController extends ChangeNotifier {
       _updateUnassignedGuests();
       error = null;
     } catch (exception) {
-      error = exception.toString();
+      error = userFacingError(exception);
     }
 
     isSubmitting = false;
-    notifyListeners();
+    _notifyIfActive();
   }
 
   Future<void> startAllTables(String eventId) async {
@@ -185,7 +198,7 @@ class SeatingAssignmentController extends ChangeNotifier {
 
     isSubmitting = true;
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       await _refreshLiveSessions(eventId);
@@ -231,11 +244,11 @@ class SeatingAssignmentController extends ChangeNotifier {
       if (hasLiveSessions) {
         error = null;
       } else {
-        error = exception.toString();
+        error = userFacingError(exception);
       }
     } finally {
       isSubmitting = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -320,6 +333,20 @@ class SeatingAssignmentController extends ChangeNotifier {
     }
 
     return roles;
+  }
+
+  bool _isCurrent(int generation) =>
+      !_isDisposed && generation == _requestGeneration;
+
+  void _notifyIfActive() {
+    if (!_isDisposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _requestGeneration += 1;
+    super.dispose();
   }
 }
 

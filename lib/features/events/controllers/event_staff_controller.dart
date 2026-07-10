@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/staff_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 
@@ -25,7 +26,7 @@ class EventStaffController extends ChangeNotifier {
     try {
       memberships = await _staffRepository.listEventStaff(eventId);
     } catch (exception) {
-      error = exception.toString();
+      error = userFacingError(exception, fallback: 'Unable to load event staff.');
     }
 
     isLoading = false;
@@ -68,7 +69,7 @@ class EventStaffController extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (exception) {
-      submitError = exception.toString();
+      submitError = userFacingError(exception, fallback: 'Unable to save event staff.');
       isSubmitting = false;
       notifyListeners();
       return false;
@@ -85,7 +86,7 @@ class EventStaffController extends ChangeNotifier {
           await _staffRepository.disableEventStaffMembership(membershipId);
       _replaceMembership(record);
     } catch (exception) {
-      submitError = exception.toString();
+      submitError = userFacingError(exception, fallback: 'Unable to update event staff.');
     }
 
     isSubmitting = false;

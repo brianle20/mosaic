@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -59,6 +61,65 @@ class _FakePrizeRepository implements PrizeRepository {
 }
 
 void main() {
+  test('stale prize load cannot overwrite a newer recovery load', () async {
+    final firstRemote = Completer<List<PrizeAwardRecord>>();
+    final firstRemoteStarted = Completer<void>();
+    final secondRemote = Completer<List<PrizeAwardRecord>>();
+    final secondRemoteStarted = Completer<void>();
+    var loadCount = 0;
+    const cached = PrizeAwardRecord(
+      id: 'award_cached',
+      eventId: 'evt_01',
+      eventGuestId: 'gst_cached',
+      displayName: 'Cached Player',
+      rankStart: 1,
+      rankEnd: 1,
+      displayRank: '1',
+      awardAmountCents: 100,
+    );
+    const recovered = PrizeAwardRecord(
+      id: 'award_recovered',
+      eventId: 'evt_01',
+      eventGuestId: 'gst_recovered',
+      displayName: 'Recovered Player',
+      rankStart: 1,
+      rankEnd: 1,
+      displayRank: '1',
+      awardAmountCents: 200,
+    );
+    final repository = _FakePrizeRepository(
+      cachedAwards: [cached],
+      loadAwards: (_) {
+        loadCount += 1;
+        if (loadCount == 1) {
+          firstRemoteStarted.complete();
+          return firstRemote.future;
+        }
+        secondRemoteStarted.complete();
+        return secondRemote.future;
+      },
+    );
+    final controller = PrizeAwardsController(
+      eventId: 'evt_01',
+      prizeRepository: repository,
+    );
+
+    final firstLoad = controller.load();
+    await firstRemoteStarted.future;
+    final secondLoad = controller.load();
+    await secondRemoteStarted.future;
+
+    firstRemote.complete([cached]);
+    await firstLoad;
+    expect(controller.isLoading, isTrue);
+
+    secondRemote.complete([recovered]);
+    await secondLoad;
+    expect(controller.awards.single.displayName, 'Recovered Player');
+    expect(controller.isLoading, isFalse);
+    controller.dispose();
+  });
+
   test('loads cached awards when remote load fails', () async {
     const cachedAwards = [
       PrizeAwardRecord(

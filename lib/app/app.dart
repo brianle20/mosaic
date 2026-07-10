@@ -224,7 +224,9 @@ class _MosaicAppState extends State<MosaicApp> {
       inner: supabaseSessionRepository,
       store: offlineStore,
       reachability: reachability,
-      onMutationQueued: () => syncCoordinator.syncNow(),
+      onMutationQueued: () => syncCoordinator.syncNow(
+        trigger: OfflineRecoveryTrigger.queuedWork,
+      ),
     );
     syncCoordinator = SyncCoordinator(
       store: offlineStore,
@@ -595,6 +597,7 @@ class _AuthGateState extends State<_AuthGate> {
     }
 
     return ReconnectRefreshListener(
+      routeAware: false,
       onRefresh: _controller.refreshAccessAfterRecovery,
       child: child,
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 
@@ -14,11 +15,15 @@ class PrizeAwardsController extends ChangeNotifier {
   bool isLoading = false;
   String? error;
   List<PrizeAwardRecord> awards = const [];
+  int _requestGeneration = 0;
+  bool _isDisposed = false;
 
   Future<void> load({bool silent = false}) async {
+    final generation = ++_requestGeneration;
     final shouldShowLoading = !silent;
     final previousAwards = awards;
     final cachedAwards = await prizeRepository.readCachedPrizeAwards(eventId);
+    if (!_isCurrent(generation)) return;
     if (cachedAwards.isNotEmpty || awards.isEmpty) {
       awards = cachedAwards;
     }
@@ -26,22 +31,39 @@ class PrizeAwardsController extends ChangeNotifier {
       isLoading = true;
     }
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
-      awards = await prizeRepository.loadPrizeAwards(eventId);
+      final loadedAwards = await prizeRepository.loadPrizeAwards(eventId);
+      if (!_isCurrent(generation)) return;
+      awards = loadedAwards;
     } catch (err) {
+      if (!_isCurrent(generation)) return;
       if (previousAwards.isNotEmpty) {
         awards = previousAwards;
       }
       if (awards.isEmpty) {
-        error = err.toString();
+        error = userFacingError(err, fallback: 'Unable to load prize awards.');
       }
     } finally {
-      if (shouldShowLoading) {
+      if (_isCurrent(generation)) {
         isLoading = false;
+        _notifyIfActive();
       }
-      notifyListeners();
     }
+  }
+
+  bool _isCurrent(int generation) =>
+      !_isDisposed && generation == _requestGeneration;
+
+  void _notifyIfActive() {
+    if (!_isDisposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _requestGeneration += 1;
+    super.dispose();
   }
 }

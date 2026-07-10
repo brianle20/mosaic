@@ -827,6 +827,23 @@ void main() {
     expect(controller.isLoading, isFalse);
   });
 
+  test('successful null event response clears cached dashboard event', () async {
+    final cachedEvent = _dashboardEvent(title: 'Cached Event');
+    final eventRepository = _FakeEventRepository(
+      cachedEvents: [cachedEvent],
+      eventLoader: (_) async => null,
+    );
+    final controller = EventDashboardController(
+      eventRepository: eventRepository,
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.event, isNull);
+    controller.dispose();
+  });
+
   test('silent refresh preserves prize pool when remote plan load fails',
       () async {
     final prizeRepository = _FakePrizeRepository(

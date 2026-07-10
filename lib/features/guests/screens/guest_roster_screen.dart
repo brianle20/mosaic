@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -1006,11 +1007,6 @@ class _GuestRosterScreenState extends State<GuestRosterScreen> {
   }
 
   String _formatActionError(Object exception) {
-    final message = exception.toString();
-    const prefix = 'Bad state: ';
-    if (message.startsWith(prefix)) {
-      return message.substring(prefix.length);
-    }
-    return message;
+    return userFacingError(exception);
   }
 }

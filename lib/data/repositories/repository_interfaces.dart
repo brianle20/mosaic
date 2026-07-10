@@ -216,6 +216,12 @@ abstract interface class SessionRepository {
   Future<SessionDetailRecord> voidHand(VoidHandResultInput input);
 }
 
+/// Exposes whether a photo-bearing offline mutation crossed its durable queue
+/// commit boundary during the most recent hand write.
+abstract interface class PhotoQueueCommitStatus {
+  bool get photoMutationCommitted;
+}
+
 abstract interface class FalseWinPenaltyCorrectionRepository {
   Future<SessionDetailRecord> voidFalseWinPenalty(
     VoidFalseWinPenaltyInput input,

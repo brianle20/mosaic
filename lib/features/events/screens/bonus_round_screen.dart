@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -86,7 +87,7 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
     } catch (exception) {
       if (mounted) {
         setState(() {
-          _scanError = exception.toString();
+          _scanError = userFacingError(exception, fallback: 'Unable to read that table tag.');
         });
       }
     } finally {

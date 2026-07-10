@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/offline/offline_models.dart';
@@ -30,6 +31,7 @@ class SessionDetailController extends ChangeNotifier {
   int _detailRefreshGeneration = 0;
   StreamSubscription<void>? _syncSubscription;
   bool _isRefreshingSync = false;
+  bool _syncRefreshQueued = false;
   bool _isDisposed = false;
 
   Future<void> load({
@@ -39,6 +41,7 @@ class SessionDetailController extends ChangeNotifier {
     final generation = ++_requestGeneration;
     _detailRefreshGeneration += 1;
     _isRefreshingSync = false;
+    _syncRefreshQueued = false;
     final oldSubscription = _syncSubscription;
     _syncSubscription = null;
     if (oldSubscription != null) {
@@ -107,6 +110,21 @@ class SessionDetailController extends ChangeNotifier {
     notifyListeners();
 
     _subscribeToSyncChanges(provider, sessionId, generation);
+    // Reread after subscribing so a store update emitted during the initial
+    // snapshot-to-subscription handoff cannot be missed.
+    if (provider != null) {
+      final postSubscribeSnapshot = await _capture(
+        () => provider.readSessionSyncSnapshot(sessionId),
+      );
+      if (!_isCurrentRequest(generation)) {
+        return;
+      }
+      if (postSubscribeSnapshot.error == null &&
+          postSubscribeSnapshot.value != null) {
+        syncSnapshot = postSubscribeSnapshot.value;
+        notifyListeners();
+      }
+    }
 
     final remoteDetailFuture = _loadRemoteDetail(
       eventId: eventId,
@@ -142,6 +160,9 @@ class SessionDetailController extends ChangeNotifier {
       return;
     }
 
+    final provider = sessionRepository is SessionSyncStatusProvider
+        ? sessionRepository as SessionSyncStatusProvider
+        : null;
     final oldSubscription = _syncSubscription;
     _syncSubscription = null;
     if (oldSubscription != null) {
@@ -149,7 +170,11 @@ class SessionDetailController extends ChangeNotifier {
     }
 
     _isRefreshingSync = false;
+    _syncRefreshQueued = false;
     final generation = ++_requestGeneration;
+    // Reattach before reading the snapshot so a store event emitted during the
+    // handoff is observed by the current generation.
+    _subscribeToSyncChanges(provider, sessionId, generation);
     final remoteGuestsFuture = _capture(
       () => guestRepository.listGuests(eventId),
     );
@@ -169,10 +194,15 @@ class SessionDetailController extends ChangeNotifier {
     }
 
     if (_isCurrentRequest(generation)) {
-      final provider = sessionRepository is SessionSyncStatusProvider
-          ? sessionRepository as SessionSyncStatusProvider
-          : null;
-      _subscribeToSyncChanges(provider, sessionId, generation);
+      if (provider != null) {
+        final snapshot = await _capture(
+          () => provider.readSessionSyncSnapshot(sessionId),
+        );
+        if (_isCurrentRequest(generation) && snapshot.value != null) {
+          syncSnapshot = snapshot.value;
+          notifyListeners();
+        }
+      }
     }
   }
 
@@ -209,7 +239,10 @@ class SessionDetailController extends ChangeNotifier {
     }
 
     if (detail == null && remoteDetail.error != null) {
-      error = remoteDetail.error.toString();
+      error = userFacingError(
+        remoteDetail.error!,
+        fallback: 'Unable to load session details.',
+      );
     }
     if (showLoading || detail == null) {
       isLoading = false;
@@ -326,7 +359,11 @@ class SessionDetailController extends ChangeNotifier {
   }
 
   Future<void> _handleSyncChange(int generation) async {
-    if (!_isCurrentRequest(generation) || _isRefreshingSync) {
+    if (!_isCurrentRequest(generation)) {
+      return;
+    }
+    if (_isRefreshingSync) {
+      _syncRefreshQueued = true;
       return;
     }
     final provider = sessionRepository is SessionSyncStatusProvider
@@ -378,6 +415,10 @@ class SessionDetailController extends ChangeNotifier {
     } finally {
       if (_isCurrentRequest(generation)) {
         _isRefreshingSync = false;
+        if (_syncRefreshQueued) {
+          _syncRefreshQueued = false;
+          unawaited(_handleSyncChange(generation));
+        }
       }
     }
   }
@@ -423,17 +464,13 @@ class SessionDetailController extends ChangeNotifier {
   }
 
   String _formatActionError(Object exception) {
-    final message = exception.toString();
-    const statePrefix = 'Bad state: ';
-    if (message.startsWith(statePrefix)) {
-      return message.substring(statePrefix.length);
-    }
-    return message;
+    return userFacingError(exception);
   }
 
   @override
   void dispose() {
     _isDisposed = true;
+    _syncRefreshQueued = false;
     _requestGeneration += 1;
     final subscription = _syncSubscription;
     _syncSubscription = null;

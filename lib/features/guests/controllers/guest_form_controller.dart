@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/guests/models/guest_form_draft.dart';
@@ -61,7 +62,7 @@ class GuestFormController extends ChangeNotifier {
       _notifyIfActive();
       return savedGuest;
     } catch (exception) {
-      submitError = exception.toString();
+      submitError = userFacingError(exception, fallback: 'Unable to save guest details.');
       isSubmitting = false;
       _notifyIfActive();
       return null;

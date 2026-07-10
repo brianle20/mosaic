@@ -261,6 +261,22 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
 }
 
 void main() {
+  test('successful empty seating response clears cached assignments', () async {
+    final controller = SeatingAssignmentController(
+      seatingRepository: _FakeSeatingRepository(
+        cachedAssignments: [_assignment(displayName: 'Cached East')],
+        loadedAssignments: const [],
+      ),
+      guestRepository: _FakeGuestRepository(),
+      sessionRepository: _FakeSessionRepository(),
+    );
+
+    await controller.load('evt_01');
+
+    expect(controller.assignments, isEmpty);
+    controller.dispose();
+  });
+
   test('load publishes cached assignments before remote assignments', () async {
     final repository = _FakeSeatingRepository(
       cachedAssignments: [_assignment(displayName: 'Cached East')],

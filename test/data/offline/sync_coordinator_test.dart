@@ -137,6 +137,19 @@ void main() {
       expect(repository.recordedInputs.single.clientMutationId, 'mut_01');
     });
 
+    test('queued work while backgrounded waits for resume', () async {
+      await coordinator.initialize();
+      coordinator.setForeground(false);
+      await store.insertMutation(_mutation(id: 'mut_background'));
+      await pumpEventQueue(times: 10);
+
+      expect(repository.recordedInputs, isEmpty);
+
+      coordinator.setForeground(true);
+      await pumpEventQueue(times: 10);
+      expect(repository.recordedInputs.single.clientMutationId, 'mut_background');
+    });
+
     test(
       'does not hand off reachability recovery while backgrounded',
       () async {
@@ -648,7 +661,7 @@ void main() {
       expect(evidence.uploads.single.handResultId, 'remote_hand_01');
     });
 
-    test('business upload failures mark photo upload blocked and stop',
+    test('business upload failures block one photo and continue later uploads',
         () async {
       final evidence = _FakeHandEvidenceRepository()
         ..errors.add(StateError('Photo row not found.'));
@@ -665,12 +678,20 @@ void main() {
           remoteHandResultId: 'remote_hand_01',
         ),
       );
+      await store.insertPhotoUpload(
+        _photoUpload(
+          id: 'photo_upload_02',
+          mutationId: 'mut_02',
+          remoteHandResultId: 'remote_hand_02',
+          createdAt: DateTime.utc(2026, 6, 18, 20, 1),
+        ),
+      );
 
       await coordinator.syncNow();
 
       final uploads = await store.readPhotoUploadsForSession('ses_01');
-      expect(uploads.single.status, OfflinePhotoUploadStatus.blocked);
-      expect(uploads.single.lastError, 'Bad state: Photo row not found.');
+      expect(uploads.first.lastError, 'Bad state: Photo row not found.');
+      expect(uploads.last.status, OfflinePhotoUploadStatus.uploaded);
     });
 
     test('failed mutations are retried', () async {

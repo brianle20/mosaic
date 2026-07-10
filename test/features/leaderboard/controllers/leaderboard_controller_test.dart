@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -28,6 +30,57 @@ class _FakeLeaderboardRepository implements LeaderboardRepository {
 }
 
 void main() {
+  test('stale leaderboard load cannot overwrite a newer recovery load',
+      () async {
+    final firstRemote = Completer<List<LeaderboardEntry>>();
+    final firstRemoteStarted = Completer<void>();
+    var loadCount = 0;
+    const cached = LeaderboardEntry(
+      eventGuestId: 'gst_cached',
+      displayName: 'Cached Player',
+      totalPoints: 1,
+      handsPlayed: 1,
+      handsWon: 0,
+      selfDrawWins: 0,
+      discardWins: 0,
+      rank: 1,
+    );
+    const recovered = LeaderboardEntry(
+      eventGuestId: 'gst_recovered',
+      displayName: 'Recovered Player',
+      totalPoints: 20,
+      handsPlayed: 4,
+      handsWon: 2,
+      selfDrawWins: 1,
+      discardWins: 1,
+      rank: 1,
+    );
+    final repository = _FakeLeaderboardRepository(
+      cachedEntries: [cached],
+      loader: (_) {
+        loadCount += 1;
+        if (loadCount == 1) {
+          firstRemoteStarted.complete();
+          return firstRemote.future;
+        }
+        return Future.value([recovered]);
+      },
+    );
+    final controller = LeaderboardController(leaderboardRepository: repository);
+
+    final firstLoad = controller.load('evt_01');
+    await firstRemoteStarted.future;
+    final secondLoad = controller.load('evt_01', silent: true);
+    await secondLoad;
+    expect(controller.entries.single.displayName, 'Recovered Player');
+
+    firstRemote.complete([cached]);
+    await firstLoad;
+    expect(controller.entries.single.displayName, 'Recovered Player');
+    expect(controller.isLoading, isFalse);
+    controller.dispose();
+  });
+
   test('uses half of median scored-player hands for prize eligibility',
       () async {
     final controller = LeaderboardController(

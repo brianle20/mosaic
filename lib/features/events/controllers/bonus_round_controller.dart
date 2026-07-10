@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -43,6 +44,8 @@ class BonusRoundController extends ChangeNotifier {
   List<BonusRoundSeatPreview> redemptionSeats = const [];
   EventTableRecord? championsTable;
   EventTableRecord? redemptionTable;
+  int _requestGeneration = 0;
+  bool _isDisposed = false;
 
   bool get redemptionRequired => redemptionSeats.isNotEmpty;
 
@@ -61,6 +64,7 @@ class BonusRoundController extends ChangeNotifier {
   }
 
   Future<void> load(String eventId, {bool silent = false}) async {
+    final generation = ++_requestGeneration;
     if (!silent) {
       isLoading = true;
     }
@@ -69,17 +73,22 @@ class BonusRoundController extends ChangeNotifier {
     hasCreatedBonusRound = false;
 
     final cachedTables = await _tableRepository.readCachedTables(eventId);
+    if (!_isCurrent(generation)) return;
     if (!silent || cachedTables.isNotEmpty || tables.isEmpty) {
       tables = cachedTables;
     }
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final leaderboard = await _leaderboardRepository.loadLeaderboard(eventId);
+      if (!_isCurrent(generation)) return;
       final loadedTables = await _tableRepository.listTables(eventId);
+      if (!_isCurrent(generation)) return;
       final sessions = await _sessionRepository.listSessions(eventId);
+      if (!_isCurrent(generation)) return;
       final tournamentRoundSummary =
           await _seatingRepository.loadTournamentRoundSummary(eventId);
+      if (!_isCurrent(generation)) return;
       final eligibleEntries = _standingsEligibleEntries(leaderboard);
       tables = loadedTables;
       championSeats = _championSeats(eligibleEntries);
@@ -89,15 +98,15 @@ class BonusRoundController extends ChangeNotifier {
         tournamentRoundSummary.round?.id,
       );
     } catch (exception) {
-      if (tables.isEmpty) {
-        error = exception.toString();
+      if (_isCurrent(generation) && tables.isEmpty) {
+        error = userFacingError(exception, fallback: 'Unable to load bonus round.');
       }
     }
 
-    if (!silent) {
+    if (_isCurrent(generation)) {
       isLoading = false;
+      _notifyIfActive();
     }
-    notifyListeners();
   }
 
   void selectTable({
@@ -119,7 +128,7 @@ class BonusRoundController extends ChangeNotifier {
         }
     }
 
-    notifyListeners();
+    _notifyIfActive();
   }
 
   Future<void> resolveScannedTable({
@@ -133,7 +142,7 @@ class BonusRoundController extends ChangeNotifier {
 
     isResolvingTable = true;
     actionError = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final table = await _tableRepository.resolveTableByTag(
@@ -142,11 +151,11 @@ class BonusRoundController extends ChangeNotifier {
       );
       selectTable(role: role, table: table);
     } catch (exception) {
-      actionError = _formatError(exception);
+      actionError = userFacingError(exception);
     }
 
     isResolvingTable = false;
-    notifyListeners();
+    _notifyIfActive();
   }
 
   Future<bool> createBonusRound(String eventId) async {
@@ -163,20 +172,20 @@ class BonusRoundController extends ChangeNotifier {
     );
     if (hasLiveSessions) {
       actionError = bonusRoundLiveSessionBlockedMessage;
-      notifyListeners();
+      _notifyIfActive();
       return false;
     }
 
     if (championSeats.length < 2) {
       actionError = bonusRoundMinimumPlayersMessage;
-      notifyListeners();
+      _notifyIfActive();
       return false;
     }
 
     final selectedChampionsTable = championsTable;
     if (selectedChampionsTable == null) {
       actionError = 'Choose Table of Champions.';
-      notifyListeners();
+      _notifyIfActive();
       return false;
     }
 
@@ -184,20 +193,20 @@ class BonusRoundController extends ChangeNotifier {
     if (redemptionRequired) {
       if (selectedRedemptionTable == null) {
         actionError = 'Choose Table of Redemption.';
-        notifyListeners();
+        _notifyIfActive();
         return false;
       }
 
       if (selectedChampionsTable.id == selectedRedemptionTable.id) {
         actionError = 'Finals tables must be different.';
-        notifyListeners();
+        _notifyIfActive();
         return false;
       }
     }
 
     isSubmitting = true;
     actionError = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       await _seatingRepository.generateBonusRoundAssignments(
@@ -207,12 +216,12 @@ class BonusRoundController extends ChangeNotifier {
       );
       hasCreatedBonusRound = true;
       isSubmitting = false;
-      notifyListeners();
+      _notifyIfActive();
       return true;
     } catch (exception) {
-      actionError = _formatError(exception);
+      actionError = userFacingError(exception);
       isSubmitting = false;
-      notifyListeners();
+      _notifyIfActive();
       return false;
     }
   }
@@ -345,13 +354,18 @@ class BonusRoundController extends ChangeNotifier {
     );
   }
 
-  String _formatError(Object exception) {
-    final message = exception.toString();
-    const statePrefix = 'Bad state: ';
-    if (message.startsWith(statePrefix)) {
-      return message.substring(statePrefix.length);
-    }
-    return message;
+  bool _isCurrent(int generation) =>
+      !_isDisposed && generation == _requestGeneration;
+
+  void _notifyIfActive() {
+    if (!_isDisposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _requestGeneration += 1;
+    super.dispose();
   }
 }
 

@@ -52,7 +52,8 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   bool _isCapturingPhoto = false;
   bool _showValidationSummary = false;
   bool _winBonusesExpanded = false;
-  bool _photoOwnershipTransferred = false;
+  bool _photoSubmissionInFlight = false;
+  String? _transferredPhotoPath;
   CapturedHandPhoto? _capturedPhoto;
   late final HandPhotoService _handPhotoService;
   late final HandPhotoStorage _handPhotoStorage;
@@ -96,7 +97,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   @override
   void dispose() {
     final photo = _capturedPhoto;
-    if (photo != null && !_photoOwnershipTransferred) {
+    if (photo != null &&
+        photo.localPath != _transferredPhotoPath &&
+        !_photoSubmissionInFlight) {
       unawaited(_handPhotoStorage.delete(photo.localPath));
     }
     _controller
@@ -130,7 +133,8 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     final seat = _sessionDetail.seats.firstWhere(
       (entry) => entry.seatIndex == seatIndex,
     );
-    return widget.guestNamesById[seat.eventGuestId] ?? seat.eventGuestId;
+    return widget.guestNamesById[seat.eventGuestId] ??
+        'Seat ${seatIndex + 1}';
   }
 
   bool get _isEditingLegacyFalseWin =>
@@ -254,7 +258,9 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       setState(() {
         _capturedPhoto = captured;
       });
-      if (previousPhoto != null) {
+      if (previousPhoto != null &&
+          previousPhoto.localPath != _transferredPhotoPath &&
+          !_photoSubmissionInFlight) {
         await _handPhotoStorage.delete(previousPhoto.localPath);
       }
     } finally {
@@ -289,18 +295,25 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
       _showValidationSummary = false;
     });
     final submittedDraft = _draft;
-    final detail = await _controller.submit(
-      tableSessionId: _sessionDetail.session.id,
-      draft: submittedDraft,
-      existingHand: widget.initialHand,
-    );
+    _photoSubmissionInFlight = submittedDraft.photoLocalPath != null;
+    SessionDetailRecord? detail;
+    try {
+      detail = await _controller.submit(
+        tableSessionId: _sessionDetail.session.id,
+        draft: submittedDraft,
+        existingHand: widget.initialHand,
+      );
+    } finally {
+      _photoSubmissionInFlight = false;
+    }
+    if (widget.initialHand == null && submittedDraft.photoLocalPath != null &&
+        _controller.photoOwnershipTransferred) {
+      _transferredPhotoPath = submittedDraft.photoLocalPath;
+    }
     if (!mounted || detail == null) {
       return;
     }
 
-    if (widget.initialHand == null && submittedDraft.photoLocalPath != null) {
-      _photoOwnershipTransferred = true;
-    }
     Navigator.of(context).pop(detail);
   }
 
@@ -789,7 +802,10 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                                   }
                                   _choosingFalseWinCaller = false;
                                 });
-                                if (photoToDelete != null) {
+                                if (photoToDelete != null &&
+                                    photoToDelete.localPath !=
+                                        _transferredPhotoPath &&
+                                    !_photoSubmissionInFlight) {
                                   unawaited(
                                     _handPhotoStorage.delete(
                                       photoToDelete.localPath,

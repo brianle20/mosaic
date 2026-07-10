@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
+import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/controllers/hand_entry_controller.dart';
 import 'package:mosaic/features/scoring/models/hand_result_draft.dart';
 
@@ -57,6 +58,18 @@ class _RecordingSessionRepository extends ThrowingSessionRepository {
       'settlements': [],
       'false_win_penalties': [],
     });
+  }
+}
+
+class _PostCommitFailureRepository extends _RecordingSessionRepository
+    implements PhotoQueueCommitStatus {
+  @override
+  bool photoMutationCommitted = false;
+
+  @override
+  Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
+    photoMutationCommitted = input.photoLocalPath != null;
+    throw StateError('projection failed after queue commit');
   }
 }
 
@@ -121,6 +134,28 @@ void main() {
       expect(repository.recordInput?.photoClientId, 'photo_client_01');
       expect(repository.recordInput?.photoLocalPath, '/local/photo.jpg');
       expect(repository.recordInput?.photoCapturedAt, capturedAt);
+    });
+
+    test('retains photo ownership when projection fails after queue commit', () async {
+      final repository = _PostCommitFailureRepository();
+      final controller = HandEntryController(sessionRepository: repository);
+
+      final detail = await controller.submit(
+        tableSessionId: 'session-1',
+        draft: HandResultDraft(
+          resultType: HandResultType.win,
+          winnerSeatIndex: 0,
+          winType: HandWinType.selfDraw,
+          fanCount: 3,
+          requiresPhoto: true,
+          photoClientId: 'photo_client_01',
+          photoLocalPath: '/local/photo.jpg',
+          photoCapturedAt: DateTime.utc(2026, 6, 25, 18),
+        ),
+      );
+
+      expect(detail, isNull);
+      expect(controller.photoOwnershipTransferred, isTrue);
     });
   });
 }

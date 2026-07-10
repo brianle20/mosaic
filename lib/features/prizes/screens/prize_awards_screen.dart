@@ -93,7 +93,7 @@ class _PrizeAwardsScreenState extends State<PrizeAwardsScreen> {
                           title: Text(
                             award.displayName ??
                                 widget.guestNamesById[award.eventGuestId] ??
-                                award.eventGuestId,
+                                'Guest award',
                           ),
                           subtitle: Text(award.displayRank),
                           trailing:

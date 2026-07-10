@@ -29,10 +29,12 @@ class ReconnectRefreshListener extends StatefulWidget {
     super.key,
     required this.onRefresh,
     required this.child,
+    this.routeAware = true,
   });
 
   final Future<void> Function() onRefresh;
   final Widget child;
+  final bool routeAware;
 
   @override
   State<ReconnectRefreshListener> createState() =>
@@ -46,10 +48,24 @@ class _ReconnectRefreshListenerState extends State<ReconnectRefreshListener> {
   var _refreshing = false;
   var _refreshQueued = false;
   var _listenerToken = 0;
+  Animation<double>? _routeAnimation;
+  Animation<double>? _secondaryAnimation;
+  Timer? _routeReturnTimer;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (!identical(route?.animation, _routeAnimation)) {
+      _routeAnimation?.removeStatusListener(_handleRouteAnimation);
+      _routeAnimation = route?.animation;
+      _routeAnimation?.addStatusListener(_handleRouteAnimation);
+    }
+    if (!identical(route?.secondaryAnimation, _secondaryAnimation)) {
+      _secondaryAnimation?.removeStatusListener(_handleRouteAnimation);
+      _secondaryAnimation = route?.secondaryAnimation;
+      _secondaryAnimation?.addStatusListener(_handleRouteAnimation);
+    }
     final next = OfflineRecoveryScope.maybeSignalOf(context);
     if (identical(next, _signal)) {
       return;
@@ -62,6 +78,24 @@ class _ReconnectRefreshListenerState extends State<ReconnectRefreshListener> {
     _subscription = next?.generations.listen(
       (generation) => _handleGeneration(token, generation),
     );
+    if (widget.routeAware &&
+        mounted &&
+        (ModalRoute.of(context)?.isCurrent ?? true) &&
+        _refreshQueued) {
+      unawaited(_drainRefreshes(token));
+    }
+  }
+
+  void _handleRouteAnimation(AnimationStatus status) {
+    if (!widget.routeAware ||
+        !mounted ||
+        (status != AnimationStatus.completed &&
+            status != AnimationStatus.dismissed) ||
+        !(ModalRoute.of(context)?.isCurrent ?? true) ||
+        !_refreshQueued) {
+      return;
+    }
+    unawaited(_drainRefreshes(_listenerToken));
   }
 
   void _handleGeneration(int token, int generation) {
@@ -69,11 +103,27 @@ class _ReconnectRefreshListenerState extends State<ReconnectRefreshListener> {
       return;
     }
     _lastGeneration = generation;
-    if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+    if (widget.routeAware && !(ModalRoute.of(context)?.isCurrent ?? true)) {
+      _refreshQueued = true;
+      _watchForRouteReturn(token);
       return;
     }
     _refreshQueued = true;
     unawaited(_drainRefreshes(token));
+  }
+
+  void _watchForRouteReturn(int token) {
+    if (!mounted || token != _listenerToken || !_refreshQueued) return;
+    _routeReturnTimer?.cancel();
+    _routeReturnTimer = Timer(const Duration(milliseconds: 250), () {
+      _routeReturnTimer = null;
+      if (!mounted || token != _listenerToken || !_refreshQueued) return;
+      if (ModalRoute.of(context)?.isCurrent ?? true) {
+        unawaited(_drainRefreshes(token));
+      } else {
+        _watchForRouteReturn(token);
+      }
+    });
   }
 
   Future<void> _drainRefreshes(int token) async {
@@ -87,7 +137,7 @@ class _ReconnectRefreshListenerState extends State<ReconnectRefreshListener> {
         if (!mounted || token != _listenerToken) {
           break;
         }
-        if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
+        if (widget.routeAware && !(ModalRoute.of(context)?.isCurrent ?? true)) {
           break;
         }
         await widget.onRefresh();
@@ -102,10 +152,20 @@ class _ReconnectRefreshListenerState extends State<ReconnectRefreshListener> {
 
   @override
   void dispose() {
+    _routeAnimation?.removeStatusListener(_handleRouteAnimation);
+    _secondaryAnimation?.removeStatusListener(_handleRouteAnimation);
+    _routeReturnTimer?.cancel();
     unawaited(_subscription?.cancel());
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    if (widget.routeAware &&
+        (ModalRoute.of(context)?.isCurrent ?? true) &&
+        _refreshQueued) {
+      unawaited(_drainRefreshes(_listenerToken));
+    }
+    return widget.child;
+  }
 }

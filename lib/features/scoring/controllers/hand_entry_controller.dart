@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -11,17 +12,28 @@ class HandEntryController extends ChangeNotifier {
 
   bool isSubmitting = false;
   String? submitError;
+  bool photoOwnershipTransferred = false;
+  String? _transferredPhotoPath;
+  bool _isDisposed = false;
 
   Future<SessionDetailRecord?> submit({
     required String tableSessionId,
     required HandResultDraft draft,
     HandResultRecord? existingHand,
   }) async {
+    if (_isDisposed) {
+      return null;
+    }
     isSubmitting = true;
     submitError = null;
-    notifyListeners();
+    photoOwnershipTransferred = draft.photoLocalPath != null &&
+        draft.photoLocalPath == _transferredPhotoPath;
+    _notifyIfActive();
 
     try {
+      final queueStatus = sessionRepository is PhotoQueueCommitStatus
+          ? sessionRepository as PhotoQueueCommitStatus
+          : null;
       final detail = existingHand == null
           ? await sessionRepository.recordHand(
               draft.toRecordInput(tableSessionId: tableSessionId),
@@ -33,13 +45,30 @@ class HandEntryController extends ChangeNotifier {
                     existingHand.dealerWasWaitingAtDraw,
               ),
             );
+      if (draft.photoLocalPath != null) {
+        photoOwnershipTransferred = queueStatus?.photoMutationCommitted ?? true;
+        if (photoOwnershipTransferred) {
+          _transferredPhotoPath = draft.photoLocalPath;
+        }
+      }
       return detail;
     } catch (err) {
-      submitError = err.toString();
+      final queueStatus = sessionRepository is PhotoQueueCommitStatus
+          ? sessionRepository as PhotoQueueCommitStatus
+          : null;
+      if (draft.photoLocalPath != null &&
+          (queueStatus?.photoMutationCommitted ?? false)) {
+        photoOwnershipTransferred = true;
+        _transferredPhotoPath = draft.photoLocalPath;
+      }
+      if (!_isDisposed) {
+        submitError =
+            userFacingError(err, fallback: 'Unable to save this hand.');
+      }
       return null;
     } finally {
       isSubmitting = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -47,9 +76,12 @@ class HandEntryController extends ChangeNotifier {
     required String handResultId,
     String? correctionNote,
   }) async {
+    if (_isDisposed) {
+      return null;
+    }
     isSubmitting = true;
     submitError = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       return await sessionRepository.voidHand(
@@ -59,11 +91,14 @@ class HandEntryController extends ChangeNotifier {
         ),
       );
     } catch (err) {
-      submitError = err.toString();
+      if (!_isDisposed) {
+        submitError =
+            userFacingError(err, fallback: 'Unable to update this hand.');
+      }
       return null;
     } finally {
       isSubmitting = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -72,9 +107,12 @@ class HandEntryController extends ChangeNotifier {
     required int penaltySeatIndex,
     String? correctionNote,
   }) async {
+    if (_isDisposed) {
+      return null;
+    }
     isSubmitting = true;
     submitError = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       return await sessionRepository.recordFalseWinPenalty(
@@ -88,11 +126,14 @@ class HandEntryController extends ChangeNotifier {
         ),
       );
     } catch (err) {
-      submitError = err.toString();
+      if (!_isDisposed) {
+        submitError =
+            userFacingError(err, fallback: 'Unable to save the false win.');
+      }
       return null;
     } finally {
       isSubmitting = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -100,9 +141,12 @@ class HandEntryController extends ChangeNotifier {
     required String handFalseWinPenaltyId,
     String? correctionNote,
   }) async {
+    if (_isDisposed) {
+      return null;
+    }
     isSubmitting = true;
     submitError = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final correctionRepository =
@@ -117,11 +161,26 @@ class HandEntryController extends ChangeNotifier {
         ),
       );
     } catch (err) {
-      submitError = err.toString();
+      if (!_isDisposed) {
+        submitError =
+            userFacingError(err, fallback: 'Unable to update the false win.');
+      }
       return null;
     } finally {
       isSubmitting = false;
+      _notifyIfActive();
+    }
+  }
+
+  void _notifyIfActive() {
+    if (!_isDisposed) {
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

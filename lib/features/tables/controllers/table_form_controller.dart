@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/table_scan_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -81,7 +82,7 @@ class TableFormController extends ChangeNotifier {
       notifyListeners();
       return boundTable;
     } catch (exception) {
-      submitError = exception.toString();
+      submitError = userFacingError(exception, fallback: 'Unable to save table.');
       isSubmitting = false;
       notifyListeners();
       return null;
@@ -124,7 +125,7 @@ class TableFormController extends ChangeNotifier {
       notifyListeners();
       return savedTable;
     } catch (exception) {
-      submitError = exception.toString();
+      submitError = userFacingError(exception, fallback: 'Unable to save table.');
       isSubmitting = false;
       notifyListeners();
       return null;
@@ -157,7 +158,7 @@ class TableFormController extends ChangeNotifier {
       notifyListeners();
       return updatedTable;
     } catch (exception) {
-      submitError = exception.toString();
+      submitError = userFacingError(exception, fallback: 'Unable to update table.');
       isBindingTag = false;
       notifyListeners();
       return null;

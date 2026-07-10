@@ -116,6 +116,35 @@ void main() {
     expect(refreshCount, 0);
   });
 
+  testWidgets('auth listener refreshes while a nested route is visible',
+      (tester) async {
+    final signal = _FakeOfflineRecoverySignal();
+    addTearDown(signal.dispose);
+    var refreshCount = 0;
+    final navigatorKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          navigatorKey: navigatorKey,
+          home: ReconnectRefreshListener(
+            routeAware: false,
+            onRefresh: () async => refreshCount += 1,
+            child: const Text('underlying route'),
+          ),
+        ),
+      ),
+    );
+    navigatorKey.currentState!.push(
+      MaterialPageRoute<void>(builder: (_) => const Text('top route')),
+    );
+    await tester.pumpAndSettle();
+
+    signal.emit();
+    await tester.pump();
+    expect(refreshCount, 1);
+  });
+
   testWidgets('covered route drops a queued follow-up refresh', (tester) async {
     final signal = _FakeOfflineRecoverySignal();
     addTearDown(signal.dispose);
@@ -151,6 +180,37 @@ void main() {
     await tester.pumpAndSettle();
     firstRefresh.complete();
     await tester.pumpAndSettle();
+    expect(refreshCount, 1);
+  });
+
+  testWidgets('hidden route refreshes when it becomes current again',
+      (tester) async {
+    final signal = _FakeOfflineRecoverySignal();
+    addTearDown(signal.dispose);
+    var refreshCount = 0;
+    final navigatorKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      OfflineRecoveryScope(
+        signal: signal,
+        child: MaterialApp(
+          navigatorKey: navigatorKey,
+          home: ReconnectRefreshListener(
+            onRefresh: () async => refreshCount += 1,
+            child: const Text('underlying route'),
+          ),
+        ),
+      ),
+    );
+    navigatorKey.currentState!.push(
+      MaterialPageRoute<void>(builder: (_) => const Text('top route')),
+    );
+    await tester.pumpAndSettle();
+    signal.emit();
+    await tester.pump();
+    expect(refreshCount, 0);
+    navigatorKey.currentState!.pop();
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(refreshCount, 1);
   });
 

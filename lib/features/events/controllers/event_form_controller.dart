@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/models/event_form_draft.dart';
@@ -61,6 +62,6 @@ class EventFormController extends ChangeNotifier {
       return 'Only event owners can create events. Sign out and use an owner account.';
     }
 
-    return message;
+    return userFacingError(exception, fallback: 'Unable to save event details.');
   }
 }

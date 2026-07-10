@@ -17,7 +17,8 @@ class OfflineSessionRepository
     implements
         SessionRepository,
         FalseWinPenaltyCorrectionRepository,
-        SessionSyncStatusProvider {
+        SessionSyncStatusProvider,
+        PhotoQueueCommitStatus {
   OfflineSessionRepository({
     required this.inner,
     required this.store,
@@ -40,6 +41,9 @@ class OfflineSessionRepository
   final String Function() _newMutationId;
   final DateTime Function() _now;
   final Future<void> Function()? _onMutationQueued;
+
+  @override
+  bool photoMutationCommitted = false;
 
   @override
   Future<SessionSyncSnapshot> readSessionSyncSnapshot(String sessionId) async {
@@ -122,6 +126,7 @@ class OfflineSessionRepository
 
   @override
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
+    photoMutationCommitted = false;
     if (_shouldEnqueuePhotoUpload(input)) {
       return _enqueueRecordHand(input);
     }
@@ -132,7 +137,9 @@ class OfflineSessionRepository
 
     if (await reachability.isReachable()) {
       try {
-        return await inner.recordHand(input);
+        final detail = await inner.recordHand(input);
+        photoMutationCommitted = input.photoLocalPath != null;
+        return detail;
       } catch (error) {
         if (!reachability.isNetworkException(error)) {
           rethrow;
@@ -243,6 +250,7 @@ class OfflineSessionRepository
           updatedAt: timestamp,
         ),
       );
+      photoMutationCommitted = true;
     } else {
       await store.insertMutation(mutation);
     }

@@ -171,6 +171,11 @@ class SyncCoordinator
     }
     final knownPendingWorkIds = Set<String>.of(_knownPendingWorkIds);
     final pendingWorkIds = await _readPendingWorkIds();
+    if (!_isForeground) {
+      _resumeRequested = true;
+      _knownPendingWorkIds = pendingWorkIds;
+      return;
+    }
     final hasNewWork =
         pendingWorkIds.difference(knownPendingWorkIds).isNotEmpty;
     if (hasNewWork) {
@@ -260,6 +265,10 @@ class SyncCoordinator
     OfflineRecoveryTrigger trigger = OfflineRecoveryTrigger.manual,
   }) async {
     if (_isDisposed) {
+      return Future<void>.value();
+    }
+    if (!_isForeground && trigger == OfflineRecoveryTrigger.queuedWork) {
+      _resumeRequested = true;
       return Future<void>.value();
     }
     if (_isSyncing) {
@@ -521,7 +530,7 @@ class SyncCoordinator
         }
 
         await _store.markPhotoUploadBlocked(upload.id, error.toString());
-        return _PhotoSyncResult(madeProgress: madeProgress);
+        continue;
       }
     }
     return _PhotoSyncResult(madeProgress: madeProgress);

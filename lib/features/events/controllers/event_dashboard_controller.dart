@@ -1,5 +1,6 @@
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
@@ -100,6 +101,7 @@ class EventDashboardController extends ChangeNotifier {
   List<EventHandLedgerEntry> _bonusLedgerEntries = const [];
   List<LeaderboardEntry> _leaderboardEntries = const [];
   int? _loadingRequestToken;
+  bool _isDisposed = false;
 
   bool get canManageEvent => callerRole.canManageEvent;
 
@@ -201,13 +203,13 @@ class EventDashboardController extends ChangeNotifier {
       if (!_isCurrentStateRequest(requestToken)) {
         return;
       }
-      event = loadedEvent ?? event;
+      event = loadedEvent;
     } catch (exception) {
       if (!_isCurrentStateRequest(requestToken)) {
         return;
       }
       if (event == null) {
-        error = exception.toString();
+        error = userFacingError(exception, fallback: 'Unable to load event details.');
       }
     }
 
@@ -222,7 +224,7 @@ class EventDashboardController extends ChangeNotifier {
         return;
       }
       if (event == null && guestCount == 0) {
-        error ??= exception.toString();
+        error ??= userFacingError(exception, fallback: 'Unable to load event details.');
       }
     }
 
@@ -338,13 +340,20 @@ class EventDashboardController extends ChangeNotifier {
   }
 
   bool _isCurrentStateRequest(int requestToken) {
-    return requestToken == _stateRequestToken;
+    return !_isDisposed && requestToken == _stateRequestToken;
   }
 
   void _beginHostMutation() {
     _stateRequestToken += 1;
     _loadingRequestToken = null;
     isLoading = false;
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _stateRequestToken += 1;
+    super.dispose();
   }
 
   void _updateGuestSummaries(List<EventGuestRecord> guests) {
@@ -874,12 +883,7 @@ class EventDashboardController extends ChangeNotifier {
   }
 
   String _formatLifecycleError(Object exception) {
-    final message = exception.toString();
-    const statePrefix = 'Bad state: ';
-    if (message.startsWith(statePrefix)) {
-      return message.substring(statePrefix.length);
-    }
-    return message;
+    return userFacingError(exception);
   }
 
   void recordTableScanError(Object exception) {

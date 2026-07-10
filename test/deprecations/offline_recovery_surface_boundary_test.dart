@@ -27,6 +27,12 @@ void main() {
         contains('ReconnectRefreshListener'),
         reason: '$path must revalidate after offline recovery.',
       );
+      final listenerStart = source.indexOf('ReconnectRefreshListener(');
+      expect(
+        source.substring(listenerStart),
+        contains('onRefresh:'),
+        reason: '$path must wire a refresh callback, not a no-op listener.',
+      );
     }
   });
 }

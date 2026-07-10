@@ -43,6 +43,11 @@ void main() {
           pendingHandIds: const {'pending:mut_01'},
           pendingCount: 1,
         ),
+        SessionSyncSnapshot(
+          sessionId: 'ses_01',
+          pendingHandIds: const {'pending:mut_01'},
+          pendingCount: 1,
+        ),
         SessionSyncSnapshot(sessionId: 'ses_01'),
       ],
     );
@@ -100,6 +105,11 @@ void main() {
           pendingHandIds: const {'pending:mut_01'},
           pendingCount: 1,
         ),
+        SessionSyncSnapshot(
+          sessionId: 'ses_01',
+          pendingHandIds: const {'pending:mut_01'},
+          pendingCount: 1,
+        ),
         SessionSyncSnapshot(sessionId: 'ses_01'),
       ],
     );
@@ -121,6 +131,68 @@ void main() {
     await loadFuture;
 
     expect(controller.detail!.hands.single.id, 'remote_hand');
+    controller.dispose();
+  });
+
+  test('recovery rereads the complete sync snapshot after subscription handoff',
+      () async {
+    final initial = SessionSyncSnapshot(
+      sessionId: 'ses_01',
+      pendingHandIds: const {'pending:mut_01'},
+      pendingCount: 1,
+    );
+    final latest = SessionSyncSnapshot(
+      sessionId: 'ses_01',
+      blockedPhotoClientIds: const {'photo_01'},
+      photoBlockedReason: 'Photo is unavailable.',
+    );
+    final sessions = _FakeSyncSessionRepository(
+      cachedDetail: _detail(handId: 'cached_hand'),
+      snapshots: [initial, latest],
+    );
+    final controller = SessionDetailController(
+      guestRepository: _FakeGuestRepository(cachedGuests: [_guest()]),
+      sessionRepository: sessions,
+    );
+
+    await controller.load(eventId: 'evt_01', sessionId: 'ses_01');
+    await controller.refreshAfterRecovery();
+
+    expect(controller.syncSnapshot?.pendingHandIds, isEmpty);
+    expect(controller.syncSnapshot?.blockedPhotoClientIds, {'photo_01'});
+    expect(controller.syncSnapshot?.photoBlockedReason, 'Photo is unavailable.');
+    controller.dispose();
+  });
+
+  test('queues a sync event that arrives during snapshot refresh', () async {
+    final initial = SessionSyncSnapshot(
+      sessionId: 'ses_01',
+      pendingHandIds: const {'pending:mut_01'},
+      pendingCount: 1,
+    );
+    final latest = SessionSyncSnapshot(sessionId: 'ses_01');
+    final sessions = _FakeSyncSessionRepository(
+      cachedDetail: _detail(handId: 'pending:mut_01'),
+      loadedDetail: _detail(handId: 'remote_hand_01'),
+      snapshots: [initial, latest, latest],
+    );
+    final controller = SessionDetailController(
+      guestRepository: _FakeGuestRepository(cachedGuests: [_guest()]),
+      sessionRepository: sessions,
+    );
+    await controller.load(eventId: 'evt_01', sessionId: 'ses_01');
+
+    final snapshotGate = Completer<SessionSyncSnapshot>();
+    sessions.snapshotGate = snapshotGate;
+    sessions.emitChange();
+    await pumpEventQueue();
+    sessions.emitChange();
+    await pumpEventQueue();
+    snapshotGate.complete(latest);
+    await pumpEventQueue(times: 6);
+
+    expect(sessions.snapshotReadCount, 4);
+    expect(controller.syncSnapshot?.pendingHandIds, isEmpty);
     controller.dispose();
   });
 }
@@ -176,6 +248,8 @@ class _FakeSyncSessionRepository
   final SessionDetailRecord? quietRefreshDetail;
   final _changes = StreamController<void>.broadcast();
   int loadCount = 0;
+  int snapshotReadCount = 0;
+  Completer<SessionSyncSnapshot>? snapshotGate;
   int _snapshotIndex = 0;
 
   @override
@@ -200,6 +274,12 @@ class _FakeSyncSessionRepository
 
   @override
   Future<SessionSyncSnapshot> readSessionSyncSnapshot(String sessionId) async {
+    snapshotReadCount += 1;
+    final gate = snapshotGate;
+    if (gate != null) {
+      snapshotGate = null;
+      return gate.future;
+    }
     if (snapshots.isEmpty) {
       return SessionSyncSnapshot(sessionId: sessionId);
     }

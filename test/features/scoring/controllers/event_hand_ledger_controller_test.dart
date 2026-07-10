@@ -10,7 +10,7 @@ import 'package:mosaic/features/scoring/controllers/event_hand_ledger_controller
 
 void main() {
   group('EventHandLedgerController', () {
-    test('loads cached rows before refreshed rows', () async {
+  test('loads cached rows before refreshed rows', () async {
       final controller = EventHandLedgerController(
         sessionRepository: _FakeSessionRepository(
           cachedRows: [_entry('cached_hand', handNumber: 1)],
@@ -161,6 +161,42 @@ void main() {
       expect(controller.isLoadingCorrection, isFalse);
     });
   });
+
+  test('stale ledger load cannot overwrite a newer recovery load', () async {
+    final firstRemote = Completer<List<EventHandLedgerEntry>>();
+    final firstRemoteStarted = Completer<void>();
+    final secondRemote = Completer<List<EventHandLedgerEntry>>();
+    final secondRemoteStarted = Completer<void>();
+    var loadCount = 0;
+    final repository = _FakeSessionRepository(
+      cachedRows: [_entry('cached_hand', handNumber: 1)],
+      ledgerLoader: (_) {
+        loadCount += 1;
+        if (loadCount == 1) {
+          firstRemoteStarted.complete();
+          return firstRemote.future;
+        }
+        secondRemoteStarted.complete();
+        return secondRemote.future;
+      },
+    );
+    final controller = EventHandLedgerController(sessionRepository: repository);
+
+    final firstLoad = controller.load('evt_01');
+    await firstRemoteStarted.future;
+    final secondLoad = controller.load('evt_01');
+    await secondRemoteStarted.future;
+
+    firstRemote.complete([_entry('stale_hand', handNumber: 2)]);
+    await firstLoad;
+    expect(controller.isLoading, isTrue);
+
+    secondRemote.complete([_entry('recovered_hand', handNumber: 3)]);
+    await secondLoad;
+    expect(controller.rows.single.handId, 'recovered_hand');
+    expect(controller.isLoading, isFalse);
+    controller.dispose();
+  });
 }
 
 class _FakeSessionRepository implements SessionRepository {
@@ -170,6 +206,7 @@ class _FakeSessionRepository implements SessionRepository {
     this.loadError,
     this.sessionDetail,
     this.detailLoader,
+    this.ledgerLoader,
   });
 
   final List<EventHandLedgerEntry> cachedRows;
@@ -177,6 +214,7 @@ class _FakeSessionRepository implements SessionRepository {
   final Object? loadError;
   final SessionDetailRecord? sessionDetail;
   final Future<SessionDetailRecord> Function(String sessionId)? detailLoader;
+  final Future<List<EventHandLedgerEntry>> Function(String eventId)? ledgerLoader;
   final loadedSessionIds = <String>[];
 
   @override
@@ -187,6 +225,10 @@ class _FakeSessionRepository implements SessionRepository {
 
   @override
   Future<List<EventHandLedgerEntry>> loadEventHandLedger(String eventId) async {
+    final loader = ledgerLoader;
+    if (loader != null) {
+      return loader(eventId);
+    }
     final error = loadError;
     if (error != null) {
       throw error;

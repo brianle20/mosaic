@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -13,6 +14,7 @@ class EventListController extends ChangeNotifier {
   final EventRepository _eventRepository;
   final MosaicAccessState? _accessState;
   bool _isDisposed = false;
+  int _requestGeneration = 0;
 
   bool isLoading = true;
   String? error;
@@ -33,6 +35,7 @@ class EventListController extends ChangeNotifier {
   }
 
   Future<void> load({bool silent = false}) async {
+    final generation = ++_requestGeneration;
     if (!silent) {
       isLoading = true;
     }
@@ -42,7 +45,7 @@ class EventListController extends ChangeNotifier {
     }
 
     final cachedEvents = await _eventRepository.readCachedEvents();
-    if (_isDisposed) {
+    if (!_isCurrent(generation)) {
       return;
     }
     if (cachedEvents.isNotEmpty) {
@@ -54,22 +57,23 @@ class EventListController extends ChangeNotifier {
     }
 
     try {
-      events = _latestCreatedFirst(
-        _filterAccessible(await _eventRepository.listEvents()),
-      );
+      final loadedEvents = await _eventRepository.listEvents();
+      if (!_isCurrent(generation)) return;
+      events = _latestCreatedFirst(_filterAccessible(loadedEvents));
       error = null;
     } catch (exception) {
+      if (!_isCurrent(generation)) {
+        return;
+      }
       if (events.isEmpty) {
-        error = exception.toString();
+        error = userFacingError(exception, fallback: 'Unable to load events.');
       }
     }
 
-    if (_isDisposed) {
+    if (!_isCurrent(generation)) {
       return;
     }
-    if (!silent) {
-      isLoading = false;
-    }
+    isLoading = false;
     _notifyIfActive();
   }
 
@@ -78,6 +82,9 @@ class EventListController extends ChangeNotifier {
     _isDisposed = true;
     super.dispose();
   }
+
+  bool _isCurrent(int generation) =>
+      !_isDisposed && generation == _requestGeneration;
 
   void _notifyIfActive() {
     if (!_isDisposed) {

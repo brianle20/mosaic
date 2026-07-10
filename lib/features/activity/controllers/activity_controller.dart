@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 
@@ -13,6 +14,7 @@ class ActivityController extends ChangeNotifier {
   EventActivityCategory selectedCategory = EventActivityCategory.all;
   List<EventActivityEntry> entries = const [];
   int _requestGeneration = 0;
+  bool _isDisposed = false;
 
   Future<void> load(String eventId, {bool silent = false}) async {
     final requestGeneration = ++_requestGeneration;
@@ -49,11 +51,11 @@ class ActivityController extends ChangeNotifier {
         entries = previousEntries;
       }
       if (entries.isEmpty) {
-        error = exception.toString();
+        error = userFacingError(exception, fallback: 'Unable to load activity.');
       }
     }
 
-    if (shouldShowLoading && _isCurrentRequest(requestGeneration, category)) {
+    if (_isCurrentRequest(requestGeneration, category)) {
       isLoading = false;
     }
     if (_isCurrentRequest(requestGeneration, category)) {
@@ -79,7 +81,14 @@ class ActivityController extends ChangeNotifier {
     int requestGeneration,
     EventActivityCategory category,
   ) {
-    return requestGeneration == _requestGeneration &&
+    return !_isDisposed && requestGeneration == _requestGeneration &&
         category == selectedCategory;
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _requestGeneration += 1;
+    super.dispose();
   }
 }

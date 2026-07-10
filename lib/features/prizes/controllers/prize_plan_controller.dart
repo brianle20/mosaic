@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/prizes/models/prize_plan_draft.dart';
@@ -24,14 +25,22 @@ class PrizePlanController extends ChangeNotifier {
   bool hasPreviewedPayouts = false;
   bool hasUnsavedChanges = false;
   int _requestGeneration = 0;
+  int _submissionGeneration = 0;
   int _draftEditGeneration = 0;
   bool _hasLoadedPlan = false;
+  bool _isDisposed = false;
   String? _previewedPlanFingerprint;
 
   Future<void> load({bool silent = false}) async {
+    if (_isDisposed || isSubmitting) {
+      return;
+    }
     final requestGeneration = ++_requestGeneration;
     final draftEditGeneration = _draftEditGeneration;
     final cachedPlan = await prizeRepository.readCachedPrizePlan(eventId);
+    if (_isDisposed) {
+      return;
+    }
     final preservePreview = silent && hasPreviewedPayouts;
     List<PrizeAwardRecord>? cachedAwards;
     if (cachedPlan?.plan.status == PrizePlanStatus.locked) {
@@ -51,7 +60,7 @@ class PrizePlanController extends ChangeNotifier {
       _hasLoadedPlan = true;
     }
 
-    if (requestGeneration != _requestGeneration) {
+    if (!_isCurrentRequest(requestGeneration)) {
       return;
     }
 
@@ -60,7 +69,7 @@ class PrizePlanController extends ChangeNotifier {
       isLoading = true;
     }
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final loaded = await prizeRepository.loadPrizePlan(
@@ -95,20 +104,18 @@ class PrizePlanController extends ChangeNotifier {
         _previewedPlanFingerprint = null;
       }
     } catch (err) {
-      if (requestGeneration == _requestGeneration &&
+      if (_isCurrentRequest(requestGeneration) &&
           cachedPlan == null &&
           !hasUnsavedChanges &&
           !_hasLoadedPlan &&
           previewRows.isEmpty &&
           lockedAwards.isEmpty) {
-        error = err.toString();
+        error = userFacingError(err, fallback: 'Unable to load prizes.');
       }
     } finally {
-      if (requestGeneration == _requestGeneration) {
-        if (shouldShowLoading) {
-          isLoading = false;
-        }
-        notifyListeners();
+      if (_isCurrentRequest(requestGeneration)) {
+        isLoading = false;
+        _notifyIfActive();
       }
     }
   }
@@ -208,6 +215,9 @@ class PrizePlanController extends ChangeNotifier {
   }
 
   Future<void> preview() async {
+    if (_isDisposed) {
+      return;
+    }
     if (!draft.isValid) {
       error = _validationError();
       notifyListeners();
@@ -215,16 +225,18 @@ class PrizePlanController extends ChangeNotifier {
     }
     isSubmitting = true;
     error = null;
-    _requestGeneration += 1;
+    ++_requestGeneration;
+    final submissionGeneration = ++_submissionGeneration;
     final editGeneration = _draftEditGeneration;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final saved = await prizeRepository.upsertPrizePlan(
         draft.toUpsertInput(eventId: eventId),
       );
       final loadedPreview = await prizeRepository.loadPrizePreview(eventId);
-      if (editGeneration != _draftEditGeneration) {
+      if (!_isCurrentSubmission(submissionGeneration) ||
+          editGeneration != _draftEditGeneration) {
         return;
       }
       draft = PrizePlanDraft.fromDetail(saved);
@@ -233,17 +245,23 @@ class PrizePlanController extends ChangeNotifier {
       hasUnsavedChanges = false;
       _previewedPlanFingerprint = _draftFingerprint(draft);
     } catch (err) {
-      if (editGeneration == _draftEditGeneration) {
-        error = err.toString();
+      if (_isCurrentSubmission(submissionGeneration) &&
+          editGeneration == _draftEditGeneration) {
+        error = userFacingError(err, fallback: 'Unable to preview prizes.');
         hasPreviewedPayouts = false;
       }
     } finally {
-      isSubmitting = false;
-      notifyListeners();
+      if (_isCurrentSubmission(submissionGeneration)) {
+        isSubmitting = false;
+        _notifyIfActive();
+      }
     }
   }
 
   Future<void> lockAwards() async {
+    if (_isDisposed) {
+      return;
+    }
     if (!draft.isValid) {
       error = _validationError();
       notifyListeners();
@@ -257,27 +275,33 @@ class PrizePlanController extends ChangeNotifier {
 
     isSubmitting = true;
     error = null;
-    _requestGeneration += 1;
+    ++_requestGeneration;
+    final submissionGeneration = ++_submissionGeneration;
     final editGeneration = _draftEditGeneration;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final loadedAwards = await prizeRepository.lockPrizeAwards(eventId);
-      if (editGeneration != _draftEditGeneration) {
+      if (!_isCurrentSubmission(submissionGeneration) ||
+          editGeneration != _draftEditGeneration) {
         return;
       }
       lockedAwards = loadedAwards;
       hasUnsavedChanges = false;
     } catch (err) {
-      error = err.toString();
+      if (_isCurrentSubmission(submissionGeneration)) {
+        error = userFacingError(err, fallback: 'Unable to lock prize awards.');
+      }
     } finally {
-      isSubmitting = false;
-      notifyListeners();
+      if (_isCurrentSubmission(submissionGeneration)) {
+        isSubmitting = false;
+        _notifyIfActive();
+      }
     }
   }
 
   Future<void> refreshAfterRecovery() async {
-    if (isSubmitting || hasUnsavedChanges) {
+    if (_isDisposed || isSubmitting || hasUnsavedChanges) {
       return;
     }
     await load(silent: true);
@@ -291,9 +315,23 @@ class PrizePlanController extends ChangeNotifier {
   }
 
   bool _canApplyLoad(int requestGeneration, int draftEditGeneration) {
-    return requestGeneration == _requestGeneration &&
+    return _isCurrentRequest(requestGeneration) &&
         draftEditGeneration == _draftEditGeneration &&
         !hasUnsavedChanges;
+  }
+
+  bool _isCurrentRequest(int requestGeneration) {
+    return !_isDisposed && requestGeneration == _requestGeneration;
+  }
+
+  bool _isCurrentSubmission(int submissionGeneration) {
+    return !_isDisposed && submissionGeneration == _submissionGeneration;
+  }
+
+  void _notifyIfActive() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
   }
 
   String _draftFingerprint(PrizePlanDraft value) {
@@ -309,6 +347,14 @@ class PrizePlanController extends ChangeNotifier {
   String _validationError() {
     return draft.generalError ??
         draft.tierErrors.values.whereType<String>().first;
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _requestGeneration += 1;
+    _submissionGeneration += 1;
+    super.dispose();
   }
 }
 

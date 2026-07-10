@@ -91,7 +91,7 @@ class _FakeHandPhotoService implements HandPhotoService {
 }
 
 class _RecordingSessionRepository
-    implements SessionRepository, FalseWinPenaltyCorrectionRepository {
+    implements SessionRepository, FalseWinPenaltyCorrectionRepository, PhotoQueueCommitStatus {
   RecordHandResultInput? recordedInput;
   EditHandResultInput? editedInput;
   VoidHandResultInput? voidedInput;
@@ -105,6 +105,9 @@ class _RecordingSessionRepository
   SessionDetailRecord Function(VoidFalseWinPenaltyInput input)?
       voidFalseWinPenaltyResponseBuilder;
   SessionStatus recordHandSessionStatus = SessionStatus.active;
+  Object? recordHandErrorAfterInput;
+  @override
+  bool photoMutationCommitted = false;
 
   @override
   Future<SessionDetailRecord> endSession({
@@ -223,6 +226,11 @@ class _RecordingSessionRepository
   @override
   Future<SessionDetailRecord> recordHand(RecordHandResultInput input) async {
     recordedInput = input;
+    photoMutationCommitted = input.photoLocalPath != null;
+    final postCommitError = recordHandErrorAfterInput;
+    if (postCommitError != null) {
+      throw postCommitError;
+    }
     final pendingResponse = recordHandCompleter;
     if (pendingResponse != null) {
       return pendingResponse.future;
@@ -1004,6 +1012,99 @@ void main() {
     expect(storage.deletedPaths, isEmpty);
     expect(storage.existingPaths, contains('/local/one.jpg'));
     expect(find.text('Open hand entry'), findsOneWidget);
+  });
+
+  testWidgets('photo survives route disposal while hand commit is pending',
+      (tester) async {
+    final repository = _RecordingSessionRepository()
+      ..recordHandCompleter = Completer<SessionDetailRecord>();
+    final storage = _FakeHandPhotoStorage(existing: {'/local/one.jpg'});
+    final visible = ValueNotifier(true);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ValueListenableBuilder<bool>(
+          valueListenable: visible,
+          builder: (context, isVisible, child) => isVisible
+              ? HandEntryScreen(
+                  sessionDetail: buildDetail(),
+                  guestNamesById: seatNames,
+                  sessionRepository: repository,
+                  handPhotoService: _SequencedHandPhotoService([
+                    _photo('photo_01', '/local/one.jpg'),
+                  ]),
+                  handPhotoStorage: storage,
+                )
+              : const SizedBox.shrink(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tapVisible(tester, find.text('Capture winning hand photo'));
+    await tapVisible(
+      tester,
+      find.widgetWithText(OutlinedButton, 'East\nAlice Wong'),
+    );
+    await tester.tap(find.text('Save Hand'));
+    await tester.pump();
+
+    // Dispose the route before the repository future returns. The durable
+    // record may already own the photo even though submit has not completed.
+    visible.value = false;
+    await tester.pump();
+    expect(find.byType(HandEntryScreen), findsNothing);
+
+    expect(storage.deletedPaths, isEmpty);
+    repository.recordHandCompleter!.complete(buildDetail());
+    await tester.pumpAndSettle();
+    expect(storage.existingPaths, contains('/local/one.jpg'));
+  });
+
+  testWidgets('post-commit projection failure keeps queued photo on dispose',
+      (tester) async {
+    final repository = _RecordingSessionRepository()
+      ..recordHandErrorAfterInput = StateError('projection failed');
+    final storage = _FakeHandPhotoStorage(existing: {'/local/one.jpg'});
+    await pumpHandEntry(
+      tester,
+      repository: repository,
+      handPhotoService: _SequencedHandPhotoService([
+        _photo('photo_01', '/local/one.jpg'),
+      ]),
+      handPhotoStorage: storage,
+    );
+
+    await tapVisible(tester, find.text('Capture winning hand photo'));
+    await completeValidWinAndSave(tester);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(storage.deletedPaths, isEmpty);
+    expect(storage.existingPaths, contains('/local/one.jpg'));
+  });
+
+  testWidgets('post-commit photo remains when failed hand is changed to draw',
+      (tester) async {
+    final repository = _RecordingSessionRepository()
+      ..recordHandErrorAfterInput = StateError('projection failed');
+    final storage = _FakeHandPhotoStorage(existing: {'/local/one.jpg'});
+    await pumpHandEntry(
+      tester,
+      repository: repository,
+      handPhotoService: _SequencedHandPhotoService([
+        _photo('photo_01', '/local/one.jpg'),
+      ]),
+      handPhotoStorage: storage,
+    );
+
+    await tapVisible(tester, find.text('Capture winning hand photo'));
+    await completeValidWinAndSave(tester);
+    await tapVisible(tester, find.text('Draw'));
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(storage.deletedPaths, isEmpty);
+    expect(storage.existingPaths, contains('/local/one.jpg'));
   });
 
   testWidgets('leaving an unsubmitted draft deletes its captured photo',

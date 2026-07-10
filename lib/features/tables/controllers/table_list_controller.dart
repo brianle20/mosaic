@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
@@ -50,6 +51,8 @@ class TableListController extends ChangeNotifier {
   List<TableOverviewCardData> cards = const [];
   List<TableOverviewCardData> currentRoundCards = const [];
   List<TableOverviewCardData> otherCards = const [];
+  int _requestGeneration = 0;
+  bool _isDisposed = false;
 
   bool get isSuddenDeathRequired =>
       bonusRoundState?.suddenDeathStatus == 'required';
@@ -73,15 +76,17 @@ class TableListController extends ChangeNotifier {
     }
 
     _refreshCards();
-    notifyListeners();
+    _notifyIfActive();
   }
 
   Future<void> load(String eventId, {bool silent = false}) async {
+    final generation = ++_requestGeneration;
     final cachedTables = await _tableRepository.readCachedTables(eventId);
     final cachedSessions = await _sessionRepository.readCachedSessions(eventId);
     final cachedGuests = await _guestRepository.readCachedGuests(eventId);
     final cachedRoundSummary = await _readCachedTournamentRoundSummary(eventId);
     final cachedBonusAssignments = await _readCachedBonusAssignments(eventId);
+    if (!_isCurrent(generation)) return;
     final cachedSummaryIsUsable = _hasUsableRoundSummary(cachedRoundSummary);
 
     if (!silent) {
@@ -136,19 +141,22 @@ class TableListController extends ChangeNotifier {
       sessionDetailsBySessionId = cachedSessionDetails;
     }
     _refreshCards();
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final loadedTables = await _tableRepository.listTables(eventId);
+      if (!_isCurrent(generation)) return;
       tables = loadedTables;
     } catch (exception) {
+      if (!_isCurrent(generation)) return;
       if (tables.isEmpty && activeSessionsByTableId.isEmpty) {
-        error = exception.toString();
+        error = userFacingError(exception, fallback: 'Unable to load tables.');
       }
     }
 
     try {
       final guests = await _guestRepository.listGuests(eventId);
+      if (!_isCurrent(generation)) return;
       guestNamesById = _guestNamesById(guests);
     } catch (_) {
       // Cached guest names are enough for the table list fallback.
@@ -156,17 +164,21 @@ class TableListController extends ChangeNotifier {
 
     try {
       final sessions = await _sessionRepository.listSessions(eventId);
+      if (!_isCurrent(generation)) return;
       activeSessionsByTableId = _activeSessionsByTable(sessions);
       sessionsByTableId = _sessionsByTable(sessions);
-      sessionDetailsBySessionId =
-          await _loadDetails(activeSessionsByTableId.values);
+      final loadedDetails = await _loadDetails(activeSessionsByTableId.values);
+      if (!_isCurrent(generation)) return;
+      sessionDetailsBySessionId = loadedDetails;
     } catch (exception) {
+      if (!_isCurrent(generation)) return;
       if (tables.isEmpty && activeSessionsByTableId.isEmpty) {
-        error ??= exception.toString();
+        error ??= userFacingError(exception, fallback: 'Unable to load tables.');
       }
     }
 
     final loadedBonusAssignments = await _loadBonusAssignments(eventId);
+    if (!_isCurrent(generation)) return;
     if (!silent ||
         loadedBonusAssignments.succeeded ||
         bonusAssignments.isEmpty) {
@@ -183,6 +195,7 @@ class TableListController extends ChangeNotifier {
       try {
         loadedBonusRoundState =
             await _seatingRepository?.loadBonusRoundState(eventId);
+        if (!_isCurrent(generation)) return;
         didLoadBonusRoundState = true;
       } catch (_) {
         // Preserve the current bonus state when recovery cannot reach remote.
@@ -198,6 +211,7 @@ class TableListController extends ChangeNotifier {
     } else {
       bonusRoundState = null;
       final loadedSummary = await _loadTournamentRoundSummary(eventId);
+      if (!_isCurrent(generation)) return;
       if (!silent ||
           loadedSummary.succeeded ||
           !_hasUsableRoundSummary(tournamentRoundSummary)) {
@@ -205,11 +219,11 @@ class TableListController extends ChangeNotifier {
       }
     }
 
-    _refreshCards();
-    if (!silent) {
+    if (_isCurrent(generation)) {
+      _refreshCards();
       isLoading = false;
+      _notifyIfActive();
     }
-    notifyListeners();
   }
 
   Future<List<SeatingAssignmentRecord>?> startNextTournamentRound(
@@ -222,7 +236,7 @@ class TableListController extends ChangeNotifier {
 
     isStartingNextRound = true;
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       final assignments =
@@ -230,11 +244,11 @@ class TableListController extends ChangeNotifier {
       await load(eventId);
       return assignments;
     } catch (exception) {
-      error = exception.toString();
+      error = userFacingError(exception);
       return null;
     } finally {
       isStartingNextRound = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -245,7 +259,7 @@ class TableListController extends ChangeNotifier {
 
     isStartingAllTables = true;
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       await _sessionRepository.startCurrentTournamentRoundSessions(eventId);
@@ -253,11 +267,11 @@ class TableListController extends ChangeNotifier {
     } catch (exception) {
       await load(eventId);
       if (activeSessionsByTableId.isEmpty) {
-        error = exception.toString();
+        error = userFacingError(exception);
       }
     } finally {
       isStartingAllTables = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -272,7 +286,7 @@ class TableListController extends ChangeNotifier {
 
     isStartingNextRound = true;
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       return await seatingRepository.startBonusRoundSuddenDeath(
@@ -280,11 +294,11 @@ class TableListController extends ChangeNotifier {
         tableId: tableId,
       );
     } catch (exception) {
-      error = exception.toString();
+      error = userFacingError(exception);
       return null;
     } finally {
       isStartingNextRound = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -299,7 +313,7 @@ class TableListController extends ChangeNotifier {
 
     isStartingNextRound = true;
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       return await seatingRepository.startTableOfChampionsPlayIn(
@@ -307,11 +321,11 @@ class TableListController extends ChangeNotifier {
         tableId: tableId,
       );
     } catch (exception) {
-      error = exception.toString();
+      error = userFacingError(exception);
       return null;
     } finally {
       isStartingNextRound = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -372,16 +386,16 @@ class TableListController extends ChangeNotifier {
 
     isUpdatingTimers = true;
     error = null;
-    notifyListeners();
+    _notifyIfActive();
 
     try {
       await Future.wait(sessionIds.map(update));
       await load(eventId);
     } catch (exception) {
-      error = exception.toString();
+      error = userFacingError(exception);
     } finally {
       isUpdatingTimers = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -1214,7 +1228,7 @@ class TableListController extends ChangeNotifier {
     }
 
     final guestId = matchingSeats.first.eventGuestId;
-    return guestNamesById[guestId] ?? guestId;
+    return guestNamesById[guestId] ?? 'Seat ${seatIndex + 1}';
   }
 
   LastHandSummary _lastHandSummary(
@@ -1327,6 +1341,20 @@ class TableListController extends ChangeNotifier {
       3 => 'North',
       _ => 'Seat',
     };
+  }
+
+  bool _isCurrent(int generation) =>
+      !_isDisposed && generation == _requestGeneration;
+
+  void _notifyIfActive() {
+    if (!_isDisposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _requestGeneration += 1;
+    super.dispose();
   }
 }
 

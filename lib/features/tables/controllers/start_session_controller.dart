@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
@@ -59,7 +60,7 @@ class StartSessionController extends ChangeNotifier {
       expectedAssignmentsBySeatIndex =
           _expectedAssignmentsForTable(seatingAssignments);
     } catch (exception) {
-      error = exception.toString();
+      error = userFacingError(exception, fallback: 'Unable to load table assignments.');
     }
 
     isLoading = false;
@@ -176,7 +177,7 @@ class StartSessionController extends ChangeNotifier {
           '${table.label} tag, or rebind this table tag from Tables.';
     }
 
-    return message;
+    return userFacingError(exception);
   }
 }
 

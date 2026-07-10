@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/checkin/models/cover_entry_form_draft.dart';
@@ -15,39 +16,44 @@ class GuestRosterController extends ChangeNotifier {
   final Set<String> _submittingGuestIds = <String>{};
   final Set<String> _qualifyingCheckedInConsideredGuestIds = <String>{};
   bool _isQualifyingCheckedInConsidered = false;
+  int _requestGeneration = 0;
+  bool _isDisposed = false;
 
   bool get isQualifyingCheckedInConsidered => _isQualifyingCheckedInConsidered;
 
   Future<void> load(String eventId, {bool silent = false}) async {
+    final generation = ++_requestGeneration;
     if (!silent) {
       isLoading = true;
     }
     error = null;
     if (!silent) {
-      notifyListeners();
+      _notifyIfActive();
     }
 
     final cachedGuests = await _guestRepository.readCachedGuests(eventId);
+    if (!_isCurrent(generation)) return;
     if (cachedGuests.isNotEmpty) {
       guests = cachedGuests;
       if (!silent) {
         isLoading = false;
       }
-      notifyListeners();
+      _notifyIfActive();
     }
 
     try {
-      guests = await _guestRepository.listGuests(eventId);
+      final loadedGuests = await _guestRepository.listGuests(eventId);
+      if (!_isCurrent(generation)) return;
+      guests = loadedGuests;
     } catch (exception) {
+      if (!_isCurrent(generation)) return;
       if (guests.isEmpty) {
-        error = exception.toString();
+        error = userFacingError(exception, fallback: 'Unable to load guests.');
       }
     }
 
-    if (!silent) {
-      isLoading = false;
-    }
-    notifyListeners();
+    isLoading = false;
+    _notifyIfActive();
   }
 
   bool isSubmittingGuest(String guestId) =>
@@ -143,7 +149,7 @@ class GuestRosterController extends ChangeNotifier {
     final targetIds = targets.map((guest) => guest.id).toSet();
     _isQualifyingCheckedInConsidered = true;
     _qualifyingCheckedInConsideredGuestIds.addAll(targetIds);
-    notifyListeners();
+    _notifyIfActive();
 
     var promotedCount = 0;
     try {
@@ -159,7 +165,7 @@ class GuestRosterController extends ChangeNotifier {
     } finally {
       _qualifyingCheckedInConsideredGuestIds.removeAll(targetIds);
       _isQualifyingCheckedInConsidered = false;
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
@@ -168,6 +174,7 @@ class GuestRosterController extends ChangeNotifier {
       guestId,
       () async {
         await _guestRepository.removeGuest(guestId);
+        if (_isDisposed) return;
         guests = guests
             .where((guest) => guest.id != guestId)
             .toList(growable: false);
@@ -237,19 +244,34 @@ class GuestRosterController extends ChangeNotifier {
     Future<void> Function() action,
   ) async {
     _submittingGuestIds.add(guestId);
-    notifyListeners();
+    _notifyIfActive();
     try {
       await action();
     } finally {
       _submittingGuestIds.remove(guestId);
-      notifyListeners();
+      _notifyIfActive();
     }
   }
 
   void _mergeGuest(EventGuestRecord guest) {
+    if (_isDisposed) return;
     guests = [
       ...guests.where((entry) => entry.id != guest.id),
       guest,
     ]..sort((left, right) => left.displayName.compareTo(right.displayName));
+  }
+
+  bool _isCurrent(int generation) =>
+      !_isDisposed && generation == _requestGeneration;
+
+  void _notifyIfActive() {
+    if (!_isDisposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _requestGeneration += 1;
+    super.dispose();
   }
 }
