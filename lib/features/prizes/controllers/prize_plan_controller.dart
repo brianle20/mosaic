@@ -100,13 +100,12 @@ class PrizePlanController extends ChangeNotifier {
         error = err.toString();
       }
     } finally {
-      if (requestGeneration != _requestGeneration) {
-        return;
+      if (requestGeneration == _requestGeneration) {
+        if (shouldShowLoading) {
+          isLoading = false;
+        }
+        notifyListeners();
       }
-      if (shouldShowLoading) {
-        isLoading = false;
-      }
-      notifyListeners();
     }
   }
 
