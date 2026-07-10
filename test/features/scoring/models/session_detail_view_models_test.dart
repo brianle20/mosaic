@@ -399,6 +399,28 @@ void main() {
       );
       expect(viewModel.hands.single.syncStatusLabel, 'Photo needs attention');
     });
+
+    test('does not expose raw blocked sync reasons', () {
+      final viewModel = buildSessionDetailViewModel(
+        detail: _detail(),
+        guestNamesById: _guestNamesById,
+        syncSnapshot: SessionSyncSnapshot(
+          sessionId: 'ses_01',
+          blockedHandIds: const {'hand_01'},
+          isBlocked: true,
+          blockedReason: 'PostgREST/RPC details',
+        ),
+      );
+
+      expect(
+        viewModel.blockedSyncMessage,
+        'Offline hand sync needs review before more hands can be recorded.',
+      );
+      expect(
+        viewModel.blockedSyncMessage,
+        isNot(contains('PostgREST/RPC details')),
+      );
+    });
   });
 }
 

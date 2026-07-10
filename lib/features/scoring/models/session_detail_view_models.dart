@@ -191,14 +191,7 @@ String? _blockedSyncMessage(SessionSyncSnapshot? syncSnapshot) {
     return null;
   }
 
-  final reason = syncSnapshot.blockedReason?.trim();
-  const baseMessage =
-      'Offline hand sync needs review before more hands can be recorded.';
-  if (reason == null || reason.isEmpty) {
-    return baseMessage;
-  }
-
-  return '$baseMessage $reason';
+  return 'Offline hand sync needs review before more hands can be recorded.';
 }
 
 String? _blockedPhotoUploadMessage(SessionSyncSnapshot? syncSnapshot) {
