@@ -263,16 +263,12 @@ class EventDashboardController extends ChangeNotifier {
       _rebuildBonusRoundResults();
     }
 
-    try {
-      final prizePlan = await _prizeRepository?.loadPrizePlan(eventId: eventId);
-      if (!_isCurrentStateRequest(requestToken)) {
-        return;
-      }
-      if (prizePlan != null || _prizeRepository != null && !silent) {
-        prizePoolCents = _totalPrizeCents(prizePlan);
-      }
-    } catch (_) {
-      // Prize setup is a dashboard summary only; keep event loading usable.
+    final prizeResult = await _loadPrizePlan(eventId);
+    if (!_isCurrentStateRequest(requestToken)) {
+      return;
+    }
+    if (!silent || prizeResult.succeeded) {
+      prizePoolCents = _totalPrizeCents(prizeResult.value);
     }
 
     final currentScoringPhase = event?.currentScoringPhase;
@@ -448,6 +444,20 @@ class EventDashboardController extends ChangeNotifier {
     }
     try {
       return _LoadResult.success(await repository.loadBonusRoundState(eventId));
+    } catch (_) {
+      return const _LoadResult.failure(null);
+    }
+  }
+
+  Future<_LoadResult<PrizePlanDetail?>> _loadPrizePlan(String eventId) async {
+    final repository = _prizeRepository;
+    if (repository == null) {
+      return const _LoadResult.failure(null);
+    }
+    try {
+      return _LoadResult.success(
+        await repository.loadPrizePlan(eventId: eventId),
+      );
     } catch (_) {
       return const _LoadResult.failure(null);
     }

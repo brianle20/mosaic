@@ -8,6 +8,7 @@ import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
+import 'package:mosaic/data/models/prize_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
@@ -292,6 +293,27 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   }
 }
 
+class _FakePrizeRepository extends ThrowingPrizeRepository {
+  _FakePrizeRepository({this.cachedPlan, this.remotePlan});
+
+  PrizePlanDetail? cachedPlan;
+  PrizePlanDetail? remotePlan;
+  Object? remoteError;
+
+  @override
+  Future<PrizePlanDetail?> readCachedPrizePlan(String eventId) async =>
+      cachedPlan;
+
+  @override
+  Future<PrizePlanDetail?> loadPrizePlan({required String eventId}) async {
+    final error = remoteError;
+    if (error != null) {
+      throw error;
+    }
+    return remotePlan;
+  }
+}
+
 class _FakeTableRepository extends ThrowingTableRepository {
   _FakeTableRepository(this.tables);
 
@@ -441,6 +463,27 @@ EventHandLedgerEntry _championAwardLedgerEntry({
     'status': 'recorded',
     'cells': const [],
   });
+}
+
+PrizePlanDetail _prizePlan({required int fixedAmountCents}) {
+  return PrizePlanDetail(
+    plan: const PrizePlanRecord(
+      id: 'pp_01',
+      eventId: 'evt_01',
+      mode: PrizePlanMode.fixed,
+      status: PrizePlanStatus.draft,
+      reserveFixedCents: 0,
+      reservePercentageBps: 0,
+    ),
+    tiers: [
+      PrizeTierRecord(
+        id: 'tier_01',
+        prizePlanId: 'pp_01',
+        place: 1,
+        fixedAmountCents: fixedAmountCents,
+      ),
+    ],
+  );
 }
 
 LeaderboardEntry _championLeaderboardEntry() {
@@ -757,6 +800,55 @@ void main() {
     await initialLoad;
 
     expect(controller.event?.title, 'Recovered Event');
+    expect(controller.isLoading, isFalse);
+  });
+
+  test('silent refresh clears prize pool when remote has no plan', () async {
+    final prizeRepository = _FakePrizeRepository(
+      cachedPlan: _prizePlan(fixedAmountCents: 5000),
+      remotePlan: _prizePlan(fixedAmountCents: 5000),
+    );
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(
+        cachedEvents: [_dashboardEvent()],
+      ),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      prizeRepository: prizeRepository,
+    );
+
+    await controller.load('evt_01');
+    expect(controller.prizePoolCents, 5000);
+
+    prizeRepository.remotePlan = null;
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.prizePoolCents, isNull);
+    expect(controller.error, isNull);
+    expect(controller.isLoading, isFalse);
+  });
+
+  test('silent refresh preserves prize pool when remote plan load fails',
+      () async {
+    final prizeRepository = _FakePrizeRepository(
+      cachedPlan: _prizePlan(fixedAmountCents: 5000),
+      remotePlan: _prizePlan(fixedAmountCents: 5000),
+    );
+    final controller = EventDashboardController(
+      eventRepository: _FakeEventRepository(
+        cachedEvents: [_dashboardEvent()],
+      ),
+      guestRepository: _FakeGuestRepository(cachedGuests: const []),
+      prizeRepository: prizeRepository,
+    );
+
+    await controller.load('evt_01');
+    expect(controller.prizePoolCents, 5000);
+
+    prizeRepository.remoteError = Exception('prize plan fetch failed');
+    await controller.load('evt_01', silent: true);
+
+    expect(controller.prizePoolCents, 5000);
+    expect(controller.error, isNull);
     expect(controller.isLoading, isFalse);
   });
 
