@@ -20,6 +20,7 @@ import 'package:mosaic/data/models/staff_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/offline/offline_recovery_lifecycle.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 
@@ -654,6 +655,7 @@ void main() {
     expect(find.text('Mosaic Sign In'), findsOneWidget);
     expect(find.text('Preparing host tools...'), findsNothing);
     expect(find.byType(OfflineRecoveryLifecycleListener), findsNothing);
+    expect(find.byType(OfflineRecoveryScope), findsNothing);
   });
 
   testWidgets('renders event list when signed in', (tester) async {

@@ -8,6 +8,8 @@ import 'package:mosaic/data/local/local_cache.dart';
 import 'package:mosaic/data/models/staff_models.dart';
 import 'package:mosaic/data/offline/network_reachability.dart';
 import 'package:mosaic/data/offline/offline_recovery_lifecycle.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/offline/offline_session_repository.dart';
 import 'package:mosaic/data/offline/sqlite_offline_store.dart';
 import 'package:mosaic/data/offline/sync_coordinator.dart';
@@ -50,6 +52,7 @@ class MosaicApp extends StatefulWidget {
     this.mosaicProfileRepository,
     this.staffRepository,
     this.nfcService,
+    this.recoverySignal,
   });
 
   final AppEnvironment? environment;
@@ -66,6 +69,7 @@ class MosaicApp extends StatefulWidget {
   final MosaicProfileRepository? mosaicProfileRepository;
   final StaffRepository? staffRepository;
   final NfcService? nfcService;
+  final OfflineRecoverySignal? recoverySignal;
 
   @override
   State<MosaicApp> createState() => _MosaicAppState();
@@ -155,6 +159,7 @@ class _MosaicAppState extends State<MosaicApp> {
         staffRepository:
             widget.staffRepository ?? const _UnavailableStaffRepository(),
         nfcService: widget.nfcService!,
+        recoverySignal: widget.recoverySignal,
       );
     }
 
@@ -194,6 +199,7 @@ class _MosaicAppState extends State<MosaicApp> {
             mosaicProfileRepository: snapshot.data!.mosaicProfileRepository,
             staffRepository: snapshot.data!.staffRepository,
             nfcService: snapshot.data!.nfcService,
+            recoverySignal: snapshot.data!.syncCoordinator,
           ),
         );
       },
@@ -432,6 +438,7 @@ class _AppWithRepositories extends StatelessWidget {
     required this.mosaicProfileRepository,
     required this.staffRepository,
     required this.nfcService,
+    this.recoverySignal,
   });
 
   final AuthRepository authRepository;
@@ -446,6 +453,7 @@ class _AppWithRepositories extends StatelessWidget {
   final MosaicProfileRepository mosaicProfileRepository;
   final StaffRepository staffRepository;
   final NfcService nfcService;
+  final OfflineRecoverySignal? recoverySignal;
 
   @override
   Widget build(BuildContext context) {
@@ -463,7 +471,7 @@ class _AppWithRepositories extends StatelessWidget {
       nfcService: nfcService,
     );
 
-    return MaterialApp(
+    final app = MaterialApp(
       title: 'Mosaic',
       theme: AppTheme.build(),
       builder: _buildKeyboardDismissRegion,
@@ -482,6 +490,10 @@ class _AppWithRepositories extends StatelessWidget {
       ),
       onGenerateRoute: router.onGenerateRoute,
     );
+    final signal = recoverySignal;
+    return signal == null
+        ? app
+        : OfflineRecoveryScope(signal: signal, child: app);
   }
 }
 
