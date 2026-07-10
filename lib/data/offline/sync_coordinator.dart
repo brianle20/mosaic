@@ -149,9 +149,10 @@ class SyncCoordinator implements OfflineRecoverySignal {
     if (wasSyncing) {
       _syncRequested = true;
     }
+    final knownPendingWorkIds = Set<String>.of(_knownPendingWorkIds);
     final pendingWorkIds = await _readPendingWorkIds();
     final hasNewWork =
-        pendingWorkIds.difference(_knownPendingWorkIds).isNotEmpty;
+        pendingWorkIds.difference(knownPendingWorkIds).isNotEmpty;
     if (hasNewWork) {
       _resetRetryBackoff();
     }
