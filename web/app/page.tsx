@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
+import { PublicSiteHeader } from "../components/PublicSiteHeader";
 import { SalesEmailLink } from "../components/SalesEmailLink";
 
 export const metadata: Metadata = {
@@ -64,20 +63,13 @@ const benefits = [
 export default function LandingPage() {
   return (
     <div className="landing-page">
-      <header className="landing-header">
-        <Link className="landing-brand" href="/" aria-label="Mosaic home">
-          <Image src="/mosaic-app-icon.png" alt="" width={40} height={40} priority />
-          <span>Mosaic</span>
-        </Link>
-        <nav className="public-nav landing-nav" aria-label="Public navigation">
-          <Link href="/events">Events</Link>
-          <SalesEmailLink className="landing-header-email" location="header">
-            {salesEmail}
-          </SalesEmailLink>
-        </nav>
-      </header>
+      <PublicSiteHeader navClassName="landing-nav">
+        <SalesEmailLink className="landing-header-email" location="header">
+          {salesEmail}
+        </SalesEmailLink>
+      </PublicSiteHeader>
 
-      <main>
+      <main id="main-content">
         <section className="landing-hero" aria-labelledby="landing-title">
           <div className="landing-hero-content">
             <p className="landing-eyebrow">Mahjong event software</p>

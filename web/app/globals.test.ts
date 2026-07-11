@@ -135,3 +135,11 @@ describe("public event navigation styles", () => {
     expect(css).toMatch(/\.standings-header h1\s*\{[^}]*overflow-wrap:\s*anywhere/);
   });
 });
+
+describe("event directory action hierarchy", () => {
+  it("gives Standings stronger treatment than Points Race", () => {
+    expect(css).toMatch(/\.event-directory-actions a\.is-primary\s*\{[\s\S]*background:\s*var\(--accent-strong\)/);
+    expect(css).toMatch(/\.event-directory-actions a\s*\{[\s\S]*min-height:\s*44px/);
+    expect(css).toMatch(/\.event-directory-card h2 a:focus-visible/);
+  });
+});

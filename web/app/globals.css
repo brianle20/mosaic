@@ -447,6 +447,18 @@ select {
   line-height: 1.25;
 }
 
+.event-directory-card h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.event-directory-card h2 a:hover,
+.event-directory-card h2 a:focus-visible {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 .event-directory-card p {
   margin-top: 5px;
   color: var(--muted);
@@ -464,7 +476,7 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
+  min-height: 44px;
   padding: 0 14px;
   border: 1px solid var(--accent-strong);
   border-radius: 8px;
@@ -474,10 +486,20 @@ select {
   text-decoration: none;
 }
 
+.event-directory-actions a.is-primary {
+  background: var(--accent-strong);
+  color: white;
+}
+
 .event-directory-actions a:hover,
 .event-directory-actions a:focus-visible {
   background: var(--accent-strong);
   color: white;
+}
+
+.event-directory-actions a.is-primary:hover,
+.event-directory-actions a.is-primary:focus-visible {
+  background: var(--accent);
 }
 
 .events-empty {

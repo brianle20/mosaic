@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import EventsPage, { metadata } from "./page";
 
 vi.mock("../../lib/supabase", () => ({
@@ -24,6 +24,10 @@ describe("EventsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedCreatePublicSupabaseClient.mockReturnValue({ rpc: vi.fn() } as never);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("defines public events metadata", () => {
@@ -66,20 +70,26 @@ describe("EventsPage", () => {
       },
     ]);
 
+    vi.spyOn(Date, "now").mockReturnValue(
+      Date.parse("2026-06-27T12:35:00.000Z"),
+    );
+
     render(await EventsPage());
 
     expect(mockedFetchPublicEvents).toHaveBeenCalledWith(publicClient);
     expect(screen.getByRole("heading", { level: 1, name: "Events" })).toBeInTheDocument();
-    expect(screen.getByText("Summer Open")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Summer Open standings" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Summer Open" })).toHaveAttribute(
       "href",
       "/events/summer-open/standings",
     );
+    expect(screen.getByRole("link", { name: "Summer Open standings" })).toHaveClass(
+      "is-primary",
+    );
     expect(screen.getByRole("link", { name: "Summer Open points race" })).toHaveAttribute(
       "href",
-      "/events/summer-open/standings/graph",
+      "/events/summer-open/points-race",
     );
-    expect(screen.getByText("Updated Jun 27, 2026, 12:30 PM UTC")).toBeInTheDocument();
+    expect(screen.getByText("Updated 5 min ago")).toBeInTheDocument();
     expect(screen.getByText("Autumn Open")).toBeInTheDocument();
     expect(screen.getByText("Standings update pending")).toBeInTheDocument();
   });

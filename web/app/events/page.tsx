@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
+import { PublicSiteHeader } from "../../components/PublicSiteHeader";
+import { PublicUpdatedAt } from "../../components/PublicUpdatedAt";
+import {
+  publicEventPointsRacePath,
+  publicEventStandingsPath,
+} from "../../lib/public-routes";
 import {
   fetchPublicEvents,
   type PublicEventDirectoryRow,
@@ -16,34 +21,6 @@ export const metadata: Metadata = publicEventMetadata({
   description: "Public Mosaic mahjong event standings and points races.",
   canonicalPath: "/events",
 });
-
-function formatUpdatedAt(value: string | null): string {
-  if (!value) {
-    return "Standings update pending";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "Standings update pending";
-  }
-
-  return `Updated ${new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "UTC",
-    timeZoneName: "short",
-  }).format(date)}`;
-}
-
-function eventLinks(event: PublicEventDirectoryRow) {
-  return {
-    standings: `/events/${event.publicSlug}/standings`,
-    pointsRace: `/events/${event.publicSlug}/standings/graph`,
-  };
-}
 
 export default async function EventsPage() {
   let events: PublicEventDirectoryRow[] = [];
@@ -61,17 +38,9 @@ export default async function EventsPage() {
 
   return (
     <div className="events-page">
-      <header className="landing-header public-site-header">
-        <Link className="landing-brand" href="/" aria-label="Mosaic home">
-          <Image src="/mosaic-app-icon.png" alt="" width={40} height={40} priority />
-          <span>Mosaic</span>
-        </Link>
-        <nav className="public-nav" aria-label="Public navigation">
-          <Link href="/events">Events</Link>
-        </nav>
-      </header>
+      <PublicSiteHeader className="public-site-header" eventsCurrent />
 
-      <main className="events-shell">
+      <main id="main-content" className="events-shell">
         <section className="events-hero" aria-labelledby="events-title">
           <p className="eyebrow">Public results</p>
           <h1 id="events-title">Events</h1>
@@ -90,25 +59,39 @@ export default async function EventsPage() {
           </section>
         ) : (
           <section className="events-list" aria-label="Public events">
-            {events.map((event) => {
-              const links = eventLinks(event);
-              return (
-                <article className="event-directory-card" key={event.eventId}>
-                  <div>
-                    <h2>{event.title}</h2>
-                    <p>{formatUpdatedAt(event.standingsUpdatedAt)}</p>
-                  </div>
-                  <div className="event-directory-actions">
-                    <Link href={links.standings} aria-label={`${event.title} standings`}>
-                      Standings
+            {events.map((event) => (
+              <article className="event-directory-card" key={event.eventId}>
+                <div>
+                  <h2>
+                    <Link href={publicEventStandingsPath(event.publicSlug)}>
+                      {event.title}
                     </Link>
-                    <Link href={links.pointsRace} aria-label={`${event.title} points race`}>
-                      Points Race
-                    </Link>
-                  </div>
-                </article>
-              );
-            })}
+                  </h2>
+                  <p>
+                    <PublicUpdatedAt
+                      value={event.standingsUpdatedAt}
+                      pendingLabel="Standings update pending"
+                      prefix="Updated "
+                    />
+                  </p>
+                </div>
+                <div className="event-directory-actions">
+                  <Link
+                    className="is-primary"
+                    href={publicEventStandingsPath(event.publicSlug)}
+                    aria-label={`${event.title} standings`}
+                  >
+                    Standings
+                  </Link>
+                  <Link
+                    href={publicEventPointsRacePath(event.publicSlug)}
+                    aria-label={`${event.title} points race`}
+                  >
+                    Points Race
+                  </Link>
+                </div>
+              </article>
+            ))}
           </section>
         )}
       </main>
