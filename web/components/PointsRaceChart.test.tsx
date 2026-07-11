@@ -67,15 +67,11 @@ describe("PointsRaceChart", () => {
 
   it("shows a graceful empty state when no timeline hands are recorded", () => {
     render(
-      <PointsRaceChart
-        eventTitle="Mosaic May Tournament"
-        updatedAt={null}
-        pointsTimeline={[]}
-      />,
+      <PointsRaceChart eventTitle="Mosaic May Tournament" pointsTimeline={[]} />,
     );
 
-    expect(screen.getByRole("heading", { name: "Mosaic May Tournament" })).toBeVisible();
     expect(screen.getByText(/points race will appear once scored hands arrive/i)).toBeVisible();
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
     const stats = screen.getByLabelText(/points race stats/i);
     expect(within(stats).getByText(/hands recorded/i)).toBeVisible();
     expect(within(stats).getAllByText("0")).toHaveLength(2);
@@ -86,7 +82,6 @@ describe("PointsRaceChart", () => {
       <PointsRaceChart
         eventTitle="Mosaic May Tournament"
         eventSlug="mosaic-may-tournament"
-        updatedAt="2026-05-24T12:00:00.000Z"
         pointsTimeline={createTimeline(14)}
       />,
     );
@@ -117,7 +112,6 @@ describe("PointsRaceChart", () => {
     render(
       <PointsRaceChart
         eventTitle="Mosaic May Tournament"
-        updatedAt="2026-05-24T12:00:00.000Z"
         pointsTimeline={createTimeline(10)}
       />,
     );
@@ -147,7 +141,6 @@ describe("PointsRaceChart", () => {
     const { container } = render(
       <PointsRaceChart
         eventTitle="Mosaic May Tournament"
-        updatedAt="2026-05-24T12:00:00.000Z"
         pointsTimeline={pointsTimeline}
       />,
     );
@@ -161,13 +154,12 @@ describe("PointsRaceChart", () => {
     const html = renderToString(
       <PointsRaceChart
         eventTitle="Mosaic May Tournament"
-        updatedAt="2026-05-24T12:00:00.000Z"
         pointsTimeline={createTimeline(14)}
       />,
     );
 
-    expect(html).toContain("Mosaic May Tournament");
     expect(html).toContain("Preparing points race");
+    expect(html).not.toContain("<h1");
     expect(html).not.toContain("Player 12");
   });
 
@@ -175,7 +167,6 @@ describe("PointsRaceChart", () => {
     render(
       <PointsRaceChart
         eventTitle="Mosaic May Tournament"
-        updatedAt="2026-05-24T12:00:00.000Z"
         pointsTimeline={createTimeline(2, 2)}
       />,
     );
@@ -198,7 +189,6 @@ describe("PointsRaceChart", () => {
     const { container } = render(
       <PointsRaceChart
         eventTitle="Mosaic May Tournament"
-        updatedAt="2026-05-24T12:00:00.000Z"
         pointsTimeline={[
           {
             handNumber: 1,
@@ -234,7 +224,6 @@ describe("PointsRaceChart", () => {
     const { container } = render(
       <PointsRaceChart
         eventTitle="Mosaic May Tournament"
-        updatedAt="2026-05-24T12:00:00.000Z"
         pointsTimeline={createTimeline(5)}
       />,
     );
@@ -255,7 +244,6 @@ describe("PointsRaceChart", () => {
     render(
       <PointsRaceChart
         eventTitle="Mosaic May Tournament"
-        updatedAt="2026-05-24T12:00:00.000Z"
         pointsTimeline={createTimeline(14)}
       />,
     );

@@ -50,6 +50,16 @@ describe("LiveStandings", () => {
     expect(captureAnalyticsEvent).toHaveBeenCalledWith("public_standings_viewed", {
       event_slug: "fv-mahjong-1",
     });
+    expect(screen.getByRole("link", { name: "Mosaic home" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "All events" })).toHaveAttribute("href", "/events");
+    expect(screen.getByRole("link", { name: "Standings" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("link", { name: "Points race" })).toHaveAttribute(
+      "href",
+      "/events/fv-mahjong-1/points-race",
+    );
   });
 
   it("subscribes to the public standings snapshot and applies streamed payloads without refetching", async () => {
@@ -66,6 +76,7 @@ describe("LiveStandings", () => {
     render(
       <LiveStandings
         eventId="event-1"
+        eventSlug="fv-mahjong-1"
         initialSnapshot={initial}
         supabaseClient={realtime.client}
         fetchStandings={fetchStandings}
@@ -114,6 +125,10 @@ describe("LiveStandings", () => {
 
     expect(fetchStandings).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", { name: "FV Mahjong 1" })).toBeVisible();
+    expect(screen.getByRole("time")).toHaveAttribute(
+      "datetime",
+      "2026-05-24T12:01:00.000Z",
+    );
     expect(screen.getAllByText("Brian L.")[0]).toBeVisible();
     vi.useRealTimers();
   });
@@ -126,6 +141,7 @@ describe("LiveStandings", () => {
     render(
       <LiveStandings
         eventId="event-1"
+        eventSlug="fv-mahjong-1"
         initialSnapshot={{
           eventTitle: "Mosaic May Tournament",
           leaderboard: [],
@@ -179,6 +195,7 @@ describe("LiveStandings", () => {
     render(
       <LiveStandings
         eventId="event-1"
+        eventSlug="fv-mahjong-1"
         initialSnapshot={initial}
         supabaseClient={realtime.client}
         fetchStandings={fetchStandings}
@@ -223,6 +240,7 @@ describe("LiveStandings", () => {
     render(
       <LiveStandings
         eventId="event-1"
+        eventSlug="fv-mahjong-1"
         initialSnapshot={initial}
         supabaseClient={realtime.client}
         fetchStandings={fetchStandings}
@@ -297,6 +315,7 @@ describe("LiveStandings", () => {
     render(
       <LiveStandings
         eventId="event-1"
+        eventSlug="fv-mahjong-1"
         initialSnapshot={initial}
         supabaseClient={realtime.client}
         fetchStandings={vi.fn()}
@@ -363,6 +382,7 @@ describe("LiveStandings", () => {
     render(
       <LiveStandings
         eventId="event-1"
+        eventSlug="fv-mahjong-1"
         initialSnapshot={{
           eventTitle: "Mosaic May Tournament",
           leaderboard: [
@@ -437,6 +457,7 @@ describe("LiveStandings", () => {
     const { rerender } = render(
       <LiveStandings
         eventId="event-1"
+        eventSlug="fv-mahjong-1"
         initialSnapshot={{
           eventTitle: "Mosaic May Tournament",
           leaderboard: [
@@ -470,6 +491,7 @@ describe("LiveStandings", () => {
       rerender(
         <LiveStandings
           eventId="event-2"
+          eventSlug="fv-mahjong-2"
         initialSnapshot={{
           eventTitle: "Mosaic June Tournament",
           leaderboard: [

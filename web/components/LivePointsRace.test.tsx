@@ -78,6 +78,16 @@ describe("LivePointsRace", () => {
     expect(captureAnalyticsEvent).toHaveBeenCalledWith("points_race_viewed", {
       event_slug: "fv-mahjong-1",
     });
+    expect(screen.getByRole("link", { name: "Mosaic home" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "All events" })).toHaveAttribute("href", "/events");
+    expect(screen.getByRole("link", { name: "Points race" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("link", { name: "Standings" })).toHaveAttribute(
+      "href",
+      "/events/fv-mahjong-1/standings",
+    );
   });
 
   it("subscribes to public standings snapshots and applies streamed point timelines", async () => {
@@ -88,6 +98,7 @@ describe("LivePointsRace", () => {
     render(
       <LivePointsRace
         eventId="event-1"
+        eventSlug="fv-mahjong-1"
         initialSnapshot={snapshot(100, "2026-05-24T12:00:00.000Z")}
         supabaseClient={realtime.client}
         fetchStandings={fetchStandings}
@@ -112,7 +123,7 @@ describe("LivePointsRace", () => {
           event_id: "event-1",
           updated_at: "2026-05-24T12:01:00.000Z",
           payload: {
-            eventTitle: "Mosaic May Tournament",
+            eventTitle: "FV Mahjong 1",
             leaderboard: [],
             bonusResults: [],
             pointsTimeline: [
@@ -140,6 +151,11 @@ describe("LivePointsRace", () => {
 
     expect(fetchStandings).not.toHaveBeenCalled();
     expect(screen.getAllByText("+260")[0]).toBeVisible();
+    expect(screen.getByRole("heading", { name: "FV Mahjong 1" })).toBeVisible();
+    expect(screen.getByRole("time")).toHaveAttribute(
+      "datetime",
+      "2026-05-24T12:01:00.000Z",
+    );
   });
 
   it("polls for fresh standings when realtime events do not arrive", async () => {
@@ -153,6 +169,7 @@ describe("LivePointsRace", () => {
     render(
       <LivePointsRace
         eventId="event-1"
+        eventSlug="fv-mahjong-1"
         initialSnapshot={snapshot(100, "2026-05-24T12:00:00.000Z")}
         supabaseClient={realtime.client}
         fetchStandings={fetchStandings}

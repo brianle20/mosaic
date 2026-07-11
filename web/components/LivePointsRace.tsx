@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { PointsRaceChart } from "./PointsRaceChart";
+import { PublicEventShell } from "./PublicEventShell";
 import {
   fetchPublicStandings,
   mapPublicStandingsSnapshotPayload,
@@ -24,7 +25,7 @@ type RealtimeSnapshotPayload = {
 
 type LivePointsRaceProps = {
   eventId: string;
-  eventSlug?: string;
+  eventSlug: string;
   initialSnapshot: PublicStandingsSnapshot;
   supabaseClient?: SupabaseRealtimeClient;
   fetchStandings?: (
@@ -209,11 +210,15 @@ export function LivePointsRace({
   }, [eventId, fetchStandings, initialSnapshot]);
 
   return (
-    <>
+    <PublicEventShell
+      eventSlug={eventSlug}
+      eventTitle={snapshot.eventTitle}
+      updatedAt={snapshot.updatedAt}
+      activeView="points-race"
+    >
       <PointsRaceChart
         eventSlug={eventSlug}
         eventTitle={snapshot.eventTitle}
-        updatedAt={snapshot.updatedAt}
         pointsTimeline={snapshot.pointsTimeline}
       />
       {status === "refreshing" ? <p className="status-line">Refreshing points race...</p> : null}
@@ -222,6 +227,6 @@ export function LivePointsRace({
           Live refresh could not update. Showing the latest points race we have.
         </p>
       ) : null}
-    </>
+    </PublicEventShell>
   );
 }

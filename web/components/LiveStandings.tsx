@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { PublicEventShell } from "./PublicEventShell";
 import { StandingsTable, type ScoreChangeMap } from "./StandingsTable";
 import {
   fetchPublicStandings,
@@ -26,7 +27,7 @@ type RealtimeSnapshotPayload = {
 
 type LiveStandingsProps = {
   eventId: string;
-  eventSlug?: string;
+  eventSlug: string;
   initialSnapshot: PublicStandingsSnapshot;
   supabaseClient?: SupabaseRealtimeClient;
   fetchStandings?: (
@@ -302,26 +303,12 @@ export function LiveStandings({
   }, [eventId, fetchStandings, initialSnapshot]);
 
   return (
-    <main className="standings-shell">
-      <header className="standings-header">
-        <div>
-          <p className="eyebrow">Mosaic tournament</p>
-          <h1>{snapshot.eventTitle}</h1>
-        </div>
-        <div className="updated-at">
-          <span>Last updated</span>
-          <time dateTime={snapshot.updatedAt ?? undefined}>
-            {snapshot.updatedAt
-              ? new Intl.DateTimeFormat(undefined, {
-                  hour: "numeric",
-                  minute: "2-digit",
-                  second: "2-digit",
-                }).format(new Date(snapshot.updatedAt))
-              : "Waiting for scores"}
-          </time>
-        </div>
-      </header>
-
+    <PublicEventShell
+      eventSlug={eventSlug}
+      eventTitle={snapshot.eventTitle}
+      updatedAt={snapshot.updatedAt}
+      activeView="standings"
+    >
       {snapshot.bonusResults.length > 0 ? (
         <section className="bonus-strip" aria-label="Finals results">
           {snapshot.bonusResults.map((result) => (
@@ -346,7 +333,7 @@ export function LiveStandings({
           Live refresh could not update. Showing the latest standings we have.
         </p>
       ) : null}
-    </main>
+    </PublicEventShell>
   );
 }
 

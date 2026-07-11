@@ -20,7 +20,6 @@ export type PointsTimelineHand = {
 type PointsRaceChartProps = {
   eventSlug?: string;
   eventTitle: string;
-  updatedAt: string | null;
   pointsTimeline?: PointsTimelineHand[];
 };
 
@@ -89,18 +88,6 @@ function useVisiblePlayerLimit() {
     },
     () => null,
   );
-}
-
-function formatUpdatedAt(updatedAt: string | null) {
-  if (!updatedAt) {
-    return "Waiting for scores";
-  }
-
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-  }).format(new Date(updatedAt));
 }
 
 function signedPoints(points: number) {
@@ -238,7 +225,6 @@ function lineClassName(
 export function PointsRaceChart({
   eventSlug,
   eventTitle,
-  updatedAt,
   pointsTimeline = [],
 }: PointsRaceChartProps) {
   const chartTitleId = useId();
@@ -276,17 +262,7 @@ export function PointsRaceChart({
 
   if (pointsTimeline.length === 0 || series.length === 0) {
     return (
-      <main className="standings-shell points-race-shell">
-        <header className="standings-header">
-          <div>
-            <p className="eyebrow">Mosaic points race</p>
-            <h1>{eventTitle}</h1>
-          </div>
-          <div className="updated-at">
-            <span>Last updated</span>
-            <time dateTime={updatedAt ?? undefined}>{formatUpdatedAt(updatedAt)}</time>
-          </div>
-        </header>
+      <>
         <section className="points-race-stats" aria-label="Points race stats">
           <div className="points-race-stat">
             <span>Leader</span>
@@ -305,24 +281,13 @@ export function PointsRaceChart({
           <h2>No points race data yet</h2>
           <p>Points race will appear once scored hands arrive.</p>
         </section>
-      </main>
+      </>
     );
   }
 
   if (!isViewportReady) {
     return (
-      <main className="standings-shell points-race-shell">
-        <header className="standings-header">
-          <div>
-            <p className="eyebrow">Mosaic points race</p>
-            <h1>{eventTitle}</h1>
-          </div>
-          <div className="updated-at">
-            <span>Last updated</span>
-            <time dateTime={updatedAt ?? undefined}>{formatUpdatedAt(updatedAt)}</time>
-          </div>
-        </header>
-
+      <>
         <section className="points-race-stats" aria-label="Points race stats">
           <div className="points-race-stat">
             <span>Leader</span>
@@ -344,23 +309,12 @@ export function PointsRaceChart({
           <h2>Preparing points race</h2>
           <p>The graph will appear once the viewport is ready.</p>
         </section>
-      </main>
+      </>
     );
   }
 
   return (
-    <main className="standings-shell points-race-shell">
-      <header className="standings-header">
-        <div>
-          <p className="eyebrow">Mosaic points race</p>
-          <h1>{eventTitle}</h1>
-        </div>
-        <div className="updated-at">
-          <span>Last updated</span>
-          <time dateTime={updatedAt ?? undefined}>{formatUpdatedAt(updatedAt)}</time>
-        </div>
-      </header>
-
+    <>
       <section className="points-race-stats" aria-label="Points race stats">
         <div className="points-race-stat">
           <span>Leader</span>
@@ -558,6 +512,6 @@ export function PointsRaceChart({
           })}
         </ul>
       </section>
-    </main>
+    </>
   );
 }
