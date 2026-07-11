@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 
 const css = readFileSync("app/globals.css", "utf8");
 
+function ruleBody(source: string, selector: string) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return source.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
+}
+
 describe("standings table readability styles", () => {
   it("keeps table headers sticky while rows scroll", () => {
     expect(css).toMatch(/\.standings-table th\s*\{[\s\S]*position:\s*sticky/);
@@ -147,5 +152,25 @@ describe("event directory action hierarchy", () => {
     expect(css).toMatch(
       /\.event-directory-card h2 a:focus-visible\s*\{[^}]*color:\s*var\(--accent-strong\)[^}]*text-decoration:\s*underline[^}]*text-underline-offset:\s*4px/,
     );
+  });
+});
+
+describe("points race responsive styles", () => {
+  it("does not force the phone chart wider than the viewport", () => {
+    const desktopSvgStart = css.indexOf(".points-race-svg");
+    const mobileSvgStart = css.indexOf(".points-race-svg", desktopSvgStart + 1);
+    const mobileMediaStart = css.lastIndexOf(
+      "@media (max-width: 680px)",
+      mobileSvgStart,
+    );
+    const mobileCss = css.slice(mobileMediaStart);
+
+    expect(mobileSvgStart).toBeGreaterThan(desktopSvgStart);
+    expect(mobileMediaStart).toBeGreaterThan(desktopSvgStart);
+    expect(ruleBody(css, ".points-race-svg")).toMatch(/min-height:\s*0/);
+    expect(ruleBody(mobileCss, ".points-race-svg")).toMatch(/min-width:\s*0/);
+    expect(ruleBody(mobileCss, ".points-race-svg")).not.toMatch(/min-width:\s*760px/);
+    expect(ruleBody(mobileCss, ".points-race-stage")).toMatch(/overflow:\s*hidden/);
+    expect(ruleBody(mobileCss, ".points-race-stage")).not.toMatch(/overflow-x:\s*auto/);
   });
 });

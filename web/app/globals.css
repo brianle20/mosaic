@@ -1054,7 +1054,7 @@ select {
   display: block;
   width: 100%;
   height: auto;
-  min-height: 330px;
+  min-height: 0;
 }
 
 .points-race-plot {
@@ -1524,11 +1524,11 @@ select {
   }
 
   .points-race-svg {
-    min-width: 760px;
+    min-width: 0;
   }
 
   .points-race-stage {
-    overflow-x: auto;
+    overflow: hidden;
   }
 
   .points-race-actions {

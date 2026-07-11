@@ -34,13 +34,28 @@ type PlayerSeries = {
 const DESKTOP_VISIBLE_PLAYERS = 12;
 const MOBILE_VISIBLE_PLAYERS = 8;
 const MOBILE_QUERY = "(max-width: 680px)";
-const CHART_WIDTH = 960;
-const CHART_HEIGHT = 420;
-const CHART_PADDING = {
-  top: 30,
-  right: 38,
-  bottom: 44,
-  left: 72,
+
+type ChartGeometry = {
+  width: number;
+  height: number;
+  padding: {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  };
+};
+
+const DESKTOP_CHART: ChartGeometry = {
+  width: 960,
+  height: 420,
+  padding: { top: 30, right: 38, bottom: 44, left: 72 },
+};
+
+const MOBILE_CHART: ChartGeometry = {
+  width: 480,
+  height: 420,
+  padding: { top: 30, right: 24, bottom: 44, left: 60 },
 };
 const LINE_COLORS = [
   "#006c67",
@@ -179,9 +194,10 @@ function getPathForSeries(
   series: PlayerSeries,
   minPoints: number,
   maxPoints: number,
+  geometry: ChartGeometry,
 ) {
-  const plotWidth = CHART_WIDTH - CHART_PADDING.left - CHART_PADDING.right;
-  const plotHeight = CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom;
+  const plotWidth = geometry.width - geometry.padding.left - geometry.padding.right;
+  const plotHeight = geometry.height - geometry.padding.top - geometry.padding.bottom;
   const pointRange = Math.max(1, maxPoints - minPoints);
   const xStep = series.values.length > 1 ? plotWidth / (series.values.length - 1) : 0;
   const points = series.values
@@ -190,9 +206,11 @@ function getPathForSeries(
         return null;
       }
 
-      const x = CHART_PADDING.left + xStep * index;
+      const x = geometry.padding.left + xStep * index;
       const y =
-        CHART_PADDING.top + plotHeight - ((value - minPoints) / pointRange) * plotHeight;
+        geometry.padding.top +
+        plotHeight -
+        ((value - minPoints) / pointRange) * plotHeight;
       return { x, y };
     })
     .filter((point): point is { x: number; y: number } => point !== null);
@@ -251,11 +269,13 @@ export function PointsRaceChart({
   const yPadding = Math.max(100, Math.round((rawMax - rawMin) * 0.12));
   const minPoints = rawMin - yPadding;
   const maxPoints = rawMax + yPadding;
+  const geometry =
+    visibleLimit === MOBILE_VISIBLE_PLAYERS ? MOBILE_CHART : DESKTOP_CHART;
   const gridLines = Array.from({ length: 5 }, (_, index) => {
     const ratio = index / 4;
     const y =
-      CHART_PADDING.top +
-      (CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom) * ratio;
+      geometry.padding.top +
+      (geometry.height - geometry.padding.top - geometry.padding.bottom) * ratio;
     const value = maxPoints - (maxPoints - minPoints) * ratio;
     return { y, value };
   });
@@ -335,7 +355,7 @@ export function PointsRaceChart({
       <section className="points-race-stage" aria-label="Points race chart">
         <svg
           className="points-race-svg"
-          viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+          viewBox={`0 0 ${geometry.width} ${geometry.height}`}
           role="img"
           aria-labelledby={`${chartTitleId} ${chartDescriptionId}`}
         >
@@ -356,18 +376,18 @@ export function PointsRaceChart({
           </defs>
           <rect
             className="points-race-plot"
-            x={CHART_PADDING.left}
-            y={CHART_PADDING.top}
-            width={CHART_WIDTH - CHART_PADDING.left - CHART_PADDING.right}
-            height={CHART_HEIGHT - CHART_PADDING.top - CHART_PADDING.bottom}
+            x={geometry.padding.left}
+            y={geometry.padding.top}
+            width={geometry.width - geometry.padding.left - geometry.padding.right}
+            height={geometry.height - geometry.padding.top - geometry.padding.bottom}
             rx="8"
           />
           {gridLines.map((gridLine) => (
             <g key={gridLine.y}>
               <line
                 className="points-race-grid-line"
-                x1={CHART_PADDING.left}
-                x2={CHART_WIDTH - CHART_PADDING.right}
+                x1={geometry.padding.left}
+                x2={geometry.width - geometry.padding.right}
                 y1={gridLine.y}
                 y2={gridLine.y}
               />
@@ -378,7 +398,12 @@ export function PointsRaceChart({
           ))}
           {visibleSeries.map((player, index) => {
             const color = LINE_COLORS[index % LINE_COLORS.length];
-            const { path, latestPoint } = getPathForSeries(player, minPoints, maxPoints);
+            const { path, latestPoint } = getPathForSeries(
+              player,
+              minPoints,
+              maxPoints,
+              geometry,
+            );
             const isSpotlighted = spotlightedPlayerId === player.id;
             const hasSpotlight = spotlightedPlayerId !== null;
             const isDefaultVisible = index < visibleLimit;

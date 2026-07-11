@@ -122,6 +122,38 @@ describe("PointsRaceChart", () => {
     expect(within(legend).queryByText("Player 9")).not.toBeInTheDocument();
   });
 
+  it("uses a narrower responsive geometry on mobile", () => {
+    mockMatchMedia(true);
+
+    const { container } = render(
+      <PointsRaceChart
+        eventTitle="Mosaic May Tournament"
+        pointsTimeline={createTimeline(8)}
+      />,
+    );
+
+    expect(container.querySelector(".points-race-svg")).toHaveAttribute(
+      "viewBox",
+      "0 0 480 420",
+    );
+  });
+
+  it("keeps the full geometry on desktop", () => {
+    mockMatchMedia(false);
+
+    const { container } = render(
+      <PointsRaceChart
+        eventTitle="Mosaic May Tournament"
+        pointsTimeline={createTimeline(8)}
+      />,
+    );
+
+    expect(container.querySelector(".points-race-svg")).toHaveAttribute(
+      "viewBox",
+      "0 0 960 420",
+    );
+  });
+
   it("scales the default chart to visible players instead of hidden outliers", () => {
     const pointsTimeline: PointsTimelineHand[] = [
       {
