@@ -1,74 +1,13 @@
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { LivePointsRace } from "../../../../../components/LivePointsRace";
-import {
-  fetchPublicStandings,
-  isPublicEventUnavailableError,
-  type PublicStandingsClient,
-  type PublicStandingsSnapshot,
-} from "../../../../../lib/public-standings";
-import { eventTitleFromSlug, publicEventMetadata } from "../../../../../lib/public-metadata";
-import { createPublicSupabaseClient } from "../../../../../lib/supabase";
+import { permanentRedirect } from "next/navigation";
+import { publicEventPointsRacePath } from "../../../../../lib/public-routes";
 
-type PointsRacePageProps = {
+type LegacyPointsRacePageProps = {
   params: Promise<{ eventSlug: string }>;
 };
 
-export const dynamic = "force-dynamic";
-
-export async function generateMetadata({
+export default async function LegacyPointsRacePage({
   params,
-}: PointsRacePageProps): Promise<Metadata> {
+}: LegacyPointsRacePageProps) {
   const { eventSlug } = await params;
-  const canonicalPath = `/events/${eventSlug}/standings/graph`;
-  const eventTitle = eventTitleFromSlug(eventSlug);
-  const title = `${eventTitle} Points Race`;
-  const description = `Live cumulative points graph for ${eventTitle}.`;
-
-  return publicEventMetadata({
-    title,
-    description,
-    canonicalPath,
-  });
-}
-
-export default async function PointsRacePage({ params }: PointsRacePageProps) {
-  const { eventSlug } = await params;
-  let initialSnapshot: PublicStandingsSnapshot;
-  let loadError: string | null = null;
-
-  try {
-    const publicClient = createPublicSupabaseClient() as unknown as PublicStandingsClient;
-    initialSnapshot = await fetchPublicStandings(publicClient, eventSlug);
-  } catch (error) {
-    if (isPublicEventUnavailableError(error)) {
-      notFound();
-    }
-
-    initialSnapshot = {
-      eventId: eventSlug,
-      eventSlug,
-      eventTitle: "Mosaic tournament",
-      leaderboard: [],
-      bonusResults: [],
-      pointsTimeline: [],
-      updatedAt: null,
-    };
-    loadError = error instanceof Error ? error.message : "Unable to load public standings.";
-  }
-
-  return (
-    <>
-      {loadError ? (
-        <div className="load-error" role="alert">
-          {loadError}
-        </div>
-      ) : null}
-      <LivePointsRace
-        eventId={initialSnapshot.eventId ?? eventSlug}
-        eventSlug={eventSlug}
-        initialSnapshot={initialSnapshot}
-      />
-    </>
-  );
+  permanentRedirect(publicEventPointsRacePath(eventSlug));
 }

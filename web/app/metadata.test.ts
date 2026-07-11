@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { metadata as eventsMetadata } from "./events/page";
-import { generateMetadata as generatePointsRaceMetadata } from "./events/[eventSlug]/standings/graph/page";
+import { generateMetadata as generatePointsRaceMetadata } from "./events/[eventSlug]/points-race/page";
 import { generateMetadata as generateStandingsMetadata } from "./events/[eventSlug]/standings/page";
 
 describe("site metadata assets", () => {
@@ -87,12 +87,12 @@ describe("standings metadata", () => {
       title: "FV Mahjong 1 Points Race",
       description: "Live cumulative points graph for FV Mahjong 1.",
       alternates: {
-        canonical: "/events/fv-mahjong-1/standings/graph",
+        canonical: "/events/fv-mahjong-1/points-race",
       },
       openGraph: {
         title: "FV Mahjong 1 Points Race",
         description: "Live cumulative points graph for FV Mahjong 1.",
-        url: "/events/fv-mahjong-1/standings/graph",
+        url: "/events/fv-mahjong-1/points-race",
         siteName: "Mosaic",
         type: "website",
       },
