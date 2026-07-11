@@ -1,5 +1,5 @@
 import { act, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { captureAnalyticsEvent } from "../lib/analytics";
 import { LiveStandings } from "./LiveStandings";
 import type { PublicStandingsSnapshot } from "../lib/public-standings";
@@ -40,6 +40,12 @@ function createSupabaseClient() {
 }
 
 describe("LiveStandings", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
+
   it("keeps a controlled initial-load failure inside the event shell", () => {
     const realtime = createSupabaseClient();
 
