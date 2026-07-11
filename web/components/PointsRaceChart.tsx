@@ -443,31 +443,33 @@ export function PointsRaceChart({
         </svg>
       </section>
 
-      <table className="visually-hidden" aria-label="Points race data summary">
-        <caption>Points race data summary</caption>
-        <thead>
-          <tr>
-            <th scope="col">Player</th>
-            <th scope="col">Latest points</th>
-            {pointsTimeline.map((hand, index) => (
-              <th scope="col" key={index}>
-                {handLabel(hand, index)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {series.map((player) => (
-            <tr key={player.id}>
-              <th scope="row">{player.name}</th>
-              <td>{player.latestPoints.toLocaleString()}</td>
-              {player.values.map((value, index) => (
-                <td key={index}>{value === null ? "No score" : value.toLocaleString()}</td>
+      <div className="visually-hidden">
+        <table aria-label="Points race data summary">
+          <caption>Points race data summary</caption>
+          <thead>
+            <tr>
+              <th scope="col">Player</th>
+              <th scope="col">Latest points</th>
+              {pointsTimeline.map((hand, index) => (
+                <th scope="col" key={index}>
+                  {handLabel(hand, index)}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {series.map((player) => (
+              <tr key={player.id}>
+                <th scope="row">{player.name}</th>
+                <td>{player.latestPoints.toLocaleString()}</td>
+                {player.values.map((value, index) => (
+                  <td key={index}>{value === null ? "No score" : value.toLocaleString()}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <section className="points-race-legend-wrap" aria-label="Player controls">
         <div className="points-race-actions">

@@ -210,6 +210,8 @@ describe("PointsRaceChart", () => {
     ).toBeVisible();
 
     const summary = screen.getByRole("table", { name: /points race data summary/i });
+    expect(summary.parentElement).toHaveClass("visually-hidden");
+    expect(summary).not.toHaveClass("visually-hidden");
     expect(within(summary).getByRole("columnheader", { name: /player/i })).toBeVisible();
     expect(within(summary).getByRole("columnheader", { name: /hand 1/i })).toBeVisible();
     expect(within(summary).getByRole("row", { name: /player 1/i })).toHaveTextContent(
