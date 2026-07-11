@@ -8,6 +8,10 @@ vi.mock("../lib/analytics", () => ({
   captureAnalyticsEvent: vi.fn(),
 }));
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
+
 function createSupabaseClient() {
   const callbacks: Array<(payload: { new?: Record<string, unknown> }) => void> = [];
   const subscribe = vi.fn(() => ({ unsubscribe: vi.fn() }));
@@ -29,6 +33,36 @@ function createSupabaseClient() {
 }
 
 describe("LiveStandings", () => {
+  it("keeps a controlled initial-load failure inside the event shell", () => {
+    const realtime = createSupabaseClient();
+
+    render(
+      <LiveStandings
+        eventId="south-wind-6-copy"
+        eventSlug="south-wind-6-copy"
+        initialSnapshot={{
+          eventTitle: "South Wind 6 Copy",
+          leaderboard: [],
+          bonusResults: [],
+          pointsTimeline: [],
+          updatedAt: null,
+        }}
+        initialLoadFailed
+        supabaseClient={realtime.client}
+        fetchStandings={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "We couldn't load the latest public results.",
+    );
+    expect(screen.getByRole("heading", { name: "South Wind 6 Copy" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Browse events" })).toHaveAttribute(
+      "href",
+      "/events",
+    );
+  });
+
   it("tracks a public standings view without player data", () => {
     const realtime = createSupabaseClient();
 

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { PublicEventShell } from "./PublicEventShell";
+import { PublicLoadErrorBanner } from "./PublicLoadErrorBanner";
 import { StandingsTable, type ScoreChangeMap } from "./StandingsTable";
 import {
   fetchPublicStandings,
@@ -29,6 +30,7 @@ type LiveStandingsProps = {
   eventId: string;
   eventSlug: string;
   initialSnapshot: PublicStandingsSnapshot;
+  initialLoadFailed?: boolean;
   supabaseClient?: SupabaseRealtimeClient;
   fetchStandings?: (
     client: PublicStandingsClient,
@@ -119,6 +121,7 @@ export function LiveStandings({
   eventId,
   eventSlug,
   initialSnapshot,
+  initialLoadFailed = false,
   supabaseClient,
   fetchStandings = fetchPublicStandings,
 }: LiveStandingsProps) {
@@ -309,6 +312,8 @@ export function LiveStandings({
       updatedAt={snapshot.updatedAt}
       activeView="standings"
     >
+      {initialLoadFailed ? <PublicLoadErrorBanner /> : null}
+
       {snapshot.bonusResults.length > 0 ? (
         <section className="bonus-strip" aria-label="Finals results">
           {snapshot.bonusResults.map((result) => (

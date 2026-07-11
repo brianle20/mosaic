@@ -33,7 +33,7 @@ export async function generateMetadata({
 export default async function PointsRacePage({ params }: PointsRacePageProps) {
   const { eventSlug } = await params;
   let initialSnapshot: PublicStandingsSnapshot;
-  let loadError: string | null = null;
+  let initialLoadFailed = false;
 
   try {
     const publicClient = createPublicSupabaseClient() as unknown as PublicStandingsClient;
@@ -52,21 +52,15 @@ export default async function PointsRacePage({ params }: PointsRacePageProps) {
       pointsTimeline: [],
       updatedAt: null,
     };
-    loadError = "Unable to load public standings.";
+    initialLoadFailed = true;
   }
 
   return (
-    <>
-      {loadError ? (
-        <div className="load-error" role="alert">
-          {loadError}
-        </div>
-      ) : null}
-      <LivePointsRace
-        eventId={initialSnapshot.eventId ?? eventSlug}
-        eventSlug={eventSlug}
-        initialSnapshot={initialSnapshot}
-      />
-    </>
+    <LivePointsRace
+      eventId={initialSnapshot.eventId ?? eventSlug}
+      eventSlug={eventSlug}
+      initialSnapshot={initialSnapshot}
+      initialLoadFailed={initialLoadFailed}
+    />
   );
 }

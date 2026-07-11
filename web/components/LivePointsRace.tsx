@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { PointsRaceChart } from "./PointsRaceChart";
 import { PublicEventShell } from "./PublicEventShell";
+import { PublicLoadErrorBanner } from "./PublicLoadErrorBanner";
 import {
   fetchPublicStandings,
   mapPublicStandingsSnapshotPayload,
@@ -27,6 +28,7 @@ type LivePointsRaceProps = {
   eventId: string;
   eventSlug: string;
   initialSnapshot: PublicStandingsSnapshot;
+  initialLoadFailed?: boolean;
   supabaseClient?: SupabaseRealtimeClient;
   fetchStandings?: (
     client: PublicStandingsClient,
@@ -65,6 +67,7 @@ export function LivePointsRace({
   eventId,
   eventSlug,
   initialSnapshot,
+  initialLoadFailed = false,
   supabaseClient,
   fetchStandings = fetchPublicStandings,
 }: LivePointsRaceProps) {
@@ -216,6 +219,8 @@ export function LivePointsRace({
       updatedAt={snapshot.updatedAt}
       activeView="points-race"
     >
+      {initialLoadFailed ? <PublicLoadErrorBanner /> : null}
+
       <PointsRaceChart
         eventSlug={eventSlug}
         eventTitle={snapshot.eventTitle}
