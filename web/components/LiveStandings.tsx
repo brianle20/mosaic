@@ -286,7 +286,16 @@ export function LiveStandings({
         },
       );
 
-    channel.subscribe();
+    channel.subscribe((subscriptionStatus) => {
+      if (
+        isCurrentEvent &&
+        (subscriptionStatus === "CHANNEL_ERROR" ||
+          subscriptionStatus === "TIMED_OUT" ||
+          subscriptionStatus === "CLOSED")
+      ) {
+        setStatusState({ eventId, status: "error" });
+      }
+    });
     startAutoRefresh();
     document.addEventListener("visibilitychange", handleVisibilityChange);
 

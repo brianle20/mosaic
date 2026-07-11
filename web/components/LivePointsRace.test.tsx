@@ -14,7 +14,13 @@ vi.mock("next/navigation", () => ({
 
 function createSupabaseClient() {
   const callbacks: Array<(payload: { new?: Record<string, unknown> }) => void> = [];
-  const subscribe = vi.fn(() => ({ unsubscribe: vi.fn() }));
+  const statusCallbacks: Array<(status: string) => void> = [];
+  const subscribe = vi.fn((callback?: (status: string) => void) => {
+    if (callback) {
+      statusCallbacks.push(callback);
+    }
+    return channel;
+  });
   const on = vi.fn((_event, _filter, callback) => {
     callbacks.push(callback);
     return channel;
@@ -27,6 +33,7 @@ function createSupabaseClient() {
       removeChannel: vi.fn(),
     },
     callbacks,
+    statusCallbacks,
     on,
     subscribe,
   };
@@ -243,6 +250,29 @@ describe("LivePointsRace", () => {
     });
 
     expect(fetchStandings).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText("+100")[0]).toBeVisible();
+    expect(screen.getByText(/Live refresh could not update/)).toHaveTextContent(
+      "Showing the latest points race we have.",
+    );
+  });
+
+  it("keeps the latest points race visible when realtime subscription fails", async () => {
+    const realtime = createSupabaseClient();
+
+    render(
+      <LivePointsRace
+        eventId="event-1"
+        eventSlug="fv-mahjong-1"
+        initialSnapshot={snapshot(100, "2026-05-24T12:00:00.000Z")}
+        supabaseClient={realtime.client}
+        fetchStandings={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      realtime.statusCallbacks[0]("CHANNEL_ERROR");
+    });
+
     expect(screen.getAllByText("+100")[0]).toBeVisible();
     expect(screen.getByText(/Live refresh could not update/)).toHaveTextContent(
       "Showing the latest points race we have.",

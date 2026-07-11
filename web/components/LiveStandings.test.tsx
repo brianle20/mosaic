@@ -14,7 +14,13 @@ vi.mock("next/navigation", () => ({
 
 function createSupabaseClient() {
   const callbacks: Array<(payload: { new?: Record<string, unknown> }) => void> = [];
-  const subscribe = vi.fn(() => ({ unsubscribe: vi.fn() }));
+  const statusCallbacks: Array<(status: string) => void> = [];
+  const subscribe = vi.fn((callback?: (status: string) => void) => {
+    if (callback) {
+      statusCallbacks.push(callback);
+    }
+    return channel;
+  });
   const on = vi.fn((_event, _filter, callback) => {
     callbacks.push(callback);
     return channel;
@@ -27,6 +33,7 @@ function createSupabaseClient() {
       removeChannel: vi.fn(),
     },
     callbacks,
+    statusCallbacks,
     on,
     subscribe,
   };
@@ -289,11 +296,53 @@ describe("LiveStandings", () => {
 
     expect(fetchStandings).toHaveBeenCalledTimes(1);
     expect(screen.getAllByText("Caren L.")[0]).toBeVisible();
+    expect(screen.getAllByText("1,024")[0]).toBeVisible();
     expect(screen.getByText(/Live refresh could not update/)).toHaveTextContent(
       "Showing the latest standings we have.",
     );
     vi.mocked(Math.random).mockRestore();
     vi.useRealTimers();
+  });
+
+  it("keeps the latest standings visible when realtime subscription fails", async () => {
+    const realtime = createSupabaseClient();
+
+    render(
+      <LiveStandings
+        eventId="event-1"
+        eventSlug="fv-mahjong-1"
+        initialSnapshot={{
+          eventTitle: "Mosaic May Tournament",
+          leaderboard: [
+            {
+              eventGuestId: "guest-1",
+              publicDisplayName: "Caren L.",
+              totalPoints: 1024,
+              handsPlayed: 15,
+              wins: 7,
+              selfDrawWins: 2,
+              discardWins: 5,
+              discardLosses: 0,
+              rank: 1,
+            },
+          ],
+          bonusResults: [],
+          updatedAt: "2026-05-24T12:00:00.000Z",
+        }}
+        supabaseClient={realtime.client}
+        fetchStandings={vi.fn()}
+      />,
+    );
+
+    await act(async () => {
+      realtime.statusCallbacks[0]("CHANNEL_ERROR");
+    });
+
+    expect(screen.getAllByText("Caren L.")[0]).toBeVisible();
+    expect(screen.getAllByText("1,024")[0]).toBeVisible();
+    expect(screen.getByText(/Live refresh could not update/)).toHaveTextContent(
+      "Showing the latest standings we have.",
+    );
   });
 
   it("shows a temporary points delta when streamed standings change", async () => {
