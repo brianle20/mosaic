@@ -248,6 +248,54 @@ describe("LiveStandings", () => {
     vi.useRealTimers();
   });
 
+  it("keeps the latest standings visible when a refresh fails", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const realtime = createSupabaseClient();
+    const fetchStandings = vi.fn().mockRejectedValue(new Error("network unavailable"));
+
+    render(
+      <LiveStandings
+        eventId="event-1"
+        eventSlug="fv-mahjong-1"
+        initialSnapshot={{
+          eventTitle: "Mosaic May Tournament",
+          leaderboard: [
+            {
+              eventGuestId: "guest-1",
+              publicDisplayName: "Caren L.",
+              totalPoints: 1024,
+              handsPlayed: 15,
+              wins: 7,
+              selfDrawWins: 2,
+              discardWins: 5,
+              discardLosses: 0,
+              rank: 1,
+            },
+          ],
+          bonusResults: [],
+          updatedAt: "2026-05-24T12:00:00.000Z",
+        }}
+        supabaseClient={realtime.client}
+        fetchStandings={fetchStandings}
+      />,
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+      vi.advanceTimersByTime(250);
+      await Promise.resolve();
+    });
+
+    expect(fetchStandings).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText("Caren L.")[0]).toBeVisible();
+    expect(screen.getByText(/Live refresh could not update/)).toHaveTextContent(
+      "Showing the latest standings we have.",
+    );
+    vi.mocked(Math.random).mockRestore();
+    vi.useRealTimers();
+  });
+
   it("shows a temporary points delta when streamed standings change", async () => {
     vi.useFakeTimers();
     const realtime = createSupabaseClient();

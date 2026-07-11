@@ -219,4 +219,33 @@ describe("LivePointsRace", () => {
     expect(fetchStandings).toHaveBeenCalledTimes(1);
     expect(screen.getAllByText("+340")[0]).toBeVisible();
   });
+
+  it("keeps the latest points race visible when a refresh fails", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const realtime = createSupabaseClient();
+    const fetchStandings = vi.fn().mockRejectedValue(new Error("network unavailable"));
+
+    render(
+      <LivePointsRace
+        eventId="event-1"
+        eventSlug="fv-mahjong-1"
+        initialSnapshot={snapshot(100, "2026-05-24T12:00:00.000Z")}
+        supabaseClient={realtime.client}
+        fetchStandings={fetchStandings}
+      />,
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+      vi.advanceTimersByTime(250);
+      await Promise.resolve();
+    });
+
+    expect(fetchStandings).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText("+100")[0]).toBeVisible();
+    expect(screen.getByText(/Live refresh could not update/)).toHaveTextContent(
+      "Showing the latest points race we have.",
+    );
+  });
 });
