@@ -138,8 +138,14 @@ describe("public event navigation styles", () => {
 
 describe("event directory action hierarchy", () => {
   it("gives Standings stronger treatment than Points Race", () => {
-    expect(css).toMatch(/\.event-directory-actions a\.is-primary\s*\{[\s\S]*background:\s*var\(--accent-strong\)/);
-    expect(css).toMatch(/\.event-directory-actions a\s*\{[\s\S]*min-height:\s*44px/);
-    expect(css).toMatch(/\.event-directory-card h2 a:focus-visible/);
+    expect(css).toMatch(
+      /\.event-directory-actions a\.is-primary\s*\{[^}]*background:\s*var\(--accent-strong\)[^}]*color:\s*white/,
+    );
+    expect(css).toMatch(
+      /\.event-directory-actions a\s*\{[^}]*min-height:\s*44px/,
+    );
+    expect(css).toMatch(
+      /\.event-directory-card h2 a:focus-visible\s*\{[^}]*color:\s*var\(--accent-strong\)[^}]*text-decoration:\s*underline[^}]*text-underline-offset:\s*4px/,
+    );
   });
 });
