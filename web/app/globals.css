@@ -58,6 +58,24 @@ select {
   margin: 0 auto;
 }
 
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 20;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--accent-strong);
+  color: white;
+  font-weight: 800;
+  text-decoration: none;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 .landing-brand {
   display: inline-flex;
   align-items: center;
@@ -94,6 +112,17 @@ select {
   font-size: 0.94rem;
   font-weight: 800;
   text-decoration: none;
+}
+
+.landing-brand,
+.public-nav a {
+  min-height: 44px;
+}
+
+.landing-brand:focus-visible,
+.public-nav a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent), transparent 55%);
+  outline-offset: 3px;
 }
 
 .public-nav a:hover,
@@ -484,6 +513,15 @@ select {
   padding: 28px 0 52px;
 }
 
+.public-event-page {
+  min-height: 100vh;
+  padding: 24px clamp(20px, 5vw, 72px) 0;
+}
+
+.public-event-site-header {
+  margin-bottom: 8px;
+}
+
 .standings-header {
   display: flex;
   align-items: center;
@@ -505,6 +543,41 @@ select {
   margin: 0;
   font-size: clamp(1.8rem, 4vw, 3.2rem);
   line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.event-view-nav {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.event-view-nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.event-view-nav a[aria-current="page"] {
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: 0 2px 8px rgba(23, 33, 30, 0.08);
+}
+
+.event-view-nav a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent), transparent 55%);
+  outline-offset: 2px;
 }
 
 .updated-at {
@@ -1119,6 +1192,15 @@ select {
 }
 
 @media (max-width: 680px) {
+  .public-event-page {
+    padding: 18px 10px 0;
+  }
+
+  .event-view-nav {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .standings-shell {
     width: min(100% - 20px, 1120px);
     padding: 20px 0 36px;

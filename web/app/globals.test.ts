@@ -118,3 +118,14 @@ describe("landing page styles", () => {
     expect(css).toMatch(/@media \(max-width:\s*680px\)\s*\{[\s\S]*\.workflow-strip\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
   });
 });
+
+describe("public event navigation styles", () => {
+  it("keeps direct-link navigation visible, touchable, and keyboard focused", () => {
+    expect(css).toMatch(/\.skip-link:focus-visible\s*\{[\s\S]*transform:\s*translateY\(0\)/);
+    expect(css).toMatch(/\.event-view-nav a\s*\{[\s\S]*min-height:\s*44px/);
+    expect(css).toMatch(/\.event-view-nav a\[aria-current="page"\]/);
+    expect(css).toMatch(/\.event-view-nav a:focus-visible/);
+    expect(css).toMatch(/\.landing-brand,[\s\S]*\.public-nav a\s*\{[\s\S]*min-height:\s*44px/);
+    expect(css).toMatch(/\.standings-header h1\s*\{[\s\S]*overflow-wrap:\s*anywhere/);
+  });
+});
