@@ -103,6 +103,74 @@ describe("LivePointsRace", () => {
     );
   });
 
+  it("adopts the recovered event identity and applies UUID realtime updates", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const realtime = createSupabaseClient();
+    const recoveredEventId = "11111111-1111-4111-8111-111111111111";
+    const fetchStandings = vi
+      .fn()
+      .mockResolvedValue({
+        ...snapshot(200, "2026-07-11T12:00:00.000Z"),
+        eventId: recoveredEventId,
+        eventTitle: "Recovered Tournament",
+      });
+
+    render(
+      <LivePointsRace
+        eventId="recovery-slug"
+        eventSlug="recovery-slug"
+        initialSnapshot={{
+          eventTitle: "Recovery Slug",
+          leaderboard: [],
+          bonusResults: [],
+          pointsTimeline: [],
+          updatedAt: null,
+        }}
+        initialLoadFailed
+        supabaseClient={realtime.client}
+        fetchStandings={fetchStandings}
+      />,
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_250);
+      await Promise.resolve();
+    });
+
+    expect(fetchStandings).toHaveBeenCalledWith(realtime.client, "recovery-slug");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(realtime.client.removeChannel).toHaveBeenCalledTimes(1);
+    expect(realtime.client.channel).toHaveBeenLastCalledWith(
+      `public-points-race:${recoveredEventId}`,
+    );
+
+    await act(async () => {
+      realtime.callbacks[1]({
+        new: {
+          event_id: recoveredEventId,
+          updated_at: "2026-07-11T12:01:00.000Z",
+          payload: {
+            ...snapshot(420, "2026-07-11T12:01:00.000Z"),
+            eventId: undefined,
+          },
+        },
+      });
+      vi.advanceTimersByTime(250);
+    });
+
+    expect(fetchStandings).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText("+420")[0]).toBeVisible();
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_250);
+      await Promise.resolve();
+    });
+
+    expect(fetchStandings).toHaveBeenLastCalledWith(realtime.client, recoveredEventId);
+    expect(realtime.client.channel).toHaveBeenCalledTimes(2);
+  });
+
   it("tracks a public points race view without player data", () => {
     const realtime = createSupabaseClient();
 
@@ -277,5 +345,11 @@ describe("LivePointsRace", () => {
     expect(screen.getByText(/Live refresh could not update/)).toHaveTextContent(
       "Showing the latest points race we have.",
     );
+
+    await act(async () => {
+      realtime.statusCallbacks[0]("SUBSCRIBED");
+    });
+
+    expect(screen.queryByText(/Live refresh could not update/)).not.toBeInTheDocument();
   });
 });

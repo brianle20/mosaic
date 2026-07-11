@@ -133,6 +133,14 @@ export function LiveStandings({
     eventId: string;
     status: "idle" | "refreshing" | "error";
   }>({ eventId, status: "idle" });
+  const [realtimeIdentityState, setRealtimeIdentityState] = useState({
+    eventId,
+    realtimeEventId: eventId,
+  });
+  const [initialLoadFailureState, setInitialLoadFailureState] = useState({
+    eventId,
+    failed: initialLoadFailed,
+  });
   const [scoreChangesState, setScoreChangesState] = useState<{
     eventId: string;
     scoreChanges: ScoreChangeMap;
@@ -151,6 +159,14 @@ export function LiveStandings({
   const status = statusState.eventId === eventId ? statusState.status : "idle";
   const scoreChanges =
     scoreChangesState.eventId === eventId ? scoreChangesState.scoreChanges : {};
+  const realtimeEventId =
+    realtimeIdentityState.eventId === eventId
+      ? realtimeIdentityState.realtimeEventId
+      : eventId;
+  const initialLoadFailure =
+    initialLoadFailureState.eventId === eventId
+      ? initialLoadFailureState.failed
+      : initialLoadFailed;
 
   useEffect(() => {
     if (eventSlug) {
@@ -161,7 +177,9 @@ export function LiveStandings({
   useEffect(() => {
     let isCurrentEvent = true;
     let client: SupabaseRealtimeClient;
-    snapshotRef.current = { eventId, snapshot: initialSnapshot };
+    if (snapshotRef.current.eventId !== eventId) {
+      snapshotRef.current = { eventId, snapshot: initialSnapshot };
+    }
     try {
       client = clientRef.current ?? createRealtimeClient();
     } catch {
@@ -202,6 +220,13 @@ export function LiveStandings({
       snapshotRef.current = { eventId, snapshot: refreshedSnapshot };
       setSnapshotState({ eventId, snapshot: refreshedSnapshot });
       setStatusState({ eventId, status: "idle" });
+      setInitialLoadFailureState({ eventId, failed: false });
+      if (refreshedSnapshot.eventId) {
+        setRealtimeIdentityState({
+          eventId,
+          realtimeEventId: refreshedSnapshot.eventId,
+        });
+      }
     };
 
     const clearRealtimeTimer = () => {
@@ -229,7 +254,7 @@ export function LiveStandings({
       timerRef.current = setTimeout(async () => {
         setStatusState({ eventId, status: "refreshing" });
         try {
-          const refreshedSnapshot = await fetchStandings(client, eventId);
+          const refreshedSnapshot = await fetchStandings(client, realtimeEventId);
           if (isCurrentEvent) {
             clearRealtimeTimer();
             applySnapshot(refreshedSnapshot);
@@ -270,12 +295,12 @@ export function LiveStandings({
     };
 
     const channel = client
-      .channel(`public-standings:${eventId}`)
+      .channel(`public-standings:${realtimeEventId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: REALTIME_SNAPSHOT_TABLE },
         (payload) => {
-          if (!payloadMatchesEvent(payload, eventId)) {
+          if (!payloadMatchesEvent(payload, realtimeEventId)) {
             return;
           }
 
@@ -287,6 +312,13 @@ export function LiveStandings({
       );
 
     channel.subscribe((subscriptionStatus) => {
+      if (isCurrentEvent && subscriptionStatus === "SUBSCRIBED") {
+        setStatusState((current) =>
+          current.eventId === eventId && current.status === "error"
+            ? { eventId, status: "idle" }
+            : current,
+        );
+      }
       if (
         isCurrentEvent &&
         (subscriptionStatus === "CHANNEL_ERROR" ||
@@ -312,7 +344,7 @@ export function LiveStandings({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       void client.removeChannel?.(channel);
     };
-  }, [eventId, fetchStandings, initialSnapshot]);
+  }, [eventId, fetchStandings, initialSnapshot, realtimeEventId]);
 
   return (
     <PublicEventShell
@@ -321,7 +353,7 @@ export function LiveStandings({
       updatedAt={snapshot.updatedAt}
       activeView="standings"
     >
-      {initialLoadFailed ? <PublicLoadErrorBanner /> : null}
+      {initialLoadFailure ? <PublicLoadErrorBanner /> : null}
 
       {snapshot.bonusResults.length > 0 ? (
         <section className="bonus-strip" aria-label="Finals results">

@@ -1,11 +1,15 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PublicUpdatedAt } from "./PublicUpdatedAt";
 
 const NOW = Date.parse("2026-07-11T12:00:00.000Z");
 
 describe("PublicUpdatedAt", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("server-renders stable fallback copy", () => {
     expect(
       renderToString(
@@ -47,5 +51,31 @@ describe("PublicUpdatedAt", () => {
 
     expect(screen.getByText("Standings update pending")).toBeVisible();
     expect(screen.queryByRole("time")).not.toBeInTheDocument();
+  });
+
+  it("refreshes relative freshness while mounted and stops the shared clock on cleanup", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime("2026-07-11T12:00:00.000Z");
+
+    const { unmount } = render(
+      <PublicUpdatedAt
+        value="2026-07-11T11:59:20.000Z"
+        pendingLabel="Standings update pending"
+        prefix="Updated "
+      />,
+    );
+
+    expect(screen.getByText("Updated moments ago")).toBeVisible();
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+    });
+
+    expect(screen.getByText("Updated 1 min ago")).toBeVisible();
+    expect(vi.getTimerCount()).toBe(1);
+
+    unmount();
+
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

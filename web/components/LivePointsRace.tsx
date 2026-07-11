@@ -76,6 +76,14 @@ export function LivePointsRace({
     eventId: string;
     status: "idle" | "refreshing" | "error";
   }>({ eventId, status: "idle" });
+  const [realtimeIdentityState, setRealtimeIdentityState] = useState({
+    eventId,
+    realtimeEventId: eventId,
+  });
+  const [initialLoadFailureState, setInitialLoadFailureState] = useState({
+    eventId,
+    failed: initialLoadFailed,
+  });
   const clientRef = useRef<SupabaseRealtimeClient | null>(supabaseClient ?? null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realtimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -83,6 +91,14 @@ export function LivePointsRace({
   const snapshot =
     snapshotState.eventId === eventId ? snapshotState.snapshot : initialSnapshot;
   const status = statusState.eventId === eventId ? statusState.status : "idle";
+  const realtimeEventId =
+    realtimeIdentityState.eventId === eventId
+      ? realtimeIdentityState.realtimeEventId
+      : eventId;
+  const initialLoadFailure =
+    initialLoadFailureState.eventId === eventId
+      ? initialLoadFailureState.failed
+      : initialLoadFailed;
 
   useEffect(() => {
     if (eventSlug) {
@@ -114,6 +130,13 @@ export function LivePointsRace({
 
       setSnapshotState({ eventId, snapshot: refreshedSnapshot });
       setStatusState({ eventId, status: "idle" });
+      setInitialLoadFailureState({ eventId, failed: false });
+      if (refreshedSnapshot.eventId) {
+        setRealtimeIdentityState({
+          eventId,
+          realtimeEventId: refreshedSnapshot.eventId,
+        });
+      }
     };
 
     const clearRealtimeTimer = () => {
@@ -139,7 +162,7 @@ export function LivePointsRace({
       timerRef.current = setTimeout(async () => {
         setStatusState({ eventId, status: "refreshing" });
         try {
-          const refreshedSnapshot = await fetchStandings(client, eventId);
+          const refreshedSnapshot = await fetchStandings(client, realtimeEventId);
           if (isCurrentEvent) {
             clearRealtimeTimer();
             applySnapshot(refreshedSnapshot);
@@ -180,12 +203,12 @@ export function LivePointsRace({
     };
 
     const channel = client
-      .channel(`public-points-race:${eventId}`)
+      .channel(`public-points-race:${realtimeEventId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: REALTIME_SNAPSHOT_TABLE },
         (payload) => {
-          if (!payloadMatchesEvent(payload, eventId)) {
+          if (!payloadMatchesEvent(payload, realtimeEventId)) {
             return;
           }
 
@@ -197,6 +220,13 @@ export function LivePointsRace({
       );
 
     channel.subscribe((subscriptionStatus) => {
+      if (isCurrentEvent && subscriptionStatus === "SUBSCRIBED") {
+        setStatusState((current) =>
+          current.eventId === eventId && current.status === "error"
+            ? { eventId, status: "idle" }
+            : current,
+        );
+      }
       if (
         isCurrentEvent &&
         (subscriptionStatus === "CHANNEL_ERROR" ||
@@ -219,7 +249,12 @@ export function LivePointsRace({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       void client.removeChannel?.(channel);
     };
-  }, [eventId, fetchStandings, initialSnapshot]);
+  }, [
+    eventId,
+    fetchStandings,
+    initialSnapshot,
+    realtimeEventId,
+  ]);
 
   return (
     <PublicEventShell
@@ -228,7 +263,7 @@ export function LivePointsRace({
       updatedAt={snapshot.updatedAt}
       activeView="points-race"
     >
-      {initialLoadFailed ? <PublicLoadErrorBanner /> : null}
+      {initialLoadFailure ? <PublicLoadErrorBanner /> : null}
 
       <PointsRaceChart
         eventSlug={eventSlug}

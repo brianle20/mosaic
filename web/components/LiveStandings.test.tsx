@@ -70,6 +70,89 @@ describe("LiveStandings", () => {
     );
   });
 
+  it("adopts the recovered event identity and applies UUID realtime updates", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const realtime = createSupabaseClient();
+    const recoveredEventId = "11111111-1111-4111-8111-111111111111";
+    const fetchStandings = vi.fn().mockResolvedValue({
+      eventId: recoveredEventId,
+      eventTitle: "Recovered Tournament",
+      leaderboard: [],
+      bonusResults: [],
+      pointsTimeline: [],
+      updatedAt: "2026-07-11T12:00:00.000Z",
+    } satisfies PublicStandingsSnapshot);
+
+    render(
+      <LiveStandings
+        eventId="recovery-slug"
+        eventSlug="recovery-slug"
+        initialSnapshot={{
+          eventTitle: "Recovery Slug",
+          leaderboard: [],
+          bonusResults: [],
+          pointsTimeline: [],
+          updatedAt: null,
+        }}
+        initialLoadFailed
+        supabaseClient={realtime.client}
+        fetchStandings={fetchStandings}
+      />,
+    );
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_250);
+      await Promise.resolve();
+    });
+
+    expect(fetchStandings).toHaveBeenCalledWith(realtime.client, "recovery-slug");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(realtime.client.removeChannel).toHaveBeenCalledTimes(1);
+    expect(realtime.client.channel).toHaveBeenLastCalledWith(
+      `public-standings:${recoveredEventId}`,
+    );
+
+    await act(async () => {
+      realtime.callbacks[1]({
+        new: {
+          event_id: recoveredEventId,
+          updated_at: "2026-07-11T12:01:00.000Z",
+          payload: {
+            eventTitle: "Recovered Tournament",
+            leaderboard: [
+              {
+                eventGuestId: "guest-1",
+                publicDisplayName: "Recovered Player",
+                totalPoints: 800,
+                handsPlayed: 1,
+                wins: 1,
+                selfDrawWins: 1,
+                discardWins: 0,
+                discardLosses: 0,
+                rank: 1,
+              },
+            ],
+            bonusResults: [],
+            pointsTimeline: [],
+          },
+        },
+      });
+      vi.advanceTimersByTime(250);
+    });
+
+    expect(fetchStandings).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByText("Recovered Player")[0]).toBeVisible();
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_250);
+      await Promise.resolve();
+    });
+
+    expect(fetchStandings).toHaveBeenLastCalledWith(realtime.client, recoveredEventId);
+    expect(realtime.client.channel).toHaveBeenCalledTimes(2);
+  });
+
   it("tracks a public standings view without player data", () => {
     const realtime = createSupabaseClient();
 
@@ -343,6 +426,12 @@ describe("LiveStandings", () => {
     expect(screen.getByText(/Live refresh could not update/)).toHaveTextContent(
       "Showing the latest standings we have.",
     );
+
+    await act(async () => {
+      realtime.statusCallbacks[0]("SUBSCRIBED");
+    });
+
+    expect(screen.queryByText(/Live refresh could not update/)).not.toBeInTheDocument();
   });
 
   it("shows a temporary points delta when streamed standings change", async () => {

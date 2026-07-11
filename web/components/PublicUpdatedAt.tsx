@@ -1,6 +1,11 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import {
+  getPublicClockServerSnapshot,
+  getPublicClockSnapshot,
+  subscribeToPublicClock,
+} from "../lib/public-clock";
 import { formatPublicUpdatedAt } from "../lib/public-time";
 
 const subscribeToHydration = () => () => {};
@@ -18,12 +23,13 @@ export function PublicUpdatedAt({
   prefix = "",
   now,
 }: PublicUpdatedAtProps) {
-  const hydrated = useSyncExternalStore(
-    subscribeToHydration,
-    () => true,
-    () => false,
+  const currentTime = useSyncExternalStore(
+    now === undefined ? subscribeToPublicClock : subscribeToHydration,
+    now === undefined ? getPublicClockSnapshot : () => now,
+    getPublicClockServerSnapshot,
   );
-  const formatted = hydrated ? formatPublicUpdatedAt(value, now) : null;
+  const formatted =
+    currentTime === null ? null : formatPublicUpdatedAt(value, currentTime);
   if (!formatted) {
     return <span>{pendingLabel}</span>;
   }
