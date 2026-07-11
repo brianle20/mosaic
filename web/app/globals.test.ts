@@ -121,11 +121,17 @@ describe("landing page styles", () => {
 
 describe("public event navigation styles", () => {
   it("keeps direct-link navigation visible, touchable, and keyboard focused", () => {
-    expect(css).toMatch(/\.skip-link:focus-visible\s*\{[\s\S]*transform:\s*translateY\(0\)/);
-    expect(css).toMatch(/\.event-view-nav a\s*\{[\s\S]*min-height:\s*44px/);
-    expect(css).toMatch(/\.event-view-nav a\[aria-current="page"\]/);
-    expect(css).toMatch(/\.event-view-nav a:focus-visible/);
-    expect(css).toMatch(/\.landing-brand,[\s\S]*\.public-nav a\s*\{[\s\S]*min-height:\s*44px/);
-    expect(css).toMatch(/\.standings-header h1\s*\{[\s\S]*overflow-wrap:\s*anywhere/);
+    expect(css).toMatch(/\.skip-link:focus-visible\s*\{[^}]*transform:\s*translateY\(0\)/);
+    expect(css).toMatch(/\.event-view-nav a\s*\{[^}]*min-height:\s*44px/);
+    expect(css).toMatch(
+      /\.event-view-nav a\[aria-current="page"\]\s*\{[^}]*background:\s*var\(--surface\)[^}]*color:\s*var\(--accent-strong\)/,
+    );
+    expect(css).toMatch(
+      /\.event-view-nav a:focus-visible\s*\{[^}]*outline:\s*3px solid[^}]*outline-offset:\s*2px/,
+    );
+    expect(css).toMatch(
+      /\.landing-brand,\s*\.public-nav a\s*\{[^}]*min-height:\s*44px/,
+    );
+    expect(css).toMatch(/\.standings-header h1\s*\{[^}]*overflow-wrap:\s*anywhere/);
   });
 });
