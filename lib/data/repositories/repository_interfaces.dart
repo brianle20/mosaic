@@ -3,6 +3,7 @@ import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/hand_evidence_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -316,6 +317,18 @@ abstract interface class SeatingRepository {
   });
 
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId);
+}
+
+abstract interface class FinalsRepository {
+  Future<FinalsSetupPreview> previewFinals(String eventId);
+
+  Future<FinalsState> loadFinalsState(String eventId);
+
+  Future<FinalsState> beginFinals(BeginFinalsInput input);
+
+  Future<FinalsState> startContest(StartFinalsContestInput input);
+
+  Future<FinalsState> resumeFinalsStart(ResumeFinalsStartInput input);
 }
 
 abstract interface class ActivityRepository {

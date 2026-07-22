@@ -24,6 +24,7 @@ import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
+import '../helpers/repository_fakes.dart';
 
 class _FakeAuthRepository implements AuthRepository {
   _FakeAuthRepository({
@@ -647,6 +648,7 @@ void main() {
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           seatingRepository: _FakeSeatingRepository(),
+          finalsRepository: const ThrowingFinalsRepository(),
           mosaicProfileRepository: const _FakeMosaicProfileRepository(),
           staffRepository: _FakeStaffRepository(),
           nfcService: const _FakeNfcService(),
@@ -672,6 +674,7 @@ void main() {
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           seatingRepository: _FakeSeatingRepository(),
+          finalsRepository: const ThrowingFinalsRepository(),
           mosaicProfileRepository: const _FakeMosaicProfileRepository(),
           staffRepository: _FakeStaffRepository(),
           nfcService: const _FakeNfcService(),
@@ -719,6 +722,7 @@ void main() {
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           seatingRepository: _FakeSeatingRepository(),
+          finalsRepository: const ThrowingFinalsRepository(),
           mosaicProfileRepository: const _FakeMosaicProfileRepository(),
           nfcService: const _FakeNfcService(),
         ),
@@ -753,6 +757,7 @@ void main() {
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           seatingRepository: _FakeSeatingRepository(),
+          finalsRepository: const ThrowingFinalsRepository(),
           mosaicProfileRepository: const _FakeMosaicProfileRepository(),
           nfcService: const _FakeNfcService(),
           recoverySignal: recoverySignal,
@@ -808,6 +813,7 @@ void main() {
           activityRepository: _FakeActivityRepository(),
           prizeRepository: _FakePrizeRepository(),
           seatingRepository: _FakeSeatingRepository(),
+          finalsRepository: const ThrowingFinalsRepository(),
           mosaicProfileRepository: const _FakeMosaicProfileRepository(),
           nfcService: const _FakeNfcService(),
         ),
@@ -833,6 +839,7 @@ void main() {
       activityRepository: _FakeActivityRepository(),
       prizeRepository: _FakePrizeRepository(),
       seatingRepository: _FakeSeatingRepository(),
+      finalsRepository: const ThrowingFinalsRepository(),
       mosaicProfileRepository: const _FakeMosaicProfileRepository(),
       staffRepository: _FakeStaffRepository(),
       nfcService: const _FakeNfcService(),

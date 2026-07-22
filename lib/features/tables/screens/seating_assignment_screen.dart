@@ -130,6 +130,18 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
     );
   }
 
+  Future<void> _openFinalsTables() {
+    return Navigator.of(context).pushReplacementNamed(
+      AppRouter.tablesOverviewRoute,
+      arguments: TablesOverviewArgs(
+        eventId: widget.eventId,
+        eventTitle: widget.eventTitle,
+        scoringOpen: true,
+        scoringPhase: EventScoringPhase.bonus,
+      ),
+    );
+  }
+
   EventScoringPhase get _currentSeatingScoringPhase {
     final assignments = _controller.assignments;
     if (assignments.isNotEmpty &&
@@ -173,7 +185,22 @@ class _SeatingAssignmentScreenState extends State<SeatingAssignmentScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (_controller.canStartAllTables ||
+                if (_controller.isBonusSeating) ...[
+                  const InfoPanel(
+                    message:
+                        'Review Finals seating, then open Finals Tables for the current status and next action.',
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _openFinalsTables,
+                      icon: const Icon(Icons.table_restaurant),
+                      label: const Text('Open Finals Tables'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ] else if (_controller.canStartAllTables ||
                     _controller.isSubmitting) ...[
                   SizedBox(
                     width: double.infinity,

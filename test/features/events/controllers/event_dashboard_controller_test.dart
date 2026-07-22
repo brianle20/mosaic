@@ -6,6 +6,7 @@ import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
@@ -13,6 +14,7 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
+import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/event_dashboard_controller.dart';
 import '../../../helpers/repository_fakes.dart';
 
@@ -411,6 +413,43 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
       assignments;
 }
 
+class _FakeFinalsRepository extends ThrowingFinalsRepository {
+  _FakeFinalsRepository(this.state);
+
+  FinalsState state;
+  Object? loadError;
+  Object? actionError;
+  Completer<FinalsState>? actionCompleter;
+  int loadCount = 0;
+  int resumeCount = 0;
+  int startContestCount = 0;
+  ResumeFinalsStartInput? lastResumeInput;
+  StartFinalsContestInput? lastContestInput;
+
+  @override
+  Future<FinalsState> loadFinalsState(String eventId) async {
+    loadCount += 1;
+    if (loadError case final error?) throw error;
+    return state;
+  }
+
+  @override
+  Future<FinalsState> resumeFinalsStart(ResumeFinalsStartInput input) async {
+    resumeCount += 1;
+    lastResumeInput = input;
+    if (actionError case final error?) throw error;
+    return actionCompleter == null ? state : actionCompleter!.future;
+  }
+
+  @override
+  Future<FinalsState> startContest(StartFinalsContestInput input) async {
+    startContestCount += 1;
+    lastContestInput = input;
+    if (actionError case final error?) throw error;
+    return actionCompleter == null ? state : actionCompleter!.future;
+  }
+}
+
 TournamentRoundSummary _roundSummary(int roundNumber) {
   return TournamentRoundSummary(
     round: TournamentRoundRecord(
@@ -592,7 +631,230 @@ EventGuestRecord _eventGuest({
   });
 }
 
+EventDashboardController _finalsController(FinalsRepository finalsRepository) {
+  return EventDashboardController(
+    eventRepository: _FakeEventRepository(
+      cachedEvents: [_dashboardEvent()],
+    ),
+    guestRepository: _FakeGuestRepository(cachedGuests: const []),
+    sessionRepository: _FakeSessionRepository(const []),
+    finalsRepository: finalsRepository,
+  );
+}
+
+FinalsState _finalsState({
+  FinalsOverallStatus status = FinalsOverallStatus.active,
+  List<FinalsAction> actions = const [],
+  List<FinalsContest> contests = const [],
+  String? blockingReason,
+  String? recoveryToken,
+  int eligiblePlayerCount = 8,
+  FinalsFormat format = FinalsFormat.parallelFinals,
+}) {
+  return FinalsState(
+    flowVersion: FinalsFlowVersion.orchestrated,
+    stateVersion: 7,
+    format: format,
+    overallStatus: status,
+    eligiblePlayerCount: eligiblePlayerCount,
+    championsSlots: const [],
+    contests: contests,
+    allowedActions: actions,
+    blockingReason: blockingReason,
+    recoveryToken: recoveryToken,
+    champion: null,
+    redemptionWinner: null,
+    sessions: const [],
+  );
+}
+
+FinalsState _sqlShapedFinalsState({
+  required Map<String, Object?> action,
+  String overallStatus = 'active',
+  String? recoveryToken,
+}) {
+  return FinalsState.fromJson({
+    'flow_version': recoveryToken == null ? 'orchestrated' : 'legacy',
+    'state_version': 7,
+    'format': 'parallel_finals',
+    'overall_status': overallStatus,
+    'eligible_player_count': 8,
+    'champions_slots': const [],
+    'contests': const [],
+    'allowed_actions': [action],
+    'blocking_reason': null,
+    'recovery_token': recoveryToken,
+    'champion': null,
+    'redemption_winner': null,
+    'sessions': const [],
+  });
+}
+
 void main() {
+  group('authoritative Finals command state', () {
+    test('loads the server primary action again after an app restart',
+        () async {
+      const action = FinalsAction(
+        kind: FinalsActionKind.startContest,
+        label: 'Start Table of Champions',
+        contestId: 'contest_champions',
+        tableId: 'table_champions',
+        expectedStateVersion: 7,
+      );
+      final repository = _FakeFinalsRepository(
+        _finalsState(actions: const [action]),
+      );
+
+      for (var restart = 0; restart < 2; restart += 1) {
+        final controller = _finalsController(repository);
+        await controller.load('evt_01');
+
+        expect(controller.primaryFinalsAction, same(action));
+        expect(controller.effectiveScoringPhase, EventScoringPhase.bonus);
+        controller.dispose();
+      }
+
+      expect(repository.loadCount, 2);
+    });
+
+    for (final kind in [
+      FinalsActionKind.startFinalsTables,
+      FinalsActionKind.resumeFinalsStart,
+    ]) {
+      test('$kind dispatches the exact server recovery command', () async {
+        final action = FinalsAction(
+          kind: kind,
+          label: kind == FinalsActionKind.startFinalsTables
+              ? 'Start Finals Tables'
+              : 'Resume Finals Start',
+          recoveryToken: 'recovery-token',
+        );
+        final repository = _FakeFinalsRepository(
+          _finalsState(
+            status: FinalsOverallStatus.recoverableMissingSessions,
+            actions: [action],
+            recoveryToken: 'recovery-token',
+          ),
+        );
+        final controller = _finalsController(repository);
+        await controller.load('evt_01');
+
+        await controller.executeFinalsAction(action);
+
+        expect(repository.resumeCount, 1);
+        expect(repository.lastResumeInput?.eventId, 'evt_01');
+        expect(repository.lastResumeInput?.recoveryToken, 'recovery-token');
+        expect(repository.startContestCount, 0);
+      });
+    }
+
+    test('start_contest dispatches the exact server contest command', () async {
+      final state = _sqlShapedFinalsState(action: const {
+        'action': 'start_contest',
+        'label': 'Start Table of Redemption',
+        'contest_id': 'contest_redemption',
+        'table_id': 'table_redemption',
+        'expected_state_version': 7,
+      });
+      final action = state.primaryAction!;
+      final repository = _FakeFinalsRepository(
+        state,
+      );
+      final controller = _finalsController(repository);
+      await controller.load('evt_01');
+
+      await controller.executeFinalsAction(action);
+
+      expect(repository.startContestCount, 1);
+      expect(repository.lastContestInput?.contestId, 'contest_redemption');
+      expect(repository.lastContestInput?.tableId, 'table_redemption');
+      expect(repository.lastContestInput?.expectedStateVersion, 7);
+      expect(repository.resumeCount, 0);
+    });
+
+    test('SQL-shaped recovery action parses and dispatches its nested token',
+        () async {
+      final state = _sqlShapedFinalsState(
+        overallStatus: 'recoverable_missing_sessions',
+        recoveryToken: 'recovery-token-from-sql',
+        action: const {
+          'action': 'start_finals_tables',
+          'label': 'Start Finals Tables',
+          'recovery_token': 'recovery-token-from-sql',
+        },
+      );
+      final repository = _FakeFinalsRepository(state);
+      final controller = _finalsController(repository);
+      await controller.load('evt_01');
+
+      await controller.executeFinalsAction(state.primaryAction!);
+
+      expect(
+          repository.lastResumeInput?.recoveryToken, 'recovery-token-from-sql');
+    });
+
+    test('guards one in-flight Finals action and rejects reconstructed actions',
+        () async {
+      const action = FinalsAction(
+        kind: FinalsActionKind.startContest,
+        label: 'Start Tiebreak',
+        contestId: 'contest_tiebreak',
+        tableId: 'table_tiebreak',
+        expectedStateVersion: 7,
+      );
+      final repository = _FakeFinalsRepository(
+        _finalsState(actions: const [action]),
+      )..actionCompleter = Completer<FinalsState>();
+      final controller = _finalsController(repository);
+      await controller.load('evt_01');
+
+      final first = controller.executeFinalsAction(action);
+      final second = controller.executeFinalsAction(action);
+      await controller.executeFinalsAction(
+        FinalsAction(
+          kind: FinalsActionKind.startContest,
+          label: 'Start Tiebreak',
+          contestId: 'contest_tiebreak',
+          tableId: 'table_tiebreak',
+          expectedStateVersion: 7,
+        ),
+      );
+
+      expect(identical(first, second), isTrue);
+      expect(repository.startContestCount, 1);
+      repository.actionCompleter!.complete(repository.state);
+      await first;
+    });
+
+    test(
+        'silent load and action failures preserve the last usable Finals state',
+        () async {
+      const action = FinalsAction(
+        kind: FinalsActionKind.startContest,
+        label: 'Start Table of Champions',
+        contestId: 'contest_champions',
+        tableId: 'table_champions',
+        expectedStateVersion: 7,
+      );
+      final initial = _finalsState(actions: const [action]);
+      final repository = _FakeFinalsRepository(initial);
+      final controller = _finalsController(repository);
+      await controller.load('evt_01');
+
+      repository.loadError = Exception('offline');
+      await controller.load('evt_01', silent: true);
+      expect(controller.finalsState, same(initial));
+      expect(controller.primaryFinalsAction, same(action));
+
+      repository.loadError = null;
+      repository.actionError = Exception('action failed');
+      await controller.executeFinalsAction(action);
+      expect(controller.finalsState, same(initial));
+      expect(controller.primaryFinalsAction, same(action));
+      expect(controller.finalsActionError, isNotNull);
+    });
+  });
+
   test('exposes role capability booleans for event scorers', () {
     final controller = EventDashboardController(
       eventRepository: _FakeEventRepository(cachedEvents: const []),
@@ -827,7 +1089,8 @@ void main() {
     expect(controller.isLoading, isFalse);
   });
 
-  test('successful null event response clears cached dashboard event', () async {
+  test('successful null event response clears cached dashboard event',
+      () async {
     final cachedEvent = _dashboardEvent(title: 'Cached Event');
     final eventRepository = _FakeEventRepository(
       cachedEvents: [cachedEvent],

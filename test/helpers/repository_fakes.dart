@@ -3,6 +3,7 @@ import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
@@ -353,6 +354,30 @@ class ThrowingSeatingRepository implements SeatingRepository {
 
   @override
   Future<List<SeatingAssignmentRecord>> clearAssignments(String eventId) =>
+      throw UnimplementedError();
+}
+
+class ThrowingFinalsRepository implements FinalsRepository {
+  const ThrowingFinalsRepository();
+
+  @override
+  Future<FinalsSetupPreview> previewFinals(String eventId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<FinalsState> loadFinalsState(String eventId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<FinalsState> beginFinals(BeginFinalsInput input) =>
+      throw UnimplementedError();
+
+  @override
+  Future<FinalsState> startContest(StartFinalsContestInput input) =>
+      throw UnimplementedError();
+
+  @override
+  Future<FinalsState> resumeFinalsStart(ResumeFinalsStartInput input) =>
       throw UnimplementedError();
 }
 

@@ -7,8 +7,6 @@ import 'package:mosaic/data/repositories/repository_interfaces.dart';
 
 const seatingChangeBlockedMessage =
     'End active or paused sessions before changing seating.';
-const bonusSeatingRoleRequiredMessage =
-    'Bonus seating must use one table role.';
 
 class SeatingAssignmentController extends ChangeNotifier {
   SeatingAssignmentController({
@@ -43,25 +41,14 @@ class SeatingAssignmentController extends ChangeNotifier {
   bool _initialAssignmentsPending;
 
   bool get canChangeSeating => !hasLiveSessions;
-  bool get canStartAllTables => !hasLiveSessions;
-  String get startAllTablesLabel {
-    if (_hasStandardMixedFinalsRoles) {
-      return 'Start Finals Tables';
-    }
-
-    final roles = _bonusTableRoles;
-    if (roles == null || roles.length != 1) {
-      return 'Start All Tables';
-    }
-
-    return switch (roles.single) {
-      BonusTableRole.tableOfChampions ||
-      BonusTableRole.tableOfRedemption =>
-        tableGroups.length == 1 ? 'Start Finals Table' : 'Start Finals Tables',
-      BonusTableRole.tableOfChampionsSuddenDeath => 'Start Sudden Death',
-      BonusTableRole.tableOfChampionsPlayIn => 'Start Play-In',
-    };
-  }
+  bool get isBonusSeating =>
+      assignments.isNotEmpty &&
+      assignments.every(
+        (assignment) =>
+            assignment.assignmentType == SeatingAssignmentType.bonus,
+      );
+  bool get canStartAllTables => !hasLiveSessions && !isBonusSeating;
+  String get startAllTablesLabel => 'Start All Tables';
 
   List<SeatingTableGroup> get tableGroups {
     final groups = <String, SeatingTableGroup>{};
@@ -192,7 +179,7 @@ class SeatingAssignmentController extends ChangeNotifier {
   }
 
   Future<void> startAllTables(String eventId) async {
-    if (isSubmitting) {
+    if (isSubmitting || !canStartAllTables) {
       return;
     }
 
@@ -219,20 +206,7 @@ class SeatingAssignmentController extends ChangeNotifier {
         _updateUnassignedGuests();
       }
 
-      if (_hasInvalidBonusTableRole) {
-        error = bonusSeatingRoleRequiredMessage;
-        return;
-      }
-
-      if (!_hasOnlyBonusAssignments) {
-        await _sessionRepository.startCurrentTournamentRoundSessions(eventId);
-      } else {
-        final roles = _bonusTableRoles!;
-        await _sessionRepository.startBonusAssignedTableSessions(
-          eventId: eventId,
-          bonusTableRole: roles.length == 1 ? roles.single : null,
-        );
-      }
+      await _sessionRepository.startCurrentTournamentRoundSessions(eventId);
       await _refreshLiveSessions(eventId);
       error = null;
     } catch (exception) {
@@ -292,47 +266,6 @@ class SeatingAssignmentController extends ChangeNotifier {
           session.status == SessionStatus.active ||
           session.status == SessionStatus.paused,
     );
-  }
-
-  bool get _hasOnlyBonusAssignments =>
-      assignments.isNotEmpty &&
-      assignments.every(
-        (assignment) =>
-            assignment.assignmentType == SeatingAssignmentType.bonus,
-      );
-
-  bool get _hasInvalidBonusTableRole {
-    if (!_hasOnlyBonusAssignments) {
-      return false;
-    }
-
-    final roles = _bonusTableRoles;
-    return roles == null || (roles.length > 1 && !_hasStandardMixedFinalsRoles);
-  }
-
-  bool get _hasStandardMixedFinalsRoles {
-    final roles = _bonusTableRoles;
-    return roles != null &&
-        roles.length == 2 &&
-        roles.contains(BonusTableRole.tableOfChampions) &&
-        roles.contains(BonusTableRole.tableOfRedemption);
-  }
-
-  Set<BonusTableRole>? get _bonusTableRoles {
-    if (!_hasOnlyBonusAssignments) {
-      return null;
-    }
-
-    final roles = <BonusTableRole>{};
-    for (final assignment in assignments) {
-      final role = assignment.bonusTableRole;
-      if (role == null) {
-        return null;
-      }
-      roles.add(role);
-    }
-
-    return roles;
   }
 
   bool _isCurrent(int generation) =>

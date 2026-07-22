@@ -635,237 +635,56 @@ void main() {
     expect(controller.error, isNull);
   });
 
-  test('startAllTables starts bonus sessions for one loaded bonus role',
-      () async {
-    final sessionRepository = _FakeSessionRepository(
-      sessionsAfterBulkStart: [_session(SessionStatus.active)],
-    );
-    final controller = SeatingAssignmentController(
-      seatingRepository: _FakeSeatingRepository(
-        loadedAssignments: [
-          _assignment(
-            displayName: 'Ava East',
-            assignmentType: SeatingAssignmentType.bonus,
-            bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
-          ),
-          _assignment(
-            id: 'asg_02',
-            guestId: 'gst_02',
-            displayName: 'Mina South',
-            seatIndex: 1,
-            assignmentType: SeatingAssignmentType.bonus,
-            bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
-          ),
-        ],
+  test('all-bonus seating is review only regardless of bonus role', () async {
+    final sessionRepository = _FakeSessionRepository();
+    final bonusAssignments = [
+      _assignment(
+        assignmentType: SeatingAssignmentType.bonus,
+        bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
       ),
+      _assignment(
+        id: 'asg_02',
+        tableId: 'tbl_02',
+        guestId: 'gst_02',
+        assignmentType: SeatingAssignmentType.bonus,
+        bonusTableRole: BonusTableRole.tableOfRedemption,
+      ),
+      _assignment(
+        id: 'asg_03',
+        tableId: 'tbl_03',
+        guestId: 'gst_03',
+        assignmentType: SeatingAssignmentType.bonus,
+      ),
+    ];
+    final controller = SeatingAssignmentController(
+      seatingRepository: _FakeSeatingRepository(),
       guestRepository: _FakeGuestRepository(),
       sessionRepository: sessionRepository,
+      initialAssignments: bonusAssignments,
     );
 
-    await controller.load('evt_01');
+    expect(controller.isBonusSeating, isTrue);
+    expect(controller.canStartAllTables, isFalse);
+
     await controller.startAllTables('evt_01');
 
-    expect(sessionRepository.calls, [
-      'list:evt_01',
-      'list:evt_01',
-      'bonusBulkStart:evt_01:tableOfChampionsSuddenDeath',
-      'list:evt_01',
-    ]);
-    expect(controller.hasLiveSessions, isTrue);
+    expect(sessionRepository.calls, isEmpty);
+    expect(controller.assignments, bonusAssignments);
     expect(controller.error, isNull);
-  });
-
-  test('startAllTables starts standard finals sessions for mixed bonus roles',
-      () async {
-    final sessionRepository = _FakeSessionRepository(
-      sessionsAfterBulkStart: [_session(SessionStatus.active)],
-    );
-    final controller = SeatingAssignmentController(
-      seatingRepository: _FakeSeatingRepository(
-        loadedAssignments: [
-          _assignment(
-            displayName: 'Champion East',
-            assignmentType: SeatingAssignmentType.bonus,
-            bonusTableRole: BonusTableRole.tableOfChampions,
-          ),
-          _assignment(
-            id: 'asg_02',
-            tableId: 'tbl_02',
-            tableLabel: 'Table 2',
-            guestId: 'gst_02',
-            displayName: 'Redemption East',
-            assignmentType: SeatingAssignmentType.bonus,
-            bonusTableRole: BonusTableRole.tableOfRedemption,
-          ),
-        ],
-      ),
-      guestRepository: _FakeGuestRepository(),
-      sessionRepository: sessionRepository,
-    );
-
-    await controller.load('evt_01');
-    await controller.startAllTables('evt_01');
-
-    expect(sessionRepository.calls, [
-      'list:evt_01',
-      'list:evt_01',
-      'bonusBulkStart:evt_01:null',
-      'list:evt_01',
-    ]);
-    expect(controller.error, isNull);
-    expect(controller.hasLiveSessions, isTrue);
     expect(controller.isSubmitting, isFalse);
   });
 
-  test('startAllTables rejects mixed sudden death and finals bonus roles',
-      () async {
-    final sessionRepository = _FakeSessionRepository();
-    final controller = SeatingAssignmentController(
-      seatingRepository: _FakeSeatingRepository(
-        loadedAssignments: [
-          _assignment(
-            displayName: 'Champion East',
-            assignmentType: SeatingAssignmentType.bonus,
-            bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
-          ),
-          _assignment(
-            id: 'asg_02',
-            tableId: 'tbl_02',
-            tableLabel: 'Table 2',
-            guestId: 'gst_02',
-            displayName: 'Redemption East',
-            assignmentType: SeatingAssignmentType.bonus,
-            bonusTableRole: BonusTableRole.tableOfRedemption,
-          ),
-        ],
-      ),
-      guestRepository: _FakeGuestRepository(),
-      sessionRepository: sessionRepository,
-    );
-
-    await controller.load('evt_01');
-    await controller.startAllTables('evt_01');
-
-    expect(sessionRepository.calls, ['list:evt_01', 'list:evt_01']);
-    expect(controller.error, 'Bonus seating must use one table role.');
-    expect(controller.hasLiveSessions, isFalse);
-    expect(controller.isSubmitting, isFalse);
-  });
-
-  test('startAllTables rejects loaded bonus seating with a missing role',
-      () async {
-    final sessionRepository = _FakeSessionRepository();
-    final controller = SeatingAssignmentController(
-      seatingRepository: _FakeSeatingRepository(
-        loadedAssignments: [
-          _assignment(
-            displayName: 'Champion East',
-            assignmentType: SeatingAssignmentType.bonus,
-          ),
-        ],
-      ),
-      guestRepository: _FakeGuestRepository(),
-      sessionRepository: sessionRepository,
-    );
-
-    await controller.load('evt_01');
-    await controller.startAllTables('evt_01');
-
-    expect(sessionRepository.calls, ['list:evt_01', 'list:evt_01']);
-    expect(controller.error, 'Bonus seating must use one table role.');
-  });
-
-  test('startAllTablesLabel describes bonus contexts and tournament default',
-      () {
+  test('tournament seating retains Start All Tables availability', () {
     final tournamentController = SeatingAssignmentController(
       seatingRepository: _FakeSeatingRepository(),
       guestRepository: _FakeGuestRepository(),
       sessionRepository: _FakeSessionRepository(),
       initialAssignments: [_assignment()],
     );
-    final finalsSingleTableController = SeatingAssignmentController(
-      seatingRepository: _FakeSeatingRepository(),
-      guestRepository: _FakeGuestRepository(),
-      sessionRepository: _FakeSessionRepository(),
-      initialAssignments: [
-        _assignment(
-          assignmentType: SeatingAssignmentType.bonus,
-          bonusTableRole: BonusTableRole.tableOfChampions,
-        ),
-      ],
-    );
-    final finalsMultiTableController = SeatingAssignmentController(
-      seatingRepository: _FakeSeatingRepository(),
-      guestRepository: _FakeGuestRepository(),
-      sessionRepository: _FakeSessionRepository(),
-      initialAssignments: [
-        _assignment(
-          assignmentType: SeatingAssignmentType.bonus,
-          bonusTableRole: BonusTableRole.tableOfRedemption,
-        ),
-        _assignment(
-          id: 'asg_02',
-          tableId: 'tbl_02',
-          tableLabel: 'Table 2',
-          guestId: 'gst_02',
-          assignmentType: SeatingAssignmentType.bonus,
-          bonusTableRole: BonusTableRole.tableOfRedemption,
-        ),
-      ],
-    );
-    final standardMixedFinalsController = SeatingAssignmentController(
-      seatingRepository: _FakeSeatingRepository(),
-      guestRepository: _FakeGuestRepository(),
-      sessionRepository: _FakeSessionRepository(),
-      initialAssignments: [
-        _assignment(
-          assignmentType: SeatingAssignmentType.bonus,
-          bonusTableRole: BonusTableRole.tableOfChampions,
-        ),
-        _assignment(
-          id: 'asg_03',
-          tableId: 'tbl_03',
-          tableLabel: 'Table 3',
-          guestId: 'gst_03',
-          assignmentType: SeatingAssignmentType.bonus,
-          bonusTableRole: BonusTableRole.tableOfRedemption,
-        ),
-      ],
-    );
-    final suddenDeathController = SeatingAssignmentController(
-      seatingRepository: _FakeSeatingRepository(),
-      guestRepository: _FakeGuestRepository(),
-      sessionRepository: _FakeSessionRepository(),
-      initialAssignments: [
-        _assignment(
-          assignmentType: SeatingAssignmentType.bonus,
-          bonusTableRole: BonusTableRole.tableOfChampionsSuddenDeath,
-        ),
-      ],
-    );
-    final playInController = SeatingAssignmentController(
-      seatingRepository: _FakeSeatingRepository(),
-      guestRepository: _FakeGuestRepository(),
-      sessionRepository: _FakeSessionRepository(),
-      initialAssignments: [
-        _assignment(
-          assignmentType: SeatingAssignmentType.bonus,
-          bonusTableRole: BonusTableRole.tableOfChampionsPlayIn,
-        ),
-      ],
-    );
 
     expect(tournamentController.startAllTablesLabel, 'Start All Tables');
-    expect(
-        finalsSingleTableController.startAllTablesLabel, 'Start Finals Table');
-    expect(
-        finalsMultiTableController.startAllTablesLabel, 'Start Finals Tables');
-    expect(
-      standardMixedFinalsController.startAllTablesLabel,
-      'Start Finals Tables',
-    );
-    expect(suddenDeathController.startAllTablesLabel, 'Start Sudden Death');
-    expect(playInController.startAllTablesLabel, 'Start Play-In');
+    expect(tournamentController.isBonusSeating, isFalse);
+    expect(tournamentController.canStartAllTables, isTrue);
   });
 
   test('canStartAllTables requires no live sessions', () async {

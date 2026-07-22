@@ -11,6 +11,7 @@ import 'package:mosaic/data/models/activity_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/hand_evidence_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
@@ -35,6 +36,22 @@ import 'package:mosaic/services/nfc/native_nfc_reader.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
 import 'package:mosaic/widgets/app_actions.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
+
+FinalsState _startedFinalsState() => FinalsState(
+      flowVersion: FinalsFlowVersion.orchestrated,
+      stateVersion: 1,
+      format: FinalsFormat.championsOnly,
+      overallStatus: FinalsOverallStatus.active,
+      eligiblePlayerCount: 4,
+      championsSlots: const [],
+      contests: const [],
+      allowedActions: const [],
+      blockingReason: null,
+      recoveryToken: null,
+      champion: null,
+      redemptionWinner: null,
+      sessions: const [],
+    );
 
 class _EventRepository extends ThrowingEventRepository {
   _EventRepository(
@@ -377,6 +394,39 @@ class _SeatingRepository extends ThrowingSeatingRepository {
       bonusRoundState;
 }
 
+class _FinalsRepository extends ThrowingFinalsRepository {
+  _FinalsRepository(this.state, {this.actionResult});
+
+  FinalsState state;
+  FinalsState? actionResult;
+  Object? loadError;
+  Object? actionError;
+  int loadCount = 0;
+  int resumeCount = 0;
+  int startContestCount = 0;
+
+  @override
+  Future<FinalsState> loadFinalsState(String eventId) async {
+    loadCount += 1;
+    if (loadError case final error?) throw error;
+    return state;
+  }
+
+  @override
+  Future<FinalsState> resumeFinalsStart(ResumeFinalsStartInput input) async {
+    resumeCount += 1;
+    if (actionError case final error?) throw error;
+    return state = actionResult ?? state;
+  }
+
+  @override
+  Future<FinalsState> startContest(StartFinalsContestInput input) async {
+    startContestCount += 1;
+    if (actionError case final error?) throw error;
+    return state = actionResult ?? state;
+  }
+}
+
 class _PrizeRepository extends ThrowingPrizeRepository {
   _PrizeRepository({
     PrizePlanDetail? loadedPlan,
@@ -674,6 +724,7 @@ Future<void> _expectHandLedgerCorrectionFlag(
     activityRepository: _ActivityRepository(),
     prizeRepository: _PrizeRepository(),
     seatingRepository: const _SeatingRepository(),
+    finalsRepository: const ThrowingFinalsRepository(),
     mosaicProfileRepository: const _MosaicProfileRepository(),
     nfcService: const _NfcService(),
   );
@@ -902,6 +953,7 @@ Future<void> _pumpDashboard(
   TableRepository? tableRepository,
   SessionRepository? sessionRepository,
   SeatingRepository? seatingRepository,
+  FinalsRepository? finalsRepository,
   NfcService? nfcService,
 }) async {
   await tester.pumpWidget(
@@ -919,11 +971,107 @@ Future<void> _pumpDashboard(
         tableRepository: tableRepository,
         sessionRepository: sessionRepository,
         seatingRepository: seatingRepository,
+        finalsRepository: finalsRepository,
         nfcService: nfcService,
       ),
     ),
   );
   await tester.pumpAndSettle();
+}
+
+Future<void> _pumpFinalsDashboard(
+  WidgetTester tester, {
+  required FinalsRepository repository,
+  Route<dynamic>? Function(RouteSettings settings)? onGenerateRoute,
+}) async {
+  final event = EventRecord.fromJson({
+    ...EventRecord.fromJson(const {
+      'id': 'evt_01',
+      'owner_user_id': 'usr_01',
+      'title': 'Friday Night Mahjong',
+      'timezone': 'America/Los_Angeles',
+      'starts_at': '2026-04-24T19:00:00-07:00',
+      'lifecycle_status': 'active',
+      'checkin_open': true,
+      'scoring_open': true,
+      'cover_charge_cents': 2000,
+      'default_ruleset_id': 'HK_STANDARD',
+      'prevailing_wind': 'east',
+      'current_scoring_phase': 'bonus',
+    }).toJson(),
+  });
+  await tester.pumpWidget(
+    MaterialApp(
+      home: EventDashboardScreen(
+        args: EventDashboardArgs(eventId: event.id),
+        eventRepository: _EventRepository(event),
+        guestRepository: _GuestRepository(),
+        leaderboardRepository: _LeaderboardRepository(),
+        sessionRepository: const _SessionRepository(),
+        finalsRepository: repository,
+      ),
+      onGenerateRoute: onGenerateRoute,
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+FinalsState _finalsState({
+  FinalsOverallStatus status = FinalsOverallStatus.active,
+  FinalsFormat format = FinalsFormat.parallelFinals,
+  int eligiblePlayerCount = 8,
+  List<FinalsChampionsSlot> slots = const [],
+  List<FinalsContest> contests = const [],
+  List<FinalsAction> actions = const [],
+  String? blockingReason,
+  String? recoveryToken,
+  FinalsResult? champion,
+  FinalsResult? redemptionWinner,
+}) {
+  return FinalsState(
+    flowVersion: status == FinalsOverallStatus.notStarted
+        ? null
+        : FinalsFlowVersion.orchestrated,
+    stateVersion: status == FinalsOverallStatus.notStarted ? 0 : 7,
+    format: status == FinalsOverallStatus.notStarted ? null : format,
+    overallStatus: status,
+    eligiblePlayerCount:
+        status == FinalsOverallStatus.notStarted ? null : eligiblePlayerCount,
+    championsSlots: slots,
+    contests: contests,
+    allowedActions: actions,
+    blockingReason: blockingReason,
+    recoveryToken: recoveryToken,
+    champion: champion,
+    redemptionWinner: redemptionWinner,
+    sessions: const [],
+  );
+}
+
+FinalsContest _finalsContest({
+  required String id,
+  required String title,
+  required FinalsContestStatus status,
+  FinalsContestType type = FinalsContestType.tableOfChampions,
+  String? tableLabel,
+  String? sessionId,
+}) {
+  return FinalsContest(
+    id: id,
+    type: type,
+    title: title,
+    status: status,
+    tableLabel: tableLabel,
+    tableSessionId: sessionId,
+    slotsToFill: 1,
+    slotStartIndex: 4,
+    sequenceNumber: 1,
+    startedAt: sessionId == null ? null : DateTime.utc(2026, 7, 11, 19),
+    completedAt: status == FinalsContestStatus.complete
+        ? DateTime.utc(2026, 7, 11, 20)
+        : null,
+    participants: const [],
+  );
 }
 
 TournamentRoundSummary _roundSummary({
@@ -1222,6 +1370,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      finalsRepository: const ThrowingFinalsRepository(),
       mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: const _NfcService(),
     );
@@ -1486,6 +1635,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      finalsRepository: const ThrowingFinalsRepository(),
       mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: const _NfcService(),
     );
@@ -1556,6 +1706,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      finalsRepository: const ThrowingFinalsRepository(),
       mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: const _NfcService(),
     );
@@ -1658,18 +1809,19 @@ void main() {
               completeTableCount: 3,
             ),
           ),
+          finalsRepository: _FinalsRepository(
+            _finalsState(status: FinalsOverallStatus.notStarted),
+          ),
         ),
         onGenerateRoute: (settings) {
           if (settings.name == AppRouter.bonusRoundRoute) {
             openedSettings = settings;
             final args = settings.arguments! as BonusRoundArgs;
-            return MaterialPageRoute<void>(
+            return MaterialPageRoute<FinalsState>(
               builder: (_) => BonusRoundScreen(
                 eventId: args.eventId,
-                leaderboardRepository: _LeaderboardRepository(),
+                finalsRepository: const ThrowingFinalsRepository(),
                 tableRepository: _TableRepository(),
-                sessionRepository: const _SessionRepository(),
-                seatingRepository: const _SeatingRepository(),
                 nfcService: const _NfcService(),
               ),
               settings: settings,
@@ -1691,6 +1843,73 @@ void main() {
     expect(openedSettings?.name, AppRouter.bonusRoundRoute);
     expect((openedSettings?.arguments as BonusRoundArgs?)?.eventId, 'evt_01');
     expect(find.byType(BonusRoundScreen), findsOneWidget);
+  });
+
+  testWidgets('successful Begin Finals opens Tables from Dashboard',
+      (tester) async {
+    RouteSettings? tablesSettings;
+    final event = EventRecord.fromJson({
+      ...activeEvent.toJson(),
+      'scoring_open': true,
+      'current_scoring_phase': 'tournament',
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventDashboardScreen(
+          args: EventDashboardArgs(eventId: event.id),
+          eventRepository: _EventRepository(event),
+          guestRepository: _GuestRepository(),
+          leaderboardRepository: _LeaderboardRepository(),
+          seatingRepository: _SeatingRepository(
+            roundSummary: _roundSummary(
+              roundNumber: 2,
+              assignedTableCount: 3,
+              completeTableCount: 3,
+            ),
+          ),
+          finalsRepository: _FinalsRepository(
+            _finalsState(status: FinalsOverallStatus.notStarted),
+          ),
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.bonusRoundRoute) {
+            return MaterialPageRoute<FinalsState>(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () => Navigator.of(context).pop(
+                    _startedFinalsState(),
+                  ),
+                  child: const Text('Complete Finals setup'),
+                ),
+              ),
+              settings: settings,
+            );
+          }
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            tablesSettings = settings;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Finals Tables')),
+              settings: settings,
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Begin Finals'));
+    await tester.tap(find.text('Begin Finals'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Complete Finals setup'));
+    await tester.pumpAndSettle();
+
+    expect(tablesSettings?.name, AppRouter.tablesOverviewRoute);
+    expect(find.text('Finals Tables'), findsOneWidget);
+    final args = tablesSettings?.arguments as TablesOverviewArgs?;
+    expect(args?.eventId, 'evt_01');
+    expect(args?.scoringPhase, EventScoringPhase.bonus);
   });
 
   testWidgets('draft event exposes seating prep action', (tester) async {
@@ -1776,6 +1995,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      finalsRepository: const ThrowingFinalsRepository(),
       mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
@@ -1919,6 +2139,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      finalsRepository: const ThrowingFinalsRepository(),
       mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
@@ -1966,6 +2187,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: const _SeatingRepository(),
+      finalsRepository: const ThrowingFinalsRepository(),
       mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
@@ -2016,6 +2238,7 @@ void main() {
       activityRepository: _ActivityRepository(),
       prizeRepository: _PrizeRepository(),
       seatingRepository: seatingRepository,
+      finalsRepository: const ThrowingFinalsRepository(),
       mosaicProfileRepository: const _MosaicProfileRepository(),
       nfcService: _NfcService(tableScanResult: _tableScanResult()),
     );
@@ -2879,6 +3102,447 @@ void main() {
     expect(find.text('Scan Table'), findsOneWidget);
   });
 
+  group('authoritative Finals command center', () {
+    testWidgets('renders ready format progress and starts the server contest',
+        (tester) async {
+      const action = FinalsAction(
+        kind: FinalsActionKind.startContest,
+        label: 'Start Table of Champions',
+        contestId: 'contest_champions',
+        tableId: 'table_champions',
+        expectedStateVersion: 7,
+      );
+      final active = _finalsState(
+        contests: [
+          _finalsContest(
+            id: 'contest_champions',
+            title: 'Table of Champions',
+            status: FinalsContestStatus.active,
+            tableLabel: 'Table 1',
+            sessionId: 'session_champions',
+          ),
+        ],
+      );
+      final repository = _FinalsRepository(
+        _finalsState(
+          contests: [
+            _finalsContest(
+              id: 'contest_champions',
+              title: 'Table of Champions',
+              status: FinalsContestStatus.ready,
+              tableLabel: 'Table 1',
+            ),
+          ],
+          actions: const [action],
+        ),
+        actionResult: active,
+      );
+      SessionDetailArgs? openedSession;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: EventDashboardScreen(
+            args: EventDashboardArgs(eventId: activeEvent.id),
+            eventRepository: _EventRepository(
+              EventRecord.fromJson({
+                ...activeEvent.toJson(),
+                'scoring_open': true,
+                'current_scoring_phase': 'bonus',
+              }),
+            ),
+            guestRepository: _GuestRepository(),
+            leaderboardRepository: _LeaderboardRepository(),
+            sessionRepository: const _SessionRepository(),
+            finalsRepository: repository,
+          ),
+          onGenerateRoute: (settings) {
+            if (settings.name == AppRouter.sessionDetailRoute) {
+              openedSession = settings.arguments! as SessionDetailArgs;
+              return MaterialPageRoute<void>(
+                builder: (_) => const Scaffold(body: Text('Opened Session')),
+              );
+            }
+            return null;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Parallel Finals'), findsOneWidget);
+      expect(find.text('0 of 4 Champions slots filled'), findsOneWidget);
+      expect(find.text('Table of Champions — Table 1 — Ready'), findsOneWidget);
+      expect(find.text('Start Table of Champions'), findsOneWidget);
+
+      await tester.tap(find.text('Start Table of Champions'));
+      await tester.pumpAndSettle();
+
+      expect(repository.startContestCount, 1);
+      expect(openedSession?.sessionId, 'session_champions');
+    });
+
+    testWidgets(
+        'SQL-shaped active contest navigates directly without an invented action',
+        (tester) async {
+      final repository = _FinalsRepository(
+        _finalsState(
+          contests: [
+            _finalsContest(
+              id: 'contest_champions',
+              title: 'Table of Champions',
+              status: FinalsContestStatus.active,
+              tableLabel: 'Table 1',
+              sessionId: 'session_champions',
+            ),
+          ],
+        ),
+      );
+      SessionDetailArgs? openedSession;
+
+      await _pumpFinalsDashboard(
+        tester,
+        repository: repository,
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            openedSession = settings.arguments! as SessionDetailArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Opened Session')),
+            );
+          }
+          return null;
+        },
+      );
+
+      await tester.tap(find.text('Open Table of Champions'));
+      await tester.pumpAndSettle();
+
+      expect(repository.startContestCount, 0);
+      expect(openedSession?.sessionId, 'session_champions');
+    });
+
+    testWidgets(
+        'active legacy session opens directly and omits unavailable slot progress',
+        (tester) async {
+      final repository = _FinalsRepository(
+        FinalsState(
+          flowVersion: FinalsFlowVersion.legacy,
+          stateVersion: 0,
+          format: null,
+          overallStatus: FinalsOverallStatus.active,
+          eligiblePlayerCount: null,
+          championsSlots: const [],
+          contests: const [],
+          allowedActions: const [],
+          blockingReason: null,
+          recoveryToken: 'legacy-token',
+          champion: null,
+          redemptionWinner: null,
+          sessions: [
+            FinalsSessionReference(
+              id: 'session_redemption',
+              bonusTableRole: 'table_of_redemption',
+              tableLabel: 'Table 2',
+              status: 'paused',
+              startedAt: DateTime.utc(2026, 7, 11, 19),
+            ),
+          ],
+        ),
+      );
+      SessionDetailArgs? openedSession;
+
+      await _pumpFinalsDashboard(
+        tester,
+        repository: repository,
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            openedSession = settings.arguments! as SessionDetailArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Opened Session')),
+            );
+          }
+          return null;
+        },
+      );
+
+      expect(find.text('0 of 0 Champions slots filled'), findsNothing);
+      await tester.tap(find.text('Open Table of Redemption'));
+      await tester.pumpAndSettle();
+
+      expect(repository.startContestCount, 0);
+      expect(openedSession?.sessionId, 'session_redemption');
+    });
+
+    testWidgets('multi-table contest start opens Finals Tables',
+        (tester) async {
+      const action = FinalsAction(
+        kind: FinalsActionKind.startContest,
+        label: 'Start Finals Contests',
+        contestId: 'contest_champions',
+        tableId: 'table_champions',
+        expectedStateVersion: 7,
+      );
+      final repository = _FinalsRepository(
+        _finalsState(actions: const [action]),
+        actionResult: _finalsState(
+          contests: [
+            _finalsContest(
+              id: 'contest_champions',
+              title: 'Table of Champions',
+              status: FinalsContestStatus.active,
+              tableLabel: 'Table 1',
+              sessionId: 'session_champions',
+            ),
+            _finalsContest(
+              id: 'contest_redemption',
+              title: 'Table of Redemption',
+              type: FinalsContestType.tableOfRedemption,
+              status: FinalsContestStatus.active,
+              tableLabel: 'Table 2',
+              sessionId: 'session_redemption',
+            ),
+          ],
+        ),
+      );
+      TablesOverviewArgs? openedTables;
+
+      await _pumpFinalsDashboard(
+        tester,
+        repository: repository,
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedTables = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Opened Tables')),
+            );
+          }
+          return null;
+        },
+      );
+
+      await tester.tap(find.text('Start Finals Contests'));
+      await tester.pumpAndSettle();
+
+      expect(repository.startContestCount, 1);
+      expect(openedTables?.scoringPhase, EventScoringPhase.bonus);
+    });
+
+    testWidgets('selection-required start_contest opens Finals Tables',
+        (tester) async {
+      const action = FinalsAction(
+        kind: FinalsActionKind.startContest,
+        label: 'Start Championship Tiebreak',
+        contestId: 'contest_tiebreak',
+        availableTableIds: ['table_1'],
+        expectedStateVersion: 7,
+      );
+      final repository = _FinalsRepository(
+        _finalsState(actions: const [action]),
+        actionResult: _finalsState(
+          contests: [
+            _finalsContest(
+              id: 'contest_tiebreak',
+              title: 'Championship Tiebreak',
+              type: FinalsContestType.championsSuddenDeath,
+              status: FinalsContestStatus.active,
+              tableLabel: 'Table 1',
+              sessionId: 'session_tiebreak',
+            ),
+          ],
+        ),
+      );
+      TablesOverviewArgs? openedTables;
+
+      await _pumpFinalsDashboard(
+        tester,
+        repository: repository,
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedTables = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Opened Tables')),
+            );
+          }
+          return null;
+        },
+      );
+
+      await tester.tap(find.text('Start Championship Tiebreak'));
+      await tester.pumpAndSettle();
+
+      expect(repository.startContestCount, 0);
+      expect(openedTables?.scoringPhase, EventScoringPhase.bonus);
+    });
+
+    testWidgets('shows pending tiebreak copy and the exact server label',
+        (tester) async {
+      const action = FinalsAction(
+        kind: FinalsActionKind.startContest,
+        label: 'Start Championship Tiebreak',
+        contestId: 'contest_tiebreak',
+        tableId: 'table_1',
+        expectedStateVersion: 7,
+      );
+      await _pumpFinalsDashboard(
+        tester,
+        repository: _FinalsRepository(
+          _finalsState(
+            contests: [
+              _finalsContest(
+                id: 'contest_tiebreak',
+                title: 'Championship Tiebreak',
+                type: FinalsContestType.championsSuddenDeath,
+                status: FinalsContestStatus.ready,
+                tableLabel: 'Table 1',
+              ),
+            ],
+            actions: const [action],
+          ),
+        ),
+      );
+
+      expect(find.text('Tiebreak pending'), findsOneWidget);
+      expect(find.text('Start Championship Tiebreak'), findsOneWidget);
+    });
+
+    testWidgets('recovery action starts once and opens Finals Tables',
+        (tester) async {
+      const action = FinalsAction(
+        kind: FinalsActionKind.startFinalsTables,
+        label: 'Start Finals Tables',
+        recoveryToken: 'recovery-token',
+      );
+      final repository = _FinalsRepository(
+        _finalsState(
+          status: FinalsOverallStatus.recoverableMissingSessions,
+          actions: const [action],
+          recoveryToken: 'recovery-token',
+        ),
+        actionResult: _finalsState(),
+      );
+      TablesOverviewArgs? openedTables;
+
+      await _pumpFinalsDashboard(
+        tester,
+        repository: repository,
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.tablesOverviewRoute) {
+            openedTables = settings.arguments! as TablesOverviewArgs;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Opened Tables')),
+            );
+          }
+          return null;
+        },
+      );
+
+      await tester.tap(find.text('Start Finals Tables'));
+      await tester.pumpAndSettle();
+
+      expect(repository.resumeCount, 1);
+      expect(openedTables?.scoringPhase, EventScoringPhase.bonus);
+    });
+
+    testWidgets('blocked Finals shows the server reason and no generic action',
+        (tester) async {
+      await _pumpFinalsDashboard(
+        tester,
+        repository: _FinalsRepository(
+          _finalsState(
+            status: FinalsOverallStatus.blockedLegacyState,
+            blockingReason:
+                'Finals seating is incomplete. Review the missing seats.',
+          ),
+        ),
+      );
+
+      expect(find.text('Finals Blocked'), findsOneWidget);
+      expect(
+        find.text('Finals seating is incomplete. Review the missing seats.'),
+        findsOneWidget,
+      );
+      expect(find.text('Finals Live'), findsNothing);
+      expect(find.text('Open Finals Tables'), findsNothing);
+    });
+
+    testWidgets('complete Finals shows host-safe champion result',
+        (tester) async {
+      await _pumpFinalsDashboard(
+        tester,
+        repository: _FinalsRepository(
+          _finalsState(
+            status: FinalsOverallStatus.complete,
+            champion: const FinalsResult(
+              eventGuestId: 'guest_champion',
+              displayName: 'Ava Chen',
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Finals Complete'), findsOneWidget);
+      expect(find.text('Champion — Ava Chen'), findsOneWidget);
+      expect(find.textContaining('guest_champion'), findsNothing);
+    });
+
+    testWidgets(
+        'Begin Finals requires no root and a completed tournament round',
+        (tester) async {
+      final event = EventRecord.fromJson({
+        ...activeEvent.toJson(),
+        'scoring_open': true,
+        'current_scoring_phase': 'tournament',
+      });
+      final noRoot = _FinalsRepository(
+        _finalsState(status: FinalsOverallStatus.notStarted),
+      );
+
+      await _pumpDashboard(
+        tester,
+        event: event,
+        seatingRepository: _SeatingRepository(
+          roundSummary: _roundSummary(
+            assignedTableCount: 2,
+            completeTableCount: 1,
+            activeTableCount: 1,
+          ),
+        ),
+        finalsRepository: noRoot,
+      );
+      expect(find.text('Begin Finals'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      await _pumpDashboard(
+        tester,
+        event: event,
+        seatingRepository: _SeatingRepository(
+          roundSummary: _roundSummary(
+            assignedTableCount: 2,
+            completeTableCount: 2,
+          ),
+        ),
+        finalsRepository: noRoot,
+      );
+      expect(find.text('Begin Finals'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      await _pumpDashboard(
+        tester,
+        event: event,
+        seatingRepository: _SeatingRepository(
+          roundSummary: _roundSummary(
+            assignedTableCount: 2,
+            completeTableCount: 2,
+          ),
+        ),
+        finalsRepository: _FinalsRepository(_finalsState()),
+      );
+      expect(find.text('Begin Finals'), findsNothing);
+    });
+  });
+
   testWidgets('finals live dashboard ignores stale tournament round summary',
       (tester) async {
     final event = EventRecord.fromJson({
@@ -2915,6 +3579,19 @@ void main() {
               ),
             ],
           ),
+          finalsRepository: _FinalsRepository(
+            _finalsState(
+              status: FinalsOverallStatus.recoverableMissingSessions,
+              actions: const [
+                FinalsAction(
+                  kind: FinalsActionKind.startFinalsTables,
+                  label: 'Start Finals Tables',
+                  recoveryToken: 'recovery-token',
+                ),
+              ],
+              recoveryToken: 'recovery-token',
+            ),
+          ),
         ),
         onGenerateRoute: (settings) {
           if (settings.name == AppRouter.tablesOverviewRoute) {
@@ -2931,17 +3608,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Finals Live'), findsOneWidget);
-    expect(find.text('Finals'), findsOneWidget);
-    expect(find.text('0 of 1 finals tables complete'), findsOneWidget);
-    expect(find.text('1 finals table not started'), findsOneWidget);
-    expect(find.text('Open Finals Tables'), findsOneWidget);
+    expect(find.text('Finals Ready'), findsOneWidget);
+    expect(find.text('Parallel Finals'), findsOneWidget);
+    expect(find.text('0 of 4 Champions slots filled'), findsOneWidget);
+    expect(find.text('Start Finals Tables'), findsOneWidget);
     expect(find.text('Scan Table'), findsNothing);
     expect(find.text('Tournament Live'), findsNothing);
     expect(find.text('Round 2'), findsNothing);
     expect(find.text('Start Next Round'), findsNothing);
 
-    await tester.tap(find.text('Open Finals Tables'));
+    await tester.tap(find.text('Start Finals Tables'));
     await tester.pumpAndSettle();
 
     expect(openedArgs?.eventId, event.id);
@@ -3014,6 +3690,28 @@ void main() {
               ),
             ],
           ),
+          finalsRepository: _FinalsRepository(
+            _finalsState(
+              contests: [
+                _finalsContest(
+                  id: 'championship_tiebreak',
+                  title: 'Championship Tiebreak',
+                  type: FinalsContestType.championsSuddenDeath,
+                  status: FinalsContestStatus.ready,
+                  tableLabel: 'Table 1',
+                ),
+              ],
+              actions: const [
+                FinalsAction(
+                  kind: FinalsActionKind.startContest,
+                  label: 'Start Championship Tiebreak',
+                  contestId: 'championship_tiebreak',
+                  tableId: 'tbl_01',
+                  expectedStateVersion: 7,
+                ),
+              ],
+            ),
+          ),
         ),
         onGenerateRoute: (settings) {
           if (settings.name == AppRouter.tablesOverviewRoute) {
@@ -3030,14 +3728,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Sudden Death Required'), findsOneWidget);
+    expect(find.text('Tiebreak pending'), findsOneWidget);
     expect(find.textContaining('Alice Wong'), findsWidgets);
     expect(find.textContaining('Bob Lee'), findsWidgets);
     expect(find.text('Ready to complete event'), findsNothing);
-    expect(find.text('Open Finals Tables'), findsOneWidget);
+    expect(find.text('Start Championship Tiebreak'), findsOneWidget);
 
     final openFinalsTablesButton =
-        find.widgetWithText(FilledButton, 'Open Finals Tables');
+        find.widgetWithText(FilledButton, 'Start Championship Tiebreak');
     await tester.tap(openFinalsTablesButton);
     await tester.pumpAndSettle();
 
@@ -3081,6 +3779,19 @@ void main() {
               ),
             ],
           ),
+          finalsRepository: _FinalsRepository(
+            _finalsState(
+              status: FinalsOverallStatus.recoverableMissingSessions,
+              actions: const [
+                FinalsAction(
+                  kind: FinalsActionKind.resumeFinalsStart,
+                  label: 'Resume Finals Start',
+                  recoveryToken: 'recovery-token',
+                ),
+              ],
+              recoveryToken: 'recovery-token',
+            ),
+          ),
         ),
         onGenerateRoute: (settings) {
           if (settings.name == AppRouter.tablesOverviewRoute) {
@@ -3097,13 +3808,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Finals Live'), findsOneWidget);
-    expect(find.text('Finals'), findsOneWidget);
-    expect(find.text('0 of 1 finals tables complete'), findsOneWidget);
-    expect(find.text('Open Finals Tables'), findsOneWidget);
+    expect(find.text('Finals Ready'), findsOneWidget);
+    expect(find.text('Parallel Finals'), findsOneWidget);
+    expect(find.text('0 of 4 Champions slots filled'), findsOneWidget);
+    expect(find.text('Resume Finals Start'), findsOneWidget);
     expect(find.text('Round 2'), findsNothing);
 
-    await tester.tap(find.text('Open Finals Tables'));
+    await tester.tap(find.text('Resume Finals Start'));
     await tester.pumpAndSettle();
 
     expect(openedArgs?.eventId, event.id);

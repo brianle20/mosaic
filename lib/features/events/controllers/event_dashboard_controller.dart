@@ -5,6 +5,7 @@ import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/leaderboard_models.dart';
 import 'package:mosaic/data/models/prize_models.dart';
@@ -60,6 +61,7 @@ class EventDashboardController extends ChangeNotifier {
     TableRepository? tableRepository,
     SessionRepository? sessionRepository,
     SeatingRepository? seatingRepository,
+    FinalsRepository? finalsRepository,
     this.callerRole = MosaicAccessRole.owner,
   })  : _eventRepository = eventRepository,
         _guestRepository = guestRepository,
@@ -67,7 +69,8 @@ class EventDashboardController extends ChangeNotifier {
         _prizeRepository = prizeRepository,
         _tableRepository = tableRepository,
         _sessionRepository = sessionRepository,
-        _seatingRepository = seatingRepository;
+        _seatingRepository = seatingRepository,
+        _finalsRepository = finalsRepository;
 
   final EventRepository _eventRepository;
   final GuestRepository _guestRepository;
@@ -76,6 +79,7 @@ class EventDashboardController extends ChangeNotifier {
   final TableRepository? _tableRepository;
   SessionRepository? _sessionRepository;
   SeatingRepository? _seatingRepository;
+  final FinalsRepository? _finalsRepository;
   MosaicAccessRole callerRole;
   int _stateRequestToken = 0;
 
@@ -85,8 +89,10 @@ class EventDashboardController extends ChangeNotifier {
   String? error;
   String? lifecycleError;
   String? tableScanError;
+  String? finalsActionError;
   EventRecord? event;
   BonusRoundState? bonusRoundState;
+  FinalsState? finalsState;
   int guestCount = 0;
   int checkedInGuestCount = 0;
   int qualifyingGuestCount = 0;
@@ -102,6 +108,12 @@ class EventDashboardController extends ChangeNotifier {
   List<LeaderboardEntry> _leaderboardEntries = const [];
   int? _loadingRequestToken;
   bool _isDisposed = false;
+  String? _loadedEventId;
+  Future<FinalsState?>? _finalsActionFuture;
+
+  FinalsAction? get primaryFinalsAction => finalsState?.primaryAction;
+
+  bool get isExecutingFinalsAction => _finalsActionFuture != null;
 
   bool get canManageEvent => callerRole.canManageEvent;
 
@@ -117,7 +129,8 @@ class EventDashboardController extends ChangeNotifier {
   bool get canScoreBonus => callerRole.canScoreBonus;
 
   EventScoringPhase? get effectiveScoringPhase {
-    if (finalsRoundSummary.hasCurrentRound) {
+    if (finalsState case final state?
+        when state.overallStatus != FinalsOverallStatus.notStarted) {
       return EventScoringPhase.bonus;
     }
     return event?.currentScoringPhase;
@@ -133,6 +146,7 @@ class EventDashboardController extends ChangeNotifier {
       bonusRoundState?.suddenDeathStatus == 'completed';
 
   Future<void> load(String eventId, {bool silent = false}) async {
+    _loadedEventId = eventId;
     final requestToken = _beginStateRequest(silent: silent);
     final cachedEvent = (await _eventRepository.readCachedEvents())
         .where((record) => record.id == eventId)
@@ -166,6 +180,7 @@ class EventDashboardController extends ChangeNotifier {
     }
     if (!silent) {
       bonusRoundState = null;
+      finalsState = null;
     }
     if (!silent || cachedGuests.isNotEmpty) {
       _updateGuestSummaries(cachedGuests);
@@ -209,7 +224,8 @@ class EventDashboardController extends ChangeNotifier {
         return;
       }
       if (event == null) {
-        error = userFacingError(exception, fallback: 'Unable to load event details.');
+        error = userFacingError(exception,
+            fallback: 'Unable to load event details.');
       }
     }
 
@@ -224,7 +240,8 @@ class EventDashboardController extends ChangeNotifier {
         return;
       }
       if (event == null && guestCount == 0) {
-        error ??= userFacingError(exception, fallback: 'Unable to load event details.');
+        error ??= userFacingError(exception,
+            fallback: 'Unable to load event details.');
       }
     }
 
@@ -313,6 +330,31 @@ class EventDashboardController extends ChangeNotifier {
       _rebuildBonusRoundResults();
     }
 
+    final finalsRepository = _finalsRepository;
+    if (finalsRepository != null) {
+      try {
+        final loadedFinalsState =
+            await finalsRepository.loadFinalsState(eventId);
+        if (!_isCurrentStateRequest(requestToken)) {
+          return;
+        }
+        finalsState = loadedFinalsState;
+        if (loadedFinalsState.overallStatus != FinalsOverallStatus.notStarted) {
+          tournamentRoundSummary = TournamentRoundSummary.empty();
+        }
+      } catch (exception) {
+        if (!_isCurrentStateRequest(requestToken)) {
+          return;
+        }
+        if (finalsState == null && !silent) {
+          error ??= userFacingError(
+            exception,
+            fallback: 'Unable to load Finals.',
+          );
+        }
+      }
+    }
+
     if (!_isCurrentStateRequest(requestToken)) {
       return;
     }
@@ -321,6 +363,88 @@ class EventDashboardController extends ChangeNotifier {
       _loadingRequestToken = null;
     }
     notifyListeners();
+  }
+
+  Future<FinalsState?> executeFinalsAction(FinalsAction action) {
+    final isServerAction = finalsState?.allowedActions.any(
+          (serverAction) => identical(serverAction, action),
+        ) ??
+        false;
+    if (!isServerAction) return Future.value(finalsState);
+    final existing = _finalsActionFuture;
+    if (existing != null) return existing;
+
+    final future = _executeFinalsAction(action);
+    _finalsActionFuture = future;
+    notifyListeners();
+    future.whenComplete(() {
+      if (identical(_finalsActionFuture, future)) {
+        _finalsActionFuture = null;
+        if (!_isDisposed) notifyListeners();
+      }
+    });
+    return future;
+  }
+
+  Future<FinalsState?> _executeFinalsAction(FinalsAction action) async {
+    final finalsRepository = _finalsRepository;
+    if (finalsRepository == null) return finalsState;
+
+    finalsActionError = null;
+    try {
+      final updatedState = switch (action.kind) {
+        FinalsActionKind.startFinalsTables ||
+        FinalsActionKind.resumeFinalsStart =>
+          await finalsRepository.resumeFinalsStart(
+            ResumeFinalsStartInput(
+              eventId: _eventIdForFinalsAction(),
+              recoveryToken: action.recoveryToken!,
+            ),
+          ),
+        FinalsActionKind.startContest => await finalsRepository.startContest(
+            StartFinalsContestInput(
+              contestId: action.contestId!,
+              tableId: action.tableId,
+              expectedStateVersion: action.expectedStateVersion!,
+            ),
+          ),
+      };
+      finalsState = updatedState;
+      await _refreshFinalsSupportingData();
+      return updatedState;
+    } catch (exception) {
+      finalsActionError = userFacingError(
+        exception,
+        fallback:
+            'Unable to complete that Finals action right now. Refresh and try again.',
+      );
+      return null;
+    }
+  }
+
+  String _eventIdForFinalsAction() {
+    final eventId = _loadedEventId;
+    if (eventId == null) {
+      throw StateError('Refresh Finals before trying that action.');
+    }
+    return eventId;
+  }
+
+  Future<void> _refreshFinalsSupportingData() async {
+    final eventId = _eventIdForFinalsAction();
+    final loadedFinalsRoundSummary = await _loadFinalsRoundSummary(eventId);
+    if (loadedFinalsRoundSummary.succeeded) {
+      finalsRoundSummary = loadedFinalsRoundSummary.value;
+    }
+    final loadedBonusRoundState = await _loadBonusRoundState(eventId);
+    if (loadedBonusRoundState.succeeded) {
+      bonusRoundState = loadedBonusRoundState.value;
+    }
+    final ledgerResult = await _loadBonusLedger(eventId);
+    if (ledgerResult.succeeded) {
+      _bonusLedgerEntries = ledgerResult.value;
+    }
+    _rebuildBonusRoundResults();
   }
 
   int _beginStateRequest({required bool silent}) {

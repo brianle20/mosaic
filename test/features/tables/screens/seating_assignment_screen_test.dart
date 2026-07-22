@@ -160,9 +160,9 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   final List<TableSessionRecord> sessions;
   final List<TableSessionRecord> sessionsAfterBulkStart;
   final Object? bulkStartError;
+  static int listSessionsCallCount = 0;
   static int bulkStartCallCount = 0;
   static int bonusBulkStartCallCount = 0;
-  static BonusTableRole? lastBonusBulkStartRole;
 
   @override
   Future<SessionDetailRecord> editHand(EditHandResultInput input) {
@@ -188,10 +188,12 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
   }
 
   @override
-  Future<List<TableSessionRecord>> listSessions(String eventId) async =>
-      bulkStartCallCount > 0 || bonusBulkStartCallCount > 0
-          ? sessionsAfterBulkStart
-          : sessions;
+  Future<List<TableSessionRecord>> listSessions(String eventId) async {
+    listSessionsCallCount += 1;
+    return bulkStartCallCount > 0 || bonusBulkStartCallCount > 0
+        ? sessionsAfterBulkStart
+        : sessions;
+  }
 
   @override
   Future<SessionDetailRecord> pauseSession(String sessionId) {
@@ -240,7 +242,6 @@ class _FakeSessionRepository extends ThrowingSessionRepository {
     required BonusTableRole? bonusTableRole,
   }) async {
     bonusBulkStartCallCount += 1;
-    lastBonusBulkStartRole = bonusTableRole;
     if (bulkStartError != null) {
       throw bulkStartError!;
     }
@@ -273,9 +274,9 @@ class _FakeOfflineRecoverySignal implements OfflineRecoverySignal {
 
 void main() {
   setUp(() {
+    _FakeSessionRepository.listSessionsCallCount = 0;
     _FakeSessionRepository.bulkStartCallCount = 0;
     _FakeSessionRepository.bonusBulkStartCallCount = 0;
-    _FakeSessionRepository.lastBonusBulkStartRole = null;
   });
 
   testWidgets('recovery refresh keeps cached seating visible', (tester) async {
@@ -803,7 +804,7 @@ void main() {
     expect(find.text('Eli Waiting'), findsOneWidget);
   });
 
-  testWidgets('finals seating starts bonus tables and opens tables route',
+  testWidgets('bonus seating is review only and opens bonus Tables',
       (tester) async {
     TablesOverviewArgs? openedArgs;
     final guests = [
@@ -853,9 +854,7 @@ void main() {
           guestRepository: _FakeGuestRepository(
             guests: guests,
           ),
-          sessionRepository: _FakeSessionRepository(
-            sessionsAfterBulkStart: [_session(SessionStatus.active)],
-          ),
+          sessionRepository: const _FakeSessionRepository(),
           bonusTableRoleFilter: BonusTableRole.tableOfChampionsSuddenDeath,
           showUnassignedGuests: false,
         ),
@@ -880,13 +879,29 @@ void main() {
     expect(find.text('Redemption Player'), findsNothing);
     expect(find.text('Unassigned'), findsNothing);
     expect(find.text('Waiting Player'), findsNothing);
-    expect(find.text('Start Sudden Death'), findsOneWidget);
+    expect(
+      find.text(
+        'Review Finals seating, then open Finals Tables for the current status and next action.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Finals tables are ready to start.'), findsNothing);
+    expect(find.text('Open Finals Tables'), findsOneWidget);
+    expect(find.text('Start Finals Tables'), findsNothing);
+    expect(find.text('Start Sudden Death'), findsNothing);
+    expect(find.text('Start Play-In'), findsNothing);
     expect(find.text('Enter Table'), findsNothing);
+    final sessionCallsBeforeNavigation =
+        _FakeSessionRepository.listSessionsCallCount;
 
-    await tester.tap(find.text('Start Sudden Death'));
+    await tester.tap(find.text('Open Finals Tables'));
     await tester.pumpAndSettle();
+    expect(
+      _FakeSessionRepository.listSessionsCallCount,
+      sessionCallsBeforeNavigation,
+    );
     expect(_FakeSessionRepository.bulkStartCallCount, 0);
-    expect(_FakeSessionRepository.bonusBulkStartCallCount, 1);
+    expect(_FakeSessionRepository.bonusBulkStartCallCount, 0);
     expect(openedArgs?.eventId, 'evt_01');
     expect(openedArgs?.eventTitle, 'Friday Night Mahjong');
     expect(openedArgs?.scoringOpen, isTrue);
@@ -894,7 +909,7 @@ void main() {
     expect(find.text('Opened Tables'), findsOneWidget);
   });
 
-  testWidgets('standard finals seating starts all finals bonus tables',
+  testWidgets('mixed Finals roles expose navigation without a mutation',
       (tester) async {
     TablesOverviewArgs? openedArgs;
 
@@ -926,9 +941,7 @@ void main() {
             ],
           ),
           guestRepository: _FakeGuestRepository(),
-          sessionRepository: _FakeSessionRepository(
-            sessionsAfterBulkStart: [_session(SessionStatus.active)],
-          ),
+          sessionRepository: const _FakeSessionRepository(),
         ),
         onGenerateRoute: (settings) {
           if (settings.name == AppRouter.tablesOverviewRoute) {
@@ -944,14 +957,29 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Start Finals Tables'), findsOneWidget);
+    expect(
+      find.text(
+        'Review Finals seating, then open Finals Tables for the current status and next action.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Finals tables are ready to start.'), findsNothing);
+    expect(find.text('Open Finals Tables'), findsOneWidget);
+    expect(find.text('Start Finals Tables'), findsNothing);
+    expect(find.text('Start Sudden Death'), findsNothing);
+    expect(find.text('Start Play-In'), findsNothing);
+    final sessionCallsBeforeNavigation =
+        _FakeSessionRepository.listSessionsCallCount;
 
-    await tester.tap(find.text('Start Finals Tables'));
+    await tester.tap(find.text('Open Finals Tables'));
     await tester.pumpAndSettle();
 
+    expect(
+      _FakeSessionRepository.listSessionsCallCount,
+      sessionCallsBeforeNavigation,
+    );
     expect(_FakeSessionRepository.bulkStartCallCount, 0);
-    expect(_FakeSessionRepository.bonusBulkStartCallCount, 1);
-    expect(_FakeSessionRepository.lastBonusBulkStartRole, isNull);
+    expect(_FakeSessionRepository.bonusBulkStartCallCount, 0);
     expect(openedArgs?.eventId, 'evt_01');
     expect(openedArgs?.scoringPhase, EventScoringPhase.bonus);
     expect(find.text('Opened Tables'), findsOneWidget);

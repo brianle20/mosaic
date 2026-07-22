@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/data/models/auth_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/staff_models.dart';
@@ -38,6 +39,7 @@ class AppRouter {
     required this.activityRepository,
     required this.prizeRepository,
     required this.seatingRepository,
+    required this.finalsRepository,
     required this.mosaicProfileRepository,
     this.staffRepository,
     required this.nfcService,
@@ -52,6 +54,7 @@ class AppRouter {
   final ActivityRepository activityRepository;
   final PrizeRepository prizeRepository;
   final SeatingRepository seatingRepository;
+  final FinalsRepository finalsRepository;
   final MosaicProfileRepository mosaicProfileRepository;
   final StaffRepository? staffRepository;
   final NfcService nfcService;
@@ -109,6 +112,7 @@ class AppRouter {
             tableRepository: tableRepository,
             sessionRepository: sessionRepository,
             seatingRepository: seatingRepository,
+            finalsRepository: finalsRepository,
             staffRepository:
                 staffRepository ?? const _UnavailableStaffRepository(),
             nfcService: nfcService,
@@ -193,6 +197,7 @@ class AppRouter {
             sessionRepository: sessionRepository,
             guestRepository: guestRepository,
             seatingRepository: seatingRepository,
+            finalsRepository: finalsRepository,
           ),
           settings: settings,
         );
@@ -277,13 +282,11 @@ class AppRouter {
         );
       case bonusRoundRoute:
         final args = settings.arguments as BonusRoundArgs;
-        return MaterialPageRoute<void>(
+        return MaterialPageRoute<FinalsState>(
           builder: (_) => BonusRoundScreen(
             eventId: args.eventId,
-            leaderboardRepository: leaderboardRepository,
+            finalsRepository: finalsRepository,
             tableRepository: tableRepository,
-            sessionRepository: sessionRepository,
-            seatingRepository: seatingRepository,
             nfcService: nfcService,
           ),
           settings: settings,

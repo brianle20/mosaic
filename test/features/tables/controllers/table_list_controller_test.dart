@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -10,6 +11,8 @@ import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
+import 'package:mosaic/data/repositories/repository_interfaces.dart';
+import 'package:mosaic/data/repositories/supabase_finals_repository.dart';
 import '../../../helpers/repository_fakes.dart';
 import 'package:mosaic/features/tables/controllers/table_list_controller.dart';
 
@@ -258,19 +261,13 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   _FakeSeatingRepository({
     this.summary,
     this.bonusRoundState,
-    this.suddenDeathAssignments = const [],
-    this.playInAssignments = const [],
     this.assignments = const [],
   });
 
   TournamentRoundSummary? summary;
   BonusRoundState? bonusRoundState;
-  List<SeatingAssignmentRecord> suddenDeathAssignments;
-  List<SeatingAssignmentRecord> playInAssignments;
   List<SeatingAssignmentRecord> assignments;
   Object? remoteError;
-  final startedSuddenDeathTables = <String>[];
-  final startedPlayInTables = <String>[];
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
@@ -314,22 +311,511 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   Future<List<SeatingAssignmentRecord>> startBonusRoundSuddenDeath({
     required String eventId,
     required String tableId,
-  }) async {
-    startedSuddenDeathTables.add(tableId);
-    return suddenDeathAssignments;
-  }
+  }) async =>
+      const [];
 
   @override
   Future<List<SeatingAssignmentRecord>> startTableOfChampionsPlayIn({
     required String eventId,
     required String tableId,
-  }) async {
-    startedPlayInTables.add(tableId);
-    return playInAssignments;
+  }) async =>
+      const [];
+}
+
+class _FakeFinalsRepository extends ThrowingFinalsRepository {
+  _FakeFinalsRepository(this.state);
+
+  FinalsState state;
+  Object? loadError;
+  Object? actionError;
+  Completer<FinalsState>? actionCompleter;
+  int loadCount = 0;
+  int resumeCount = 0;
+  int startContestCount = 0;
+  ResumeFinalsStartInput? lastResumeInput;
+  StartFinalsContestInput? lastContestInput;
+
+  @override
+  Future<FinalsState> loadFinalsState(String eventId) async {
+    loadCount += 1;
+    if (loadError case final error?) throw error;
+    return state;
+  }
+
+  @override
+  Future<FinalsState> resumeFinalsStart(ResumeFinalsStartInput input) async {
+    resumeCount += 1;
+    lastResumeInput = input;
+    if (actionError case final error?) throw error;
+    return actionCompleter == null ? state : actionCompleter!.future;
+  }
+
+  @override
+  Future<FinalsState> startContest(StartFinalsContestInput input) async {
+    startContestCount += 1;
+    lastContestInput = input;
+    if (actionError case final error?) throw error;
+    return actionCompleter == null ? state : actionCompleter!.future;
   }
 }
 
+FinalsState _sqlShapedRecoveryState() => FinalsState.fromJson(const {
+      'flow_version': 'legacy',
+      'state_version': 0,
+      'format': 'parallel_finals',
+      'overall_status': 'recoverable_missing_sessions',
+      'eligible_player_count': 8,
+      'champions_slots': [],
+      'contests': [],
+      'allowed_actions': [
+        {
+          'action': 'start_finals_tables',
+          'label': 'Start Finals Tables',
+          'recovery_token': 'recovery-token-from-sql',
+        },
+      ],
+      'blocking_reason': null,
+      'recovery_token': 'recovery-token-from-sql',
+      'champion': null,
+      'redemption_winner': null,
+      'sessions': [],
+    });
+
 void main() {
+  group('authoritative Finals orchestration', () {
+    test('SQL-shaped recovery action dispatches from Tables without inference',
+        () async {
+      final state = _sqlShapedRecoveryState();
+      final repository = _FakeFinalsRepository(state);
+      final controller = _finalsController(repository);
+      await controller.load('evt_01');
+
+      await controller.executeFinalsAction(state.primaryAction!);
+
+      expect(repository.resumeCount, 1);
+      expect(
+          repository.lastResumeInput?.recoveryToken, 'recovery-token-from-sql');
+    });
+
+    test('loads the exact legacy recovery action and summary', () async {
+      final finalsRepository = _FakeFinalsRepository(
+        _finalsState(
+          status: FinalsOverallStatus.recoverableMissingSessions,
+          recoveryToken: 'recovery-token',
+          actions: const [
+            FinalsAction(
+              kind: FinalsActionKind.startFinalsTables,
+              label: 'Start Finals Tables',
+              recoveryToken: 'recovery-token',
+            ),
+          ],
+          contests: [
+            _contest(
+              id: 'redemption',
+              title: 'Table of Redemption',
+              status: FinalsContestStatus.ready,
+              tableLabel: 'Table 2',
+            ),
+            _contest(
+              id: 'champions',
+              title: 'Table of Champions',
+              status: FinalsContestStatus.ready,
+              tableLabel: 'Table 1',
+            ),
+          ],
+        ),
+      );
+      final controller = _finalsController(finalsRepository);
+
+      await controller.load('evt_01');
+
+      expect(controller.finalsState, same(finalsRepository.state));
+      expect(controller.primaryFinalsAction?.label, 'Start Finals Tables');
+      expect(controller.finalsSummary?.notStartedCount, 2);
+      expect(controller.canStartAllTables, isFalse);
+    });
+
+    test('loads partial and blocked legacy state without inference', () async {
+      final finalsRepository = _FakeFinalsRepository(
+        _finalsState(
+          status: FinalsOverallStatus.recoverableMissingSessions,
+          recoveryToken: 'partial-token',
+          actions: const [
+            FinalsAction(
+              kind: FinalsActionKind.resumeFinalsStart,
+              label: 'Resume Finals Start',
+              recoveryToken: 'partial-token',
+            ),
+          ],
+        ),
+      );
+      final controller = _finalsController(finalsRepository);
+      await controller.load('evt_01');
+      expect(controller.primaryFinalsAction?.label, 'Resume Finals Start');
+
+      finalsRepository.state = _finalsState(
+        status: FinalsOverallStatus.blockedLegacyState,
+        blockingReason: 'Finals seating is incomplete.',
+      );
+      await controller.load('evt_01', silent: true);
+      expect(controller.primaryFinalsAction, isNull);
+      expect(controller.finalsSummary?.blockingReason,
+          'Finals seating is incomplete.');
+    });
+
+    test('exposes ready role actions, active sessions, and completed results',
+        () async {
+      final readyCases = <(FinalsContestType, String)>[
+        (FinalsContestType.tableOfRedemption, 'Start Table of Redemption'),
+        (FinalsContestType.tableOfChampions, 'Start Table of Champions'),
+        (
+          FinalsContestType.championsSuddenDeath,
+          'Start Champions Sudden Death'
+        ),
+      ];
+      for (final (type, label) in readyCases) {
+        final repository = _FakeFinalsRepository(
+          _finalsState(
+            actions: [
+              FinalsAction(
+                kind: FinalsActionKind.startContest,
+                label: label,
+                contestId: 'contest',
+                tableId: 'tbl_01',
+                expectedStateVersion: 7,
+              ),
+            ],
+            contests: [
+              _contest(
+                id: 'contest',
+                type: type,
+                title: label.substring(6),
+                status: FinalsContestStatus.ready,
+              ),
+            ],
+          ),
+        );
+        final controller = _finalsController(repository);
+        await controller.load('evt_01');
+        expect(controller.primaryFinalsAction?.label, label);
+      }
+
+      final repository = _FakeFinalsRepository(
+        _finalsState(
+          status: FinalsOverallStatus.complete,
+          champion: const FinalsResult(
+            eventGuestId: 'guest_01',
+            displayName: 'Ava',
+          ),
+          contests: [
+            _contest(
+              id: 'complete',
+              title: 'Table of Champions',
+              status: FinalsContestStatus.complete,
+              sessionId: 'session-history',
+              completedAt: DateTime.parse('2026-07-11T20:00:00Z'),
+            ),
+            _contest(
+              id: 'active',
+              title: 'Table of Redemption',
+              status: FinalsContestStatus.active,
+              sessionId: 'session-live',
+            ),
+          ],
+        ),
+      );
+      final controller = _finalsController(repository);
+      await controller.load('evt_01');
+      expect(controller.finalsSummary?.activeContests.single.sessionId,
+          'session-live');
+      expect(controller.finalsSummary?.completedContests.single.resultLabel,
+          'Champion: Ava');
+      expect(controller.primaryFinalsAction, isNull);
+    });
+
+    test('duplicate actions share one in-flight request', () async {
+      final action = const FinalsAction(
+        kind: FinalsActionKind.startFinalsTables,
+        label: 'Start Finals Tables',
+        recoveryToken: 'recovery-token',
+      );
+      final repository = _FakeFinalsRepository(
+        _finalsState(actions: [action], recoveryToken: 'recovery-token'),
+      )..actionCompleter = Completer<FinalsState>();
+      final controller = _finalsController(repository);
+      await controller.load('evt_01');
+
+      final first = controller.executeFinalsAction(action);
+      final second = controller.executeFinalsAction(action);
+
+      expect(identical(first, second), isTrue);
+      expect(repository.resumeCount, 1);
+      expect(controller.isExecutingFinalsAction, isTrue);
+      repository.actionCompleter!.complete(repository.state);
+      await first;
+      expect(controller.isExecutingFinalsAction, isFalse);
+    });
+
+    test('never dispatches an action not returned by the server', () async {
+      final serverAction = const FinalsAction(
+        kind: FinalsActionKind.startFinalsTables,
+        label: 'Start Finals Tables',
+        recoveryToken: 'recovery-token',
+      );
+      final repository = _FakeFinalsRepository(
+        _finalsState(
+          actions: [serverAction],
+          recoveryToken: 'recovery-token',
+        ),
+      );
+      final controller = _finalsController(repository);
+      await controller.load('evt_01');
+
+      final result = await controller.executeFinalsAction(
+        FinalsAction(
+          kind: FinalsActionKind.startFinalsTables,
+          label: 'Start Finals Tables',
+          recoveryToken: 'recovery-token',
+        ),
+      );
+
+      expect(result, same(repository.state));
+      expect(repository.resumeCount, 0);
+    });
+
+    test('action and silent refresh errors preserve usable Finals state',
+        () async {
+      final action = const FinalsAction(
+        kind: FinalsActionKind.startFinalsTables,
+        label: 'Start Finals Tables',
+        recoveryToken: 'recovery-token',
+      );
+      final initial = _finalsState(
+        actions: [action],
+        recoveryToken: 'recovery-token',
+      );
+      final repository = _FakeFinalsRepository(initial);
+      final controller = _finalsController(repository);
+      await controller.load('evt_01');
+
+      repository.loadError = StateError('offline');
+      await controller.load('evt_01', silent: true);
+      expect(controller.finalsState, same(initial));
+      expect(controller.error, isNull);
+
+      repository.loadError = null;
+      repository.actionError =
+          const FinalsCommandException('Finals seating is incomplete.');
+      expect(await controller.executeFinalsAction(action), isNull);
+      expect(controller.finalsState, same(initial));
+      expect(controller.primaryFinalsAction, same(action));
+      expect(controller.finalsActionError, 'Finals seating is incomplete.');
+    });
+
+    test('initial Finals read failure never falls back to inferred assignments',
+        () async {
+      final table = _tableRecord('tbl_01', 'Table 1');
+      final repository = _FakeFinalsRepository(_finalsState())
+        ..loadError = StateError('offline');
+      final controller = TableListController(
+        tableRepository: _FakeTableRepository(cachedTables: [table]),
+        sessionRepository: _FakeSessionRepository(cachedSessions: const []),
+        guestRepository: _FakeGuestRepository(const []),
+        seatingRepository: _FakeSeatingRepository(
+          assignments: [
+            _bonusAssignment(
+              table: table,
+              seatIndex: 0,
+              displayName: 'Ava',
+              seedRank: 1,
+            ),
+            _bonusAssignment(
+              table: table,
+              seatIndex: 1,
+              displayName: 'Ben',
+              seedRank: 2,
+            ),
+          ],
+        ),
+        finalsRepository: repository,
+        scoringPhase: EventScoringPhase.bonus,
+      );
+
+      await controller.load('evt_01');
+
+      expect(controller.finalsState, isNull);
+      expect(controller.finalsSummary, isNull);
+      expect(controller.tournamentRoundSummary.hasCurrentRound, isFalse);
+      expect(controller.currentRoundCards, isEmpty);
+      expect(controller.error, 'offline');
+    });
+
+    test('six-player Redemption result includes the advancing runner-up',
+        () async {
+      final repository = _FakeFinalsRepository(
+        _finalsState(
+          status: FinalsOverallStatus.active,
+          eligiblePlayerCount: 6,
+          format: FinalsFormat.redemptionAdvancement,
+          redemptionWinner: const FinalsResult(
+            eventGuestId: 'guest_01',
+            displayName: 'Ava',
+          ),
+          contests: [
+            _contest(
+              id: 'redemption',
+              type: FinalsContestType.tableOfRedemption,
+              title: 'Table of Redemption',
+              status: FinalsContestStatus.complete,
+              participants: const [
+                FinalsParticipant(
+                  eventGuestId: 'guest_01',
+                  displayName: 'Ava',
+                  entrySeed: 3,
+                  seatIndex: 0,
+                  outcome: FinalsParticipantOutcome.winner,
+                  advancedChampionsSlot: 3,
+                  outcomeOrder: 1,
+                ),
+                FinalsParticipant(
+                  eventGuestId: 'guest_02',
+                  displayName: 'Ben',
+                  entrySeed: 4,
+                  seatIndex: 1,
+                  outcome: FinalsParticipantOutcome.runnerUp,
+                  advancedChampionsSlot: 4,
+                  outcomeOrder: 2,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      final controller = _finalsController(repository);
+
+      await controller.load('evt_01');
+
+      expect(
+        controller.finalsSummary?.completedContests.single.resultLabel,
+        'Redemption winner: Ava • Runner-up: Ben',
+      );
+    });
+
+    test('rebinds a ready contest only to a filtered usable table', () async {
+      final action = const FinalsAction(
+        kind: FinalsActionKind.startContest,
+        label: 'Start Table of Champions',
+        contestId: 'contest',
+        availableTableIds: ['tbl_ready'],
+        expectedStateVersion: 7,
+      );
+      final repository = _FakeFinalsRepository(
+        _finalsState(
+          actions: [action],
+          contests: [
+            _contest(
+              id: 'contest',
+              title: 'Table of Champions',
+              status: FinalsContestStatus.ready,
+            ),
+          ],
+        ),
+      );
+      final busySession = _session(
+        id: 'busy',
+        tableId: 'tbl_busy',
+        scoringPhase: EventScoringPhase.bonus,
+      );
+      final controller = TableListController(
+        tableRepository: _FakeTableRepository(cachedTables: [
+          _tableRecord('tbl_busy', 'Busy Table'),
+          _tableRecord('tbl_ready', 'Garden Table'),
+          _tableRecord('tbl_not_authorized', 'Retired Table'),
+        ]),
+        sessionRepository: _FakeSessionRepository(
+          cachedSessions: [busySession],
+          cachedDetails: {
+            'busy': _detail(busySession),
+          },
+          loadedDetails: {
+            'busy': _detail(busySession),
+          },
+        ),
+        guestRepository: _FakeGuestRepository(const []),
+        finalsRepository: repository,
+        scoringPhase: EventScoringPhase.bonus,
+      );
+      await controller.load('evt_01');
+
+      expect(
+        controller.usableTablesForFinalsAction(action).map((table) => table.id),
+        ['tbl_ready'],
+      );
+      await controller.executeFinalsAction(action, tableId: 'tbl_ready');
+      expect(repository.lastContestInput?.tableId, 'tbl_ready');
+    });
+
+    test('participant conflict removes every table picker candidate', () async {
+      const action = FinalsAction(
+        kind: FinalsActionKind.startContest,
+        label: 'Start Table of Champions',
+        contestId: 'contest',
+        expectedStateVersion: 7,
+      );
+      final repository = _FakeFinalsRepository(
+        _finalsState(
+          actions: const [action],
+          contests: [
+            _contest(
+              id: 'contest',
+              title: 'Table of Champions',
+              status: FinalsContestStatus.ready,
+              participants: const [
+                FinalsParticipant(
+                  eventGuestId: 'guest_conflict',
+                  displayName: 'Ava',
+                  entrySeed: 1,
+                  seatIndex: null,
+                  outcome: FinalsParticipantOutcome.pending,
+                  advancedChampionsSlot: null,
+                  outcomeOrder: null,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      final activeSession = _session(
+        id: 'active-conflict',
+        tableId: 'tbl_active',
+        scoringPhase: EventScoringPhase.bonus,
+      );
+      final conflictDetail = SessionDetailRecord(
+        session: activeSession,
+        seats: [_seat(0, 'guest_conflict')],
+        hands: const [],
+        settlements: const [],
+      );
+      final controller = TableListController(
+        tableRepository: _FakeTableRepository(cachedTables: [
+          _tableRecord('tbl_active', 'Active Table'),
+          _tableRecord('tbl_ready', 'Garden Table'),
+        ]),
+        sessionRepository: _FakeSessionRepository(
+          cachedSessions: [activeSession],
+          cachedDetails: {'active-conflict': conflictDetail},
+          loadedDetails: {'active-conflict': conflictDetail},
+        ),
+        guestRepository: _FakeGuestRepository(const []),
+        finalsRepository: repository,
+        scoringPhase: EventScoringPhase.bonus,
+      );
+      await controller.load('evt_01');
+
+      expect(controller.usableTablesForFinalsAction(action), isEmpty);
+    });
+  });
+
   test('silent recovery preserves populated table state when cache is empty',
       () async {
     final table = EventTableRecord.fromJson(const {
@@ -1294,85 +1780,6 @@ void main() {
     );
   });
 
-  test('starts bonus round sudden death through seating repository', () async {
-    final table = EventTableRecord.fromJson(const {
-      'id': 'tbl_sudden',
-      'event_id': 'evt_01',
-      'label': 'Table 9',
-      'display_order': 9,
-      'nfc_tag_id': 'tag_09',
-      'default_ruleset_id': 'HK_STANDARD',
-      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
-      'default_rotation_policy_config_json': {},
-    });
-    final assignment = _bonusAssignment(
-      table: table,
-      seatIndex: 0,
-      displayName: 'Alice Chen',
-      seedRank: 1,
-      role: BonusTableRole.tableOfChampionsSuddenDeath,
-    );
-    final seatingRepository = _FakeSeatingRepository(
-      suddenDeathAssignments: [assignment],
-    );
-    final controller = TableListController(
-      tableRepository: _FakeTableRepository(cachedTables: [table]),
-      sessionRepository: _FakeSessionRepository(cachedSessions: const []),
-      guestRepository: _FakeGuestRepository(const []),
-      seatingRepository: seatingRepository,
-      scoringPhase: EventScoringPhase.bonus,
-    );
-
-    final assignments = await controller.startBonusRoundSuddenDeath(
-      eventId: 'evt_01',
-      tableId: 'tbl_sudden',
-    );
-
-    expect(seatingRepository.startedSuddenDeathTables, ['tbl_sudden']);
-    expect(assignments, [assignment]);
-    expect(controller.error, isNull);
-  });
-
-  test('starts table of champions play-in through seating repository',
-      () async {
-    final table = EventTableRecord.fromJson(const {
-      'id': 'tbl_play_in',
-      'event_id': 'evt_01',
-      'label': 'Table 8',
-      'display_order': 8,
-      'nfc_tag_id': 'tag_08',
-      'default_ruleset_id': 'HK_STANDARD',
-      'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
-      'default_rotation_policy_config_json': {},
-    });
-    final assignment = _bonusAssignment(
-      table: table,
-      seatIndex: 0,
-      displayName: 'Dana Li',
-      seedRank: 4,
-      role: BonusTableRole.tableOfChampionsPlayIn,
-    );
-    final seatingRepository = _FakeSeatingRepository(
-      playInAssignments: [assignment],
-    );
-    final controller = TableListController(
-      tableRepository: _FakeTableRepository(cachedTables: [table]),
-      sessionRepository: _FakeSessionRepository(cachedSessions: const []),
-      guestRepository: _FakeGuestRepository(const []),
-      seatingRepository: seatingRepository,
-      scoringPhase: EventScoringPhase.bonus,
-    );
-
-    final assignments = await controller.startTableOfChampionsPlayIn(
-      eventId: 'evt_01',
-      tableId: 'tbl_play_in',
-    );
-
-    expect(seatingRepository.startedPlayInTables, ['tbl_play_in']);
-    expect(assignments, [assignment]);
-    expect(controller.error, isNull);
-  });
-
   test('starts all seated tournament tables and reloads live sessions',
       () async {
     final table = EventTableRecord.fromJson(const {
@@ -1698,6 +2105,84 @@ FalseWinPenaltyRecord _falseWinPenalty({
     'status': status,
     'entered_by_user_id': 'usr_01',
     'entered_at': '2026-04-24T19:04:00-07:00',
+  });
+}
+
+TableListController _finalsController(FinalsRepository finalsRepository) {
+  return TableListController(
+    tableRepository: _FakeTableRepository(cachedTables: const []),
+    sessionRepository: _FakeSessionRepository(cachedSessions: const []),
+    guestRepository: _FakeGuestRepository(const []),
+    finalsRepository: finalsRepository,
+    scoringPhase: EventScoringPhase.bonus,
+  );
+}
+
+FinalsState _finalsState({
+  FinalsOverallStatus status = FinalsOverallStatus.active,
+  List<FinalsAction> actions = const [],
+  List<FinalsContest> contests = const [],
+  String? blockingReason,
+  String? recoveryToken,
+  FinalsResult? champion,
+  FinalsResult? redemptionWinner,
+  int eligiblePlayerCount = 8,
+  FinalsFormat format = FinalsFormat.parallelFinals,
+}) {
+  return FinalsState(
+    flowVersion: FinalsFlowVersion.orchestrated,
+    stateVersion: 7,
+    format: format,
+    overallStatus: status,
+    eligiblePlayerCount: eligiblePlayerCount,
+    championsSlots: const [],
+    contests: contests,
+    allowedActions: actions,
+    blockingReason: blockingReason,
+    recoveryToken: recoveryToken,
+    champion: champion,
+    redemptionWinner: redemptionWinner,
+    sessions: const [],
+  );
+}
+
+FinalsContest _contest({
+  required String id,
+  FinalsContestType type = FinalsContestType.tableOfChampions,
+  required String title,
+  required FinalsContestStatus status,
+  String? tableLabel,
+  String? sessionId,
+  DateTime? completedAt,
+  List<FinalsParticipant> participants = const [],
+}) {
+  return FinalsContest(
+    id: id,
+    type: type,
+    title: title,
+    status: status,
+    tableLabel: tableLabel,
+    tableSessionId: sessionId,
+    slotsToFill: 0,
+    slotStartIndex: null,
+    sequenceNumber: 1,
+    startedAt:
+        sessionId == null ? null : DateTime.parse('2026-07-11T19:00:00Z'),
+    completedAt: completedAt,
+    participants: participants,
+  );
+}
+
+EventTableRecord _tableRecord(String id, String label) {
+  return EventTableRecord.fromJson({
+    'id': id,
+    'event_id': 'evt_01',
+    'label': label,
+    'display_order': 1,
+    'nfc_tag_id': 'tag_$id',
+    'default_ruleset_id': 'HK_STANDARD',
+    'default_rotation_policy_type': 'dealer_cycle_return_to_initial_east',
+    'default_rotation_policy_config_json': const {},
   });
 }
 

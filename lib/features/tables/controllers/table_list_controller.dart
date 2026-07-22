@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/seating_assignment_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -11,24 +12,28 @@ import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/scoring/models/round_timer_state.dart';
 import 'package:mosaic/features/tables/models/table_overview_card_data.dart';
+import 'package:mosaic/features/tables/models/finals_overview_view_models.dart';
 
 class TableListController extends ChangeNotifier {
   TableListController({
     required TableRepository tableRepository,
     required SessionRepository sessionRepository,
     required GuestRepository guestRepository,
+    FinalsRepository? finalsRepository,
     SeatingRepository? seatingRepository,
     this.scoringPhase = EventScoringPhase.tournament,
     DateTime Function()? now,
   })  : _tableRepository = tableRepository,
         _sessionRepository = sessionRepository,
         _guestRepository = guestRepository,
+        _finalsRepository = finalsRepository,
         _seatingRepository = seatingRepository,
         _now = now ?? DateTime.now;
 
   final TableRepository _tableRepository;
   final SessionRepository _sessionRepository;
   final GuestRepository _guestRepository;
+  final FinalsRepository? _finalsRepository;
   final SeatingRepository? _seatingRepository;
   final EventScoringPhase scoringPhase;
   final DateTime Function() _now;
@@ -39,6 +44,7 @@ class TableListController extends ChangeNotifier {
   bool isStartingAllTables = false;
   bool isUpdatingTimers = false;
   String? error;
+  String? finalsActionError;
   List<EventTableRecord> tables = const [];
   Map<String, TableSessionRecord> activeSessionsByTableId = const {};
   Map<String, List<TableSessionRecord>> sessionsByTableId = const {};
@@ -47,12 +53,19 @@ class TableListController extends ChangeNotifier {
   TournamentRoundSummary tournamentRoundSummary =
       TournamentRoundSummary.empty();
   BonusRoundState? bonusRoundState;
+  FinalsState? finalsState;
+  FinalsOverviewSummary? finalsSummary;
   List<SeatingAssignmentRecord> bonusAssignments = const [];
   List<TableOverviewCardData> cards = const [];
   List<TableOverviewCardData> currentRoundCards = const [];
   List<TableOverviewCardData> otherCards = const [];
   int _requestGeneration = 0;
   bool _isDisposed = false;
+  Future<FinalsState?>? _finalsActionFuture;
+
+  FinalsAction? get primaryFinalsAction => finalsState?.primaryAction;
+
+  bool get isExecutingFinalsAction => _finalsActionFuture != null;
 
   bool get isSuddenDeathRequired =>
       bonusRoundState?.suddenDeathStatus == 'required';
@@ -80,6 +93,7 @@ class TableListController extends ChangeNotifier {
   }
 
   Future<void> load(String eventId, {bool silent = false}) async {
+    _loadedEventId = eventId;
     final generation = ++_requestGeneration;
     final cachedTables = await _tableRepository.readCachedTables(eventId);
     final cachedSessions = await _sessionRepository.readCachedSessions(eventId);
@@ -122,7 +136,9 @@ class TableListController extends ChangeNotifier {
       effectiveScoringPhase = resolvedScoringPhase;
     }
     if (effectiveScoringPhase == EventScoringPhase.bonus) {
-      if (!silent ||
+      if (_finalsRepository != null) {
+        tournamentRoundSummary = TournamentRoundSummary.empty();
+      } else if (!silent ||
           cachedBonusAssignments.isNotEmpty ||
           bonusRoundState == null) {
         tournamentRoundSummary = _buildBonusRoundSummary();
@@ -173,7 +189,8 @@ class TableListController extends ChangeNotifier {
     } catch (exception) {
       if (!_isCurrent(generation)) return;
       if (tables.isEmpty && activeSessionsByTableId.isEmpty) {
-        error ??= userFacingError(exception, fallback: 'Unable to load tables.');
+        error ??=
+            userFacingError(exception, fallback: 'Unable to load tables.');
       }
     }
 
@@ -203,13 +220,39 @@ class TableListController extends ChangeNotifier {
       if (!silent || didLoadBonusRoundState || bonusRoundState == null) {
         bonusRoundState = loadedBonusRoundState;
       }
-      if (!silent ||
+      if (_finalsRepository != null) {
+        tournamentRoundSummary = TournamentRoundSummary.empty();
+      } else if (!silent ||
           loadedBonusAssignments.succeeded ||
           bonusRoundState == null) {
         tournamentRoundSummary = _buildBonusRoundSummary();
       }
+
+      final finalsRepository = _finalsRepository;
+      if (finalsRepository != null) {
+        try {
+          final loadedFinalsState =
+              await finalsRepository.loadFinalsState(eventId);
+          if (!_isCurrent(generation)) return;
+          _setFinalsState(loadedFinalsState);
+          tournamentRoundSummary = TournamentRoundSummary.empty();
+        } catch (exception) {
+          if (!_isCurrent(generation)) return;
+          if (finalsState == null) {
+            tournamentRoundSummary = TournamentRoundSummary.empty();
+            if (!silent) {
+              error ??= userFacingError(
+                exception,
+                fallback: 'Unable to load Finals.',
+              );
+            }
+          }
+        }
+      }
     } else {
       bonusRoundState = null;
+      finalsState = null;
+      finalsSummary = null;
       final loadedSummary = await _loadTournamentRoundSummary(eventId);
       if (!_isCurrent(generation)) return;
       if (!silent ||
@@ -224,6 +267,140 @@ class TableListController extends ChangeNotifier {
       isLoading = false;
       _notifyIfActive();
     }
+  }
+
+  Future<FinalsState?> executeFinalsAction(
+    FinalsAction action, {
+    String? tableId,
+  }) {
+    final isServerAction = finalsState?.allowedActions.any(
+          (serverAction) => identical(serverAction, action),
+        ) ??
+        false;
+    if (!isServerAction) return Future.value(finalsState);
+    if (action.kind == FinalsActionKind.startContest) {
+      final selectedTableId = tableId ?? action.tableId;
+      if (selectedTableId == null ||
+          !usableTablesForFinalsAction(action)
+              .any((table) => table.id == selectedTableId)) {
+        return Future.value(finalsState);
+      }
+    }
+    final existing = _finalsActionFuture;
+    if (existing != null) return existing;
+
+    final future = _executeFinalsAction(action, tableId: tableId);
+    _finalsActionFuture = future;
+    _notifyIfActive();
+    future.whenComplete(() {
+      if (identical(_finalsActionFuture, future)) {
+        _finalsActionFuture = null;
+        _notifyIfActive();
+      }
+    });
+    return future;
+  }
+
+  Future<FinalsState?> _executeFinalsAction(
+    FinalsAction action, {
+    String? tableId,
+  }) async {
+    final finalsRepository = _finalsRepository;
+    if (finalsRepository == null) return finalsState;
+
+    finalsActionError = null;
+    try {
+      final updatedState = switch (action.kind) {
+        FinalsActionKind.startFinalsTables ||
+        FinalsActionKind.resumeFinalsStart =>
+          await finalsRepository.resumeFinalsStart(
+            ResumeFinalsStartInput(
+              eventId: _eventIdForFinalsAction(),
+              recoveryToken: action.recoveryToken!,
+            ),
+          ),
+        FinalsActionKind.startContest => await finalsRepository.startContest(
+            StartFinalsContestInput(
+              contestId: action.contestId!,
+              tableId: tableId ?? action.tableId,
+              expectedStateVersion: action.expectedStateVersion!,
+            ),
+          ),
+      };
+      _setFinalsState(updatedState);
+      await _refreshSessionsAfterFinalsAction();
+      return updatedState;
+    } catch (exception) {
+      finalsActionError = userFacingError(
+        exception,
+        fallback:
+            'Unable to complete that Finals action right now. Refresh and try again.',
+      );
+      return null;
+    }
+  }
+
+  String? _loadedEventId;
+
+  String _eventIdForFinalsAction() {
+    final eventId = _loadedEventId;
+    if (eventId == null) {
+      throw StateError('Refresh Finals before trying that action.');
+    }
+    return eventId;
+  }
+
+  void _setFinalsState(FinalsState state) {
+    finalsState = state;
+    finalsSummary = FinalsOverviewSummary.fromState(state);
+  }
+
+  Future<void> _refreshSessionsAfterFinalsAction() async {
+    final eventId = _eventIdForFinalsAction();
+    try {
+      final sessions = await _sessionRepository.listSessions(eventId);
+      activeSessionsByTableId = _activeSessionsByTable(sessions);
+      sessionsByTableId = _sessionsByTable(sessions);
+      sessionDetailsBySessionId =
+          await _loadDetails(activeSessionsByTableId.values);
+      _refreshCards();
+    } catch (_) {
+      // The returned Finals state remains authoritative and usable.
+    }
+  }
+
+  List<EventTableRecord> usableTablesForFinalsAction(FinalsAction action) {
+    if (action.kind != FinalsActionKind.startContest) return const [];
+    final contest = finalsState?.contests
+        .where((contest) => contest.id == action.contestId)
+        .firstOrNull;
+    if (contest == null || contest.status != FinalsContestStatus.ready) {
+      return const [];
+    }
+    final availableTableIds = action.availableTableIds.toSet();
+    final participantIds = {
+      for (final participant in contest.participants) participant.eventGuestId,
+    };
+    var hasParticipantConflict = false;
+    for (final entry in activeSessionsByTableId.entries) {
+      final detail = sessionDetailsBySessionId[entry.value.id];
+      if (detail != null &&
+          detail.seats.any(
+            (seat) => participantIds.contains(seat.eventGuestId),
+          )) {
+        hasParticipantConflict = true;
+      }
+    }
+    if (hasParticipantConflict) return const [];
+    return tables
+        .where(
+          (table) =>
+              availableTableIds.contains(table.id) &&
+              table.nfcTagId != null &&
+              !activeSessionsByTableId.containsKey(table.id),
+        )
+        .toList(growable: false)
+      ..sort((left, right) => left.displayOrder.compareTo(right.displayOrder));
   }
 
   Future<List<SeatingAssignmentRecord>?> startNextTournamentRound(
@@ -271,60 +448,6 @@ class TableListController extends ChangeNotifier {
       }
     } finally {
       isStartingAllTables = false;
-      _notifyIfActive();
-    }
-  }
-
-  Future<List<SeatingAssignmentRecord>?> startBonusRoundSuddenDeath({
-    required String eventId,
-    required String tableId,
-  }) async {
-    final seatingRepository = _seatingRepository;
-    if (seatingRepository == null) {
-      return null;
-    }
-
-    isStartingNextRound = true;
-    error = null;
-    _notifyIfActive();
-
-    try {
-      return await seatingRepository.startBonusRoundSuddenDeath(
-        eventId: eventId,
-        tableId: tableId,
-      );
-    } catch (exception) {
-      error = userFacingError(exception);
-      return null;
-    } finally {
-      isStartingNextRound = false;
-      _notifyIfActive();
-    }
-  }
-
-  Future<List<SeatingAssignmentRecord>?> startTableOfChampionsPlayIn({
-    required String eventId,
-    required String tableId,
-  }) async {
-    final seatingRepository = _seatingRepository;
-    if (seatingRepository == null) {
-      return null;
-    }
-
-    isStartingNextRound = true;
-    error = null;
-    _notifyIfActive();
-
-    try {
-      return await seatingRepository.startTableOfChampionsPlayIn(
-        eventId: eventId,
-        tableId: tableId,
-      );
-    } catch (exception) {
-      error = userFacingError(exception);
-      return null;
-    } finally {
-      isStartingNextRound = false;
       _notifyIfActive();
     }
   }

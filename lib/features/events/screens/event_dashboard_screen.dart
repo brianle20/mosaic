@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
@@ -25,6 +26,7 @@ class EventDashboardScreen extends StatefulWidget {
     this.tableRepository,
     this.sessionRepository,
     this.seatingRepository,
+    this.finalsRepository,
     this.staffRepository,
     this.nfcService,
   });
@@ -37,6 +39,7 @@ class EventDashboardScreen extends StatefulWidget {
   final TableRepository? tableRepository;
   final SessionRepository? sessionRepository;
   final SeatingRepository? seatingRepository;
+  final FinalsRepository? finalsRepository;
   final StaffRepository? staffRepository;
   final NfcService? nfcService;
 
@@ -63,6 +66,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       tableRepository: widget.tableRepository,
       sessionRepository: widget.sessionRepository,
       seatingRepository: widget.seatingRepository,
+      finalsRepository: widget.finalsRepository,
       callerRole: widget.args.callerRole,
     )
       ..addListener(_handleUpdate)
@@ -122,7 +126,7 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
     await _reloadDashboardAfterReturn(event.id);
   }
 
-  Future<void> _openTables() async {
+  Future<void> _openTables({EventScoringPhase? scoringPhase}) async {
     final event = _controller.event;
     if (event == null) {
       return;
@@ -134,8 +138,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         eventId: event.id,
         eventTitle: event.title,
         scoringOpen: event.scoringOpen,
-        scoringPhase:
-            _controller.effectiveScoringPhase ?? event.currentScoringPhase,
+        scoringPhase: scoringPhase ??
+            _controller.effectiveScoringPhase ??
+            event.currentScoringPhase,
         readOnly: event.lifecycleStatus != EventLifecycleStatus.draft &&
             event.lifecycleStatus != EventLifecycleStatus.active,
         canManageTables: _controller.canManageEvent,
@@ -293,11 +298,52 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
       return;
     }
 
-    await Navigator.of(context).pushNamed(
+    final startedFinals = await Navigator.of(context).pushNamed<FinalsState>(
       AppRouter.bonusRoundRoute,
       arguments: BonusRoundArgs(eventId: event.id),
     );
+    if (!mounted) return;
+    if (startedFinals != null) {
+      await _openTables(scoringPhase: EventScoringPhase.bonus);
+      return;
+    }
     await _reloadDashboardAfterReturn(event.id);
+  }
+
+  Future<void> _openFinalsSession(String sessionId) async {
+    await Navigator.of(context).pushNamed(
+      AppRouter.sessionDetailRoute,
+      arguments: SessionDetailArgs(
+        eventId: widget.args.eventId,
+        sessionId: sessionId,
+        scoringOpen: _controller.event?.scoringOpen ?? false,
+      ),
+    );
+    await _reloadDashboardAfterReturn(widget.args.eventId);
+  }
+
+  Future<void> _executeFinalsAction(FinalsAction action) async {
+    if (action.sessionId case final sessionId?) {
+      await _openFinalsSession(sessionId);
+      return;
+    }
+    if (action.kind == FinalsActionKind.startContest &&
+        action.tableId == null) {
+      await _openTables(scoringPhase: EventScoringPhase.bonus);
+      return;
+    }
+    final updatedState = await _controller.executeFinalsAction(action);
+    if (!mounted || updatedState == null) {
+      _scrollToTop();
+      return;
+    }
+    if (action.kind == FinalsActionKind.startFinalsTables ||
+        action.kind == FinalsActionKind.resumeFinalsStart ||
+        updatedState.activeSessionIds.length != 1) {
+      await _openTables(scoringPhase: EventScoringPhase.bonus);
+      return;
+    }
+    await _openFinalsSession(updatedState.activeSessionIds.single);
   }
 
   Future<void> _openActivity() async {
@@ -821,8 +867,9 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
         _controller.tournamentRoundSummary.hasCurrentRound;
     final showFinalsCommandCenter = _controller.canManageEvent &&
         lifecycleStatus == EventLifecycleStatus.active &&
-        event.scoringOpen &&
-        scoringPhase == EventScoringPhase.bonus;
+        _controller.finalsState != null &&
+        _controller.finalsState!.overallStatus !=
+            FinalsOverallStatus.notStarted;
     final showRoundCommandCenter =
         showTournamentCommandCenter || showFinalsCommandCenter;
 
@@ -892,15 +939,19 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 _BonusRoundResultsPanel(summary: _controller.bonusRoundResults),
               ],
               const SizedBox(height: 16),
-              if (showRoundCommandCenter)
+              if (showFinalsCommandCenter)
+                _FinalsCommandCenter(
+                  state: _controller.finalsState!,
+                  action: _controller.primaryFinalsAction,
+                  isBusy: _controller.isExecutingFinalsAction,
+                  onAction: _executeFinalsAction,
+                  onOpenSession: _openFinalsSession,
+                )
+              else if (showTournamentCommandCenter)
                 _TournamentRoundCommandCenter(
                   scoringPhase: scoringPhase,
-                  summary: showFinalsCommandCenter
-                      ? _controller.finalsRoundSummary
-                      : _controller.tournamentRoundSummary,
-                  suddenDeathStatus: showFinalsCommandCenter
-                      ? _controller.bonusRoundResults.suddenDeathStatus
-                      : null,
+                  summary: _controller.tournamentRoundSummary,
+                  suddenDeathStatus: null,
                   isBusy: _controller.isSubmittingLifecycle,
                   onOpenTables: _openTables,
                   onScanTable: showTableScanAction ? _scanTable : null,
@@ -908,6 +959,8 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                   onStartNextRound: _startNextTournamentRound,
                   onGenerateRound: _startNextTournamentRound,
                   onBeginFinals: _openBonusRound,
+                  canBeginFinals: _controller.finalsState?.overallStatus ==
+                      FinalsOverallStatus.notStarted,
                 )
               else
                 HeroActionButton(
@@ -934,6 +987,11 @@ class _EventDashboardScreenState extends State<EventDashboardScreen> {
                 InlineErrorBanner(
                   message: _formatLifecycleError(lifecycleError),
                 ),
+              ],
+              if (_controller.finalsActionError
+                  case final finalsActionError?) ...[
+                const SizedBox(height: 12),
+                InlineErrorBanner(message: finalsActionError),
               ],
               if (showLiveNavigation) const SizedBox(height: 14),
               if (lifecycleStatus != EventLifecycleStatus.active) ...[
@@ -1077,6 +1135,7 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
     required this.onStartNextRound,
     required this.onGenerateRound,
     required this.onBeginFinals,
+    required this.canBeginFinals,
   });
 
   final EventScoringPhase scoringPhase;
@@ -1089,6 +1148,7 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
   final VoidCallback onStartNextRound;
   final VoidCallback onGenerateRound;
   final VoidCallback onBeginFinals;
+  final bool canBeginFinals;
 
   @override
   Widget build(BuildContext context) {
@@ -1204,7 +1264,10 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
               ),
             ),
           ],
-          if (!isFinals && round != null && summary.isComplete) ...[
+          if (!isFinals &&
+              canBeginFinals &&
+              round != null &&
+              summary.isComplete) ...[
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
@@ -1252,6 +1315,214 @@ class _TournamentRoundCommandCenter extends StatelessWidget {
       'Sudden death active' => 'Sudden Death Active',
       _ => status.statusLabel,
     };
+  }
+}
+
+class _FinalsCommandCenter extends StatelessWidget {
+  const _FinalsCommandCenter({
+    required this.state,
+    required this.action,
+    required this.isBusy,
+    required this.onAction,
+    required this.onOpenSession,
+  });
+
+  final FinalsState state;
+  final FinalsAction? action;
+  final bool isBusy;
+  final ValueChanged<FinalsAction> onAction;
+  final ValueChanged<String> onOpenSession;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final slotCount = state.championsSlots.isNotEmpty
+        ? state.championsSlots.length
+        : (state.eligiblePlayerCount ?? 0).clamp(0, 4);
+    final filledSlots =
+        state.championsSlots.where((slot) => slot.eventGuestId != null).length;
+    final hasSlotProgress = state.championsSlots.isNotEmpty ||
+        (state.eligiblePlayerCount != null && state.eligiblePlayerCount! > 0);
+    final visibleContests = state.contests
+        .where((contest) => contest.status != FinalsContestStatus.cancelled)
+        .toList(growable: false);
+    final openSessions = _openSessionTargets(state);
+    final hasPendingTiebreak = visibleContests.any(
+      (contest) =>
+          _isTiebreak(contest.type) &&
+          (contest.status == FinalsContestStatus.pending ||
+              contest.status == FinalsContestStatus.ready),
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.88),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          StatusChip(
+            label: _statusLabel(state.overallStatus),
+            tone: state.overallStatus == FinalsOverallStatus.blockedLegacyState
+                ? StatusChipTone.warning
+                : StatusChipTone.success,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _formatLabel(state.format),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+          if (hasSlotProgress) ...[
+            const SizedBox(height: 6),
+            Text(
+              '$filledSlots of $slotCount Champions slots filled',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ],
+          if (hasPendingTiebreak) ...[
+            const SizedBox(height: 5),
+            Text(
+              'Tiebreak pending',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+            ),
+          ],
+          for (final contest in visibleContests) ...[
+            const SizedBox(height: 5),
+            Text(_contestLabel(contest)),
+          ],
+          if (state.champion case final champion?) ...[
+            const SizedBox(height: 5),
+            Text('Champion — ${champion.displayName}'),
+          ],
+          if (state.redemptionWinner case final redemptionWinner?) ...[
+            const SizedBox(height: 5),
+            Text('Redemption winner — ${redemptionWinner.displayName}'),
+          ],
+          if (action case final serverAction?) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: isBusy ? null : () => onAction(serverAction),
+                icon: const Icon(Icons.table_bar),
+                label: Text(serverAction.label),
+              ),
+            ),
+          ] else if (state.blockingReason case final blockingReason?) ...[
+            const SizedBox(height: 10),
+            Text(
+              blockingReason,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.error,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ],
+          for (final openSession in openSessions) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => onOpenSession(openSession.sessionId),
+                icon: const Icon(Icons.open_in_new),
+                label: Text(openSession.label),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static List<({String sessionId, String label})> _openSessionTargets(
+    FinalsState state,
+  ) {
+    final sessionIds = <String>{};
+    final targets = <({String sessionId, String label})>[];
+    for (final contest in state.contests) {
+      final sessionId = contest.tableSessionId;
+      if (contest.status == FinalsContestStatus.active &&
+          sessionId != null &&
+          sessionIds.add(sessionId)) {
+        targets.add((sessionId: sessionId, label: 'Open ${contest.title}'));
+      }
+    }
+    for (final session in state.sessions) {
+      if ((session.status == 'active' || session.status == 'paused') &&
+          sessionIds.add(session.id)) {
+        targets.add((
+          sessionId: session.id,
+          label: _legacySessionActionLabel(session),
+        ));
+      }
+    }
+    return targets;
+  }
+
+  static String _legacySessionActionLabel(FinalsSessionReference session) {
+    return switch (session.bonusTableRole) {
+      'table_of_champions' => 'Open Table of Champions',
+      'table_of_redemption' => 'Open Table of Redemption',
+      'table_of_champions_play_in' => 'Open Champions Play-In',
+      'table_of_champions_sudden_death' => 'Open Champions Sudden Death',
+      _ => 'Open ${session.tableLabel ?? 'Finals Table'}',
+    };
+  }
+
+  static bool _isTiebreak(FinalsContestType type) {
+    return switch (type) {
+      FinalsContestType.tableOfChampions ||
+      FinalsContestType.tableOfRedemption =>
+        false,
+      FinalsContestType.directQualificationTiebreak ||
+      FinalsContestType.redemptionAdvancementTiebreak ||
+      FinalsContestType.redemptionWinnerTiebreak ||
+      FinalsContestType.championsSuddenDeath =>
+        true,
+    };
+  }
+
+  static String _statusLabel(FinalsOverallStatus status) {
+    return switch (status) {
+      FinalsOverallStatus.complete => 'Finals Complete',
+      FinalsOverallStatus.blockedLegacyState => 'Finals Blocked',
+      FinalsOverallStatus.recoverableMissingSessions => 'Finals Ready',
+      FinalsOverallStatus.active => 'Finals Live',
+      FinalsOverallStatus.cancelled => 'Finals Cancelled',
+      FinalsOverallStatus.notStarted => 'Finals Not Started',
+    };
+  }
+
+  static String _formatLabel(FinalsFormat? format) {
+    return switch (format) {
+      FinalsFormat.championsOnly => 'Champions Only',
+      FinalsFormat.automaticRedemption => 'Automatic Redemption',
+      FinalsFormat.redemptionAdvancement => 'Redemption Advancement',
+      FinalsFormat.parallelFinals => 'Parallel Finals',
+      null => 'Finals',
+    };
+  }
+
+  static String _contestLabel(FinalsContest contest) {
+    final table = contest.tableLabel == null ? '' : ' — ${contest.tableLabel}';
+    final status = switch (contest.status) {
+      FinalsContestStatus.pending => 'Pending',
+      FinalsContestStatus.ready => 'Ready',
+      FinalsContestStatus.active => 'In progress',
+      FinalsContestStatus.complete => 'Complete',
+      FinalsContestStatus.cancelled => 'Cancelled',
+    };
+    return '${contest.title}$table — $status';
   }
 }
 

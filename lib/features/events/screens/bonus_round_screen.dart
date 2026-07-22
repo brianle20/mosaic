@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:mosaic/core/errors/user_facing_error.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
-import 'package:mosaic/data/offline/offline_recovery_scope.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
+import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/events/controllers/bonus_round_controller.dart';
 import 'package:mosaic/services/nfc/nfc_service.dart';
@@ -14,18 +15,14 @@ class BonusRoundScreen extends StatefulWidget {
   const BonusRoundScreen({
     super.key,
     required this.eventId,
-    required this.leaderboardRepository,
+    required this.finalsRepository,
     required this.tableRepository,
-    required this.sessionRepository,
-    required this.seatingRepository,
     required this.nfcService,
   });
 
   final String eventId;
-  final LeaderboardRepository leaderboardRepository;
+  final FinalsRepository finalsRepository;
   final TableRepository tableRepository;
-  final SessionRepository sessionRepository;
-  final SeatingRepository seatingRepository;
   final NfcService nfcService;
 
   @override
@@ -41,10 +38,8 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
   void initState() {
     super.initState();
     _controller = BonusRoundController(
-      leaderboardRepository: widget.leaderboardRepository,
+      finalsRepository: widget.finalsRepository,
       tableRepository: widget.tableRepository,
-      sessionRepository: widget.sessionRepository,
-      seatingRepository: widget.seatingRepository,
     )
       ..addListener(_handleUpdate)
       ..load(widget.eventId);
@@ -59,26 +54,18 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
   }
 
   void _handleUpdate() {
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   Future<void> _scanTable(BonusRoundTableRole role) async {
-    if (_scanningRole != null || _controller.isResolvingTable) {
-      return;
-    }
-
+    if (_scanningRole != null || _controller.isResolvingTable) return;
     setState(() {
       _scanningRole = role;
       _scanError = null;
     });
-
     try {
       final result = await widget.nfcService.scanTableTag(context);
-      if (!mounted || result == null) {
-        return;
-      }
+      if (!mounted || result == null) return;
       await _controller.resolveScannedTable(
         eventId: widget.eventId,
         role: role,
@@ -87,15 +74,14 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
     } catch (exception) {
       if (mounted) {
         setState(() {
-          _scanError = userFacingError(exception, fallback: 'Unable to read that table tag.');
+          _scanError = userFacingError(
+            exception,
+            fallback: 'Unable to read that table tag.',
+          );
         });
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _scanningRole = null;
-        });
-      }
+      if (mounted) setState(() => _scanningRole = null);
     }
   }
 
@@ -125,7 +111,8 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
                     const EmptyStateCard(
                       icon: Icons.table_bar,
                       title: 'No ready tables',
-                      message: 'Bind table tags before beginning finals.',
+                      message:
+                          'Finish active play or bind an active table tag before beginning Finals.',
                     )
                   else
                     Flexible(
@@ -162,31 +149,22 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
         );
       },
     );
-
-    if (table != null) {
-      _controller.selectTable(role: role, table: table);
-    }
+    if (table != null) _controller.selectTable(role: role, table: table);
   }
 
   Future<void> _beginFinals() async {
-    final created = await _controller.createBonusRound(widget.eventId);
-    if (!mounted || !created) {
-      return;
-    }
-
+    final state = await _controller.beginFinals(widget.eventId);
+    if (!mounted || state == null) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Finals seating created.')),
+      const SnackBar(content: Text('Finals tables started.')),
     );
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop(true);
-    }
+    Navigator.of(context).pop<FinalsState>(state);
   }
 
   @override
   Widget build(BuildContext context) {
-    final scanningRole = _scanningRole;
+    final setup = _controller.setup;
     final actionError = _scanError ?? _controller.actionError;
-
     return ReconnectRefreshListener(
       onRefresh: () => _controller.load(widget.eventId, silent: true),
       child: Scaffold(
@@ -198,31 +176,83 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              if (_controller.hasLiveSessions) ...[
-                const InfoPanel(message: bonusRoundLiveSessionBlockedMessage),
+              Text(
+                setup.formatTitle,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              for (final line in setup.orderCopy)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(line),
+                ),
+              if (setup.cutoffTiePlayerNames.isNotEmpty) ...[
                 const SizedBox(height: 12),
+                AppListSurface(
+                  onTap: null,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Direct qualification tiebreak',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(setup.cutoffTieNamesCopy),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'This tiebreak runs before the displayed Finals assignments become final.',
+                      ),
+                    ],
+                  ),
+                ),
               ],
               if (actionError != null) ...[
-                InlineErrorBanner(message: actionError),
                 const SizedBox(height: 12),
+                InlineErrorBanner(message: actionError),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: const ValueKey('refreshFinalsPreview'),
+                    onPressed: () => _controller.load(widget.eventId),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Refresh Finals preview'),
+                  ),
+                ),
               ],
-              _BonusRoundTablePanel(
-                title: 'Table of Champions',
-                selectedTable: _controller.championsTable,
-                seatPreviews: _controller.championSeats,
-                scanKey: const ValueKey('scanChampionsTable'),
-                isScanning: scanningRole == BonusRoundTableRole.champions,
-                onScan: () => _scanTable(BonusRoundTableRole.champions),
-                onChoose: () => _chooseTable(BonusRoundTableRole.champions),
-              ),
+              if (_controller.championsRequired) ...[
+                const SizedBox(height: 12),
+                _FinalsTablePanel(
+                  title: 'Table of Champions',
+                  selectedTable: _controller.championsTable,
+                  rows: setup.championsRows,
+                  scanKey: const ValueKey('scanChampionsTable'),
+                  isScanning: _scanningRole == BonusRoundTableRole.champions,
+                  onScan: () => _scanTable(BonusRoundTableRole.champions),
+                  onChoose: () => _chooseTable(BonusRoundTableRole.champions),
+                ),
+              ],
+              if (setup.automaticRedemptionPlayer case final player?) ...[
+                const SizedBox(height: 12),
+                AppListSurface(
+                  onTap: null,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('5th place — ${player.displayName}'),
+                      const Text('Redemption winner (no table)'),
+                    ],
+                  ),
+                ),
+              ],
               if (_controller.redemptionRequired) ...[
                 const SizedBox(height: 12),
-                _BonusRoundTablePanel(
+                _FinalsTablePanel(
                   title: 'Table of Redemption',
                   selectedTable: _controller.redemptionTable,
-                  seatPreviews: _controller.redemptionSeats,
+                  rows: setup.redemptionRows,
                   scanKey: const ValueKey('scanRedemptionTable'),
-                  isScanning: scanningRole == BonusRoundTableRole.redemption,
+                  isScanning: _scanningRole == BonusRoundTableRole.redemption,
                   onScan: () => _scanTable(BonusRoundTableRole.redemption),
                   onChoose: () => _chooseTable(BonusRoundTableRole.redemption),
                 ),
@@ -231,8 +261,8 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
               HeroActionButton(
                 label: 'Begin Finals',
                 icon: Icons.emoji_events,
-                enabled: _controller.canCreateBonusRound &&
-                    !_controller.isSubmitting,
+                enabled:
+                    _controller.canBeginFinals && !_controller.isSubmitting,
                 isBusy: _controller.isSubmitting,
                 onPressed: _beginFinals,
               ),
@@ -244,11 +274,11 @@ class _BonusRoundScreenState extends State<BonusRoundScreen> {
   }
 }
 
-class _BonusRoundTablePanel extends StatelessWidget {
-  const _BonusRoundTablePanel({
+class _FinalsTablePanel extends StatelessWidget {
+  const _FinalsTablePanel({
     required this.title,
     required this.selectedTable,
-    required this.seatPreviews,
+    required this.rows,
     required this.scanKey,
     required this.isScanning,
     required this.onScan,
@@ -257,7 +287,7 @@ class _BonusRoundTablePanel extends StatelessWidget {
 
   final String title;
   final EventTableRecord? selectedTable;
-  final List<BonusRoundSeatPreview> seatPreviews;
+  final List<String> rows;
   final Key scanKey;
   final bool isScanning;
   final VoidCallback onScan;
@@ -273,16 +303,18 @@ class _BonusRoundTablePanel extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 4),
           Text(
             selectedTable?.label ?? 'No table selected',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -303,52 +335,18 @@ class _BonusRoundTablePanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          for (final preview in seatPreviews) _SeatPreviewRow(preview: preview),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Text(row),
+            ),
         ],
       ),
     );
   }
 }
 
-class _SeatPreviewRow extends StatelessWidget {
-  const _SeatPreviewRow({required this.preview});
-
-  final BonusRoundSeatPreview preview;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 52,
-            child: Text(
-              preview.windLabel,
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              '${preview.seedLabel} ${preview.playerName}',
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            preview.totalPoints.toString(),
-            style: TextStyle(color: colorScheme.onSurfaceVariant),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-String _tableRoleTitle(BonusRoundTableRole role) {
-  return switch (role) {
-    BonusRoundTableRole.champions => 'Table of Champions',
-    BonusRoundTableRole.redemption => 'Table of Redemption',
-  };
-}
+String _tableRoleTitle(BonusRoundTableRole role) => switch (role) {
+      BonusRoundTableRole.champions => 'Table of Champions',
+      BonusRoundTableRole.redemption => 'Table of Redemption',
+    };

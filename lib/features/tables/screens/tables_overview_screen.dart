@@ -5,13 +5,14 @@ import 'package:mosaic/core/routing/app_router.dart';
 import 'package:mosaic/core/widgets/async_body.dart';
 import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/models/event_models.dart';
-import 'package:mosaic/data/models/seating_assignment_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/session_models.dart';
 import 'package:mosaic/data/models/table_models.dart';
 import 'package:mosaic/data/models/tournament_round_models.dart';
 import 'package:mosaic/data/repositories/repository_interfaces.dart';
 import 'package:mosaic/features/tables/controllers/table_list_controller.dart';
 import 'package:mosaic/features/tables/models/table_overview_card_data.dart';
+import 'package:mosaic/features/tables/models/finals_overview_view_models.dart';
 import 'package:mosaic/widgets/app_surfaces.dart';
 import 'package:mosaic/widgets/empty_state_card.dart';
 import 'package:mosaic/widgets/status_chip.dart';
@@ -28,6 +29,7 @@ class TablesOverviewScreen extends StatefulWidget {
     required this.tableRepository,
     required this.sessionRepository,
     required this.guestRepository,
+    this.finalsRepository,
     this.seatingRepository,
     this.now,
   });
@@ -41,6 +43,7 @@ class TablesOverviewScreen extends StatefulWidget {
   final TableRepository tableRepository;
   final SessionRepository sessionRepository;
   final GuestRepository guestRepository;
+  final FinalsRepository? finalsRepository;
   final SeatingRepository? seatingRepository;
   final DateTime Function()? now;
 
@@ -64,6 +67,7 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       tableRepository: widget.tableRepository,
       sessionRepository: widget.sessionRepository,
       guestRepository: widget.guestRepository,
+      finalsRepository: widget.finalsRepository,
       seatingRepository: widget.seatingRepository,
       scoringPhase: widget.scoringPhase,
       now: widget.now,
@@ -163,58 +167,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
 
   Future<void> _startAllTables() async {
     await _controller.startAllTables(widget.eventId);
-  }
-
-  Future<void> _startSuddenDeath(EventTableRecord table) async {
-    final assignments = await _controller.startBonusRoundSuddenDeath(
-      eventId: widget.eventId,
-      tableId: table.id,
-    );
-    if (!mounted || assignments == null) {
-      return;
-    }
-
-    if (assignments.isNotEmpty) {
-      await Navigator.of(context).pushNamed(
-        AppRouter.seatingAssignmentsRoute,
-        arguments: SeatingAssignmentsArgs(
-          eventId: widget.eventId,
-          eventTitle: widget.eventTitle,
-          initialAssignments: assignments,
-          bonusTableRoleFilter: BonusTableRole.tableOfChampionsSuddenDeath,
-          showUnassignedGuests: false,
-        ),
-      );
-    }
-    if (mounted) {
-      await _controller.load(widget.eventId);
-    }
-  }
-
-  Future<void> _startPlayIn(EventTableRecord table) async {
-    final assignments = await _controller.startTableOfChampionsPlayIn(
-      eventId: widget.eventId,
-      tableId: table.id,
-    );
-    if (!mounted || assignments == null) {
-      return;
-    }
-
-    if (assignments.isNotEmpty) {
-      await Navigator.of(context).pushNamed(
-        AppRouter.seatingAssignmentsRoute,
-        arguments: SeatingAssignmentsArgs(
-          eventId: widget.eventId,
-          eventTitle: widget.eventTitle,
-          initialAssignments: assignments,
-          bonusTableRoleFilter: BonusTableRole.tableOfChampionsPlayIn,
-          showUnassignedGuests: false,
-        ),
-      );
-    }
-    if (mounted) {
-      await _controller.load(widget.eventId);
-    }
   }
 
   Future<void> _openBonusRound() async {
@@ -362,6 +314,12 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 _buildSearchField(),
               ],
               const SizedBox(height: 16),
+              if (_controller.effectiveScoringPhase ==
+                      EventScoringPhase.bonus &&
+                  _controller.finalsSummary != null) ...[
+                _buildFinalsOverview(_controller.finalsSummary!),
+                const SizedBox(height: 16),
+              ],
               if (_controller.tournamentRoundSummary.hasCurrentRound) ...[
                 _buildCurrentRoundStatusBoard(
                   _controller.tournamentRoundSummary,
@@ -414,6 +372,287 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
       ),
     );
   }
+
+  Widget _buildFinalsOverview(FinalsOverviewSummary summary) {
+    final recoveryAction = _controller.primaryFinalsAction;
+    final showRecoveryAction = recoveryAction != null &&
+        (recoveryAction.kind == FinalsActionKind.startFinalsTables ||
+            recoveryAction.kind == FinalsActionKind.resumeFinalsStart);
+    final inProgress = summary.activeCount;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showRecoveryAction &&
+            !widget.readOnly &&
+            widget.canManageTables) ...[
+          FilledButton.icon(
+            onPressed: _controller.isExecutingFinalsAction
+                ? null
+                : () => _controller.executeFinalsAction(recoveryAction),
+            icon: const Icon(Icons.play_arrow),
+            label: Text(recoveryAction.label),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (_controller.finalsActionError case final actionError?) ...[
+          InfoPanel(message: actionError),
+          const SizedBox(height: 12),
+        ],
+        AppListSurface(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Finals',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                  ),
+                  StatusChip(
+                    label: _finalsStatusLabel(summary.overallStatus),
+                    tone: _finalsStatusTone(summary.overallStatus),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildRoundMetric(
+                    '${summary.completeCount} Complete',
+                    StatusChipTone.success,
+                  ),
+                  _buildRoundMetric(
+                    '$inProgress In Progress',
+                    inProgress == 0
+                        ? StatusChipTone.neutral
+                        : StatusChipTone.info,
+                  ),
+                  _buildRoundMetric(
+                    '${summary.notStartedCount} Not Started',
+                    summary.notStartedCount == 0
+                        ? StatusChipTone.neutral
+                        : StatusChipTone.warning,
+                  ),
+                ],
+              ),
+              if (summary.blockingReason case final blockingReason?) ...[
+                const SizedBox(height: 12),
+                InfoPanel(message: blockingReason),
+              ],
+              if (summary.contests.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                for (final contest in summary.contests)
+                  _buildFinalsContest(contest),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFinalsContest(FinalsContestOverview contest) {
+    final action = _controller.finalsState?.allowedActions
+        .where((action) => action.contestId == contest.id)
+        .firstOrNull;
+    final sessionId = contest.sessionId;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border:
+              Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      contest.title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  StatusChip(
+                    label: _finalsContestStatusLabel(contest.status),
+                    tone: _finalsContestStatusTone(contest.status),
+                  ),
+                ],
+              ),
+              if (contest.tableLabel case final tableLabel?) ...[
+                const SizedBox(height: 2),
+                Text(tableLabel),
+              ],
+              if (contest.participantNames.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(contest.participantNames.join(' • ')),
+              ],
+              if (contest.resultLabel case final resultLabel?) ...[
+                const SizedBox(height: 6),
+                Text(
+                  resultLabel,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ],
+              if (_finalsContestTimestamp(contest) case final timestamp?) ...[
+                const SizedBox(height: 4),
+                Text(
+                  timestamp,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              if (contest.isReady &&
+                  action != null &&
+                  !widget.readOnly &&
+                  widget.canManageTables) ...[
+                const SizedBox(height: 10),
+                FilledButton(
+                  onPressed: _controller.isExecutingFinalsAction
+                      ? null
+                      : () => _executeContestAction(action),
+                  child: Text(action.label),
+                ),
+              ] else if (contest.isActive && sessionId != null) ...[
+                const SizedBox(height: 10),
+                FilledButton(
+                  onPressed: () => _openSessionDetail(sessionId),
+                  child: const Text('Open Table'),
+                ),
+              ] else if (contest.isComplete && sessionId != null) ...[
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () => _openSessionDetail(sessionId),
+                  icon: const Icon(Icons.history),
+                  label: const Text('History'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _executeContestAction(FinalsAction action) async {
+    final usableTables = _controller.usableTablesForFinalsAction(action);
+    final boundTableIsUsable = action.tableId != null &&
+        usableTables.any((table) => table.id == action.tableId);
+    if (boundTableIsUsable) {
+      await _controller.executeFinalsAction(action);
+      return;
+    }
+
+    final selected = await showModalBottomSheet<EventTableRecord>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Choose a ready table',
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 12),
+              if (usableTables.isEmpty)
+                const EmptyStateCard(
+                  icon: Icons.table_bar,
+                  title: 'No ready tables',
+                  message:
+                      'Finish conflicting play before starting this Finals table.',
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: usableTables.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final table = usableTables[index];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(table.label),
+                        onTap: () => Navigator.of(sheetContext).pop(table),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null) {
+      await _controller.executeFinalsAction(action, tableId: selected.id);
+    }
+  }
+
+  String? _finalsContestTimestamp(FinalsContestOverview contest) {
+    final timestamp = contest.completedAt ?? contest.startedAt;
+    if (timestamp == null) return null;
+    final local = timestamp.toLocal();
+    final material = MaterialLocalizations.of(context);
+    final date = material.formatShortDate(local);
+    final time = material.formatTimeOfDay(TimeOfDay.fromDateTime(local));
+    return contest.completedAt == null
+        ? 'Started $date at $time'
+        : 'Completed $date at $time';
+  }
+
+  String _finalsStatusLabel(FinalsOverallStatus status) => switch (status) {
+        FinalsOverallStatus.complete => 'Complete',
+        FinalsOverallStatus.blockedLegacyState => 'Needs attention',
+        FinalsOverallStatus.recoverableMissingSessions => 'Ready to start',
+        FinalsOverallStatus.cancelled => 'Cancelled',
+        FinalsOverallStatus.notStarted => 'Not Started',
+        FinalsOverallStatus.active => 'In Progress',
+      };
+
+  StatusChipTone _finalsStatusTone(FinalsOverallStatus status) =>
+      switch (status) {
+        FinalsOverallStatus.complete => StatusChipTone.success,
+        FinalsOverallStatus.blockedLegacyState => StatusChipTone.warning,
+        FinalsOverallStatus.recoverableMissingSessions =>
+          StatusChipTone.warning,
+        FinalsOverallStatus.cancelled => StatusChipTone.neutral,
+        FinalsOverallStatus.notStarted => StatusChipTone.neutral,
+        FinalsOverallStatus.active => StatusChipTone.info,
+      };
+
+  String _finalsContestStatusLabel(FinalsContestStatus status) =>
+      switch (status) {
+        FinalsContestStatus.pending => 'Waiting',
+        FinalsContestStatus.ready => 'Not Started',
+        FinalsContestStatus.active => 'In Progress',
+        FinalsContestStatus.complete => 'Complete',
+        FinalsContestStatus.cancelled => 'Cancelled',
+      };
+
+  StatusChipTone _finalsContestStatusTone(FinalsContestStatus status) =>
+      switch (status) {
+        FinalsContestStatus.pending => StatusChipTone.neutral,
+        FinalsContestStatus.ready => StatusChipTone.warning,
+        FinalsContestStatus.active => StatusChipTone.info,
+        FinalsContestStatus.complete => StatusChipTone.success,
+        FinalsContestStatus.cancelled => StatusChipTone.neutral,
+      };
 
   Widget _buildSearchField() {
     return TextField(
@@ -663,20 +902,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     final sessionId =
         roundTable.activeSessionId ?? roundTable.latestEndedSessionId;
     final action = _currentRoundAction(roundTable);
-    final canStartPlayIn = _controller.isPlayInRequired &&
-        action == _CurrentRoundAction.enter &&
-        widget.scoringOpen &&
-        widget.canManageTables &&
-        !widget.readOnly;
-    final canStartSuddenDeath =
-        _canStartSuddenDeathFromCurrentTable(cardData) ||
-            (_controller.isSuddenDeathRequired &&
-                action == _CurrentRoundAction.enter &&
-                widget.scoringOpen &&
-                widget.canManageTables &&
-                !widget.readOnly &&
-                cardData.table.nfcTagId != null);
-
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: AppListSurface(
@@ -730,24 +955,12 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                if (canStartPlayIn ||
-                    canStartSuddenDeath ||
-                    action != _CurrentRoundAction.enter)
+                if (action != _CurrentRoundAction.enter)
                   FilledButton(
-                    onPressed: canStartPlayIn
-                        ? () => _startPlayIn(cardData.table)
-                        : canStartSuddenDeath
-                            ? () => _startSuddenDeath(cardData.table)
-                            : sessionId == null
-                                ? null
-                                : () => _openSessionDetail(sessionId),
-                    child: Text(
-                      canStartPlayIn
-                          ? 'Start Play-In'
-                          : canStartSuddenDeath
-                              ? 'Start Sudden Death'
-                              : _currentRoundActionLabel(action),
-                    ),
+                    onPressed: sessionId == null
+                        ? null
+                        : () => _openSessionDetail(sessionId),
+                    child: Text(_currentRoundActionLabel(action)),
                   ),
                 if (cardData.liveSummary case final liveSummary?)
                   if (liveSummary.showRoundTimer)
@@ -1176,17 +1389,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   Widget _buildReadyTableCard(EventTableRecord table) {
     final hasTag = table.nfcTagId != null;
     final hasSessionHistory = _controller.sessionsForTable(table.id).isNotEmpty;
-    final canStartPlayIn = hasTag &&
-        _controller.isPlayInRequired &&
-        widget.scoringOpen &&
-        widget.canManageTables &&
-        !widget.readOnly;
-    final canStartSuddenDeath = hasTag &&
-        _controller.isSuddenDeathRequired &&
-        !_hasCompletedChampionsTableForSuddenDeath() &&
-        widget.scoringOpen &&
-        widget.canManageTables &&
-        !widget.readOnly;
     final statusLabel = widget.readOnly
         ? 'Locked'
         : hasTag || _isQualificationPhase
@@ -1204,11 +1406,9 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 ? 'Ready for assigned tournament seating. Start this table when players are seated.'
                 : 'Open scoring before starting assigned tournament seating at this table.'
             : hasTag
-                ? canStartPlayIn
-                    ? 'Start play-in at this table.'
-                    : canStartSuddenDeath
-                        ? 'Start sudden death at this table.'
-                        : 'Scan this table from the event dashboard to start seating.'
+                ? _controller.effectiveScoringPhase == EventScoringPhase.bonus
+                    ? 'Use the Finals controls above when players are seated.'
+                    : 'Scan this table from the event dashboard to start seating.'
                 : 'Bind this table tag before live seating.';
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1244,22 +1444,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
                 runSpacing: 12,
                 children: [
                   if (!widget.readOnly) ...[
-                    if (canStartPlayIn)
-                      FilledButton.icon(
-                        onPressed: _controller.isStartingNextRound
-                            ? null
-                            : () => _startPlayIn(table),
-                        icon: const Icon(Icons.sports_esports),
-                        label: const Text('Start Play-In'),
-                      ),
-                    if (canStartSuddenDeath)
-                      FilledButton.icon(
-                        onPressed: _controller.isStartingNextRound
-                            ? null
-                            : () => _startSuddenDeath(table),
-                        icon: const Icon(Icons.flash_on),
-                        label: const Text('Start Sudden Death'),
-                      ),
                     if (_isQualificationPhase && widget.scoringOpen)
                       FilledButton.icon(
                         onPressed: () => _enterReadyTable(table),
@@ -1292,28 +1476,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
     );
   }
 
-  bool _canStartSuddenDeathFromCurrentTable(TableOverviewCardData cardData) {
-    return _controller.isSuddenDeathRequired &&
-        widget.scoringOpen &&
-        widget.canManageTables &&
-        !widget.readOnly &&
-        cardData.table.nfcTagId != null &&
-        cardData.assignmentTitle == 'Table of Champions' &&
-        cardData.currentRoundSummary?.status ==
-            TournamentRoundTableStatus.complete;
-  }
-
-  bool _hasCompletedChampionsTableForSuddenDeath() {
-    return _controller.currentRoundCards.any(
-      (card) =>
-          _canStartSuddenDeathFromCurrentTable(card) ||
-          (_controller.isSuddenDeathRequired &&
-              card.assignmentTitle == 'Table of Champions' &&
-              card.currentRoundSummary?.status ==
-                  TournamentRoundTableStatus.complete),
-    );
-  }
-
   String _liveStatusLabel(SessionStatus status) {
     return switch (status) {
       SessionStatus.paused => 'Paused',
@@ -1334,14 +1496,6 @@ class _TablesOverviewScreenState extends State<TablesOverviewScreen> {
   }
 
   String _currentRoundActionLabel(_CurrentRoundAction action) {
-    if (_controller.isSuddenDeathRequired &&
-        action == _CurrentRoundAction.enter) {
-      return 'Start Sudden Death';
-    }
-    if (_controller.isPlayInRequired && action == _CurrentRoundAction.enter) {
-      return 'Start Play-In';
-    }
-
     return switch (action) {
       _CurrentRoundAction.open => 'Open Session',
       _CurrentRoundAction.view => 'View Session',

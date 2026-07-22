@@ -7,6 +7,7 @@ import 'package:mosaic/data/offline/offline_recovery_scope.dart';
 import 'package:mosaic/data/offline/offline_recovery_signal.dart';
 import 'package:mosaic/data/models/bonus_round_state_models.dart';
 import 'package:mosaic/data/models/event_models.dart';
+import 'package:mosaic/data/models/finals_state_models.dart';
 import 'package:mosaic/data/models/event_hand_ledger_models.dart';
 import 'package:mosaic/data/models/guest_models.dart';
 import 'package:mosaic/data/models/scoring_models.dart';
@@ -305,19 +306,13 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
     required this.summary,
     this.assignments = const [],
     this.bonusRoundState,
-    this.suddenDeathAssignments = const [],
-    this.playInAssignments = const [],
   });
 
   TournamentRoundSummary summary;
   List<SeatingAssignmentRecord> assignments;
   BonusRoundState? bonusRoundState;
-  List<SeatingAssignmentRecord> suddenDeathAssignments;
-  List<SeatingAssignmentRecord> playInAssignments;
   int generateCount = 0;
   int loadCount = 0;
-  final startedSuddenDeathTables = <String>[];
-  final startedPlayInTables = <String>[];
 
   @override
   Future<List<SeatingAssignmentRecord>> readCachedAssignments(
@@ -359,22 +354,390 @@ class _FakeSeatingRepository extends ThrowingSeatingRepository {
   Future<List<SeatingAssignmentRecord>> startBonusRoundSuddenDeath({
     required String eventId,
     required String tableId,
-  }) async {
-    startedSuddenDeathTables.add(tableId);
-    return suddenDeathAssignments;
-  }
+  }) async =>
+      const [];
 
   @override
   Future<List<SeatingAssignmentRecord>> startTableOfChampionsPlayIn({
     required String eventId,
     required String tableId,
-  }) async {
-    startedPlayInTables.add(tableId);
-    return playInAssignments;
+  }) async =>
+      const [];
+}
+
+class _FakeFinalsRepository extends ThrowingFinalsRepository {
+  _FakeFinalsRepository(this.state);
+
+  FinalsState state;
+  int resumeCount = 0;
+  int startContestCount = 0;
+  StartFinalsContestInput? lastContestInput;
+
+  @override
+  Future<FinalsState> loadFinalsState(String eventId) async => state;
+
+  @override
+  Future<FinalsState> resumeFinalsStart(ResumeFinalsStartInput input) async {
+    resumeCount += 1;
+    return state;
+  }
+
+  @override
+  Future<FinalsState> startContest(StartFinalsContestInput input) async {
+    startContestCount += 1;
+    lastContestInput = input;
+    return state;
   }
 }
 
 void main() {
+  testWidgets(
+      'legacy screenshot state shows one Start Finals Tables above summary and calls recovery once',
+      (tester) async {
+    final finalsRepository = _FakeFinalsRepository(
+      _widgetFinalsState(
+        actions: const [
+          FinalsAction(
+            kind: FinalsActionKind.startFinalsTables,
+            label: 'Start Finals Tables',
+            recoveryToken: 'recovery-token',
+          ),
+        ],
+        contests: [
+          _widgetContest(
+            id: 'champions',
+            title: 'Table of Champions',
+            tableLabel: 'Table 1',
+          ),
+          _widgetContest(
+            id: 'redemption',
+            title: 'Table of Redemption',
+            tableLabel: 'Table 2',
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          scoringPhase: EventScoringPhase.bonus,
+          tableRepository: _FakeTableRepository([
+            _table('tbl_01', 'Table 1'),
+            _table('tbl_02', 'Table 2'),
+          ]),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+          finalsRepository: finalsRepository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final button = find.widgetWithText(FilledButton, 'Start Finals Tables');
+    expect(button, findsOneWidget);
+    expect(find.text('2 Not Started'), findsOneWidget);
+    expect(tester.getTopLeft(button).dy,
+        lessThan(tester.getTopLeft(find.text('Finals')).dy));
+
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+    expect(finalsRepository.resumeCount, 1);
+  });
+
+  testWidgets('renders blocked, ready, active, and completed contest states',
+      (tester) async {
+    final repository = _FakeFinalsRepository(
+      _widgetFinalsState(
+        status: FinalsOverallStatus.blockedLegacyState,
+        blockingReason: 'Finals seating is incomplete.',
+        champion: const FinalsResult(
+          eventGuestId: 'guest_01',
+          displayName: 'Ava',
+        ),
+        actions: const [
+          FinalsAction(
+            kind: FinalsActionKind.startContest,
+            label: 'Start Table of Redemption',
+            contestId: 'ready',
+            tableId: 'tbl_01',
+            expectedStateVersion: 7,
+          ),
+        ],
+        contests: [
+          _widgetContest(
+            id: 'ready',
+            title: 'Table of Redemption',
+            tableLabel: 'Table 1',
+          ),
+          _widgetContest(
+            id: 'active',
+            title: 'Redemption Tiebreak',
+            tableLabel: 'Table 2',
+            status: FinalsContestStatus.active,
+            sessionId: 'session-live',
+          ),
+          _widgetContest(
+            id: 'champions',
+            title: 'Table of Champions',
+            tableLabel: 'Table 3',
+            status: FinalsContestStatus.complete,
+            sessionId: 'session-history',
+            completedAt: DateTime.parse('2026-07-11T20:00:00Z'),
+          ),
+        ],
+      ),
+    );
+    String? openedSessionId;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          scoringPhase: EventScoringPhase.bonus,
+          tableRepository: _FakeTableRepository([
+            _table('tbl_01', 'Table 1'),
+            _table('tbl_02', 'Table 2'),
+            _table('tbl_03', 'Table 3'),
+          ]),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+          finalsRepository: repository,
+        ),
+        onGenerateRoute: (settings) {
+          if (settings.name == AppRouter.sessionDetailRoute) {
+            openedSessionId =
+                (settings.arguments! as SessionDetailArgs).sessionId;
+            return MaterialPageRoute<void>(
+              builder: (_) => const Scaffold(body: Text('Session detail')),
+            );
+          }
+          return null;
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Finals seating is incomplete.'), findsOneWidget);
+    expect(find.text('Start Table of Redemption'), findsOneWidget);
+    expect(find.text('Open Table'), findsOneWidget);
+    expect(find.text('Champion: Ava'), findsOneWidget);
+    expect(find.text('History'), findsOneWidget);
+
+    await _scrollTablesOverviewUntilVisible(tester, find.text('Open Table'));
+    await tester.tap(find.text('Open Table'));
+    await tester.pumpAndSettle();
+    expect(openedSessionId, 'session-live');
+  });
+
+  testWidgets('read-only viewers can open active and completed Finals sessions',
+      (tester) async {
+    final repository = _FakeFinalsRepository(
+      _widgetFinalsState(
+        status: FinalsOverallStatus.active,
+        actions: const [
+          FinalsAction(
+            kind: FinalsActionKind.startContest,
+            label: 'Start Table of Redemption',
+            contestId: 'ready',
+            tableId: 'tbl_01',
+            expectedStateVersion: 7,
+          ),
+        ],
+        contests: [
+          _widgetContest(
+            id: 'ready',
+            title: 'Table of Redemption',
+            tableLabel: 'Table 1',
+          ),
+          _widgetContest(
+            id: 'active',
+            title: 'Redemption Tiebreak',
+            tableLabel: 'Table 2',
+            status: FinalsContestStatus.active,
+            sessionId: 'session-live',
+          ),
+          _widgetContest(
+            id: 'champions',
+            title: 'Table of Champions',
+            tableLabel: 'Table 3',
+            status: FinalsContestStatus.complete,
+            sessionId: 'session-history',
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: false,
+          scoringPhase: EventScoringPhase.bonus,
+          readOnly: true,
+          canManageTables: false,
+          tableRepository: _FakeTableRepository(const []),
+          sessionRepository: _FakeSessionRepository(sessions: const []),
+          guestRepository: _FakeGuestRepository(const []),
+          finalsRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start Table of Redemption'), findsNothing);
+    expect(find.text('Open Table'), findsOneWidget);
+    expect(find.text('History'), findsOneWidget);
+  });
+
+  testWidgets('unavailable contest table opens filtered ready-table picker',
+      (tester) async {
+    final action = const FinalsAction(
+      kind: FinalsActionKind.startContest,
+      label: 'Start Table of Champions',
+      contestId: 'champions',
+      availableTableIds: ['tbl_ready'],
+      expectedStateVersion: 7,
+    );
+    final repository = _FakeFinalsRepository(
+      _widgetFinalsState(
+        status: FinalsOverallStatus.active,
+        actions: [action],
+        contests: [
+          _widgetContest(
+            id: 'champions',
+            title: 'Table of Champions',
+            tableLabel: 'Busy Table',
+          ),
+        ],
+      ),
+    );
+    final busySession = _session(
+      id: 'session-busy',
+      tableId: 'tbl_busy',
+      scoringPhase: EventScoringPhase.bonus,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          scoringPhase: EventScoringPhase.bonus,
+          tableRepository: _FakeTableRepository([
+            _table('tbl_busy', 'Busy Table'),
+            _table('tbl_ready', 'Garden Table'),
+            _table('tbl_retired', 'Retired Table'),
+          ]),
+          sessionRepository: _FakeSessionRepository(
+            sessions: [busySession],
+            details: {'session-busy': _detail(busySession)},
+          ),
+          guestRepository: _FakeGuestRepository(const []),
+          finalsRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Start Table of Champions'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a ready table'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Busy Table'), findsNothing);
+    expect(find.widgetWithText(ListTile, 'Garden Table'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Retired Table'), findsNothing);
+
+    await tester.tap(find.text('Garden Table'));
+    await tester.pumpAndSettle();
+    expect(repository.startContestCount, 1);
+    expect(repository.lastContestInput?.tableId, 'tbl_ready');
+  });
+
+  testWidgets('no-candidate picker tells the host to finish conflicting play',
+      (tester) async {
+    const action = FinalsAction(
+      kind: FinalsActionKind.startContest,
+      label: 'Start Table of Champions',
+      contestId: 'champions',
+      expectedStateVersion: 7,
+    );
+    final repository = _FakeFinalsRepository(
+      _widgetFinalsState(
+        status: FinalsOverallStatus.active,
+        actions: const [action],
+        contests: [
+          _widgetContest(
+            id: 'champions',
+            title: 'Table of Champions',
+            tableLabel: 'Champions Table',
+            participants: const [
+              FinalsParticipant(
+                eventGuestId: 'guest_conflict',
+                displayName: 'Ava',
+                entrySeed: 1,
+                seatIndex: null,
+                outcome: FinalsParticipantOutcome.pending,
+                advancedChampionsSlot: null,
+                outcomeOrder: null,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    final conflictSession = _session(
+      id: 'session-conflict',
+      tableId: 'tbl_active',
+      scoringPhase: EventScoringPhase.bonus,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TablesOverviewScreen(
+          eventId: 'evt_01',
+          eventTitle: 'Friday Night Mahjong',
+          scoringOpen: true,
+          scoringPhase: EventScoringPhase.bonus,
+          tableRepository: _FakeTableRepository([
+            _table('tbl_active', 'Active Table'),
+            _table('tbl_ready', 'Garden Table'),
+          ]),
+          sessionRepository: _FakeSessionRepository(
+            sessions: [conflictSession],
+            details: {
+              'session-conflict': SessionDetailRecord(
+                session: conflictSession,
+                seats: [_seat(0, 'guest_conflict')],
+                hands: const [],
+                settlements: const [],
+              ),
+            },
+          ),
+          guestRepository: _FakeGuestRepository(const []),
+          finalsRepository: repository,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Start Table of Champions'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Finish conflicting play before starting this Finals table.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('pause'), findsNothing);
+  });
+
   testWidgets('recovery refresh keeps cached table cards visible',
       (tester) async {
     final tableRepository = _FakeTableRepository([_table('tbl_01', 'Table 1')]);
@@ -1787,385 +2150,6 @@ void main() {
     expect(openedStartSession, isFalse);
   });
 
-  testWidgets('required sudden death starts from current finals table',
-      (tester) async {
-    final table = _table('tbl_sudden', 'Table 9');
-    final returnedAssignments = [
-      _bonusAssignment(
-        table: table,
-        seatIndex: 0,
-        displayName: 'Alice Chen',
-        seedRank: 1,
-        role: BonusTableRole.tableOfChampionsSuddenDeath,
-      ),
-      _bonusAssignment(
-        table: table,
-        seatIndex: 1,
-        displayName: 'Ben Wong',
-        seedRank: 2,
-        role: BonusTableRole.tableOfChampionsSuddenDeath,
-      ),
-    ];
-    final seatingRepository = _FakeSeatingRepository(
-      summary: TournamentRoundSummary.empty(),
-      bonusRoundState: const BonusRoundState(
-        bonusRoundId: 'bonus_01',
-        eventId: 'evt_01',
-        status: 'active',
-        suddenDeathStatus: 'required',
-        suddenDeathTableId: 'tbl_sudden',
-        tiedTopPlayers: [
-          BonusRoundTiedPlayer(
-            eventGuestId: 'guest_01',
-            displayName: 'Alice Chen',
-            seedRank: 1,
-          ),
-          BonusRoundTiedPlayer(
-            eventGuestId: 'guest_02',
-            displayName: 'Ben Wong',
-            seedRank: 2,
-          ),
-        ],
-      ),
-      suddenDeathAssignments: returnedAssignments,
-    );
-    SeatingAssignmentsArgs? openedAssignmentsArgs;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: TablesOverviewScreen(
-          eventId: 'evt_01',
-          eventTitle: 'Friday Night Mahjong',
-          scoringOpen: true,
-          scoringPhase: EventScoringPhase.bonus,
-          tableRepository: _FakeTableRepository([table]),
-          sessionRepository: _FakeSessionRepository(sessions: const []),
-          guestRepository: _FakeGuestRepository(const []),
-          seatingRepository: seatingRepository,
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.seatingAssignmentsRoute) {
-            openedAssignmentsArgs =
-                settings.arguments! as SeatingAssignmentsArgs;
-            return MaterialPageRoute<void>(
-              builder: (context) => const Scaffold(
-                body: Text('Opened Seating Assignments'),
-              ),
-            );
-          }
-
-          return null;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Sudden Death Required'), findsOneWidget);
-    expect(find.text('Start Next Round'), findsNothing);
-    expect(find.text('Finals Tables'), findsOneWidget);
-    expect(find.text('Table of Champions Sudden Death'), findsOneWidget);
-    expect(find.text('Alice Chen'), findsOneWidget);
-    expect(find.text('Ben Wong'), findsOneWidget);
-
-    await _scrollTablesOverviewUntilVisible(
-      tester,
-      find.text('Start Sudden Death'),
-    );
-    await tester.tap(find.text('Start Sudden Death'));
-    await tester.pumpAndSettle();
-
-    expect(seatingRepository.startedSuddenDeathTables, ['tbl_sudden']);
-    expect(openedAssignmentsArgs?.eventId, 'evt_01');
-    expect(openedAssignmentsArgs?.eventTitle, 'Friday Night Mahjong');
-    expect(openedAssignmentsArgs?.initialAssignments, returnedAssignments);
-    expect(find.text('Opened Seating Assignments'), findsOneWidget);
-  });
-
-  testWidgets('required sudden death can reuse completed champions table',
-      (tester) async {
-    final table = _table('tbl_champions', 'Table 1');
-    final completedChampionsSession = _session(
-      id: 'ses_champions',
-      tableId: table.id,
-      status: 'completed',
-      scoringPhase: EventScoringPhase.bonus,
-      handCount: 4,
-    );
-    final returnedAssignments = [
-      _bonusAssignment(
-        table: table,
-        seatIndex: 0,
-        displayName: 'Alice Chen',
-        seedRank: 1,
-        role: BonusTableRole.tableOfChampionsSuddenDeath,
-      ),
-      _bonusAssignment(
-        table: table,
-        seatIndex: 1,
-        displayName: 'Ben Wong',
-        seedRank: 2,
-        role: BonusTableRole.tableOfChampionsSuddenDeath,
-      ),
-    ];
-    final seatingRepository = _FakeSeatingRepository(
-      summary: TournamentRoundSummary.empty(),
-      assignments: [
-        _bonusAssignment(
-          table: table,
-          seatIndex: 0,
-          displayName: 'Alice Chen',
-          seedRank: 1,
-        ),
-        _bonusAssignment(
-          table: table,
-          seatIndex: 1,
-          displayName: 'Ben Wong',
-          seedRank: 2,
-        ),
-      ],
-      bonusRoundState: const BonusRoundState(
-        bonusRoundId: 'bonus_01',
-        eventId: 'evt_01',
-        status: 'active',
-        suddenDeathStatus: 'required',
-        tiedTopPlayers: [
-          BonusRoundTiedPlayer(
-            eventGuestId: 'guest_01',
-            displayName: 'Alice Chen',
-            seedRank: 1,
-          ),
-          BonusRoundTiedPlayer(
-            eventGuestId: 'guest_02',
-            displayName: 'Ben Wong',
-            seedRank: 2,
-          ),
-        ],
-      ),
-      suddenDeathAssignments: returnedAssignments,
-    );
-    SeatingAssignmentsArgs? openedAssignmentsArgs;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: TablesOverviewScreen(
-          eventId: 'evt_01',
-          eventTitle: 'Friday Night Mahjong',
-          scoringOpen: true,
-          scoringPhase: EventScoringPhase.bonus,
-          tableRepository: _FakeTableRepository([table]),
-          sessionRepository: _FakeSessionRepository(
-            sessions: [completedChampionsSession],
-          ),
-          guestRepository: _FakeGuestRepository(const []),
-          seatingRepository: seatingRepository,
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.seatingAssignmentsRoute) {
-            openedAssignmentsArgs =
-                settings.arguments! as SeatingAssignmentsArgs;
-            return MaterialPageRoute<void>(
-              builder: (context) => const Scaffold(
-                body: Text('Opened Seating Assignments'),
-              ),
-            );
-          }
-
-          return null;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Sudden Death Required'), findsOneWidget);
-    expect(find.text('Table of Champions'), findsOneWidget);
-    expect(find.text('Not Started'), findsWidgets);
-    expect(find.text('View Session'), findsNothing);
-    expect(find.text('Start Sudden Death'), findsOneWidget);
-
-    await _scrollTablesOverviewUntilVisible(
-      tester,
-      find.text('Start Sudden Death'),
-    );
-    await tester.tap(find.text('Start Sudden Death'));
-    await tester.pumpAndSettle();
-
-    expect(seatingRepository.startedSuddenDeathTables, ['tbl_champions']);
-    expect(openedAssignmentsArgs?.eventTitle, 'Friday Night Mahjong');
-    expect(openedAssignmentsArgs?.initialAssignments, returnedAssignments);
-    expect(find.text('Opened Seating Assignments'), findsOneWidget);
-  });
-
-  testWidgets('required sudden death can start from a ready table',
-      (tester) async {
-    final table = _table('tbl_sudden', 'Table 9');
-    final returnedAssignments = [
-      _bonusAssignment(
-        table: table,
-        seatIndex: 0,
-        displayName: 'Alice Chen',
-        seedRank: 1,
-        role: BonusTableRole.tableOfChampionsSuddenDeath,
-      ),
-      _bonusAssignment(
-        table: table,
-        seatIndex: 1,
-        displayName: 'Ben Wong',
-        seedRank: 2,
-        role: BonusTableRole.tableOfChampionsSuddenDeath,
-      ),
-    ];
-    final seatingRepository = _FakeSeatingRepository(
-      summary: TournamentRoundSummary.empty(),
-      bonusRoundState: const BonusRoundState(
-        bonusRoundId: 'bonus_01',
-        eventId: 'evt_01',
-        status: 'active',
-        suddenDeathStatus: 'required',
-        tiedTopPlayers: [
-          BonusRoundTiedPlayer(
-            eventGuestId: 'guest_01',
-            displayName: 'Alice Chen',
-            seedRank: 1,
-          ),
-          BonusRoundTiedPlayer(
-            eventGuestId: 'guest_02',
-            displayName: 'Ben Wong',
-            seedRank: 2,
-          ),
-        ],
-      ),
-      suddenDeathAssignments: returnedAssignments,
-    );
-    SeatingAssignmentsArgs? openedAssignmentsArgs;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: TablesOverviewScreen(
-          eventId: 'evt_01',
-          eventTitle: 'Friday Night Mahjong',
-          scoringOpen: true,
-          scoringPhase: EventScoringPhase.bonus,
-          tableRepository: _FakeTableRepository([table]),
-          sessionRepository: _FakeSessionRepository(sessions: const []),
-          guestRepository: _FakeGuestRepository(const []),
-          seatingRepository: seatingRepository,
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.seatingAssignmentsRoute) {
-            openedAssignmentsArgs =
-                settings.arguments! as SeatingAssignmentsArgs;
-            return MaterialPageRoute<void>(
-              builder: (context) => const Scaffold(
-                body: Text('Opened Seating Assignments'),
-              ),
-            );
-          }
-
-          return null;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Start sudden death at this table.'), findsOneWidget);
-    expect(find.text('Start Sudden Death'), findsOneWidget);
-
-    await tester.tap(find.text('Start Sudden Death'));
-    await tester.pumpAndSettle();
-
-    expect(seatingRepository.startedSuddenDeathTables, ['tbl_sudden']);
-    expect(openedAssignmentsArgs?.eventTitle, 'Friday Night Mahjong');
-    expect(openedAssignmentsArgs?.initialAssignments, returnedAssignments);
-    expect(find.text('Opened Seating Assignments'), findsOneWidget);
-  });
-
-  testWidgets('required play-in can start from a ready table', (tester) async {
-    final table = _table('tbl_play_in', 'Table 8');
-    final returnedAssignments = [
-      _bonusAssignment(
-        table: table,
-        seatIndex: 0,
-        displayName: 'Dana Li',
-        seedRank: 4,
-        role: BonusTableRole.tableOfChampionsPlayIn,
-      ),
-      _bonusAssignment(
-        table: table,
-        seatIndex: 1,
-        displayName: 'Evan Ng',
-        seedRank: 5,
-        role: BonusTableRole.tableOfChampionsPlayIn,
-      ),
-    ];
-    final seatingRepository = _FakeSeatingRepository(
-      summary: TournamentRoundSummary.empty(),
-      bonusRoundState: const BonusRoundState(
-        bonusRoundId: 'bonus_01',
-        eventId: 'evt_01',
-        status: 'active',
-        playInStatus: 'required',
-        playInPlayers: [
-          BonusRoundPlayInPlayer(
-            eventGuestId: 'guest_04',
-            displayName: 'Dana Li',
-            seedRank: 4,
-          ),
-          BonusRoundPlayInPlayer(
-            eventGuestId: 'guest_05',
-            displayName: 'Evan Ng',
-            seedRank: 5,
-          ),
-        ],
-      ),
-      playInAssignments: returnedAssignments,
-    );
-    SeatingAssignmentsArgs? openedAssignmentsArgs;
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: TablesOverviewScreen(
-          eventId: 'evt_01',
-          eventTitle: 'Friday Night Mahjong',
-          scoringOpen: true,
-          scoringPhase: EventScoringPhase.bonus,
-          tableRepository: _FakeTableRepository([table]),
-          sessionRepository: _FakeSessionRepository(sessions: const []),
-          guestRepository: _FakeGuestRepository(const []),
-          seatingRepository: seatingRepository,
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == AppRouter.seatingAssignmentsRoute) {
-            openedAssignmentsArgs =
-                settings.arguments! as SeatingAssignmentsArgs;
-            return MaterialPageRoute<void>(
-              builder: (context) => const Scaffold(
-                body: Text('Opened Seating Assignments'),
-              ),
-            );
-          }
-
-          return null;
-        },
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Start play-in at this table.'), findsOneWidget);
-    expect(find.text('Start Play-In'), findsOneWidget);
-
-    await tester.tap(find.text('Start Play-In'));
-    await tester.pumpAndSettle();
-
-    expect(seatingRepository.startedPlayInTables, ['tbl_play_in']);
-    expect(openedAssignmentsArgs?.eventTitle, 'Friday Night Mahjong');
-    expect(openedAssignmentsArgs?.initialAssignments, returnedAssignments);
-    expect(
-      openedAssignmentsArgs?.bonusTableRoleFilter,
-      BonusTableRole.tableOfChampionsPlayIn,
-    );
-    expect(find.text('Opened Seating Assignments'), findsOneWidget);
-  });
-
   testWidgets('active sudden death lists only the sudden death finals table',
       (tester) async {
     final championsTable = _table('tbl_champions', 'Table 1');
@@ -2750,4 +2734,56 @@ HandResultRecord _hand({
     'entered_by_user_id': 'usr_01',
     'entered_at': '2026-04-24T19:30:00-07:00',
   });
+}
+
+FinalsState _widgetFinalsState({
+  List<FinalsAction> actions = const [],
+  List<FinalsContest> contests = const [],
+  FinalsOverallStatus status = FinalsOverallStatus.recoverableMissingSessions,
+  String? blockingReason,
+  FinalsResult? champion,
+}) {
+  return FinalsState(
+    flowVersion: FinalsFlowVersion.legacy,
+    stateVersion: 0,
+    format: FinalsFormat.parallelFinals,
+    overallStatus: status,
+    eligiblePlayerCount: 8,
+    championsSlots: const [],
+    contests: contests,
+    allowedActions: actions,
+    blockingReason: blockingReason,
+    recoveryToken: 'recovery-token',
+    champion: champion,
+    redemptionWinner: null,
+    sessions: const [],
+  );
+}
+
+FinalsContest _widgetContest({
+  required String id,
+  required String title,
+  required String tableLabel,
+  FinalsContestStatus status = FinalsContestStatus.ready,
+  String? sessionId,
+  DateTime? completedAt,
+  List<FinalsParticipant> participants = const [],
+}) {
+  return FinalsContest(
+    id: id,
+    type: id == 'champions'
+        ? FinalsContestType.tableOfChampions
+        : FinalsContestType.tableOfRedemption,
+    title: title,
+    status: status,
+    tableLabel: tableLabel,
+    tableSessionId: sessionId,
+    slotsToFill: 0,
+    slotStartIndex: null,
+    sequenceNumber: id == 'champions' ? 1 : 2,
+    startedAt:
+        sessionId == null ? null : DateTime.parse('2026-07-11T19:00:00Z'),
+    completedAt: completedAt,
+    participants: participants,
+  );
 }
