@@ -51,7 +51,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   bool _choosingFalseWinCaller = false;
   bool _isCapturingPhoto = false;
   bool _showValidationSummary = false;
-  bool _winBonusesExpanded = false;
   bool _photoSubmissionInFlight = false;
   String? _transferredPhotoPath;
   CapturedHandPhoto? _capturedPhoto;
@@ -545,19 +544,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
     );
   }
 
-  String get _winBonusesSummary {
-    final winBonuses = _winBonuses;
-    if (winBonuses == null) {
-      return 'Not recorded';
-    }
-
-    if (winBonuses.isEmpty) {
-      return 'None selected';
-    }
-
-    return winBonuses.map((bonus) => bonus.label).join(', ');
-  }
-
   void _toggleWinBonus(HandWinBonus bonus, bool selected) {
     setState(() {
       final winBonuses = _winBonuses ?? <HandWinBonus>[];
@@ -574,70 +560,42 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
   }
 
   Widget _buildWinBonusesPicker() {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () {
-            setState(() {
-              _winBonusesExpanded = !_winBonusesExpanded;
-            });
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Win bonuses',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _winBonusesSummary,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  _winBonusesExpanded ? Icons.expand_less : Icons.expand_more,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ],
+        Text(
+          'Win bonuses',
+          style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+        ),
+        if (_winBonuses == null) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Not recorded',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-        ),
-        if (_winBonusesExpanded) ...[
-          const SizedBox(height: 4),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              const spacing = 8.0;
-              final columns = constraints.maxWidth >= 300 ? 2 : 1;
-              final optionWidth =
-                  (constraints.maxWidth - spacing * (columns - 1)) / columns;
-              return Wrap(
-                spacing: spacing,
-                runSpacing: 2,
-                children: [
-                  for (final bonus in HandWinBonus.values)
-                    _buildWinBonusOption(bonus, optionWidth),
-                ],
-              );
-            },
-          ),
         ],
+        const SizedBox(height: 4),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const spacing = 8.0;
+            final columns = constraints.maxWidth >= 300 ? 2 : 1;
+            final optionWidth =
+                (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: 2,
+              children: [
+                for (final bonus in HandWinBonus.values)
+                  _buildWinBonusOption(bonus, optionWidth),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
@@ -795,7 +753,6 @@ class _HandEntryScreenState extends State<HandEntryScreen> {
                                     _penaltySeatIndex = null;
                                     _winType = null;
                                     _capturedPhoto = null;
-                                    _winBonusesExpanded = false;
                                   } else {
                                     _winType ??= HandWinType.selfDraw;
                                     _penaltySeatIndex = null;

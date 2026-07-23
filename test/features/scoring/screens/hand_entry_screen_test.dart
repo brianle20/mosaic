@@ -671,6 +671,28 @@ void main() {
     expect(discarderTop, lessThan(fanCountTop));
   });
 
+  testWidgets('shows win bonus options without collapse affordances',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HandEntryScreen(
+          sessionDetail: buildDetail(),
+          guestNamesById: seatNames,
+          sessionRepository: _RecordingSessionRepository(),
+          handPhotoService: _FakeHandPhotoService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Win bonuses'), findsOneWidget);
+    expect(find.text('Concealed Hand'), findsOneWidget);
+    expect(find.text('Moon Under the Sea'), findsOneWidget);
+    expect(find.text('None selected'), findsNothing);
+    expect(find.byIcon(Icons.expand_more), findsNothing);
+    expect(find.byIcon(Icons.expand_less), findsNothing);
+  });
+
   testWidgets('records selected win bonuses with a win', (tester) async {
     final repository = _RecordingSessionRepository();
 
@@ -687,11 +709,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Win bonuses'), findsOneWidget);
-    expect(find.text('None selected'), findsOneWidget);
-    expect(find.text('Concealed Hand'), findsNothing);
+    expect(find.text('Concealed Hand'), findsOneWidget);
     expect(find.text('Concealed Hand +1F'), findsNothing);
-
-    await tapVisible(tester, find.text('Win bonuses'));
 
     await tapVisible(
       tester,
@@ -819,7 +838,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tapVisible(tester, find.text('Win bonuses'));
     await tapVisible(
       tester,
       find.text('Concealed Hand'),
@@ -848,7 +866,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Robbing the Kong'), findsOneWidget);
-    await tapVisible(tester, find.text('Win bonuses'));
 
     final checkbox = tester.widget<Checkbox>(
       find.descendant(
