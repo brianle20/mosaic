@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicSiteHeader } from "../../components/PublicSiteHeader";
-import { PublicUpdatedAt } from "../../components/PublicUpdatedAt";
 import {
   publicEventPointsRacePath,
   publicEventStandingsPath,
@@ -65,6 +64,10 @@ export default async function EventsPage() {
                 event.startsAt,
                 event.timezone,
               );
+              const lastHandDateTime = formatPublicEventDateTime(
+                event.standingsUpdatedAt,
+                event.timezone,
+              );
 
               return (
                 <article className="event-directory-card" key={event.eventId}>
@@ -77,16 +80,18 @@ export default async function EventsPage() {
                     {eventDateTime ? (
                       <p>
                         <time dateTime={eventDateTime.dateTime}>
-                          Event: {eventDateTime.label}
+                          {eventDateTime.label}
                         </time>
                       </p>
                     ) : null}
                     <p>
-                      <PublicUpdatedAt
-                        value={event.standingsUpdatedAt}
-                        pendingLabel="Standings update pending"
-                        prefix="Updated "
-                      />
+                      {lastHandDateTime ? (
+                        <time dateTime={lastHandDateTime.dateTime}>
+                          Last hand recorded {lastHandDateTime.label}
+                        </time>
+                      ) : (
+                        <span>Standings update pending</span>
+                      )}
                     </p>
                   </div>
                   <div className="event-directory-actions">

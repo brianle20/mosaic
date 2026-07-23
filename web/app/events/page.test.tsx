@@ -74,10 +74,6 @@ describe("EventsPage", () => {
       },
     ]);
 
-    vi.spyOn(Date, "now").mockReturnValue(
-      Date.parse("2026-06-27T12:35:00.000Z"),
-    );
-
     render(await EventsPage());
 
     expect(mockedFetchPublicEvents).toHaveBeenCalledWith(publicClient);
@@ -93,11 +89,13 @@ describe("EventsPage", () => {
       "href",
       "/events/summer-open/points-race",
     );
-    expect(screen.getByText("Event: Jul 22, 2026 at 7:00 PM PDT")).toHaveAttribute(
+    expect(screen.getByText("Jul 22, 2026 · 7:00 PM PDT")).toHaveAttribute(
       "datetime",
       "2026-07-23T02:00:00.000Z",
     );
-    expect(screen.getByText("Updated 5 min ago")).toBeInTheDocument();
+    expect(
+      screen.getByText("Last hand recorded Jun 27, 2026 · 5:30 AM PDT"),
+    ).toHaveAttribute("datetime", "2026-06-27T12:30:00.000Z");
     expect(screen.getByText("Autumn Open")).toBeInTheDocument();
     expect(screen.getByText("Standings update pending")).toBeInTheDocument();
   });

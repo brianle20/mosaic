@@ -38,7 +38,7 @@ export function formatPublicEventDateTime(
 
     return {
       dateTime: date.toISOString(),
-      label: `${formattedDate} at ${formattedTime}`,
+      label: `${formattedDate} · ${formattedTime}`,
     };
   } catch (error) {
     if (error instanceof RangeError) {
