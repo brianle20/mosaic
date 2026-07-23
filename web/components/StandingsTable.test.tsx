@@ -31,7 +31,7 @@ describe("StandingsTable", () => {
     expect(screen.getByRole("columnheader", { name: /discard losses/i })).toBeVisible();
   });
 
-  it("splits prize eligible rows from low-hand rows using competition placement", () => {
+  it("uses participation eligibility without a minimum hand count", () => {
     const { container } = render(
       <StandingsTable
         rows={[
@@ -71,6 +71,7 @@ describe("StandingsTable", () => {
           {
             eventGuestId: "guest-4",
             publicDisplayName: "Dana K.",
+            prizeEligible: true,
             totalPoints: 200,
             handsPlayed: 1,
             wins: 1,
@@ -79,18 +80,30 @@ describe("StandingsTable", () => {
             discardLosses: 0,
             rank: 4,
           },
+          {
+            eventGuestId: "guest-5",
+            publicDisplayName: "Observer",
+            prizeEligible: false,
+            totalPoints: 0,
+            handsPlayed: 0,
+            wins: 0,
+            selfDrawWins: 0,
+            discardWins: 0,
+            discardLosses: 0,
+            rank: 5,
+          },
         ]}
       />,
     );
 
-    expect(screen.getByText(/minimum hands for prize eligibility: 2/i)).toBeVisible();
+    expect(screen.queryByText(/minimum hands/i)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /prize eligible standings/i })).toBeVisible();
     expect(screen.getByRole("heading", { name: /not prize eligible/i })).toBeVisible();
     expect(
       Array.from(container.querySelectorAll(".standings-table .rank-cell")).map((cell) =>
         cell.textContent?.trim(),
       ),
-    ).toEqual(["#1", "#1", "#3", "N/A"]);
+    ).toEqual(["#1", "#1", "#3", "#4", "N/A"]);
     expect(screen.getAllByText("#3")[0]).toBeVisible();
     expect(screen.getAllByText("Dana K.")[0]).toBeVisible();
   });
@@ -103,6 +116,7 @@ describe("StandingsTable", () => {
             eventGuestId: "guest-1",
             publicDisplayName: "Alice C.",
             tournamentStatus: "qualified",
+            prizeEligible: true,
             totalPoints: 40,
             handsPlayed: 8,
             wins: 2,
@@ -115,6 +129,7 @@ describe("StandingsTable", () => {
             eventGuestId: "guest-2",
             publicDisplayName: "Brian L.",
             tournamentStatus: "withdrawn",
+            prizeEligible: false,
             totalPoints: 64,
             handsPlayed: 8,
             wins: 3,

@@ -138,13 +138,6 @@ class _TournamentLeaderboardBody extends StatelessWidget {
               ),
               const SizedBox(height: 12),
             ],
-            Text(
-              'Minimum hands to qualify: ${controller.minimumHandsForPrize}',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 12),
             if (controller.prizePlacementRows.isNotEmpty) ...[
               const _SectionLabel('Prize Placements'),
               const SizedBox(height: 8),

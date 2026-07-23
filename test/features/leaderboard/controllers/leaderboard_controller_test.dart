@@ -81,7 +81,7 @@ void main() {
     controller.dispose();
   });
 
-  test('uses half of median scored-player hands for prize eligibility',
+  test('uses server participation eligibility without a minimum hand count',
       () async {
     final controller = LeaderboardController(
       leaderboardRepository: _FakeLeaderboardRepository(
@@ -119,6 +119,7 @@ void main() {
           LeaderboardEntry(
             eventGuestId: 'gst_observer',
             displayName: 'Observer',
+            isPrizeEligible: false,
             totalPoints: 0,
             handsPlayed: 0,
             handsWon: 0,
@@ -132,14 +133,13 @@ void main() {
 
     await controller.load('evt_01');
 
-    expect(controller.minimumHandsForPrize, 4);
     expect(
       controller.prizePlacementEntries.map((entry) => entry.displayName),
-      ['Regular Player', 'Late Grinder'],
+      ['Regular Player', 'One Hand Spike', 'Late Grinder'],
     );
     expect(
       controller.notPrizeEligibleEntries.map((entry) => entry.displayName),
-      ['One Hand Spike', 'Observer'],
+      ['Observer'],
     );
   });
 
@@ -213,6 +213,7 @@ void main() {
             eventGuestId: 'gst_brian',
             displayName: 'Brian Le',
             tournamentStatus: EventTournamentStatus.withdrawn,
+            isPrizeEligible: false,
             totalPoints: 48,
             handsPlayed: 8,
             handsWon: 2,
@@ -243,11 +244,11 @@ void main() {
     );
     expect(
       controller.prizePlacementEntries.map((entry) => entry.displayName),
-      ['Alice Wong'],
+      ['Alice Wong', 'Carla Park'],
     );
     expect(
       controller.notPrizeEligibleEntries.map((entry) => entry.displayName),
-      ['Brian Le', 'Carla Park'],
+      ['Brian Le'],
     );
   });
 
@@ -273,7 +274,6 @@ void main() {
 
     await controller.load('evt_01');
 
-    expect(controller.minimumHandsForPrize, 0);
     expect(controller.prizePlacementEntries, isEmpty);
     expect(
       controller.notPrizeEligibleEntries.map((entry) => entry.displayName),

@@ -68,6 +68,7 @@ class LeaderboardEntry {
     required this.eventGuestId,
     required this.displayName,
     this.tournamentStatus = EventTournamentStatus.qualified,
+    this.isPrizeEligible = true,
     required this.totalPoints,
     required this.handsPlayed,
     required this.handsWon,
@@ -82,6 +83,7 @@ class LeaderboardEntry {
       eventGuestId: _requiredString(json, 'event_guest_id'),
       displayName: _requiredString(json, 'display_name'),
       tournamentStatus: _tournamentStatusOrDefault(json),
+      isPrizeEligible: _prizeEligibilityOrFallback(json),
       totalPoints: _requiredInt(json, 'total_points'),
       handsPlayed: _requiredInt(json, 'hands_played'),
       handsWon: _requiredInt(json, 'hands_won'),
@@ -95,6 +97,7 @@ class LeaderboardEntry {
   final String eventGuestId;
   final String displayName;
   final EventTournamentStatus tournamentStatus;
+  final bool isPrizeEligible;
   final int totalPoints;
   final int handsPlayed;
   final int handsWon;
@@ -108,6 +111,7 @@ class LeaderboardEntry {
       'event_guest_id': eventGuestId,
       'display_name': displayName,
       'tournament_status': eventTournamentStatusToJson(tournamentStatus),
+      'prize_eligible': isPrizeEligible,
       'total_points': totalPoints,
       'hands_played': handsPlayed,
       'hands_won': handsWon,
@@ -117,6 +121,16 @@ class LeaderboardEntry {
       'rank': rank,
     };
   }
+}
+
+bool _prizeEligibilityOrFallback(Map<String, dynamic> json) {
+  final value = json['prize_eligible'];
+  if (value is bool) {
+    return value;
+  }
+
+  return _tournamentStatusOrDefault(json) != EventTournamentStatus.withdrawn &&
+      _requiredInt(json, 'hands_played') > 0;
 }
 
 EventTournamentStatus _tournamentStatusOrDefault(Map<String, dynamic> json) {

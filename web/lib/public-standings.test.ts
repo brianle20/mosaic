@@ -17,6 +17,7 @@ describe("public standings data mapping", () => {
       event_guest_id: "guest-1",
       public_display_name: "Brian L.",
       tournament_status: "withdrawn",
+      prize_eligible: false,
       total_points: 42500,
       hands_played: 8,
       wins: 3,
@@ -30,6 +31,7 @@ describe("public standings data mapping", () => {
       eventGuestId: "guest-1",
       publicDisplayName: "Brian L.",
       tournamentStatus: "withdrawn",
+      prizeEligible: false,
       totalPoints: 42500,
       handsPlayed: 8,
       wins: 3,
@@ -46,6 +48,7 @@ describe("public standings data mapping", () => {
         event_guest_id: "guest-1",
         public_display_name: "Alice C.",
         tournament_status: "qualified",
+        prize_eligible: true,
         total_points: 40,
         hands_played: 8,
         wins: 2,
@@ -58,6 +61,7 @@ describe("public standings data mapping", () => {
         event_guest_id: "guest-2",
         public_display_name: "Brian L.",
         tournament_status: "withdrawn",
+        prize_eligible: false,
         total_points: 64,
         hands_played: 8,
         wins: 3,
@@ -73,6 +77,44 @@ describe("public standings data mapping", () => {
     ]);
     expect(getNotPrizeEligibleRows(rows).map((row) => row.publicDisplayName)).toEqual([
       "Brian L.",
+    ]);
+  });
+
+  it("uses participation eligibility without a minimum hand count", () => {
+    const rows: PublicLeaderboardRow[] = [
+      {
+        eventGuestId: "guest-1",
+        publicDisplayName: "Zero Hand Participant",
+        tournamentStatus: "qualified",
+        prizeEligible: true,
+        totalPoints: 0,
+        handsPlayed: 0,
+        wins: 0,
+        selfDrawWins: 0,
+        discardWins: 0,
+        discardLosses: 0,
+        rank: 1,
+      },
+      {
+        eventGuestId: "guest-2",
+        publicDisplayName: "Observer",
+        tournamentStatus: "qualified",
+        prizeEligible: false,
+        totalPoints: 0,
+        handsPlayed: 0,
+        wins: 0,
+        selfDrawWins: 0,
+        discardWins: 0,
+        discardLosses: 0,
+        rank: 1,
+      },
+    ];
+
+    expect(getPrizePlacementRows(rows).map(({ row }) => row.publicDisplayName)).toEqual([
+      "Zero Hand Participant",
+    ]);
+    expect(getNotPrizeEligibleRows(rows).map((row) => row.publicDisplayName)).toEqual([
+      "Observer",
     ]);
   });
 
@@ -280,6 +322,7 @@ describe("public standings data mapping", () => {
             {
               eventGuestId: "guest-1",
               publicDisplayName: "Caren L.",
+              prizeEligible: true,
               totalPoints: 1024,
               handsPlayed: 15,
               wins: 7,
@@ -334,6 +377,7 @@ describe("public standings data mapping", () => {
         {
           eventGuestId: "guest-1",
           publicDisplayName: "Caren L.",
+          prizeEligible: true,
           totalPoints: 1024,
           handsPlayed: 15,
           wins: 7,

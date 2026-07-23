@@ -1261,7 +1261,7 @@ void main() {
 
     await controller.load('evt_01');
 
-    expect(controller.leaderLabel, 'Brian Le');
+    expect(controller.leaderLabel, 'One Hand Spike');
   });
 
   test('defaults to tournament phase when event has no stored phase', () async {

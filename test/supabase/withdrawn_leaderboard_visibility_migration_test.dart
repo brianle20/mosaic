@@ -16,6 +16,7 @@ void main() {
     );
 
     expect(leaderboardSql, contains('tournament_status text'));
+    expect(leaderboardSql, contains('prize_eligible boolean'));
     expect(leaderboardSql, contains('guest.tournament_status'));
     expect(
       leaderboardSql,
@@ -24,6 +25,10 @@ void main() {
     expect(
       leaderboardSql,
       isNot(contains('guest.tournament_status = \'qualified\'')),
+    );
+    expect(
+      leaderboardSql,
+      contains('app_private.is_event_guest_prize_eligible('),
     );
   });
 
@@ -34,6 +39,7 @@ void main() {
     );
 
     expect(leaderboardSql, contains('tournament_status text'));
+    expect(leaderboardSql, contains('prize_eligible boolean'));
     expect(leaderboardSql, contains('guest.tournament_status'));
     expect(
       leaderboardSql,
@@ -41,9 +47,13 @@ void main() {
     );
     expect(
         leaderboardSql, contains('guest.attendance_status = \'checked_in\''));
+    expect(
+      leaderboardSql,
+      contains('app_private.is_event_guest_prize_eligible('),
+    );
   });
 
-  test('public standings snapshots preserve leaderboard tournament status', () {
+  test('public standings snapshots preserve status and prize eligibility', () {
     final snapshotSql = _extractFunction(
       migrationsSql,
       'app_private.build_public_event_standings_snapshot',
@@ -51,6 +61,8 @@ void main() {
 
     expect(snapshotSql, contains('tournamentStatus'));
     expect(snapshotSql, contains('leaderboard.tournament_status'));
+    expect(snapshotSql, contains('prizeEligible'));
+    expect(snapshotSql, contains('leaderboard.prize_eligible'));
   });
 
   test('prize preview excludes withdrawn players from awards', () {
@@ -61,26 +73,27 @@ void main() {
 
     expect(
       prizePreviewSql,
-      contains('leaderboard.tournament_status = \'qualified\''),
+      contains('where leaderboard.prize_eligible'),
     );
     expect(
       prizePreviewSql,
-      contains('leaderboard.hands_played >= minimum_hands_played'),
+      isNot(contains('minimum_hands_played')),
     );
   });
 
   test('finals eligibility excludes withdrawn players after leaderboard widens',
       () {
-    final bonusSeatingSql = _extractFunction(
+    final finalsStandingsSql = _extractFunction(
       migrationsSql,
-      'public.generate_bonus_round_seating_assignments',
+      'app_private.finals_standings_snapshot',
     );
 
     expect(
-      bonusSeatingSql,
-      contains('leaderboard.tournament_status = \'qualified\''),
+      finalsStandingsSql,
+      contains('app_private.is_event_guest_prize_eligible('),
     );
-    expect(bonusSeatingSql, contains('leaderboard.hands_played >='));
+    expect(finalsStandingsSql, isNot(contains('minimum_hands_played')));
+    expect(finalsStandingsSql, isNot(contains('percentile_cont')));
   });
 
   test('finals eligibility does not require player tags', () {

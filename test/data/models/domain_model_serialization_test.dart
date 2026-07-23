@@ -917,6 +917,7 @@ void main() {
       final entry = LeaderboardEntry.fromJson(const {
         'event_guest_id': 'gst_01',
         'display_name': 'Alice Wong',
+        'prize_eligible': true,
         'total_points': 48,
         'hands_played': 7,
         'hands_won': 3,
@@ -927,6 +928,7 @@ void main() {
       });
 
       expect(entry.displayName, 'Alice Wong');
+      expect(entry.isPrizeEligible, isTrue);
       expect(entry.totalPoints, 48);
       expect(entry.handsPlayed, 7);
       expect(entry.handsWon, 3);
@@ -934,6 +936,33 @@ void main() {
       expect(entry.discardWins, 2);
       expect(entry.discardLosses, 4);
       expect(entry.rank, 1);
+      expect(entry.toJson()['prize_eligible'], isTrue);
+    });
+
+    test('uses recorded hands as a conservative old-cache fallback', () {
+      final participant = LeaderboardEntry.fromJson(const {
+        'event_guest_id': 'gst_participant',
+        'display_name': 'Participant',
+        'total_points': 8,
+        'hands_played': 1,
+        'hands_won': 0,
+        'self_draw_wins': 0,
+        'discard_wins': 0,
+        'rank': 1,
+      });
+      final observer = LeaderboardEntry.fromJson(const {
+        'event_guest_id': 'gst_observer',
+        'display_name': 'Observer',
+        'total_points': 0,
+        'hands_played': 0,
+        'hands_won': 0,
+        'self_draw_wins': 0,
+        'discard_wins': 0,
+        'rank': 2,
+      });
+
+      expect(participant.isPrizeEligible, isTrue);
+      expect(observer.isPrizeEligible, isFalse);
     });
   });
 

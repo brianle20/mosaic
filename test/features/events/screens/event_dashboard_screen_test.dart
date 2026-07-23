@@ -1555,7 +1555,7 @@ void main() {
     expect(find.text('Opened Leaderboard'), findsOneWidget);
   });
 
-  testWidgets('leader summary card shows the top qualified player',
+  testWidgets('leader summary card shows the top leaderboard player',
       (tester) async {
     await _pumpDashboard(
       tester,
@@ -1588,8 +1588,8 @@ void main() {
     );
 
     expect(find.text('Leader'), findsOneWidget);
-    expect(find.text('Brian Le'), findsOneWidget);
-    expect(find.text('Giang Pham'), findsNothing);
+    expect(find.text('Giang Pham'), findsOneWidget);
+    expect(find.text('Brian Le'), findsNothing);
   });
 
   testWidgets('dashboard surfaces bonus round winners after finals',

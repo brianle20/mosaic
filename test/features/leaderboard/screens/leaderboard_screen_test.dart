@@ -366,7 +366,8 @@ void main() {
     expect(controller.error, contains('Unable to refresh leaderboard details'));
   });
 
-  test('non-renderable optional leaderboard state does not hide a refresh error',
+  test(
+      'non-renderable optional leaderboard state does not hide a refresh error',
       () async {
     final leaderboardRepository = _RecordingLeaderboardRepository(
       entries: const [],
@@ -508,7 +509,7 @@ void main() {
 
     expect(find.text('West Guest'), findsOneWidget);
     expect(find.text('16 pts'), findsOneWidget);
-    expect(find.text('Minimum hands to qualify: 2'), findsOneWidget);
+    expect(find.textContaining('Minimum hands'), findsNothing);
     expect(
       find.text('Hands 3 • Wins 1 • Discard wins 1 • Discard losses 0'),
       findsOneWidget,
@@ -536,6 +537,7 @@ void main() {
           eventGuestId: 'gst_brian',
           displayName: 'Brian Le',
           tournamentStatus: EventTournamentStatus.withdrawn,
+          isPrizeEligible: false,
           totalPoints: 48,
           handsPlayed: 8,
           handsWon: 2,
@@ -621,6 +623,7 @@ void main() {
         LeaderboardEntry(
           eventGuestId: 'gst_brian',
           displayName: 'Brian Le',
+          isPrizeEligible: false,
           totalPoints: 0,
           handsPlayed: 0,
           handsWon: 0,
@@ -671,7 +674,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Minimum hands to qualify: 1'), findsOneWidget);
+    expect(find.textContaining('Minimum hands'), findsNothing);
     expect(find.text('Prize Placements'), findsOneWidget);
     expect(find.text('Not Prize Eligible'), findsOneWidget);
     expect(

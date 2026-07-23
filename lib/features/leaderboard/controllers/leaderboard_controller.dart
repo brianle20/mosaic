@@ -74,37 +74,8 @@ class LeaderboardController extends ChangeNotifier {
   int _requestGeneration = 0;
   bool _isDisposed = false;
 
-  int get minimumHandsForPrize {
-    final scoredHands = entries
-        .where(_canQualifyForPrize)
-        .map((entry) => entry.handsPlayed)
-        .where((handsPlayed) => handsPlayed > 0)
-        .toList()
-      ..sort();
-    if (scoredHands.isEmpty) {
-      return 0;
-    }
-
-    final midpoint = scoredHands.length ~/ 2;
-    final medianHands = scoredHands.length.isOdd
-        ? scoredHands[midpoint].toDouble()
-        : (scoredHands[midpoint - 1] + scoredHands[midpoint]) / 2;
-    final minimumHands = (medianHands * 0.5).ceil();
-    return minimumHands < 1 ? 1 : minimumHands;
-  }
-
   List<LeaderboardEntry> get prizePlacementEntries {
-    final minimumHands = minimumHandsForPrize;
-    if (minimumHands <= 0) {
-      return const [];
-    }
-
-    return entries
-        .where(
-          (entry) =>
-              _canQualifyForPrize(entry) && entry.handsPlayed >= minimumHands,
-        )
-        .toList(growable: false);
+    return entries.where(_canQualifyForPrize).toList(growable: false);
   }
 
   List<PrizePlacementRow> get prizePlacementRows {
@@ -127,23 +98,14 @@ class LeaderboardController extends ChangeNotifier {
   }
 
   List<LeaderboardEntry> get notPrizeEligibleEntries {
-    final minimumHands = minimumHandsForPrize;
-    if (minimumHands <= 0) {
-      return entries
-          .where((entry) => !_canQualifyForPrize(entry))
-          .toList(growable: false);
-    }
-
     return entries
-        .where(
-          (entry) =>
-              !_canQualifyForPrize(entry) || entry.handsPlayed < minimumHands,
-        )
+        .where((entry) => !_canQualifyForPrize(entry))
         .toList(growable: false);
   }
 
   bool _canQualifyForPrize(LeaderboardEntry entry) {
-    return entry.tournamentStatus == EventTournamentStatus.qualified;
+    return entry.tournamentStatus == EventTournamentStatus.qualified &&
+        entry.isPrizeEligible;
   }
 
   List<FinalsLeaderboardTable> get finalsTables {
@@ -299,7 +261,8 @@ class LeaderboardController extends ChangeNotifier {
     _notifyIfActive();
 
     try {
-      final loadedEntries = await leaderboardRepository.loadLeaderboard(eventId);
+      final loadedEntries =
+          await leaderboardRepository.loadLeaderboard(eventId);
       if (!_isCurrent(generation)) return;
       entries = loadedEntries;
       var optionalReadFailed = false;

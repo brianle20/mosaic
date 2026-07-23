@@ -3667,7 +3667,7 @@ select public.preview_event_finals(
   test_support.finals_fixture_uuid(2, 1, 399)
 )->>'preview_token' as token;
 update public.event_guests
-set attendance_status = 'checked_out'
+set tournament_status = 'withdrawn'
 where id = test_support.finals_fixture_uuid(4, 7, 399);
 select throws_ok(
   format(

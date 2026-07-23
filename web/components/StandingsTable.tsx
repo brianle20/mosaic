@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import {
-  getMinimumHandsForPrize,
   getNotPrizeEligibleRows,
   getPrizePlacementRows,
   type PublicLeaderboardRow,
@@ -30,15 +29,11 @@ export function StandingsTable({ rows, scoreChanges = {} }: StandingsTableProps)
     );
   }
 
-  const minimumHands = getMinimumHandsForPrize(rows);
   const prizePlacementRows = getPrizePlacementRows(rows);
   const notPrizeEligibleRows = getNotPrizeEligibleRows(rows);
 
   return (
     <>
-      <p className="status-line">
-        Minimum hands for prize eligibility: {minimumHands}
-      </p>
       <section aria-labelledby="prize-eligible-heading">
         <h2 id="prize-eligible-heading" className="section-heading">
           Prize eligible standings
