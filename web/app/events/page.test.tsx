@@ -60,12 +60,16 @@ describe("EventsPage", () => {
         eventId: "event-1",
         publicSlug: "summer-open",
         title: "Summer Open",
+        startsAt: "2026-07-23T02:00:00.000Z",
+        timezone: "America/Los_Angeles",
         standingsUpdatedAt: "2026-06-27T12:30:00.000Z",
       },
       {
         eventId: "event-2",
         publicSlug: "autumn-open",
         title: "Autumn Open",
+        startsAt: "2026-10-16T00:30:00.000Z",
+        timezone: "America/New_York",
         standingsUpdatedAt: null,
       },
     ]);
@@ -89,6 +93,10 @@ describe("EventsPage", () => {
       "href",
       "/events/summer-open/points-race",
     );
+    expect(screen.getByText("Event: Jul 22, 2026 at 7:00 PM PDT")).toHaveAttribute(
+      "datetime",
+      "2026-07-23T02:00:00.000Z",
+    );
     expect(screen.getByText("Updated 5 min ago")).toBeInTheDocument();
     expect(screen.getByText("Autumn Open")).toBeInTheDocument();
     expect(screen.getByText("Standings update pending")).toBeInTheDocument();
@@ -100,12 +108,16 @@ describe("EventsPage", () => {
         eventId: "event-1",
         publicSlug: "",
         title: "Broken Event",
+        startsAt: null,
+        timezone: null,
         standingsUpdatedAt: null,
       },
       {
         eventId: "event-2",
         publicSlug: "valid-event",
         title: "Valid Event",
+        startsAt: null,
+        timezone: null,
         standingsUpdatedAt: null,
       },
     ]);

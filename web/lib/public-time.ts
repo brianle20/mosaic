@@ -4,6 +4,50 @@ export type FormattedPublicUpdatedAt = {
   relative: string;
 };
 
+export type FormattedPublicEventDateTime = {
+  dateTime: string;
+  label: string;
+};
+
+export function formatPublicEventDateTime(
+  value: string | null,
+  timeZone: string | null,
+): FormattedPublicEventDateTime | null {
+  if (!value || !timeZone) {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  try {
+    const formattedDate = new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone,
+    }).format(date);
+    const formattedTime = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone,
+      timeZoneName: "short",
+    }).format(date);
+
+    return {
+      dateTime: date.toISOString(),
+      label: `${formattedDate} at ${formattedTime}`,
+    };
+  } catch (error) {
+    if (error instanceof RangeError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 export function formatPublicUpdatedAt(
   value: string | null,
   now = Date.now(),

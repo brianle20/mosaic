@@ -11,6 +11,7 @@ import {
   type PublicEventDirectoryRow,
   type PublicStandingsClient,
 } from "../../lib/public-standings";
+import { formatPublicEventDateTime } from "../../lib/public-time";
 import { publicEventMetadata } from "../../lib/public-metadata";
 import { createPublicSupabaseClient } from "../../lib/supabase";
 
@@ -59,39 +60,53 @@ export default async function EventsPage() {
           </section>
         ) : (
           <section className="events-list" aria-label="Public events">
-            {events.map((event) => (
-              <article className="event-directory-card" key={event.eventId}>
-                <div>
-                  <h2>
-                    <Link href={publicEventStandingsPath(event.publicSlug)}>
-                      {event.title}
+            {events.map((event) => {
+              const eventDateTime = formatPublicEventDateTime(
+                event.startsAt,
+                event.timezone,
+              );
+
+              return (
+                <article className="event-directory-card" key={event.eventId}>
+                  <div>
+                    <h2>
+                      <Link href={publicEventStandingsPath(event.publicSlug)}>
+                        {event.title}
+                      </Link>
+                    </h2>
+                    {eventDateTime ? (
+                      <p>
+                        <time dateTime={eventDateTime.dateTime}>
+                          Event: {eventDateTime.label}
+                        </time>
+                      </p>
+                    ) : null}
+                    <p>
+                      <PublicUpdatedAt
+                        value={event.standingsUpdatedAt}
+                        pendingLabel="Standings update pending"
+                        prefix="Updated "
+                      />
+                    </p>
+                  </div>
+                  <div className="event-directory-actions">
+                    <Link
+                      className="is-primary"
+                      href={publicEventStandingsPath(event.publicSlug)}
+                      aria-label={`${event.title} standings`}
+                    >
+                      Standings
                     </Link>
-                  </h2>
-                  <p>
-                    <PublicUpdatedAt
-                      value={event.standingsUpdatedAt}
-                      pendingLabel="Standings update pending"
-                      prefix="Updated "
-                    />
-                  </p>
-                </div>
-                <div className="event-directory-actions">
-                  <Link
-                    className="is-primary"
-                    href={publicEventStandingsPath(event.publicSlug)}
-                    aria-label={`${event.title} standings`}
-                  >
-                    Standings
-                  </Link>
-                  <Link
-                    href={publicEventPointsRacePath(event.publicSlug)}
-                    aria-label={`${event.title} points race`}
-                  >
-                    Points Race
-                  </Link>
-                </div>
-              </article>
-            ))}
+                    <Link
+                      href={publicEventPointsRacePath(event.publicSlug)}
+                      aria-label={`${event.title} points race`}
+                    >
+                      Points Race
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
           </section>
         )}
       </main>

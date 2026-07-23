@@ -149,6 +149,8 @@ describe("public standings data mapping", () => {
       event_id: "event-1",
       public_slug: "summer-open",
       title: "Summer Open",
+      event_starts_at: "2026-07-23T02:00:00.000Z",
+      event_timezone: "America/Los_Angeles",
       standings_updated_at: "2026-06-27T12:30:00.000Z",
       owner_user_id: "user-1",
       email: "host@example.com",
@@ -158,6 +160,8 @@ describe("public standings data mapping", () => {
       eventId: "event-1",
       publicSlug: "summer-open",
       title: "Summer Open",
+      startsAt: "2026-07-23T02:00:00.000Z",
+      timezone: "America/Los_Angeles",
       standingsUpdatedAt: "2026-06-27T12:30:00.000Z",
     });
     expect(row).not.toHaveProperty("ownerUserId");
@@ -169,6 +173,8 @@ describe("public standings data mapping", () => {
       event_id: "event-2",
       public_slug: "  ",
       title: "  ",
+      event_starts_at: null,
+      event_timezone: null,
       standings_updated_at: null,
     });
 
@@ -176,6 +182,8 @@ describe("public standings data mapping", () => {
       eventId: "event-2",
       publicSlug: "",
       title: "Mosaic event",
+      startsAt: null,
+      timezone: null,
       standingsUpdatedAt: null,
     });
   });
@@ -253,6 +261,7 @@ describe("public standings data mapping", () => {
     expect(result.bonusResults).toEqual([]);
     expect(result.finalsLeaderboards).toEqual([]);
     expect(result.pointsTimeline).toEqual([]);
+    expect(result.updatedAt).toBeNull();
     expect(rpc).toHaveBeenCalledWith("get_public_event_summary", {
       target_event_id: "event-1",
     });
@@ -268,6 +277,49 @@ describe("public standings data mapping", () => {
     expect(rpc).toHaveBeenCalledWith("get_public_event_points_timeline", {
       target_event_id: "event-1",
     });
+  });
+
+  it("uses the latest recorded hand time for RPC fallback snapshots", async () => {
+    const rpc = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: [{ event_id: "event-1", title: "Mosaic May Tournament" }],
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            hand_index: 1,
+            hand_result_id: "hand-1",
+            recorded_at: "2026-05-24T12:03:00.000Z",
+            table_label: "Table 1",
+            event_guest_id: "guest-1",
+            public_display_name: "Alice C.",
+            points_delta: 64,
+            total_points: 64,
+            rank: 1,
+          },
+          {
+            hand_index: 2,
+            hand_result_id: "hand-2",
+            recorded_at: "2026-05-24T12:05:00.000Z",
+            table_label: "Table 1",
+            event_guest_id: "guest-1",
+            public_display_name: "Alice C.",
+            points_delta: 64,
+            total_points: 128,
+            rank: 1,
+          },
+        ],
+        error: null,
+      });
+
+    const result = await fetchPublicStandings({ rpc }, "event-1");
+
+    expect(result.updatedAt).toBe("2026-05-24T12:05:00.000Z");
   });
 
   it("treats missing public summaries as unavailable events", async () => {
@@ -506,6 +558,20 @@ describe("public standings data mapping", () => {
       pointsTimeline: [],
       updatedAt: "2026-05-24T12:02:00.000Z",
     });
+  });
+
+  it("preserves an explicit null last-hand timestamp in snapshot payloads", () => {
+    const snapshot = mapPublicStandingsSnapshotPayload(
+      {
+        eventTitle: "FV Mahjong 1",
+        leaderboard: [],
+        bonusResults: [],
+        updatedAt: null,
+      },
+      "2026-07-23T19:35:25.485381Z",
+    );
+
+    expect(snapshot.updatedAt).toBeNull();
   });
 
   it("maps public points timeline snapshots defensively", () => {

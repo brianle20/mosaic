@@ -59,6 +59,8 @@ export type PublicEventDirectoryRpcRow = {
   event_id: string;
   public_slug: string | null;
   title: string | null;
+  event_starts_at: string | null;
+  event_timezone: string | null;
   standings_updated_at: string | null;
   [key: string]: unknown;
 };
@@ -147,6 +149,8 @@ export type PublicEventDirectoryRow = {
   eventId: string;
   publicSlug: string;
   title: string;
+  startsAt: string | null;
+  timezone: string | null;
   standingsUpdatedAt: string | null;
 };
 
@@ -229,6 +233,8 @@ export function mapPublicEventRow(
     eventId: row.event_id,
     publicSlug: row.public_slug?.trim() || "",
     title: row.title?.trim() || "Mosaic event",
+    startsAt: readNullableString(row.event_starts_at),
+    timezone: readNullableString(row.event_timezone),
     standingsUpdatedAt: readNullableString(row.standings_updated_at),
   };
 }
@@ -513,6 +519,10 @@ export function mapPublicStandingsSnapshotPayload(
   const pointsTimeline = Array.isArray(record.pointsTimeline)
     ? record.pointsTimeline
     : [];
+  const hasPayloadUpdatedAt = Object.prototype.hasOwnProperty.call(
+    record,
+    "updatedAt",
+  );
   const payloadUpdatedAt =
     typeof record.updatedAt === "string" && record.updatedAt.trim().length > 0
       ? record.updatedAt
@@ -524,7 +534,7 @@ export function mapPublicStandingsSnapshotPayload(
     bonusResults: bonusResults.map(mapSnapshotBonusResult),
     finalsLeaderboards: finalsLeaderboards.map(mapSnapshotFinalsLeaderboardTable),
     pointsTimeline: mapSnapshotPointsTimelineRows(pointsTimeline),
-    updatedAt: payloadUpdatedAt ?? updatedAt,
+    updatedAt: hasPayloadUpdatedAt ? payloadUpdatedAt : updatedAt,
   };
 
   if (eventId) {
@@ -731,6 +741,29 @@ function looksLikeEventId(value: string): boolean {
   );
 }
 
+function latestPointsTimelineRecordedAt(
+  pointsTimeline: PublicPointsTimelineHand[],
+): string | null {
+  let latestValue: string | null = null;
+  let latestTime = Number.NEGATIVE_INFINITY;
+
+  for (const hand of pointsTimeline) {
+    if (!hand.recordedAt) {
+      continue;
+    }
+
+    const recordedTime = Date.parse(hand.recordedAt);
+    if (Number.isNaN(recordedTime) || recordedTime <= latestTime) {
+      continue;
+    }
+
+    latestValue = hand.recordedAt;
+    latestTime = recordedTime;
+  }
+
+  return latestValue;
+}
+
 async function resolvePublicEventId(
   client: PublicStandingsRpcClient,
   eventSlug: string,
@@ -831,6 +864,10 @@ export async function fetchPublicStandings(
     throw new PublicEventUnavailableError();
   }
 
+  const pointsTimeline = mapPointsTimelineRows(
+    (pointsTimelineResult.data ?? []) as PublicPointsTimelineRpcRow[],
+  );
+
   return {
     eventId: eventSummary?.event_id ?? eventId,
     eventSlug: eventSummary?.public_slug ?? eventSlug,
@@ -844,9 +881,7 @@ export async function fetchPublicStandings(
     finalsLeaderboards: mapFinalsLeaderboardRows(
       (finalsResult.data ?? []) as PublicFinalsLeaderboardRpcRow[],
     ),
-    pointsTimeline: mapPointsTimelineRows(
-      (pointsTimelineResult.data ?? []) as PublicPointsTimelineRpcRow[],
-    ),
-    updatedAt: new Date().toISOString(),
+    pointsTimeline,
+    updatedAt: latestPointsTimelineRecordedAt(pointsTimeline),
   };
 }
