@@ -668,7 +668,7 @@ describe("LiveStandings", () => {
     expect(screen.getByText("3 hands · 2 wins")).toBeVisible();
   });
 
-  it("shows every tied Table of Redemption leader in the results summary", () => {
+  it("stacks tied Table of Redemption leaders in one results card", () => {
     render(
       <LiveStandings
         eventId="event-1"
@@ -701,9 +701,13 @@ describe("LiveStandings", () => {
     );
 
     const results = screen.getByLabelText("Finals results");
-    expect(results.querySelectorAll(".bonus-result")).toHaveLength(2);
-    expect(results).toHaveTextContent("Anthony R.");
-    expect(results).toHaveTextContent("Edward T.");
+    const cards = results.querySelectorAll(".bonus-result");
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toHaveTextContent("Table of Redemption");
+    const winnerNames = cards[0].querySelectorAll("strong");
+    expect(winnerNames).toHaveLength(2);
+    expect(winnerNames[0]).toHaveTextContent("Anthony R.");
+    expect(winnerNames[1]).toHaveTextContent("Edward T.");
   });
 
   it("resets visible standings and ignores stale refreshes when event changes", async () => {

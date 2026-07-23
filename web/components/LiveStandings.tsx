@@ -8,6 +8,7 @@ import { StandingsTable, type ScoreChangeMap } from "./StandingsTable";
 import {
   fetchPublicStandings,
   mapPublicStandingsSnapshotPayload,
+  type PublicBonusResult,
   type PublicStandingsClient,
   type PublicLeaderboardRow,
   type PublicFinalsLeaderboardTable,
@@ -76,6 +77,21 @@ function signedPoints(points: number): string {
 
 function pluralize(count: number, singular: string): string {
   return `${count.toLocaleString()} ${singular}${count === 1 ? "" : "s"}`;
+}
+
+function groupBonusResultsByLabel(results: PublicBonusResult[]) {
+  const groups = new Map<string, PublicBonusResult[]>();
+
+  for (const result of results) {
+    const group = groups.get(result.resultLabel) ?? [];
+    group.push(result);
+    groups.set(result.resultLabel, group);
+  }
+
+  return [...groups.entries()].map(([resultLabel, groupedResults]) => ({
+    resultLabel,
+    results: groupedResults,
+  }));
 }
 
 function seatLabel(seatIndex: number): string {
@@ -156,6 +172,7 @@ export function LiveStandings({
   });
   const snapshot =
     snapshotState.eventId === eventId ? snapshotState.snapshot : initialSnapshot;
+  const bonusResultGroups = groupBonusResultsByLabel(snapshot.bonusResults);
   const status = statusState.eventId === eventId ? statusState.status : "idle";
   const scoreChanges =
     scoreChangesState.eventId === eventId ? scoreChangesState.scoreChanges : {};
@@ -355,15 +372,22 @@ export function LiveStandings({
     >
       {initialLoadFailure ? <PublicLoadErrorBanner /> : null}
 
-      {snapshot.bonusResults.length > 0 ? (
+      {bonusResultGroups.length > 0 ? (
         <section className="bonus-strip" aria-label="Finals results">
-          {snapshot.bonusResults.map((result) => (
-            <div key={`${result.eventGuestId}-${result.resultLabel}`} className="bonus-result">
-              <span>{result.resultLabel}</span>
-              <strong>{result.publicDisplayName}</strong>
-              {result.pointsDelta !== 0 ? (
-                <small>{result.pointsDelta > 0 ? "+" : ""}{result.pointsDelta.toLocaleString()}</small>
-              ) : null}
+          {bonusResultGroups.map((group) => (
+            <div key={group.resultLabel} className="bonus-result">
+              <span>{group.resultLabel}</span>
+              {group.results.map((result) => (
+                <div key={result.eventGuestId}>
+                  <strong>{result.publicDisplayName}</strong>
+                  {result.pointsDelta !== 0 ? (
+                    <small>
+                      {result.pointsDelta > 0 ? "+" : ""}
+                      {result.pointsDelta.toLocaleString()}
+                    </small>
+                  ) : null}
+                </div>
+              ))}
             </div>
           ))}
         </section>

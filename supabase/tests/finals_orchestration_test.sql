@@ -648,7 +648,7 @@ begin
 end;
 $$;
 
-select plan(324);
+select plan(325);
 
 select has_table(
   'public',
@@ -4835,6 +4835,17 @@ select ok(
          and bonus_round_id = test_support.finals_fixture_uuid(10, 1, 448)
          and status = 'completed'),
   'completed-partial recovery returns terminal with one unchanged champion award'
+);
+select ok(
+  (
+    select count(*) = 8
+      and bool_and(finals.hands_played = 5)
+      and bool_or(finals.total_points <> 0)
+    from public.get_public_event_finals_leaderboard(
+      test_support.finals_fixture_uuid(2, 1, 448)
+    ) as finals
+  ),
+  'public Finals leaderboard preserves scored legacy sessions'
 );
 
 select ok(
