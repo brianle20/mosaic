@@ -231,28 +231,6 @@ export function mapPublicEventRow(
   };
 }
 
-function publicEventDirectorySort(
-  left: PublicEventDirectoryRow,
-  right: PublicEventDirectoryRow,
-): number {
-  if (left.standingsUpdatedAt && right.standingsUpdatedAt) {
-    const updatedCompare = right.standingsUpdatedAt.localeCompare(left.standingsUpdatedAt);
-    if (updatedCompare !== 0) {
-      return updatedCompare;
-    }
-  }
-
-  if (left.standingsUpdatedAt && !right.standingsUpdatedAt) {
-    return -1;
-  }
-
-  if (!left.standingsUpdatedAt && right.standingsUpdatedAt) {
-    return 1;
-  }
-
-  return left.title.localeCompare(right.title);
-}
-
 export async function fetchPublicEvents(
   client: PublicStandingsRpcClient,
 ): Promise<PublicEventDirectoryRow[]> {
@@ -264,8 +242,7 @@ export async function fetchPublicEvents(
 
   return (result.data ?? [])
     .map((row) => mapPublicEventRow(row as PublicEventDirectoryRpcRow))
-    .filter((event) => event.publicSlug.length > 0)
-    .sort(publicEventDirectorySort);
+    .filter((event) => event.publicSlug.length > 0);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

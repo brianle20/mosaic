@@ -138,21 +138,9 @@ describe("public standings data mapping", () => {
     });
   });
 
-  it("fetches public events sorted by latest standings update and title", async () => {
+  it("preserves the event-time order returned by the public events RPC", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [
-        {
-          event_id: "event-3",
-          public_slug: "zeta-open",
-          title: "Zeta Open",
-          standings_updated_at: null,
-        },
-        {
-          event_id: "event-5",
-          public_slug: "alpha-open",
-          title: "Alpha Open",
-          standings_updated_at: null,
-        },
         {
           event_id: "event-1",
           public_slug: "summer-open",
@@ -164,6 +152,18 @@ describe("public standings data mapping", () => {
           public_slug: "autumn-open",
           title: "Autumn Open",
           standings_updated_at: "2026-06-27T13:30:00.000Z",
+        },
+        {
+          event_id: "event-3",
+          public_slug: "zeta-open",
+          title: "Zeta Open",
+          standings_updated_at: null,
+        },
+        {
+          event_id: "event-5",
+          public_slug: "alpha-open",
+          title: "Alpha Open",
+          standings_updated_at: null,
         },
         {
           event_id: "event-4",
@@ -179,10 +179,10 @@ describe("public standings data mapping", () => {
 
     expect(rpc).toHaveBeenCalledWith("get_public_events");
     expect(result.map((event) => event.publicSlug)).toEqual([
-      "autumn-open",
       "summer-open",
-      "alpha-open",
+      "autumn-open",
       "zeta-open",
+      "alpha-open",
     ]);
   });
 
