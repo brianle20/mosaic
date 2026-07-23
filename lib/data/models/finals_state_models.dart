@@ -453,6 +453,33 @@ class FinalsState {
   final FinalsResult? redemptionWinner;
   final List<FinalsSessionReference> sessions;
 
+  List<FinalsResult> get redemptionWinners {
+    final winningParticipants = [
+      for (final contest in contests)
+        if (contest.type == FinalsContestType.tableOfRedemption &&
+            contest.status == FinalsContestStatus.complete)
+          for (final participant in contest.participants)
+            if (participant.outcome == FinalsParticipantOutcome.winner)
+              participant,
+    ];
+    final contestWinners = [
+      for (final participant in winningParticipants)
+        FinalsResult(
+          eventGuestId: participant.eventGuestId,
+          displayName: participant.displayName,
+          resolutionMethod: winningParticipants.length > 1
+              ? 'table_score_tie'
+              : 'table_score',
+        ),
+    ];
+    if (contestWinners.isNotEmpty) {
+      return List.unmodifiable(contestWinners);
+    }
+    return List.unmodifiable([
+      if (redemptionWinner case final winner?) winner,
+    ]);
+  }
+
   FinalsAction? get primaryAction =>
       allowedActions.isEmpty ? null : allowedActions.first;
 

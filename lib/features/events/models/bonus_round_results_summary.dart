@@ -9,16 +9,23 @@ class BonusRoundResultsSummary {
   const BonusRoundResultsSummary({
     this.finalChampion,
     this.redemptionWinner,
+    this.redemptionWinners = const [],
     this.suddenDeathStatus,
   });
 
   final BonusRoundResult? finalChampion;
   final BonusRoundResult? redemptionWinner;
+  final List<BonusRoundResult> redemptionWinners;
   final BonusRoundSuddenDeathStatus? suddenDeathStatus;
+
+  List<BonusRoundResult> get allRedemptionWinners =>
+      redemptionWinners.isNotEmpty
+          ? redemptionWinners
+          : [if (redemptionWinner case final winner?) winner];
 
   bool get hasResults =>
       finalChampion != null ||
-      redemptionWinner != null ||
+      allRedemptionWinners.isNotEmpty ||
       suddenDeathStatus != null;
 }
 
@@ -54,9 +61,11 @@ BonusRoundResultsSummary buildBonusRoundResultsSummary({
     leaderboardEntries: leaderboardEntries,
     bonusRoundState: bonusRoundState,
   );
+  final redemptionWinners = _redemptionWinnerResults(ledgerEntries);
   return BonusRoundResultsSummary(
     finalChampion: finalChampion,
-    redemptionWinner: _redemptionWinnerResult(ledgerEntries),
+    redemptionWinner: redemptionWinners.firstOrNull,
+    redemptionWinners: redemptionWinners,
     suddenDeathStatus: _suddenDeathStatusResult(
       bonusRoundState: bonusRoundState,
       finalChampion: finalChampion,
@@ -170,7 +179,9 @@ String _formatTiedPlayers(List<BonusRoundTiedPlayer> players) {
       .join(', ');
 }
 
-BonusRoundResult? _redemptionWinnerResult(List<EventHandLedgerEntry> entries) {
+List<BonusRoundResult> _redemptionWinnerResults(
+  List<EventHandLedgerEntry> entries,
+) {
   final totalsByGuest = <String, _BonusGuestTotal>{};
 
   for (final entry in entries) {
@@ -191,7 +202,7 @@ BonusRoundResult? _redemptionWinnerResult(List<EventHandLedgerEntry> entries) {
   }
 
   if (totalsByGuest.isEmpty) {
-    return null;
+    return const [];
   }
 
   final totals = totalsByGuest.values.toList(growable: false)
@@ -202,11 +213,15 @@ BonusRoundResult? _redemptionWinnerResult(List<EventHandLedgerEntry> entries) {
       }
       return left.displayName.compareTo(right.displayName);
     });
-  final winner = totals.first;
-  return BonusRoundResult(
-    displayName: winner.displayName,
-    detailLabel: 'Score ${_signedPoints(winner.points)}',
-  );
+  final winningScore = totals.first.points;
+  return List.unmodifiable([
+    for (final winner in totals)
+      if (winner.points == winningScore)
+        BonusRoundResult(
+          displayName: winner.displayName,
+          detailLabel: 'Score ${_signedPoints(winner.points)}',
+        ),
+  ]);
 }
 
 String _signedPoints(int points) {

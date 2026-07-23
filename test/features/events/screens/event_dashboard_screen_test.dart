@@ -858,7 +858,7 @@ EventHandLedgerEntry _championAwardEntry() {
   });
 }
 
-EventHandLedgerEntry _redemptionHandEntry() {
+EventHandLedgerEntry _redemptionHandEntry({bool tied = false}) {
   return EventHandLedgerEntry.fromJson({
     'event_id': 'evt_01',
     'table_id': 'tbl_02',
@@ -876,34 +876,34 @@ EventHandLedgerEntry _redemptionHandEntry() {
     'ledger_row_type': 'hand',
     'bonus_round_id': 'bonus_01',
     'bonus_table_role': 'table_of_redemption',
-    'cells': const [
+    'cells': [
       {
         'wind': 'east',
         'seat_index': 0,
         'event_guest_id': 'gst_brian',
         'display_name': 'Brian Lee',
-        'points_delta': 18,
+        'points_delta': tied ? 8 : 18,
       },
       {
         'wind': 'south',
         'seat_index': 1,
         'event_guest_id': 'gst_carla',
         'display_name': 'Carla Park',
-        'points_delta': -6,
+        'points_delta': tied ? 8 : -6,
       },
       {
         'wind': 'west',
         'seat_index': 2,
         'event_guest_id': 'gst_dan',
         'display_name': 'Dan Yu',
-        'points_delta': -6,
+        'points_delta': tied ? -8 : -6,
       },
       {
         'wind': 'north',
         'seat_index': 3,
         'event_guest_id': 'gst_emi',
         'display_name': 'Emi Chen',
-        'points_delta': -6,
+        'points_delta': tied ? -8 : -6,
       },
     ],
   });
@@ -1055,6 +1055,7 @@ FinalsContest _finalsContest({
   FinalsContestType type = FinalsContestType.tableOfChampions,
   String? tableLabel,
   String? sessionId,
+  List<FinalsParticipant> participants = const [],
 }) {
   return FinalsContest(
     id: id,
@@ -1070,7 +1071,7 @@ FinalsContest _finalsContest({
     completedAt: status == FinalsContestStatus.complete
         ? DateTime.utc(2026, 7, 11, 20)
         : null,
-    participants: const [],
+    participants: participants,
   );
 }
 
@@ -1622,6 +1623,21 @@ void main() {
     expect(find.text('Redemption winner'), findsOneWidget);
     expect(find.text('Brian Lee'), findsOneWidget);
     expect(find.text('Score +18'), findsOneWidget);
+  });
+
+  testWidgets('dashboard surfaces every Redemption co-winner', (tester) async {
+    await _pumpDashboard(
+      tester,
+      event: completedEvent,
+      sessionRepository: _SessionRepository(
+        ledgerRows: [_redemptionHandEntry(tied: true)],
+      ),
+    );
+
+    expect(find.text('Redemption co-winner'), findsNWidgets(2));
+    expect(find.text('Brian Lee'), findsOneWidget);
+    expect(find.text('Carla Park'), findsOneWidget);
+    expect(find.text('Score +8'), findsNWidgets(2));
   });
 
   testWidgets('activity action routes into the activity screen',
@@ -3481,6 +3497,53 @@ void main() {
       expect(find.text('Finals Complete'), findsOneWidget);
       expect(find.text('Champion — Ava Chen'), findsOneWidget);
       expect(find.textContaining('guest_champion'), findsNothing);
+    });
+
+    testWidgets('complete Finals shows every Redemption co-winner',
+        (tester) async {
+      await _pumpFinalsDashboard(
+        tester,
+        repository: _FinalsRepository(
+          _finalsState(
+            status: FinalsOverallStatus.complete,
+            contests: [
+              _finalsContest(
+                id: 'contest_redemption',
+                title: 'Table of Redemption',
+                type: FinalsContestType.tableOfRedemption,
+                status: FinalsContestStatus.complete,
+                participants: const [
+                  FinalsParticipant(
+                    eventGuestId: 'guest_ava',
+                    displayName: 'Ava Chen',
+                    entrySeed: 5,
+                    seatIndex: 0,
+                    outcome: FinalsParticipantOutcome.winner,
+                    advancedChampionsSlot: null,
+                    outcomeOrder: 1,
+                  ),
+                  FinalsParticipant(
+                    eventGuestId: 'guest_ben',
+                    displayName: 'Ben Lee',
+                    entrySeed: 6,
+                    seatIndex: 1,
+                    outcome: FinalsParticipantOutcome.winner,
+                    advancedChampionsSlot: null,
+                    outcomeOrder: 1,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+
+      expect(
+        find.text('Redemption winners — Ava Chen, Ben Lee'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('guest_ava'), findsNothing);
+      expect(find.textContaining('guest_ben'), findsNothing);
     });
 
     testWidgets(

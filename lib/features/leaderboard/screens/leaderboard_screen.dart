@@ -347,6 +347,7 @@ class _BonusRoundResultsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final redemptionWinners = summary.allRedemptionWinners;
     return Card(
       color: colorScheme.tertiaryContainer.withValues(alpha: 0.32),
       child: Padding(
@@ -370,19 +371,24 @@ class _BonusRoundResultsCard extends StatelessWidget {
               ),
             if (summary.finalChampion != null &&
                 (summary.suddenDeathStatus != null ||
-                    summary.redemptionWinner != null))
+                    redemptionWinners.isNotEmpty))
               const SizedBox(height: 10),
             if (summary.suddenDeathStatus != null)
               _BonusRoundStatusLine(status: summary.suddenDeathStatus!),
             if (summary.suddenDeathStatus != null &&
-                summary.redemptionWinner != null)
+                redemptionWinners.isNotEmpty)
               const SizedBox(height: 10),
-            if (summary.redemptionWinner != null)
+            for (final (index, redemptionWinner)
+                in redemptionWinners.indexed) ...[
+              if (index > 0) const SizedBox(height: 10),
               _BonusRoundResultLine(
                 icon: Icons.replay_circle_filled,
-                label: 'Redemption winner',
-                result: summary.redemptionWinner!,
+                label: redemptionWinners.length == 1
+                    ? 'Redemption winner'
+                    : 'Redemption co-winner',
+                result: redemptionWinner,
               ),
+            ],
           ],
         ),
       ),

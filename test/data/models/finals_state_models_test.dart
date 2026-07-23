@@ -302,7 +302,65 @@ void main() {
       expect(state.allowedActions[2].recoveryToken, state.recoveryToken);
       expect(state.champion?.displayName, 'Bo');
       expect(state.redemptionWinner?.resolutionMethod, 'table_score');
+      expect(
+        state.redemptionWinners.map((winner) => winner.displayName),
+        const ['Eli'],
+      );
       expect(state.activeSessionIds, {'session_active', 'legacy_session'});
+    });
+
+    test('derives multiple Redemption winners from contest outcomes', () {
+      final state = FinalsState.fromJson({
+        ..._minimalState(
+          overallStatus: 'complete',
+          contests: const [
+            {
+              'id': 'redemption',
+              'contest_type': 'table_of_redemption',
+              'title': 'Table of Redemption',
+              'status': 'complete',
+              'table_label': 'Table 2',
+              'table_session_id': 'session_redemption',
+              'slots_to_fill': 0,
+              'slot_start_index': null,
+              'sequence_number': 1,
+              'started_at': '2026-07-23T18:00:00Z',
+              'completed_at': '2026-07-23T19:00:00Z',
+              'participants': [
+                {
+                  'event_guest_id': 'guest_01',
+                  'display_name': 'Ava',
+                  'entry_seed': 5,
+                  'seat_index': 0,
+                  'outcome': 'winner',
+                  'advanced_champions_slot': null,
+                  'outcome_order': 1,
+                },
+                {
+                  'event_guest_id': 'guest_02',
+                  'display_name': 'Ben',
+                  'entry_seed': 6,
+                  'seat_index': 1,
+                  'outcome': 'winner',
+                  'advanced_champions_slot': null,
+                  'outcome_order': 1,
+                },
+              ],
+            },
+          ],
+        ),
+        'redemption_winner': null,
+      });
+
+      expect(state.redemptionWinner, isNull);
+      expect(
+        state.redemptionWinners.map((winner) => winner.displayName),
+        const ['Ava', 'Ben'],
+      );
+      expect(
+        state.redemptionWinners.map((winner) => winner.resolutionMethod),
+        everyElement('table_score_tie'),
+      );
     });
 
     test('parses every flow and overall status', () {

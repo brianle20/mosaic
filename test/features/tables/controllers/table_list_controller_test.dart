@@ -701,6 +701,50 @@ void main() {
       );
     });
 
+    test('standalone Redemption tie labels every winner', () async {
+      final repository = _FakeFinalsRepository(
+        _finalsState(
+          status: FinalsOverallStatus.complete,
+          contests: [
+            _contest(
+              id: 'redemption',
+              type: FinalsContestType.tableOfRedemption,
+              title: 'Table of Redemption',
+              status: FinalsContestStatus.complete,
+              participants: const [
+                FinalsParticipant(
+                  eventGuestId: 'guest_01',
+                  displayName: 'Ava',
+                  entrySeed: 5,
+                  seatIndex: 0,
+                  outcome: FinalsParticipantOutcome.winner,
+                  advancedChampionsSlot: null,
+                  outcomeOrder: 1,
+                ),
+                FinalsParticipant(
+                  eventGuestId: 'guest_02',
+                  displayName: 'Ben',
+                  entrySeed: 6,
+                  seatIndex: 1,
+                  outcome: FinalsParticipantOutcome.winner,
+                  advancedChampionsSlot: null,
+                  outcomeOrder: 1,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      final controller = _finalsController(repository);
+
+      await controller.load('evt_01');
+
+      expect(
+        controller.finalsSummary?.completedContests.single.resultLabel,
+        'Redemption winners: Ava, Ben',
+      );
+    });
+
     test('rebinds a ready contest only to a filtered usable table', () async {
       final action = const FinalsAction(
         kind: FinalsActionKind.startContest,

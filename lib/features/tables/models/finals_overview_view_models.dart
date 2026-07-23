@@ -129,14 +129,17 @@ String? _redemptionResultLabel(
   FinalsState state,
   List<String> winnerNames,
 ) {
-  final winnerName = contest.participants
-          .where(
-            (participant) =>
-                participant.outcome == FinalsParticipantOutcome.winner,
-          )
-          .map((participant) => participant.displayName)
-          .firstOrNull ??
-      state.redemptionWinner?.displayName;
+  final redemptionWinnerNames = contest.participants
+      .where(
+        (participant) => participant.outcome == FinalsParticipantOutcome.winner,
+      )
+      .map((participant) => participant.displayName)
+      .toList();
+  if (redemptionWinnerNames.isEmpty) {
+    redemptionWinnerNames.addAll(
+      state.redemptionWinners.map((winner) => winner.displayName),
+    );
+  }
   final advancingRunnerUp = contest.participants
       .where(
         (participant) =>
@@ -145,7 +148,11 @@ String? _redemptionResultLabel(
       )
       .map((participant) => participant.displayName)
       .firstOrNull;
-  if (winnerName == null) return _winnerLabel(winnerNames);
+  if (redemptionWinnerNames.isEmpty) return _winnerLabel(winnerNames);
+  if (redemptionWinnerNames.length > 1) {
+    return 'Redemption winners: ${redemptionWinnerNames.join(', ')}';
+  }
+  final winnerName = redemptionWinnerNames.single;
   if (advancingRunnerUp == null) return 'Redemption winner: $winnerName';
   return 'Redemption winner: $winnerName • Runner-up: $advancingRunnerUp';
 }

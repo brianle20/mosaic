@@ -668,6 +668,44 @@ describe("LiveStandings", () => {
     expect(screen.getByText("3 hands · 2 wins")).toBeVisible();
   });
 
+  it("shows every tied Table of Redemption leader in the results summary", () => {
+    render(
+      <LiveStandings
+        eventId="event-1"
+        eventSlug="fv-mahjong-1"
+        initialSnapshot={{
+          eventTitle: "Mosaic May Tournament",
+          leaderboard: [],
+          bonusResults: [
+            {
+              eventGuestId: "guest-1",
+              publicDisplayName: "Anthony R.",
+              resultLabel: "Table of Redemption",
+              placement: 1,
+              pointsDelta: 0,
+            },
+            {
+              eventGuestId: "guest-2",
+              publicDisplayName: "Edward T.",
+              resultLabel: "Table of Redemption",
+              placement: 1,
+              pointsDelta: 0,
+            },
+          ],
+          pointsTimeline: [],
+          updatedAt: "2026-07-23T12:00:00.000Z",
+        }}
+        supabaseClient={createSupabaseClient().client}
+        fetchStandings={vi.fn()}
+      />,
+    );
+
+    const results = screen.getByLabelText("Finals results");
+    expect(results.querySelectorAll(".bonus-result")).toHaveLength(2);
+    expect(results).toHaveTextContent("Anthony R.");
+    expect(results).toHaveTextContent("Edward T.");
+  });
+
   it("resets visible standings and ignores stale refreshes when event changes", async () => {
     vi.useFakeTimers();
     vi.spyOn(Math, "random").mockReturnValue(0);

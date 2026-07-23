@@ -1404,9 +1404,16 @@ class _FinalsCommandCenter extends StatelessWidget {
             const SizedBox(height: 5),
             Text('Champion — ${champion.displayName}'),
           ],
-          if (state.redemptionWinner case final redemptionWinner?) ...[
+          if (state.redemptionWinners case final redemptionWinners
+              when redemptionWinners.isNotEmpty) ...[
             const SizedBox(height: 5),
-            Text('Redemption winner — ${redemptionWinner.displayName}'),
+            Text(
+              redemptionWinners.length == 1
+                  ? 'Redemption winner — '
+                      '${redemptionWinners.single.displayName}'
+                  : 'Redemption winners — '
+                      '${redemptionWinners.map((winner) => winner.displayName).join(', ')}',
+            ),
           ],
           if (action case final serverAction?) ...[
             const SizedBox(height: 12),
@@ -1534,6 +1541,7 @@ class _BonusRoundResultsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final redemptionWinners = summary.allRedemptionWinners;
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
       decoration: BoxDecoration(
@@ -1556,8 +1564,7 @@ class _BonusRoundResultsPanel extends StatelessWidget {
           if (summary.suddenDeathStatus != null)
             _BonusRoundPendingLine(status: summary.suddenDeathStatus!),
           if (summary.suddenDeathStatus != null &&
-              (summary.finalChampion != null ||
-                  summary.redemptionWinner != null))
+              (summary.finalChampion != null || redemptionWinners.isNotEmpty))
             const SizedBox(height: 10),
           if (summary.finalChampion != null)
             _BonusRoundResultLine(
@@ -1565,14 +1572,19 @@ class _BonusRoundResultsPanel extends StatelessWidget {
               label: 'Final champion',
               result: summary.finalChampion!,
             ),
-          if (summary.finalChampion != null && summary.redemptionWinner != null)
+          if (summary.finalChampion != null && redemptionWinners.isNotEmpty)
             const SizedBox(height: 10),
-          if (summary.redemptionWinner != null)
+          for (final (index, redemptionWinner)
+              in redemptionWinners.indexed) ...[
+            if (index > 0) const SizedBox(height: 10),
             _BonusRoundResultLine(
               icon: Icons.replay_circle_filled,
-              label: 'Redemption winner',
-              result: summary.redemptionWinner!,
+              label: redemptionWinners.length == 1
+                  ? 'Redemption winner'
+                  : 'Redemption co-winner',
+              result: redemptionWinner,
             ),
+          ],
         ],
       ),
     );

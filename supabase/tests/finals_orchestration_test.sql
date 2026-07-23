@@ -2442,14 +2442,19 @@ select is(
   (select count(*)::integer from public.event_finals_contests
    where event_id = test_support.finals_fixture_uuid(2, 1, 206)
      and contest_type = 'redemption_winner_tiebreak' and status = 'ready'),
-  1,
-  'standalone eight-player Redemption winner tie creates a winner tiebreak'
+  0,
+  'standalone eight-player Redemption winner tie does not create a winner tiebreak'
 );
 select is(
-  public.get_event_finals_state(test_support.finals_fixture_uuid(2, 1, 206))
-    #>> '{allowed_actions,0,label}',
-  'Start Redemption Winner Tiebreak',
-  'ready Redemption-winner tiebreak exposes its host-safe start action'
+  (select count(*)::integer
+   from public.event_finals_contest_participants as participant
+   join public.event_finals_contests as contest
+     on contest.id = participant.contest_id
+   where contest.event_id = test_support.finals_fixture_uuid(2, 1, 206)
+     and contest.contest_type = 'table_of_redemption'
+     and participant.outcome = 'winner'),
+  2,
+  'standalone eight-player Redemption winner tie records both leaders as winners'
 );
 
 select public.begin_event_finals(
@@ -2566,14 +2571,16 @@ select ok(
   'public standings snapshot refresh includes orchestrated champion results'
 );
 
+select test_support.create_ready_orchestrated_contest(
+  299, 'table_of_champions', 'table_of_champions'
+);
 select throws_ok(
   format(
     'select set_config(''request.jwt.claim.sub'', %L, true); select public.start_finals_contest(%L, %L, %s)',
     test_support.finals_fixture_uuid(1, 1, 2),
-    (select id from public.event_finals_contests where event_id = test_support.finals_fixture_uuid(2, 1, 206)
-      and contest_type = 'redemption_winner_tiebreak'),
-    test_support.finals_fixture_uuid(3, 3, 206),
-    (select state_version from public.event_bonus_rounds where event_id = test_support.finals_fixture_uuid(2, 1, 206))
+    test_support.finals_fixture_uuid(11, 1, 299),
+    test_support.finals_fixture_uuid(3, 2, 299),
+    (select state_version from public.event_bonus_rounds where event_id = test_support.finals_fixture_uuid(2, 1, 299))
   ),
   'P0001', 'Finals contest not found for current operator.',
   'scoring-only or unrelated users may not start a Finals contest'
@@ -2581,32 +2588,26 @@ select throws_ok(
 select lives_ok(
   format(
     'select set_config(''request.jwt.claim.sub'', %L, true); select public.start_finals_contest(%L, %L, %s)',
-    test_support.finals_fixture_uuid(1, 1, 206),
-    (select id from public.event_finals_contests where event_id = test_support.finals_fixture_uuid(2, 1, 206)
-      and contest_type = 'redemption_winner_tiebreak'),
-    test_support.finals_fixture_uuid(3, 3, 206),
-    (select state_version from public.event_bonus_rounds where event_id = test_support.finals_fixture_uuid(2, 1, 206))
+    test_support.finals_fixture_uuid(1, 1, 299),
+    test_support.finals_fixture_uuid(11, 1, 299),
+    test_support.finals_fixture_uuid(3, 2, 299),
+    (select state_version from public.event_bonus_rounds where event_id = test_support.finals_fixture_uuid(2, 1, 299))
   ),
   'owner may start a ready Finals contest'
 );
 select lives_ok(
   format(
     'select public.start_finals_contest(%L, %L, -1)',
-    (select id from public.event_finals_contests where event_id = test_support.finals_fixture_uuid(2, 1, 206)
-      and contest_type = 'redemption_winner_tiebreak'),
-    test_support.finals_fixture_uuid(3, 3, 206)
+    test_support.finals_fixture_uuid(11, 1, 299),
+    test_support.finals_fixture_uuid(3, 2, 299)
   ),
   'duplicate contest start returns current state even with a stale retry version'
-);
-select test_support.record_finals_resolution(
-  (select id from public.event_finals_contests where event_id = test_support.finals_fixture_uuid(2, 1, 206)
-    and contest_type = 'redemption_winner_tiebreak'), 'win', 0
 );
 select is(
   (select redemption_resolution_method from public.event_bonus_rounds
    where event_id = test_support.finals_fixture_uuid(2, 1, 206)),
-  'sudden_death',
-  'standalone Redemption winner tiebreak records its decisive winner'
+  'table_score_tie',
+  'standalone Redemption tie records its co-winner resolution'
 );
 select ok(
   pg_get_functiondef('public.start_finals_contest(uuid,uuid,bigint)'::regprocedure)
@@ -4488,7 +4489,7 @@ select is(
 -- Production record_hand_result, not a test helper, must complete every
 -- decisive one-hand tiebreak session on its first valid win.
 select public.begin_event_finals(
-  test_support.create_finals_fixture(8, 442),
+  test_support.create_finals_fixture(6, 442),
   test_support.finals_fixture_uuid(3, 2, 442),
   test_support.finals_fixture_uuid(3, 3, 442), 0
 );
@@ -4499,7 +4500,7 @@ select test_support.score_finals_contest(
 select public.start_finals_contest(
   (select id from public.event_finals_contests
    where event_id = test_support.finals_fixture_uuid(2, 1, 442)
-     and contest_type = 'redemption_winner_tiebreak'),
+     and contest_type = 'redemption_advancement_tiebreak'),
   test_support.finals_fixture_uuid(3, 3, 442),
   (select state_version from public.event_bonus_rounds
    where event_id = test_support.finals_fixture_uuid(2, 1, 442))
@@ -4513,18 +4514,18 @@ select lives_ok(
       || 'target_photo_client_id => %L, target_photo_captured_at => now())',
     (select table_session_id from public.event_finals_contests
      where event_id = test_support.finals_fixture_uuid(2, 1, 442)
-       and contest_type = 'redemption_winner_tiebreak'),
+       and contest_type = 'redemption_advancement_tiebreak'),
     test_support.finals_fixture_uuid(16, 1, 442)
   ),
-  'production hand-entry path accepts the decisive Redemption tiebreak win'
+  'production hand-entry path accepts the decisive Redemption advancement tiebreak win'
 );
 select ok(
   (select session.status = 'completed' and contest.status = 'complete'
    from public.event_finals_contests as contest
    join public.table_sessions as session on session.id = contest.table_session_id
    where contest.event_id = test_support.finals_fixture_uuid(2, 1, 442)
-     and contest.contest_type = 'redemption_winner_tiebreak'),
-  'first valid Redemption tiebreak win completes both session and contest'
+     and contest.contest_type = 'redemption_advancement_tiebreak'),
+  'first valid Redemption advancement tiebreak win completes both session and contest'
 );
 
 -- Read access remains available to scoring staff, but server-authored mutation

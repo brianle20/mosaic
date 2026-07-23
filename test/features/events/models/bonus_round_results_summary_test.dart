@@ -151,6 +151,22 @@ void main() {
     expect(summary.redemptionWinner?.displayName, 'Brian Lee');
     expect(summary.redemptionWinner?.detailLabel, 'Score +18');
   });
+
+  test('returns every Redemption player tied for the top score', () {
+    final summary = buildBonusRoundResultsSummary(
+      ledgerEntries: [_redemptionTieHandEntry()],
+      leaderboardEntries: const [],
+    );
+
+    expect(
+      summary.redemptionWinners.map((winner) => winner.displayName),
+      const ['Brian Lee', 'Carla Park'],
+    );
+    expect(
+      summary.redemptionWinners.map((winner) => winner.detailLabel),
+      everyElement('Score +8'),
+    );
+  });
 }
 
 EventHandLedgerEntry _championAwardEntry() {
@@ -217,6 +233,57 @@ EventHandLedgerEntry _redemptionHandEntry() {
         'event_guest_id': 'gst_emi',
         'display_name': 'Emi Chen',
         'points_delta': -6,
+      },
+    ],
+  });
+}
+
+EventHandLedgerEntry _redemptionTieHandEntry() {
+  return EventHandLedgerEntry.fromJson({
+    'event_id': 'evt_01',
+    'table_id': 'tbl_02',
+    'table_label': 'Table 2',
+    'session_id': 'ses_02',
+    'session_number_for_table': 1,
+    'hand_id': 'hand_tie',
+    'hand_number': 1,
+    'entered_at': '2026-04-24T22:20:00-07:00',
+    'result_type': 'win',
+    'status': 'recorded',
+    'win_type': 'discard',
+    'fan_count': 3,
+    'has_settlements': true,
+    'ledger_row_type': 'hand',
+    'bonus_round_id': 'bonus_01',
+    'bonus_table_role': 'table_of_redemption',
+    'cells': const [
+      {
+        'wind': 'east',
+        'seat_index': 0,
+        'event_guest_id': 'gst_brian',
+        'display_name': 'Brian Lee',
+        'points_delta': 8,
+      },
+      {
+        'wind': 'south',
+        'seat_index': 1,
+        'event_guest_id': 'gst_carla',
+        'display_name': 'Carla Park',
+        'points_delta': 8,
+      },
+      {
+        'wind': 'west',
+        'seat_index': 2,
+        'event_guest_id': 'gst_dan',
+        'display_name': 'Dan Yu',
+        'points_delta': -8,
+      },
+      {
+        'wind': 'north',
+        'seat_index': 3,
+        'event_guest_id': 'gst_emi',
+        'display_name': 'Emi Chen',
+        'points_delta': -8,
       },
     ],
   });
